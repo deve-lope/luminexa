@@ -1,0 +1,89 @@
+# Luminexa — prod-local stack (ports 3000 / 9001)
+# Env: .env.docker.prod only
+name: luminexa
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: luminexa-redis
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: luminexa-web
+    ports:
+      - "0.0.0.0:9001:9001"
+    env_file:
+      - .env.docker.prod
+    environment:
+      DJANGO_SETTINGS_MODULE: luminexa.settings
+      SQLITE_DB_PATH: /app/data/db.sqlite3
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - luminexa_prod_data:/app/data
+      - luminexa_media:/app/media
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: luminexa-celery-worker
+    command: celery -A luminexa worker -l info
+    env_file:
+      - .env.docker.prod
+    environment:
+      DJANGO_SETTINGS_MODULE: luminexa.settings
+      SQLITE_DB_PATH: /app/data/db.sqlite3
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - web
+    volumes:
+      - luminexa_prod_data:/app/data
+      - luminexa_media:/app/media
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: luminexa-celery-beat
+    command: celery -A luminexa beat -l info
+    env_file:
+      - .env.docker.prod
+    environment:
+      DJANGO_SETTINGS_MODULE: luminexa.settings
+      SQLITE_DB_PATH: /app/data/db.sqlite3
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - web
+    volumes:
+      - luminexa_prod_data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ""
+        REACT_APP_PUBLIC_URL: http://localhost:3000
+    container_name: luminexa-frontend
+    ports:
+      - "0.0.0.0:3000:80"
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  luminexa_prod_data:
+  luminexa_media:

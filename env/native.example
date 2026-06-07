@@ -1,0 +1,13 @@
+# Optional: native (non-Docker) development only
+# Copy to backend/.env.native and frontend/.env.native — OR use symlinks documented in env/README.md
+
+# --- backend/.env.native ---
+DJANGO_SECRET_KEY=dev-native-change-me
+DEBUG=True
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+PUBLIC_APP_URL=http://localhost:3000
+
+# --- frontend/.env.native ---
+REACT_APP_API_URL=http://localhost:9001
+REACT_APP_PUBLIC_URL=http://localhost:3000

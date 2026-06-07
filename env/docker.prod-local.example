@@ -1,0 +1,24 @@
+# Copy to repo root as .env.docker.prod (gitignored)
+# Used ONLY by: docker compose up (docker-compose.yml)
+
+DJANGO_SECRET_KEY=prod-local-change-me-before-deploy
+DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Browser opens SPA on 3000 → API on host 9001
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+PUBLIC_APP_URL=http://localhost:3000
+
+# Docker prod-local DB (named volume luminexa_prod_data)
+SQLITE_DB_PATH=/app/data/db.sqlite3
+# Optional production DB (when set, SQLITE_DB_PATH is ignored):
+# DATABASE_URL=postgres://luminexa:secret@db:5432/luminexa
+
+# Celery (redis service in docker-compose.yml)
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+# Email (console backend logs to `docker compose logs web`)
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@luminexa.local
