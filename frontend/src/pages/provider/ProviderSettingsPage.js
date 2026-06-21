@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
+import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,6 +40,7 @@ export default function ProviderSettingsPage() {
     [memberships, orgSlug]
   );
   const [mode, setMode] = useState('flexi');
+  const [timezone, setTimezone] = useState('America/New_York');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [blocks, setBlocks] = useState([]);
@@ -56,6 +58,7 @@ export default function ProviderSettingsPage() {
       const res = await jobsAPI.getSchedulingSettings(orgSlug);
       const d = res.data;
       setMode(d.scheduling_mode || 'flexi');
+      setTimezone(d.timezone || 'America/New_York');
       const defaults = defaultDateRange();
       setValidFrom(d.schedule_valid_from || defaults.from);
       setValidUntil(d.schedule_valid_until || defaults.until);
@@ -172,6 +175,21 @@ export default function ProviderSettingsPage() {
         <strong>Weekly schedule</strong> repeats the same hours and auto-creates bookable slots.{' '}
         <strong>Flexi</strong> lets you open specific dates yourself (one at a time or on Schedule).
       </p>
+
+      <OrganizationTimezoneField
+        orgSlug={orgSlug}
+        timezone={timezone}
+        onTimezoneChange={setTimezone}
+        schedulingMode={mode}
+        isOwner={isOwner}
+        onSaved={(msg) => {
+          setMessage(msg);
+          setError(null);
+        }}
+        onError={(msg) => {
+          if (msg) setError(msg);
+        }}
+      />
 
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold uppercase text-slate-500">Availability mode</h2>
