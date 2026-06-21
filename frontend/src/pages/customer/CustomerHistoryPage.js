@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
+import BookingsSubNav from '../../components/customer/BookingsSubNav';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { isHistoryBooking } from '../../utils/customerBookings';
@@ -49,6 +50,7 @@ export default function CustomerHistoryPage() {
 
   return (
     <div className="space-y-6">
+      <BookingsSubNav />
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {!hasActivity && !error && (

@@ -27,11 +27,34 @@ EMAIL_PORT=1025
 EMAIL_USE_TLS=False
 DEFAULT_FROM_EMAIL=noreply@luminexa.local
 
-# Production SMTP example (replace Mailpit settings above):
+# ── Going live: send real email ────────────────────────────────────────────
+# Replace the Mailpit block above with ONE real provider below, then set
+# PUBLIC_APP_URL to your real domain so links in emails point to the live app.
+# Verify your sending domain (SPF/DKIM) with the provider or mail lands in spam.
+#
+# SendGrid (username is literally "apikey"):
 # EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-# EMAIL_HOST=smtp.example.com
+# EMAIL_HOST=smtp.sendgrid.net
 # EMAIL_PORT=587
-# EMAIL_HOST_USER=your-smtp-user
-# EMAIL_HOST_PASSWORD=your-smtp-password
+# EMAIL_HOST_USER=apikey
+# EMAIL_HOST_PASSWORD=SG.xxxxxxxxxxxxxxxxxxxxxx
+# EMAIL_USE_TLS=True
+# DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+#
+# Mailgun:
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=smtp.mailgun.org
+# EMAIL_PORT=587
+# EMAIL_HOST_USER=postmaster@mg.yourdomain.com
+# EMAIL_HOST_PASSWORD=your-mailgun-smtp-password
+# EMAIL_USE_TLS=True
+# DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+#
+# Amazon SES (use the SMTP credentials from the SES console, not AWS keys):
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
+# EMAIL_PORT=587
+# EMAIL_HOST_USER=your-ses-smtp-username
+# EMAIL_HOST_PASSWORD=your-ses-smtp-password
 # EMAIL_USE_TLS=True
 # DEFAULT_FROM_EMAIL=noreply@yourdomain.com

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ServiceLocationInput from '../../components/customer/ServiceLocationInput';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { userAPI } from '../../utils/api';
 
 function ReadOnlyRow({ label, value, empty = 'Not set' }) {
@@ -127,9 +128,9 @@ function ChangePasswordDialog({ open, onClose, onSuccess }) {
 export default function CustomerAccountPage({ variant = 'customer' }) {
   const isCustomerAccount = variant === 'customer';
   const { user, setUserFromProfile } = useAuth();
+  const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
-  const [toast, setToast] = useState(null);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -175,7 +176,7 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
       const { data } = await userAPI.updateProfile(payload);
       setUserFromProfile(data);
       setEditing(false);
-      setToast('Profile updated.');
+      showToast('Profile updated.', 'success');
     } catch (err) {
       const d = err.response?.data;
       setProfileError(
@@ -190,10 +191,6 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
 
   return (
     <div className="space-y-4">
-      {toast && (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{toast}</p>
-      )}
-
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -326,7 +323,7 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
       <ChangePasswordDialog
         open={passwordOpen}
         onClose={() => setPasswordOpen(false)}
-        onSuccess={(message) => setToast(message)}
+        onSuccess={(message) => showToast(message, 'success')}
       />
     </div>
   );

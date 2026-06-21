@@ -141,6 +141,7 @@ export const jobsAPI = {
   acceptBooking: (id) => api.post(`/api/v1/bookings/${id}/accept/`),
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
   cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
+  startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
   completeBooking: (id) => api.post(`/api/v1/bookings/${id}/complete/`),
   rescheduleBooking: (id, slotId) =>
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId }),

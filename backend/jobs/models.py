@@ -447,6 +447,7 @@ class BookingStatusEvent(models.Model):
         ACCEPTED = 'accepted', 'Accepted'
         DECLINED = 'declined', 'Declined'
         CANCELLED = 'cancelled', 'Cancelled'
+        STARTED = 'started', 'Started'
         COMPLETED = 'completed', 'Completed'
         RESCHEDULED = 'rescheduled', 'Rescheduled'
         NO_SHOW = 'no_show', 'No-show'

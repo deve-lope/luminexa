@@ -13,23 +13,66 @@ const WEEKDAYS = [
 
 const DEFAULT_BLOCK = { weekday: 0, start_time: '08:00', end_time: '16:00', is_active: true };
 
+const FALLBACK_TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'Pacific/Honolulu',
+  'America/Toronto',
+  'America/Vancouver',
+  'America/Edmonton',
+  'America/Winnipeg',
+  'America/Halifax',
+  'America/St_Johns',
+  'UTC',
+];
+
+function listTimezones() {
+  try {
+    if (typeof Intl.supportedValuesOf === 'function') {
+      return Intl.supportedValuesOf('timeZone');
+    }
+  } catch {
+    /* fall through */
+  }
+  return FALLBACK_TIMEZONES;
+}
+
+function detectTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function ProviderSchedulingPanel({ orgSlug, onModeChange }) {
   const [mode, setMode] = useState('flexi');
   const [blocks, setBlocks] = useState([]);
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [tzSaving, setTzSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
+  const tzOptions = React.useMemo(() => {
+    const all = listTimezones();
+    return all.includes(timezone) || !timezone ? all : [timezone, ...all];
+  }, [timezone]);
+
   const load = useCallback(async () => {
     if (!orgSlug) return;
     try {
-      const ctx = await jobsAPI.getBookingContext(orgSlug);
-      const m = ctx.data?.scheduling_mode || 'flexi';
+      const settings = await jobsAPI.getSchedulingSettings(orgSlug);
+      const m = settings.data?.scheduling_mode || 'flexi';
       setMode(m);
       onModeChange?.(m);
+      if (settings.data?.timezone) setTimezone(settings.data.timezone);
       if (m === 'recurring') {
-        const res = await jobsAPI.getWeeklySchedule(orgSlug);
-        const list = Array.isArray(res.data) ? res.data : [];
+        const list = Array.isArray(settings.data?.weekly_blocks) ? settings.data.weekly_blocks : [];
         if (list.length) {
           setBlocks(
             list.map((b) => ({
@@ -53,6 +96,30 @@ export default function ProviderSchedulingPanel({ orgSlug, onModeChange }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const saveTimezone = async (nextTz) => {
+    setTzSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await jobsAPI.saveSchedulingSettings(orgSlug, { timezone: nextTz });
+      setTimezone(nextTz);
+      let created = 0;
+      if (mode === 'recurring') {
+        const sync = await jobsAPI.syncRecurringSlots(orgSlug);
+        created = sync.data?.created ?? 0;
+      }
+      setMessage(
+        created
+          ? `Timezone updated. ${created} slots regenerated.`
+          : 'Timezone updated.'
+      );
+    } catch {
+      setError('Could not update timezone.');
+    } finally {
+      setTzSaving(false);
+    }
+  };
 
   const setSchedulingMode = async (newMode) => {
     setSaving(true);
@@ -120,9 +187,40 @@ export default function ProviderSchedulingPanel({ orgSlug, onModeChange }) {
 
   const isDayActive = (weekday) => blocks.some((b) => b.weekday === weekday);
 
+  const detected = detectTimezone();
+
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-semibold uppercase text-slate-500">Availability mode</h2>
+      <h2 className="text-sm font-semibold uppercase text-slate-500">Timezone</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Your schedule hours and slot times use this timezone.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          value={timezone}
+          disabled={tzSaving}
+          onChange={(e) => saveTimezone(e.target.value)}
+          className="min-h-[44px] flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-60"
+        >
+          {tzOptions.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+        {detected && detected !== timezone && (
+          <button
+            type="button"
+            disabled={tzSaving}
+            onClick={() => saveTimezone(detected)}
+            className="min-h-[44px] rounded-lg border border-luminexa-accent px-3 text-sm font-medium text-luminexa-accent disabled:opacity-60"
+          >
+            Use {detected.split('/').pop().replace(/_/g, ' ')}
+          </button>
+        )}
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase text-slate-500">Availability mode</h2>
       <p className="mt-1 text-sm text-slate-600">
         Choose how customers see bookable times.
       </p>

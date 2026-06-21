@@ -5,6 +5,7 @@ import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid
 import CustomerSearchMapView from '../../components/customer/CustomerSearchMapView';
 import LocationSearchBar from '../../components/customer/LocationSearchBar';
 import ServiceSearchBar from '../../components/customer/ServiceSearchBar';
+import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { DEFAULT_RADIUS_MILES } from '../../constants/locationSearch';
 import { businessesAPI } from '../../utils/api';
 import { compareDateKeys, todayKey } from '../../utils/dateRange';
@@ -273,7 +274,16 @@ export default function CustomerFindPage() {
               )}
 
               {loading ? (
-                <p className="text-sm text-slate-500">Loading available services…</p>
+                <div aria-busy="true" aria-label="Loading available services">
+                  <Skeleton className="mb-3 h-4 w-28" />
+                  <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="h-20 rounded-2xl" />
+                    ))}
+                  </div>
+                  <Skeleton className="mb-3 h-4 w-36" />
+                  <SkeletonList count={4} />
+                </div>
               ) : (
                 <>
                   <section>

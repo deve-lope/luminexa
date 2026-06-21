@@ -21,8 +21,8 @@ def coerce_org_date(value, *, field_name: str = 'date') -> date | None:
     raise TypeError(f'Invalid {field_name}: expected YYYY-MM-DD')
 
 
-def _combine(day: date, t: time) -> datetime:
-    tz = timezone.get_current_timezone()
+def _combine(day: date, t: time, tz=None) -> datetime:
+    tz = tz or timezone.get_current_timezone()
     return timezone.make_aware(datetime.combine(day, t), tz)
 
 
@@ -41,7 +41,8 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
     if not services:
         return 0
 
-    today = timezone.localdate()
+    org_tz = organization.get_timezone()
+    today = timezone.localdate(timezone=org_tz)
     range_start = coerce_org_date(organization.schedule_valid_from) or today
     range_end = coerce_org_date(organization.schedule_valid_until) or (
         today + timedelta(weeks=weeks_ahead)
@@ -57,8 +58,8 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
         for block in day_blocks:
             for service in services:
                 duration = timedelta(minutes=service.duration_minutes)
-                cursor = _combine(day, block.start_time)
-                block_end = _combine(day, block.end_time)
+                cursor = _combine(day, block.start_time, org_tz)
+                block_end = _combine(day, block.end_time, org_tz)
                 while cursor + duration <= block_end:
                     slot_end = cursor + duration
                     if cursor <= timezone.now():
@@ -84,8 +85,8 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
     return created
 
 
-def _next_week_start(from_date: date | None = None) -> date:
-    d = from_date or timezone.localdate()
+def _next_week_start(from_date: date | None = None, *, tz=None) -> date:
+    d = from_date or timezone.localdate(timezone=tz)
     days_ahead = (7 - d.weekday()) % 7
     if days_ahead == 0:
         days_ahead = 7
@@ -110,10 +111,11 @@ def ensure_flexi_slot_alert(organization) -> ProviderNotification | None:
         _clear_flexi_slot_notifications(organization)
         return None
 
-    week_start = _next_week_start()
+    org_tz = organization.get_timezone()
+    week_start = _next_week_start(tz=org_tz)
     week_end = week_start + timedelta(days=7)
-    range_start = _combine(week_start, time.min)
-    range_end = _combine(week_end, time.min)
+    range_start = _combine(week_start, time.min, org_tz)
+    range_end = _combine(week_end, time.min, org_tz)
 
     has_open = AvailabilitySlot.objects.filter(
         organization=organization,

@@ -4,6 +4,7 @@ import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid
 import CustomerSearchResults from '../../components/customer/CustomerSearchResults';
 import ScheduledProviderCard from '../../components/customer/ScheduledProviderCard';
 import ServiceSearchBar from '../../components/customer/ServiceSearchBar';
+import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
@@ -127,7 +128,16 @@ export default function CustomerHomePage() {
   const firstName = (user?.full_name || '').split(' ')[0] || 'there';
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading your dashboard…</p>;
+    return (
+      <div className="space-y-5 pb-4" aria-busy="true" aria-label="Loading your dashboard">
+        <Skeleton className="h-40 rounded-3xl" />
+        <Skeleton className="h-28 rounded-3xl" />
+        <div>
+          <Skeleton className="mb-3 h-5 w-40" />
+          <SkeletonList count={2} />
+        </div>
+      </div>
+    );
   }
 
   if (error) {

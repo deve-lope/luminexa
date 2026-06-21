@@ -240,6 +240,24 @@ def cancel_booking(booking, *, by_user):
 
 
 @transaction.atomic
+def start_booking(booking, *, staff_user):
+    if booking.status != Booking.Status.CONFIRMED:
+        raise ValidationError({'status': 'Only confirmed bookings can be started.'})
+    if not OrganizationMembership.objects.filter(
+        organization=booking.organization,
+        user=staff_user,
+        role__in=(
+            OrganizationMembership.Role.OWNER,
+            OrganizationMembership.Role.STAFF,
+        ),
+    ).exists():
+        raise PermissionDenied('Only staff can start bookings.')
+    booking.status = Booking.Status.IN_PROGRESS
+    booking.save(update_fields=['status', 'updated_at'])
+    return booking
+
+
+@transaction.atomic
 def complete_booking(booking, *, staff_user):
     if booking.status not in (Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS):
         raise ValidationError({'status': 'Only confirmed bookings can be marked complete.'})

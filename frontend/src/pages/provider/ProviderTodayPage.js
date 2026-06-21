@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TaskListItem from '../../components/tasks/TaskListItem';
+import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import {
   providerAddTask,
-  providerRequestDetail,
   providerRequests,
   providerSchedule,
   providerScheduleDetail,
+  providerServices,
+  providerSettings,
+  providerShare,
   providerTasks,
 } from '../../utils/providerPaths';
 import { jobsAPI } from '../../utils/api';
@@ -120,8 +123,13 @@ export default function ProviderTodayPage() {
 
   if (!orgSlug || (fetching && !dashboard)) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Loading…</p>
+      <div className="space-y-5" aria-busy="true" aria-label="Loading dashboard">
+        <Skeleton className="h-24 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+        </div>
+        <SkeletonList count={3} />
       </div>
     );
   }
@@ -351,6 +359,26 @@ export default function ProviderTodayPage() {
             </Link>
           </p>
         )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-semibold text-slate-900">Manage your business</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Services', to: providerServices(orgSlug) },
+            { label: 'Schedule', to: providerSchedule(orgSlug) },
+            { label: 'My page', to: providerShare(orgSlug) },
+            { label: 'Settings', to: providerSettings(orgSlug) },
+          ].map((item) => (
+            <Link
+              key={item.label}
+              to={item.to}
+              className="flex min-h-[64px] items-center justify-center rounded-xl bg-white px-3 text-center text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-200"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </section>
 
     </div>

@@ -65,6 +65,11 @@ class Organization(models.Model):
         blank=True,
         help_text='Last date to generate or offer availability',
     )
+    timezone = models.CharField(
+        max_length=64,
+        default='America/New_York',
+        help_text='IANA timezone (e.g. America/New_York). Used for schedule hours and slot times.',
+    )
     business_types = models.ManyToManyField(
         BusinessType,
         related_name='organizations',
@@ -125,6 +130,15 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_timezone(self):
+        """Return the org's IANA timezone as a tzinfo, falling back to UTC."""
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            return ZoneInfo(self.timezone or 'UTC')
+        except (ZoneInfoNotFoundError, ValueError):
+            return ZoneInfo('UTC')
 
 
 class OrganizationGalleryImage(models.Model):

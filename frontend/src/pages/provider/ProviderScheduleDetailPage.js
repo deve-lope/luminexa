@@ -4,6 +4,8 @@ import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail } from '../../utils/providerPaths';
@@ -32,7 +34,34 @@ export default function ProviderScheduleDetailPage() {
   const [copied, setCopied] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const { showToast } = useToast();
+
+  const runNoShow = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.markBookingNoShow(id);
+      showToast('Marked as no-show.', 'success');
+      setConfirmAction(null);
+      load();
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runCancel = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.cancelBooking(id);
+      navigate(providerSchedule(orgSlug));
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,7 +91,13 @@ export default function ProviderScheduleDetailPage() {
   }, [load]);
 
   if (loading) {
-    return <p className="text-center text-slate-500 py-12">Loading…</p>;
+    return (
+      <div className="space-y-5 pb-8" aria-busy="true" aria-label="Loading booking">
+        <Skeleton className="h-28 rounded-2xl" />
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
+      </div>
+    );
   }
 
   if (error || !data) {
@@ -226,8 +261,29 @@ export default function ProviderScheduleDetailPage() {
           </button>
         )}
 
-        {data.status === 'confirmed' && (
+        {(data.status === 'confirmed' || data.status === 'in_progress') && (
           <div className="flex flex-col gap-2">
+            {data.status === 'confirmed' && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={async () => {
+                  setActionBusy(true);
+                  try {
+                    await jobsAPI.startBooking(data.id);
+                    showToast('Job started.', 'success');
+                    load();
+                  } catch (e) {
+                    setError(parseApiError(e));
+                  } finally {
+                    setActionBusy(false);
+                  }
+                }}
+                className="min-h-[48px] w-full rounded-xl bg-emerald-600 font-medium text-white disabled:opacity-60"
+              >
+                Start job
+              </button>
+            )}
             <button
               type="button"
               disabled={actionBusy}
@@ -247,41 +303,20 @@ export default function ProviderScheduleDetailPage() {
             >
               Mark complete
             </button>
+            {data.status === 'confirmed' && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('noshow')}
+                className="min-h-[48px] w-full rounded-xl border border-amber-200 font-medium text-amber-800 disabled:opacity-60"
+              >
+                Mark no-show
+              </button>
+            )}
             <button
               type="button"
               disabled={actionBusy}
-              onClick={async () => {
-                if (!window.confirm('Mark customer as no-show?')) return;
-                setActionBusy(true);
-                try {
-                  await jobsAPI.markBookingNoShow(data.id);
-                  showToast('Marked as no-show.', 'success');
-                  load();
-                } catch (e) {
-                  setError(parseApiError(e));
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
-              className="min-h-[48px] w-full rounded-xl border border-amber-200 font-medium text-amber-800 disabled:opacity-60"
-            >
-              Mark no-show
-            </button>
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={async () => {
-                if (!window.confirm('Cancel this booking?')) return;
-                setActionBusy(true);
-                try {
-                  await jobsAPI.cancelBooking(data.id);
-                  navigate(providerSchedule(orgSlug));
-                } catch (e) {
-                  setError(parseApiError(e));
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
+              onClick={() => setConfirmAction('cancel')}
               className="min-h-[48px] w-full rounded-xl border border-red-200 font-medium text-red-700 disabled:opacity-60"
             >
               Cancel booking
@@ -300,6 +335,28 @@ export default function ProviderScheduleDetailPage() {
             showToast('Booking rescheduled.', 'success');
             load();
           }}
+        />
+
+        <ConfirmDialog
+          open={confirmAction === 'noshow'}
+          title="Mark customer as no-show?"
+          message="This cancels the booking and frees the slot. Use this when the customer didn't show up."
+          confirmLabel="Mark no-show"
+          cancelLabel="Back"
+          tone="default"
+          busy={actionBusy}
+          onConfirm={runNoShow}
+          onClose={() => setConfirmAction(null)}
+        />
+        <ConfirmDialog
+          open={confirmAction === 'cancel'}
+          title="Cancel this booking?"
+          message="This frees up the slot and notifies the customer. This can't be undone."
+          confirmLabel="Cancel booking"
+          cancelLabel="Keep booking"
+          busy={actionBusy}
+          onConfirm={runCancel}
+          onClose={() => setConfirmAction(null)}
         />
       </div>
     );

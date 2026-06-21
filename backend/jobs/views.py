@@ -1,4 +1,5 @@
 from datetime import timedelta
+from zoneinfo import available_timezones
 
 from django.db.models import Case, DateTimeField, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce
@@ -13,6 +14,7 @@ from rest_framework.views import APIView
 from businesses.models import Organization, OrganizationGalleryImage, OrganizationMembership
 from businesses.public_refs import resolve_organization
 
+from .booking_audit import log_booking_event, log_booking_status_change
 from .booking_services import (
     accept_booking_request,
     booking_policy_meta,
@@ -25,6 +27,7 @@ from .booking_services import (
     decline_booking_request,
     ensure_customer_membership,
     provider_book_customer,
+    start_booking,
 )
 from .message_services import (
     can_access_booking_messages,
@@ -169,6 +172,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 'scheduling_mode': org.scheduling_mode,
                 'schedule_valid_from': org.schedule_valid_from,
                 'schedule_valid_until': org.schedule_valid_until,
+                'timezone': org.timezone,
                 'weekly_blocks': WeeklyScheduleBlockSerializer(blocks, many=True).data,
             })
 
@@ -176,6 +180,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Only the owner can update scheduling settings.')
 
         data = request.data
+        update_fields = ['scheduling_mode', 'schedule_valid_from', 'schedule_valid_until', 'updated_at']
         if 'scheduling_mode' in data:
             org.scheduling_mode = data['scheduling_mode']
         if 'schedule_valid_from' in data:
@@ -184,9 +189,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if 'schedule_valid_until' in data:
             raw = data['schedule_valid_until']
             org.schedule_valid_until = coerce_org_date(raw) if raw else None
-        org.save(update_fields=[
-            'scheduling_mode', 'schedule_valid_from', 'schedule_valid_until', 'updated_at',
-        ])
+        if 'timezone' in data:
+            tz_value = (data['timezone'] or '').strip()
+            if tz_value not in available_timezones():
+                raise ValidationError({'timezone': 'Unknown timezone.'})
+            org.timezone = tz_value
+            update_fields.append('timezone')
+        org.save(update_fields=update_fields)
 
         if 'weekly_blocks' in data:
             WeeklyScheduleBlock.objects.filter(organization=org).delete()
@@ -871,6 +880,22 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
         from .notifications import send_booking_email
         send_booking_email('booking_cancelled', booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def start(self, request, pk=None):
+        booking = self.get_object()
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can start bookings.')
+        old = booking.status
+        start_booking(booking, staff_user=request.user)
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.STARTED,
+            old_status=old,
+            new_status=booking.status,
+        )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])

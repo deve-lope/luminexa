@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import BookingsSubNav from '../../components/customer/BookingsSubNav';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
@@ -17,6 +19,7 @@ export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [rescheduleBooking, setRescheduleBooking] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -34,11 +37,11 @@ export default function CustomerBookingsPage() {
   const upcoming = useMemo(() => bookings.filter(isUpcomingBooking), [bookings]);
 
   const cancelBooking = async (id) => {
-    if (!window.confirm('Cancel this booking?')) return;
     setCancellingId(id);
     try {
       await jobsAPI.cancelBooking(id);
       showToast('Booking cancelled.', 'success');
+      setConfirmCancelId(null);
       load();
     } catch (err) {
       setError(parseApiError(err));
@@ -49,6 +52,7 @@ export default function CustomerBookingsPage() {
 
   return (
     <div className="space-y-4">
+      <BookingsSubNav />
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {upcoming.length === 0 ? (
         <div className="rounded-xl bg-white p-6 text-center shadow-sm">
@@ -77,7 +81,7 @@ export default function CustomerBookingsPage() {
               onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
               showActions
               onReschedule={canRescheduleBooking(b) ? () => setRescheduleBooking(b) : null}
-              onCancel={canCancelBooking(b) ? cancelBooking : null}
+              onCancel={canCancelBooking(b) ? () => setConfirmCancelId(b.id) : null}
               cancelling={cancellingId === b.id}
             />
           ))}
@@ -92,6 +96,17 @@ export default function CustomerBookingsPage() {
           showToast('Appointment rescheduled.', 'success');
           load();
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelId != null}
+        title="Cancel this booking?"
+        message="This frees up the time slot and notifies the business. This can't be undone."
+        confirmLabel="Cancel booking"
+        cancelLabel="Keep booking"
+        busy={cancellingId === confirmCancelId}
+        onConfirm={() => cancelBooking(confirmCancelId)}
+        onClose={() => setConfirmCancelId(null)}
       />
     </div>
   );
