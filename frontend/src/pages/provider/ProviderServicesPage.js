@@ -9,6 +9,38 @@ import { formatServiceMeta } from '../../utils/serviceDisplay';
 
 const CATEGORY_PRESETS = ['Automobile', 'House work', 'Beauty & wellness', 'Outdoor & garden'];
 
+const INPUT_CLASS =
+  'w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-luminexa-accent focus:outline-none focus:ring-2 focus:ring-luminexa-accent/20';
+const LABEL_CLASS = 'mb-1 block text-xs font-medium text-slate-600';
+
+function FieldToggle({ checked, onChange, label, description }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-luminexa-accent/40"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-800">{label}</span>
+        {description && <span className="mt-0.5 block text-xs text-slate-500">{description}</span>}
+      </span>
+      <span
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+          checked ? 'bg-luminexa-accent' : 'bg-slate-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+            checked ? 'translate-x-5' : 'translate-x-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
 const emptyServiceDraft = () => ({
   name: '',
   description: '',
@@ -58,129 +90,188 @@ function ServiceDetailForm({
   onCancel,
 }) {
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-      <p className="text-sm font-medium text-slate-800">
-        {editingServiceId ? 'Service details' : 'New service'}
-      </p>
-      <input
-        required
-        value={serviceDraft.name}
-        onChange={(e) => setServiceDraft((d) => ({ ...d, name: e.target.value }))}
-        placeholder="Service name"
-        className="w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-      />
-      <div>
-        <label htmlFor="svc-description" className="mb-1 block text-xs font-medium text-slate-600">
-          Description — what&apos;s included?
-        </label>
-        <textarea
-          id="svc-description"
-          value={serviceDraft.description}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, description: e.target.value }))}
-          rows={4}
-          placeholder="Describe the work, what customers should expect, and any notes…"
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-        />
-      </div>
-      <label className="block text-xs text-slate-600">
-        Category
-        <select
-          value={serviceDraft.category}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, category: e.target.value }))}
-          className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-        >
-          <option value="">— No category —</option>
-          {activeCategories.map((cat) => (
-            <option key={cat.id} value={String(cat.id)}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-xs text-slate-600">
-        Pricing
-        <select
-          value={serviceDraft.pricing_type}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, pricing_type: e.target.value }))}
-          className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-        >
-          <option value="fixed">Fixed price</option>
-          <option value="range">Price range</option>
-          <option value="quote">Quote on request</option>
-        </select>
-      </label>
-      {serviceDraft.pricing_type !== 'quote' && (
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-slate-600">
-            {serviceDraft.pricing_type === 'range' ? 'From ($)' : 'Rate ($)'}
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={serviceDraft.base_price}
-              onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
-              className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-            />
-          </label>
-          {serviceDraft.pricing_type === 'range' && (
-            <label className="text-xs text-slate-600">
-              To ($)
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={serviceDraft.price_max}
-                onChange={(e) => setServiceDraft((d) => ({ ...d, price_max: e.target.value }))}
-                className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-              />
-            </label>
-          )}
+    <form
+      onSubmit={onSubmit}
+      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-luminexa-accent/10"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900">
+            {editingServiceId ? 'Edit service details' : 'New service'}
+          </h4>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {editingServiceId
+              ? 'Update what customers see and how this service is booked.'
+              : 'Fill in the details customers will see on your catalog.'}
+          </p>
         </div>
-      )}
-      <label className="text-xs text-slate-600">
-        Duration (minutes)
-        <input
-          type="number"
-          min={15}
-          step={15}
-          value={serviceDraft.duration_minutes}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, duration_minutes: e.target.value }))}
-          className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-        />
-      </label>
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={serviceDraft.show_price}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, show_price: e.target.checked }))}
-          className="h-4 w-4 rounded border-slate-300"
-        />
-        Show price on public page
-      </label>
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={serviceDraft.allow_request}
-          onChange={(e) => setServiceDraft((d) => ({ ...d, allow_request: e.target.checked }))}
-          className="h-4 w-4 rounded border-slate-300"
-        />
-        Allow &quot;Request service&quot; from customers
-      </label>
-      {editingServiceId && (
-        <ServiceGalleryEditor serviceId={editingServiceId} />
-      )}
-      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-600"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path
+              d="M5 5l10 10M15 5L5 15"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div>
+          <label htmlFor="svc-name" className={LABEL_CLASS}>
+            Service name
+          </label>
+          <input
+            id="svc-name"
+            required
+            value={serviceDraft.name}
+            onChange={(e) => setServiceDraft((d) => ({ ...d, name: e.target.value }))}
+            placeholder="e.g. Standard oil change"
+            className={INPUT_CLASS}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="svc-description" className={LABEL_CLASS}>
+            Description — what&apos;s included?
+          </label>
+          <textarea
+            id="svc-description"
+            value={serviceDraft.description}
+            onChange={(e) => setServiceDraft((d) => ({ ...d, description: e.target.value }))}
+            rows={4}
+            placeholder="Describe the work, what customers should expect, and any notes…"
+            className={`${INPUT_CLASS} min-h-[96px] py-2 leading-relaxed`}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="svc-category" className={LABEL_CLASS}>
+              Category
+            </label>
+            <select
+              id="svc-category"
+              value={serviceDraft.category}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, category: e.target.value }))}
+              className={INPUT_CLASS}
+            >
+              <option value="">— No category —</option>
+              {activeCategories.map((cat) => (
+                <option key={cat.id} value={String(cat.id)}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="svc-pricing" className={LABEL_CLASS}>
+              Pricing
+            </label>
+            <select
+              id="svc-pricing"
+              value={serviceDraft.pricing_type}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, pricing_type: e.target.value }))}
+              className={INPUT_CLASS}
+            >
+              <option value="fixed">Fixed price</option>
+              <option value="range">Price range</option>
+              <option value="quote">Quote on request</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {serviceDraft.pricing_type !== 'quote' && (
+            <>
+              <div>
+                <label htmlFor="svc-price" className={LABEL_CLASS}>
+                  {serviceDraft.pricing_type === 'range' ? 'From ($)' : 'Rate ($)'}
+                </label>
+                <input
+                  id="svc-price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={serviceDraft.base_price}
+                  onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
+                  className={INPUT_CLASS}
+                />
+              </div>
+              {serviceDraft.pricing_type === 'range' && (
+                <div>
+                  <label htmlFor="svc-price-max" className={LABEL_CLASS}>
+                    To ($)
+                  </label>
+                  <input
+                    id="svc-price-max"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={serviceDraft.price_max}
+                    onChange={(e) => setServiceDraft((d) => ({ ...d, price_max: e.target.value }))}
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          <div>
+            <label htmlFor="svc-duration" className={LABEL_CLASS}>
+              Duration (minutes)
+            </label>
+            <input
+              id="svc-duration"
+              type="number"
+              min={15}
+              step={15}
+              value={serviceDraft.duration_minutes}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, duration_minutes: e.target.value }))}
+              className={INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <FieldToggle
+            checked={serviceDraft.show_price}
+            onChange={(val) => setServiceDraft((d) => ({ ...d, show_price: val }))}
+            label="Show price on public page"
+            description="Display this service's price to customers browsing your catalog."
+          />
+          <FieldToggle
+            checked={serviceDraft.allow_request}
+            onChange={(val) => setServiceDraft((d) => ({ ...d, allow_request: val }))}
+            label="Allow “Request service” from customers"
+            description="Let customers request this service directly from your page."
+          />
+        </div>
+
+        {editingServiceId && (
+          <div className="border-t border-slate-100 pt-4">
+            <ServiceGalleryEditor serviceId={editingServiceId} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
         <button
           type="submit"
           disabled={savingService}
-          className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent font-medium text-white disabled:opacity-60"
+          className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent font-medium text-white transition hover:bg-luminexa-accent/90 disabled:opacity-60"
         >
           {savingService ? 'Saving…' : editingServiceId ? 'Save details' : 'Add service'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-4 text-sm"
+          className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
         >
           Cancel
         </button>
@@ -215,27 +306,33 @@ function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow,
         {orgSlug && !hidden && (
           <Link
             to={serviceDetail(orgSlug, service.id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-block text-xs font-medium text-luminexa-accent"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-luminexa-accent transition hover:gap-1.5"
           >
-            Show full details →
+            Show full details
+            <span aria-hidden="true">→</span>
           </Link>
         )}
-        {hidden && <p className="mt-2 text-xs font-medium text-slate-500">Hidden from customers</p>}
+        {hidden && (
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            Hidden from customers
+          </span>
+        )}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
         <button
           type="button"
           onClick={() => onDetails(service)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             detailsOpen
               ? 'bg-luminexa-accent text-white'
               : needsDetails
-                ? 'border border-violet-200 bg-violet-50 text-luminexa-accent'
-                : 'border border-slate-200 text-slate-700'
+                ? 'border border-violet-200 bg-violet-50 text-luminexa-accent hover:bg-violet-100'
+                : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
           }`}
         >
+          {needsDetails && !detailsOpen && (
+            <span className="h-1.5 w-1.5 rounded-full bg-luminexa-accent" aria-hidden="true" />
+          )}
           {detailsOpen ? 'Close details' : needsDetails ? 'Add details' : 'Edit details'}
         </button>
         {editing &&
@@ -243,7 +340,7 @@ function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow,
             <button
               type="button"
               onClick={() => onShow(service)}
-              className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700"
+              className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
             >
               Show
             </button>
@@ -251,7 +348,7 @@ function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow,
             <button
               type="button"
               onClick={() => onHide(service)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-50"
             >
               Hide
             </button>
@@ -504,8 +601,6 @@ export default function ProviderServicesPage({ embedded = false }) {
               {publicCatalogPath && (
                 <Link
                   to={publicCatalogPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="mt-2 inline-block text-sm font-medium text-luminexa-accent"
                 >
                   Preview customer catalog →
