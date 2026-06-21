@@ -22,6 +22,47 @@ def _format_when(dt):
     return date_format(timezone.localtime(dt), 'DATETIME_FORMAT')
 
 
+def _provider_staff_emails(org):
+    return [
+        e
+        for e in org.memberships.filter(role__in=('owner', 'staff'))
+        .select_related('user')
+        .values_list('user__email', flat=True)
+        if e
+    ]
+
+
+def _customer_label(booking):
+    return booking.customer.full_name or booking.customer.email
+
+
+def _booking_detail_lines(booking, *, include_address=False):
+    service_name = booking.service.name if booking.service_id else 'Service'
+    lines = [
+        f'Service: {service_name}',
+        f'When: {_format_when(booking.start_at)}',
+        f'Customer: {_customer_label(booking)}',
+    ]
+    if booking.customer.phone:
+        lines.append(f'Phone: {booking.customer.phone}')
+    if include_address and booking.service_address:
+        lines.append(f'Location: {booking.service_address}')
+    if booking.customer_notes:
+        lines.append(f'Notes: {booking.customer_notes}')
+    return lines
+
+
+def notify_customer_booking_created(booking):
+    """Email provider staff and the customer after a customer books a slot."""
+    from .models import Booking
+
+    if booking.status == Booking.Status.CONFIRMED:
+        send_booking_email('booking_new_to_provider', booking)
+        send_booking_email('booking_confirmed', booking)
+    else:
+        send_booking_email('booking_requested', booking)
+
+
 def send_booking_email(event, booking):
     """Send booking lifecycle email; failures are logged, not raised."""
     org = booking.organization
@@ -33,18 +74,21 @@ def send_booking_email(event, booking):
     subject = ''
     body_lines = []
 
-    if event == 'booking_requested':
-        staff_emails = list(
-            org.memberships.filter(
-                role__in=('owner', 'staff'),
-            ).select_related('user').values_list('user__email', flat=True)
-        )
-        recipients = [e for e in staff_emails if e]
+    if event == 'booking_new_to_provider':
+        recipients = _provider_staff_emails(org)
+        subject = f'New booking — {service_name}'
+        body_lines = [
+            f'A customer booked {service_name}.',
+            *_booking_detail_lines(booking, include_address=True),
+            '',
+            f'Open in Luminexa: {provider_url}',
+        ]
+    elif event == 'booking_requested':
+        recipients = _provider_staff_emails(org)
         subject = f'New booking request — {service_name}'
         body_lines = [
             f'A customer requested {service_name}.',
-            f'When: {when}',
-            f'Customer: {booking.customer.full_name or booking.customer.email}',
+            *_booking_detail_lines(booking, include_address=True),
             '',
             f'Open in Luminexa: {provider_url}',
         ]
@@ -74,12 +118,7 @@ def send_booking_email(event, booking):
             f'When: {when}',
         ]
     elif event == 'booking_cancelled':
-        staff_emails = list(
-            org.memberships.filter(role__in=('owner', 'staff'))
-            .select_related('user')
-            .values_list('user__email', flat=True)
-        )
-        staff = [e for e in staff_emails if e]
+        staff = _provider_staff_emails(org)
         customer_email = booking.customer.email
         if customer_email:
             _send_to(

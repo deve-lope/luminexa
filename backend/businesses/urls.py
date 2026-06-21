@@ -9,6 +9,7 @@ urlpatterns = [
     path('customer/home/', api_views.customer_home_api, name='customer-home'),
     path('customer/services/', api_views.customer_services_catalog_api, name='customer-services-catalog'),
     path('customer/discover/', api_views.customer_discover_api, name='customer-discover'),
+    path('location-options/', api_views.location_options_api, name='location-options'),
     path('postal-lookup/', api_views.postal_lookup_api, name='postal-lookup'),
     path('reverse-geocode/', api_views.reverse_geocode_api, name='reverse-geocode'),
     path('map-search/', api_views.map_search_api, name='map-search'),

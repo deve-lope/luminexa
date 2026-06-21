@@ -174,6 +174,12 @@ class ProviderNotification(models.Model):
 class CustomerServiceInquiry(models.Model):
     """Customer describes what they need when no catalog service fits or before booking."""
 
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACTIVE = 'active', 'Active'
+        COMPLETED = 'completed', 'Completed'
+        DECLINED = 'declined', 'Declined'
+
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='service_inquiries'
     )
@@ -201,6 +207,11 @@ class CustomerServiceInquiry(models.Model):
         null=True,
         blank=True,
         help_text='Customer-preferred date for the job (not a confirmed slot).',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
     )
     dismissed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -459,6 +470,54 @@ class BookingStatusEvent(models.Model):
 
     def __str__(self):
         return f'{self.booking_id} {self.action}'
+
+
+class ServiceRequestMessage(models.Model):
+    """Thread between provider staff and customer on a booking or custom inquiry."""
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='request_messages',
+    )
+    inquiry = models.ForeignKey(
+        CustomerServiceInquiry,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='request_messages',
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='service_request_messages',
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(booking__isnull=False, inquiry__isnull=True)
+                    | models.Q(booking__isnull=True, inquiry__isnull=False)
+                ),
+                name='service_request_message_one_target',
+            ),
+        ]
+
+    def clean(self):
+        has_booking = bool(self.booking_id)
+        has_inquiry = bool(self.inquiry_id)
+        if has_booking == has_inquiry:
+            raise ValidationError('Message must belong to exactly one booking or inquiry.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class Task(models.Model):

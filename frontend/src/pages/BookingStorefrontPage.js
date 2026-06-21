@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom';
 import { policyLabel } from '../constants/bookingPolicies';
 import ProviderProfileEditor from '../components/provider/ProviderProfileEditor';
 import ProviderServicesEditor from '../components/provider/ProviderServicesEditor';
 import CustomerServiceRequestForm from '../components/customer/CustomerServiceRequestForm';
 import { useAuth } from '../contexts/AuthContext';
 import { businessesAPI } from '../utils/api';
-import { bookService, businessPage } from '../utils/customerPaths';
+import { bookService, businessPage, customerProviderService } from '../utils/customerPaths';
+import { providerRouteKey } from '../utils/providerRouteKey';
 import { providerServices } from '../utils/providerPaths';
 import ExpandableText from '../components/ui/ExpandableText';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
@@ -18,6 +19,7 @@ import {
   needsExplicitConnect,
 } from '../utils/bookingAccess';
 import { providerHome, providerSchedule } from '../utils/providerPaths';
+import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
 
 /**
  * Public booking profile at /book/:slug
@@ -25,8 +27,11 @@ import { providerHome, providerSchedule } from '../utils/providerPaths';
  */
 export default function BookingStorefrontPage() {
   const { variant = 'customer' } = useOutletContext() || {};
-  const { slug } = useParams();
-  const businessSlug = slug;
+  const params = useParams();
+  const location = useLocation();
+  const providerKey = providerRouteKey(params);
+  const businessSlug = providerKey;
+  const isCustomerProviderRoute = location.pathname.startsWith('/customer/provider/');
   const isOwnerView = variant === 'owner';
   const isGuest = variant === 'guest';
   const { memberships, refreshSession } = useAuth();
@@ -94,8 +99,18 @@ export default function BookingStorefrontPage() {
   }
 
   const { organization, services } = data;
+  const customerKey = organization.public_ref || providerKey;
+  const adminOrgSlug = organization.slug || providerKey;
+  const serviceBookPath = (serviceId) =>
+    isCustomerProviderRoute
+      ? customerProviderService(customerKey, serviceId)
+      : bookService(customerKey, serviceId);
+  const providerPagePath = isCustomerProviderRoute
+    ? `/customer/provider/${customerKey}`
+    : businessPage(customerKey);
   const serviceCatalog =
     data.service_catalog || buildCatalogFromFlat(services || []);
+  const hasListedServices = (services || []).length > 0;
   const gallery = organization.gallery || [];
   const businessTypes = data.business_types || [];
   const forceShowPrice = isOwnerView;
@@ -105,7 +120,7 @@ export default function BookingStorefrontPage() {
     if (isGuest) {
       return (
         <Link
-          to={`/login?next=${encodeURIComponent(bookService(businessSlug, svc.id))}`}
+          to={`/login?next=${encodeURIComponent(serviceBookPath(svc.id))}`}
           className="rounded-lg bg-luminexa-accent px-3 py-2 text-xs font-medium text-white"
         >
           Sign in to book
@@ -127,7 +142,7 @@ export default function BookingStorefrontPage() {
     if (canPickService) {
       return (
         <Link
-          to={bookService(businessSlug, svc.id)}
+          to={serviceBookPath(svc.id)}
           className="rounded-lg bg-luminexa-accent px-3 py-2 text-xs font-medium text-white"
         >
           Book
@@ -186,13 +201,13 @@ export default function BookingStorefrontPage() {
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Link
-                to={providerHome(businessSlug)}
+                to={providerHome(adminOrgSlug)}
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
               >
                 Business dashboard
               </Link>
               <Link
-                to={`${businessPage(businessSlug)}?mode=owner`}
+                to={`${businessPage(adminOrgSlug)}?mode=owner`}
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-amber-200 bg-white px-4 text-sm font-medium text-amber-900"
               >
                 Edit public page
@@ -210,13 +225,13 @@ export default function BookingStorefrontPage() {
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Link
-                to={providerServices(businessSlug)}
+                to={providerServices(adminOrgSlug)}
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
               >
                 Manage categories &amp; services
               </Link>
               <Link
-                to={providerSchedule(businessSlug)}
+                to={providerSchedule(adminOrgSlug)}
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-violet-200 bg-white px-4 text-sm font-medium text-luminexa-accent"
               >
                 Dashboard
@@ -227,8 +242,8 @@ export default function BookingStorefrontPage() {
 
         {editing ? (
           <div className="space-y-4">
-            <ProviderProfileEditor orgSlug={businessSlug} onMediaChange={load} />
-            <ProviderServicesEditor orgSlug={businessSlug} />
+            <ProviderProfileEditor orgSlug={adminOrgSlug} onMediaChange={load} />
+            <ProviderServicesEditor orgSlug={adminOrgSlug} />
           </div>
         ) : (
           <>
@@ -237,29 +252,13 @@ export default function BookingStorefrontPage() {
               {organization.tagline && (
                 <p className="mt-1 text-slate-600">{organization.tagline}</p>
               )}
-              {(organization.service_postal_code ||
-                organization.service_city ||
-                organization.service_address) && (
+              {providerHasServiceArea(organization) && (
                 <p className="mt-2 flex items-start gap-1.5 text-sm text-slate-600">
                   <span aria-hidden>📍</span>
-                  <span>
-                    {[
-                      organization.service_address,
-                      [
-                        organization.service_postal_code,
-                        [organization.service_city, organization.service_state]
-                          .filter(Boolean)
-                          .join(', '),
-                      ]
-                        .filter(Boolean)
-                        .join(' · '),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
+                  <span>{formatProviderServiceArea(organization)}</span>
                 </p>
               )}
-              {bookingPolicy && (
+              {isOwnerView && bookingPolicy && (
                 <p className="mt-2 text-xs text-slate-500">{policyLabel(bookingPolicy)}</p>
               )}
             </header>
@@ -270,13 +269,13 @@ export default function BookingStorefrontPage() {
                 <p className="mt-2 text-sm text-slate-600">Sign in to view times and book.</p>
                 <div className="mt-4 flex flex-col gap-2">
                   <Link
-                    to={`/login?next=${encodeURIComponent(businessPage(businessSlug))}`}
+                    to={`/login?next=${encodeURIComponent(providerPagePath)}`}
                     className="flex min-h-[48px] items-center justify-center rounded-xl bg-luminexa-accent font-medium text-white"
                   >
                     Sign in to book
                   </Link>
                   <Link
-                    to={`/register?next=${encodeURIComponent(businessPage(businessSlug))}`}
+                    to={`/register?next=${encodeURIComponent(providerPagePath)}`}
                     className="flex min-h-[48px] items-center justify-center rounded-xl border border-slate-200 text-slate-700"
                   >
                     Create account
@@ -309,25 +308,23 @@ export default function BookingStorefrontPage() {
               <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
             )}
 
+            {(isOwnerView || hasListedServices) && (
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">
                 Choose a category
               </h2>
-              {services.length === 0 ? (
+              {!hasListedServices ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center">
                   <p className="text-sm text-slate-500">
-                    {isOwnerView
-                      ? 'No services on your public page yet. Add categories and services from the Services menu.'
-                      : 'No services listed yet.'}
+                    No services on your public page yet. Add categories and services from the
+                    Services menu.
                   </p>
-                  {isOwnerView && (
-                    <Link
-                      to={providerServices(businessSlug)}
-                      className="mt-3 inline-block text-sm font-medium text-luminexa-accent"
-                    >
-                      Manage services
-                    </Link>
-                  )}
+                  <Link
+                    to={providerServices(adminOrgSlug)}
+                    className="mt-3 inline-block text-sm font-medium text-luminexa-accent"
+                  >
+                    Manage services
+                  </Link>
                 </div>
               ) : (
                 <ServiceCategoryBrowse
@@ -338,6 +335,7 @@ export default function BookingStorefrontPage() {
                 />
               )}
             </section>
+            )}
 
             <section className="rounded-xl bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold uppercase text-slate-500">About</h2>
@@ -376,10 +374,10 @@ export default function BookingStorefrontPage() {
 
             {!isOwnerView && (
               <CustomerServiceRequestForm
-                orgSlug={businessSlug}
+                orgSlug={customerKey}
                 businessTypes={businessTypes}
                 isGuest={isGuest}
-                loginNextUrl={businessPage(businessSlug)}
+                loginNextUrl={providerPagePath}
               />
             )}
           </>

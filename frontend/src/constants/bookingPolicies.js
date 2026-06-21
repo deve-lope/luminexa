@@ -22,3 +22,13 @@ export const BOOKING_POLICIES = [
 export function policyLabel(value) {
   return BOOKING_POLICIES.find((p) => p.value === value)?.label || value;
 }
+
+/** Short hint for customers — never provider-facing "you" wording. */
+export function customerPolicyLabel(value) {
+  const labels = {
+    instant: 'Confirmed as soon as you book a slot',
+    approval: 'The business will confirm your booking request',
+    clients_only: 'Request access before you can book',
+  };
+  return labels[value] || '';
+}

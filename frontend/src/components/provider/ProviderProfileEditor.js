@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { businessesAPI, orgProfileAPI } from '../../utils/api';
-import AddressFields from '../location/AddressFields';
+import { providerSettings } from '../../utils/providerPaths';
 
 function parseUploadError(err) {
   const d = err.response?.data;
@@ -13,10 +14,6 @@ function parseUploadError(err) {
 export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 'Page appearance & bio' }) {
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
-  const [serviceCity, setServiceCity] = useState('');
-  const [servicePostalCode, setServicePostalCode] = useState('');
-  const [serviceState, setServiceState] = useState('');
-  const [serviceAddress, setServiceAddress] = useState('');
   const [bannerUrl, setBannerUrl] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
   const [gallery, setGallery] = useState([]);
@@ -34,10 +31,6 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
         if (org) {
           setTagline(org.tagline || '');
           setDescription(org.description || '');
-          setServiceCity(org.service_city || '');
-          setServicePostalCode(org.service_postal_code || '');
-          setServiceState(org.service_state || '');
-          setServiceAddress(org.service_address || '');
           setBannerUrl(org.banner_url || null);
           setLogoUrl(org.logo_url || null);
         }
@@ -75,10 +68,6 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
       await orgProfileAPI.patchOrganization(orgSlug, {
         tagline,
         description,
-        service_city: serviceCity.trim(),
-        service_postal_code: servicePostalCode.replace(/[\s-]+/g, '').toUpperCase(),
-        service_state: serviceState.trim(),
-        service_address: serviceAddress.trim(),
       });
       setMessage('Profile saved.');
       notifyMediaChange();
@@ -234,20 +223,13 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
           placeholder="Describe your company, experience, and what customers can expect when they book with you."
         />
 
-        <p className="pt-2 text-sm font-medium text-slate-700">Service location</p>
-        <p className="text-xs text-slate-500">
-          Customers filter by PIN / postal code to find providers in their area.
+        <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+          Set your service area (map + radius circle) in{' '}
+          <Link to={providerSettings(orgSlug)} className="font-medium text-luminexa-accent">
+            Settings
+          </Link>
+          .
         </p>
-        <AddressFields
-          postalCode={servicePostalCode}
-          onPostalCodeChange={setServicePostalCode}
-          city={serviceCity}
-          onCityChange={setServiceCity}
-          state={serviceState}
-          onStateChange={setServiceState}
-          address={serviceAddress}
-          onAddressChange={setServiceAddress}
-        />
 
         <button
           type="button"

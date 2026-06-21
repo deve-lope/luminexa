@@ -5,6 +5,7 @@ from .models import BusinessType, Organization, OrganizationMembership
 
 class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
+    organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     organization_name = serializers.CharField(source='organization.name', read_only=True)
 
     class Meta:
@@ -13,6 +14,7 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
             'id',
             'organization',
             'organization_slug',
+            'organization_public_ref',
             'organization_name',
             'role',
             'customer_status',
@@ -56,7 +58,7 @@ class PublicProviderCardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = (
-            'slug', 'name', 'tagline', 'booking_policy',
+            'public_ref', 'slug', 'name', 'tagline', 'booking_policy',
             'service_city', 'service_state', 'service_postal_code', 'service_address',
             'location', 'banner_url', 'logo_url',
         )

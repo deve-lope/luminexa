@@ -180,7 +180,8 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS(
-            f'Demo ready: org slug "{org.slug}". Book at /book/{org.slug}'
+            f'Demo ready: org "{org.slug}" ({org.public_ref}). '
+            f'Customer view: /customer/provider/{org.public_ref}'
         ))
         self.stdout.write('Test logins (email / password):')
         self.stdout.write(f'  provider@luminexa.local / {demo_password}  → SPA /provider')

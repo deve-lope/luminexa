@@ -13,7 +13,14 @@ from jobs.serializers import BookingSerializer, PublicServiceReadSerializer
 from .models import BusinessType, Organization, OrganizationMembership
 from .geocode import lookup_postal_location, resolve_coordinates, reverse_geocode, search_locations
 from .location import organization_distances_within_radius, parse_radius_miles
-from .postal import normalize_postal_code
+from .postal import normalize_postal_code, picker_postal_codes
+from .region_codes import (
+    city_matches,
+    merge_unique_sorted,
+    reference_cities,
+    reference_postal_codes,
+    state_matches,
+)
 from .serializers import (
     BusinessTypeCreateSerializer,
     BusinessTypeSerializer,
@@ -69,6 +76,15 @@ def business_types_list_api(request):
 
     qs = qs.filter(provider_count__gt=0)
     return Response(BusinessTypeSerializer(qs, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def location_options_api(request):
+    """Cities and postal codes for the location picker, filtered by province/state."""
+    state = (request.query_params.get('state') or '').strip()
+    city = (request.query_params.get('city') or '').strip()
+    return Response(_location_picker_payload(state=state, city=city))
 
 
 @api_view(['GET'])
@@ -212,6 +228,7 @@ def _serialize_bookable_service(service, *, ctx):
         'image_url': PublicServiceReadSerializer(service, context=ctx).data.get('image_url'),
         'rating_summary': PublicServiceReadSerializer(service, context=ctx).data.get('rating_summary'),
         'organization_slug': org.slug,
+        'organization_public_ref': org.public_ref,
         'organization_name': org.name,
         'organization_tagline': org.tagline or '',
         'service_city': org.service_city or '',
@@ -322,15 +339,57 @@ def _location_search_meta(postal, city, state, radius_miles, dist_map):
     }
 
 
-def _distinct_postal_codes(org_filter):
-    codes = (
-        Organization.objects.filter(org_filter)
-        .exclude(service_postal_code='')
-        .values_list('service_postal_code', flat=True)
-        .distinct()
-        .order_by('service_postal_code')
+def _org_base_filter():
+    return Q(is_active=True, profile_public=True, service_city__gt='')
+
+
+def _orgs_for_location_picker(*, state='', city=''):
+    qs = Organization.objects.filter(_org_base_filter()).exclude(service_state='')
+    if state:
+        qs = [o for o in qs if state_matches(o.service_state, state)]
+    else:
+        qs = list(qs)
+    if city:
+        qs = [o for o in qs if city_matches(o.service_city, city)]
+    return qs
+
+
+def _distinct_cities(*, state='', city=''):
+    orgs = _orgs_for_location_picker(state=state, city='')
+    provider_cities = sorted(
+        {o.service_city.strip() for o in orgs if o.service_city},
+        key=str.lower,
     )
-    return list(codes)
+    return merge_unique_sorted(provider_cities, reference_cities(state=state))
+
+
+def _distinct_postal_codes(*, state='', city=''):
+    orgs = _orgs_for_location_picker(state=state, city=city)
+    provider_codes = sorted(
+        {o.service_postal_code.strip() for o in orgs if o.service_postal_code},
+        key=str.upper,
+    )
+    merged = merge_unique_sorted(
+        provider_codes,
+        reference_postal_codes(state=state, city=city),
+    )
+    return picker_postal_codes(merged, state=state)
+
+
+def _location_picker_payload(*, state='', city=''):
+    return {
+        'cities': _distinct_cities(state=state, city=city),
+        'postal_codes': _distinct_postal_codes(state=state, city=city),
+        'states': merge_unique_sorted(
+            list(
+                Organization.objects.filter(_org_base_filter())
+                .exclude(service_state='')
+                .values_list('service_state', flat=True)
+                .distinct()
+            ),
+        ),
+    }
+
 
 
 def _absolute_media_url(request, field):
@@ -393,6 +452,7 @@ def customer_home_api(request):
         ).data
         providers.append({
             'organization_slug': org.slug,
+            'organization_public_ref': org.public_ref,
             'organization_name': org.name,
             'customer_status': m.customer_status or '',
             'can_book': customer_can_book(org, user) and getattr(user, 'has_booking_contact', True),
@@ -443,28 +503,14 @@ def public_services_browse_api(request):
     )
     ctx = {'request': request, 'distance_by_org_id': dist_map}
     services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:200]]
-
-    org_filter = Q(is_active=True, profile_public=True, service_city__gt='')
-    cities = list(
-        Organization.objects.filter(org_filter)
-        .values_list('service_city', flat=True)
-        .distinct()
-        .order_by('service_city')
-    )
-    states = list(
-        Organization.objects.filter(org_filter)
-        .exclude(service_state='')
-        .values_list('service_state', flat=True)
-        .distinct()
-        .order_by('service_state')
-    )
+    picker = _location_picker_payload(state=state, city=city)
 
     return Response({
         'business_types': BusinessTypeSerializer(types_qs, many=True).data,
         'services': services,
-        'cities': cities,
-        'states': states,
-        'postal_codes': _distinct_postal_codes(org_filter),
+        'cities': picker['cities'],
+        'states': picker['states'],
+        'postal_codes': picker['postal_codes'],
         'count': len(services),
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),
     })
@@ -491,27 +537,13 @@ def customer_services_catalog_api(request):
     )
     ctx = {'request': request, 'distance_by_org_id': dist_map}
     services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:200]]
-
-    org_filter = Q(is_active=True, profile_public=True, service_city__gt='')
-    cities = list(
-        Organization.objects.filter(org_filter)
-        .values_list('service_city', flat=True)
-        .distinct()
-        .order_by('service_city')
-    )
-    states = list(
-        Organization.objects.filter(org_filter)
-        .exclude(service_state='')
-        .values_list('service_state', flat=True)
-        .distinct()
-        .order_by('service_state')
-    )
+    picker = _location_picker_payload(state=state, city=city)
 
     return Response({
         'services': services,
-        'cities': cities,
-        'states': states,
-        'postal_codes': _distinct_postal_codes(org_filter),
+        'cities': picker['cities'],
+        'states': picker['states'],
+        'postal_codes': picker['postal_codes'],
         'count': len(services),
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),
     })

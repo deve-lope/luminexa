@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from businesses.models import BusinessType, Organization, OrganizationGalleryImage, OrganizationMembership
-from businesses.location import assign_org_coordinates
+from businesses.location import assign_org_coordinates, parse_radius_miles, quantize_coordinate
 from businesses.postal import validate_postal_code
 
 User = get_user_model()
@@ -17,6 +17,7 @@ from .models import (
     Service,
     ServiceCategory,
     ServiceGalleryImage,
+    ServiceRequestMessage,
     ServiceReview,
     Task,
     UnavailableBlock,
@@ -36,21 +37,37 @@ class OrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = (
-            'id', 'name', 'slug', 'tagline', 'description',
+            'id', 'name', 'public_ref', 'slug', 'tagline', 'description',
             'logo', 'banner', 'profile_public', 'is_active', 'booking_policy',
             'scheduling_mode', 'schedule_valid_from', 'schedule_valid_until',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
+            'service_latitude', 'service_longitude', 'service_radius_miles',
             'business_type_ids',
             'created_at', 'updated_at',
         )
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
 
     def validate_service_postal_code(self, value):
         if not (value or '').strip():
             return ''
         return validate_postal_code(value)
 
+    def validate_service_radius_miles(self, value):
+        return parse_radius_miles(value)
+
+    def validate_service_latitude(self, value):
+        if value is None:
+            return None
+        return quantize_coordinate(value)
+
+    def validate_service_longitude(self, value):
+        if value is None:
+            return None
+        return quantize_coordinate(value)
+
     def _maybe_geocode(self, instance, validated_data):
+        if 'service_latitude' in validated_data and 'service_longitude' in validated_data:
+            return
         keys = ('service_postal_code', 'service_city', 'service_state', 'service_address')
         if any(k in validated_data for k in keys):
             assign_org_coordinates(instance)
@@ -119,15 +136,61 @@ class CustomerServiceInquirySerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
+    organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
 
     class Meta:
         model = CustomerServiceInquiry
         fields = (
             'id', 'service', 'service_name', 'service_label', 'message', 'service_address',
-            'preferred_date', 'dismissed_at', 'organization_name', 'organization_slug',
+            'preferred_date', 'status', 'dismissed_at', 'organization_name', 'organization_slug',
+            'organization_public_ref',
             'customer_name', 'customer_email', 'customer_phone', 'created_at',
         )
         read_only_fields = fields
+
+
+class ServiceRequestMessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.full_name', read_only=True)
+    sender_role = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ServiceRequestMessage
+        fields = (
+            'id', 'body', 'sender', 'sender_name', 'sender_role', 'is_mine', 'created_at',
+        )
+        read_only_fields = fields
+
+    def get_sender_role(self, obj):
+        booking = getattr(obj, 'booking', None)
+        inquiry = getattr(obj, 'inquiry', None)
+        if booking and obj.sender_id == booking.customer_id:
+            return 'customer'
+        if inquiry and obj.sender_id == inquiry.customer_id:
+            return 'customer'
+        return 'provider'
+
+    def get_is_mine(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.sender_id == request.user.id
+
+
+class ProviderServiceRequestListSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    customer_name = serializers.CharField()
+    customer_email = serializers.EmailField()
+    status = serializers.CharField()
+    bucket = serializers.CharField()
+    start_at = serializers.DateTimeField(allow_null=True)
+    preferred_date = serializers.DateField(allow_null=True)
+    summary = serializers.CharField(allow_null=True)
+    message_count = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
 
 
 class ServiceCategorySerializer(serializers.ModelSerializer):
@@ -342,6 +405,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     )
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
+    organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     customer_name = serializers.CharField(source='customer.full_name', read_only=True)
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
@@ -350,7 +414,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = (
-            'id', 'organization', 'organization_slug', 'organization_name',
+            'id', 'organization', 'organization_slug', 'organization_public_ref', 'organization_name',
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
             'customer', 'customer_name', 'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
@@ -364,6 +428,7 @@ class BookingSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source='service.name', read_only=True)
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
+    organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     customer_name = serializers.CharField(source='customer.full_name', read_only=True)
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
@@ -377,15 +442,17 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = (
-            'id', 'organization', 'organization_slug', 'service', 'service_name',
-            'organization_name', 'customer', 'customer_name', 'customer_email', 'customer_phone',
+            'id', 'organization', 'organization_slug', 'organization_public_ref',
+            'service', 'service_name', 'organization_name', 'customer', 'customer_name',
+            'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
             'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'customer_name', 'customer_email', 'customer_phone', 'service_name',
-            'organization_name', 'organization_slug', 'availability_slot', 'source', 'booked_by',
+            'organization_name', 'organization_slug', 'organization_public_ref', 'availability_slot',
+            'source', 'booked_by',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -562,9 +629,10 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = (
-            'id', 'name', 'slug', 'tagline', 'description', 'logo_url', 'banner_url',
+            'id', 'name', 'public_ref', 'slug', 'tagline', 'description', 'logo_url', 'banner_url',
             'booking_policy', 'gallery',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
+            'service_latitude', 'service_longitude', 'service_radius_miles',
         )
 
     def get_logo_url(self, obj):
@@ -673,11 +741,12 @@ class PublicServiceDetailSerializer(PublicServiceReadSerializer):
     can_rate = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
+    organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
 
     class Meta(PublicServiceReadSerializer.Meta):
         fields = PublicServiceReadSerializer.Meta.fields + (
             'gallery', 'reviews', 'my_review', 'can_rate',
-            'organization_name', 'organization_slug',
+            'organization_name', 'organization_slug', 'organization_public_ref',
         )
 
     def get_gallery(self, obj):

@@ -3,9 +3,10 @@
 
 DJANGO_SECRET_KEY=prod-local-change-me-before-deploy
 DEBUG=False
-ALLOWED_HOSTS=localhost,127.0.0.1
+ALLOWED_HOSTS=localhost,127.0.0.1,web,0.0.0.0
 
 # Browser opens SPA on 3000 → API on host 9001
+# Add LAN IP / domain to these lists if needed (see env/README.md)
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 PUBLIC_APP_URL=http://localhost:3000
@@ -19,6 +20,18 @@ SQLITE_DB_PATH=/app/data/db.sqlite3
 CELERY_BROKER_URL=redis://redis:6379/0
 CELERY_RESULT_BACKEND=redis://redis:6379/0
 
-# Email (console backend logs to `docker compose logs web`)
-EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+# Email — Mailpit catches all outgoing mail (inbox UI: http://localhost:8025)
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=mailpit
+EMAIL_PORT=1025
+EMAIL_USE_TLS=False
 DEFAULT_FROM_EMAIL=noreply@luminexa.local
+
+# Production SMTP example (replace Mailpit settings above):
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=smtp.example.com
+# EMAIL_PORT=587
+# EMAIL_HOST_USER=your-smtp-user
+# EMAIL_HOST_PASSWORD=your-smtp-password
+# EMAIL_USE_TLS=True
+# DEFAULT_FROM_EMAIL=noreply@yourdomain.com

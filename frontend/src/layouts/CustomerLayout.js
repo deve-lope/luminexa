@@ -62,6 +62,15 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/customer/account')) {
       return { eyebrow: 'Account', title: 'Profile & password' };
     }
+    if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Book', title: 'Book appointment' };
+    }
+    if (/^\/customer\/provider\/[^/]+\/services\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Book', title: 'Service details' };
+    }
+    if (/^\/customer\/provider\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Book', title: 'Provider' };
+    }
     if (location.pathname === '/customer' || location.pathname.endsWith('/customer/')) {
       return {
         eyebrow: 'Home',

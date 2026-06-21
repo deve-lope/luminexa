@@ -1,4 +1,16 @@
-/** Customer-facing URLs (no /customer/provider/... paths). */
+/** Customer-facing URLs — public provider pages use /customer/provider/pro12 */
+
+export function customerProviderPage(providerKey) {
+  return `/customer/provider/${providerKey}`;
+}
+
+export function customerProviderService(providerKey, serviceId) {
+  return `/customer/provider/${providerKey}/${serviceId}`;
+}
+
+export function customerProviderServiceDetail(providerKey, serviceId) {
+  return `/customer/provider/${providerKey}/services/${serviceId}`;
+}
 
 export function customerHome() {
   return '/customer';
@@ -24,16 +36,17 @@ export function publicServicesCatalog(slug) {
   return `/book/${slug}/services`;
 }
 
-export function businessPage(slug) {
-  return `/book/${slug}`;
+/** Guest/public book URL (also accepts pro12 or slug). */
+export function businessPage(providerKey) {
+  return `/book/${providerKey}`;
 }
 
-export function bookService(slug, serviceId) {
-  return `/book/${slug}/${serviceId}`;
+export function bookService(providerKey, serviceId) {
+  return `/book/${providerKey}/${serviceId}`;
 }
 
-export function serviceDetail(slug, serviceId) {
-  return `/book/${slug}/services/${serviceId}`;
+export function serviceDetail(providerKey, serviceId) {
+  return `/book/${providerKey}/services/${serviceId}`;
 }
 
 export function servicesBrowse() {

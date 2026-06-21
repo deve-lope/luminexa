@@ -4,7 +4,8 @@ import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { isHistoryBooking } from '../../utils/customerBookings';
-import { customerFind } from '../../utils/customerPaths';
+import { customerFind, customerProviderPage } from '../../utils/customerPaths';
+import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 function inquiryStatusLabel(inquiry) {
   return inquiry.dismissed_at ? 'Handled by business' : 'Sent — awaiting response';
@@ -75,6 +76,7 @@ export default function CustomerHistoryPage() {
                 booking={b}
                 expanded={expandedId === b.id}
                 onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+                showActions
               />
             ))}
           </ul>
@@ -101,9 +103,9 @@ export default function CustomerHistoryPage() {
                   {inquiryStatusLabel(inq)}
                 </span>
                 <p className="mt-2 text-sm text-slate-700 line-clamp-3">{inq.message}</p>
-                {inq.organization_slug && (
+                {providerCustomerKey(inq) && (
                   <Link
-                    to={`/book/${inq.organization_slug}`}
+                    to={customerProviderPage(providerCustomerKey(inq))}
                     className="mt-4 inline-flex min-h-[44px] items-center text-sm font-medium text-luminexa-accent"
                   >
                     View provider →

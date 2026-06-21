@@ -12,6 +12,7 @@ import { getDjangoAdminUrl } from '../utils/djangoAdmin';
 import { jobsAPI } from '../utils/api';
 import {
   firstProviderHome,
+  providerAccount,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -46,7 +47,7 @@ function ProviderShell() {
   }, [loadAlerts]);
 
   const tabs = useMemo(
-    () => buildProviderTabs(orgSlug, { scheduleBadgeCount: alertCount }),
+    () => buildProviderTabs(orgSlug, { requestsBadgeCount: alertCount }),
     [orgSlug, alertCount]
   );
   const bookingUrl = useMemo(() => getCustomerBookingUrl(orgSlug), [orgSlug]);
@@ -64,6 +65,7 @@ function ProviderShell() {
         publicServicesPreviewUrl,
         providerServicesPath: providerServices(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
+        providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         isStaff: user?.is_staff,
@@ -91,11 +93,20 @@ function ProviderShell() {
     if (location.pathname.startsWith(`${base}/services`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Services catalog' };
     }
+    if (location.pathname.startsWith(`${base}/requests/`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Request details' };
+    }
+    if (location.pathname.startsWith(`${base}/requests`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Service requests' };
+    }
     if (location.pathname.startsWith(`${base}/my-page`) || location.pathname.startsWith(`${base}/share`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My page' };
     }
     if (location.pathname.startsWith(`${base}/settings`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Settings' };
+    }
+    if (location.pathname.startsWith(`${base}/account`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'My account' };
     }
     if (location.pathname.match(/\/schedule\/booking\//)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Booking details' };

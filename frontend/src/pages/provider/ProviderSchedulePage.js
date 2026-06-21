@@ -5,14 +5,12 @@ import InteractiveDayTimeline from '../../components/scheduling/InteractiveDayTi
 import QuickAddServicePanel from '../../components/scheduling/QuickAddServicePanel';
 import ScheduleAddSheet from '../../components/scheduling/ScheduleAddSheet';
 import SchedulingModeBanner from '../../components/provider/SchedulingModeBanner';
-import { providerSettings } from '../../utils/providerPaths';
+import { providerRequests, providerSettings } from '../../utils/providerPaths';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
-import { formatWhen } from '../../utils/datetime';
 import { buildOpenSlotDays } from '../../utils/slotCalendar';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import TimelineTimeAdjust from '../../components/scheduling/TimelineTimeAdjust';
-const MAX_PENDING = 3;
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -34,7 +32,6 @@ export default function ProviderSchedulePage() {
   const [slots, setSlots] = useState([]);
   const [unavailable, setUnavailable] = useState([]);
   const [weeklyBlocks, setWeeklyBlocks] = useState([]);
-  const [pending, setPending] = useState([]);
   const [pendingCustomers, setPendingCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
@@ -53,12 +50,11 @@ export default function ProviderSchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const [svcRes, custRes, slotRes, dashRes, pendingCustRes, unavailRes, schedRes] =
+      const [svcRes, custRes, slotRes, pendingCustRes, unavailRes, schedRes] =
         await Promise.all([
           jobsAPI.listServices({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug),
           jobsAPI.listSlots({ organization: orgSlug }),
-          jobsAPI.getProviderDashboard(orgSlug),
           jobsAPI.listOrgCustomers(orgSlug, { status: 'pending' }),
           jobsAPI.listUnavailableBlocks({ organization: orgSlug }),
           jobsAPI.getSchedulingSettings(orgSlug),
@@ -74,7 +70,6 @@ export default function ProviderSchedulePage() {
       );
       setWeeklyBlocks(schedRes.data?.weekly_blocks || []);
       setPendingCustomers(pendingCustRes.data || []);
-      setPending(dashRes.data?.pending_requests || []);
       const ctx = await jobsAPI.getBookingContext(orgSlug);
       setSchedulingMode(ctx.data?.scheduling_mode || 'flexi');
       if (svcList.length && !slotService) setSlotService(String(svcList[0].id));
@@ -123,8 +118,7 @@ export default function ProviderSchedulePage() {
     [slots, selectedDay]
   );
 
-  const pendingShown = pending.slice(0, MAX_PENDING);
-  const pendingHidden = pending.length - pendingShown.length;
+  const attentionCount = pendingCustomers.length;
 
   const resetAddFlow = () => {
     setAddMode(null);
@@ -231,17 +225,6 @@ export default function ProviderSchedulePage() {
     }
   };
 
-  const respond = async (id, action) => {
-    try {
-      if (action === 'accept') await jobsAPI.acceptBooking(id);
-      else await jobsAPI.declineBooking(id);
-      setMessage(action === 'accept' ? 'Request confirmed.' : 'Request declined.');
-      load();
-    } catch (err) {
-      setError(parseApiError(err));
-    }
-  };
-
   if (!activeOrg) {
     return <p className="py-12 text-center text-slate-500">Loading schedule…</p>;
   }
@@ -267,6 +250,51 @@ export default function ProviderSchedulePage() {
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:px-4 sm:py-3">{error}</p>
       )}
       {loading && <p className="text-center text-slate-500">Loading…</p>}
+
+      {!loading && attentionCount > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">
+            {attentionCount} customer approval{attentionCount === 1 ? '' : 's'} waiting
+          </p>
+          <p className="mt-1 text-amber-800">
+            Approve customers below so they can book. Booking and custom requests are in{' '}
+            <Link to={providerRequests(orgSlug)} className="font-medium text-luminexa-accent">
+              Service requests
+            </Link>
+            .
+          </p>
+        </section>
+      )}
+
+      {!loading && !!pendingCustomers.length && (
+        <section className="rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Pending customers</h2>
+          <ul className="mt-4 space-y-3">
+            {pendingCustomers.map((c) => (
+              <li
+                key={c.membership_id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900">{c.full_name}</p>
+                  <p className="truncate text-sm text-slate-600">{c.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await jobsAPI.approveCustomer(orgSlug, c.id);
+                    setMessage(`${c.full_name} approved.`);
+                    load();
+                  }}
+                  className="min-h-[44px] shrink-0 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
+                >
+                  Approve
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <p className="mb-2 text-xs text-slate-600 sm:mb-3 sm:text-sm">
@@ -368,72 +396,6 @@ export default function ProviderSchedulePage() {
           </p>
         )}
       </section>
-
-      {!!pendingCustomers.length && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Pending customers</h2>
-          <ul className="mt-4 space-y-3">
-            {pendingCustomers.map((c) => (
-              <li
-                key={c.membership_id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{c.full_name}</p>
-                  <p className="truncate text-sm text-slate-600">{c.email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await jobsAPI.approveCustomer(orgSlug, c.id);
-                    setMessage(`${c.full_name} approved.`);
-                    load();
-                  }}
-                  className="min-h-[44px] shrink-0 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
-                >
-                  Approve
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {!!pending.length && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Pending requests</h2>
-          <ul className="mt-4 space-y-3">
-            {pendingShown.map((b) => (
-              <li key={b.id} className="rounded-lg border border-slate-200 p-3">
-                <p className="font-medium text-slate-900">{b.service_name}</p>
-                <p className="text-sm text-slate-600">{b.customer_name}</p>
-                <p className="text-sm text-slate-500">{formatWhen(b.start_at)}</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => respond(b.id, 'accept')}
-                    className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent font-medium text-white"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => respond(b.id, 'decline')}
-                    className="min-h-[44px] flex-1 rounded-lg border border-slate-200 text-slate-700"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {pendingHidden > 0 && (
-            <p className="mt-2 text-center text-xs text-slate-500">
-              +{pendingHidden} more on Today
-            </p>
-          )}
-        </section>
-      )}
 
       {schedulingMode === 'recurring' && (
         <p className="rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3 text-sm text-slate-700">

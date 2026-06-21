@@ -9,6 +9,8 @@ import {
   wasApprovedByProvider,
   wasDeclinedByProvider,
 } from '../../utils/customerBookings';
+import { customerProviderPage } from '../../utils/customerPaths';
+import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 export default function CustomerBookingCard({
   booking,
@@ -65,9 +67,9 @@ export default function CustomerBookingCard({
       )}
       {showActions && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {booking.organization_slug && (
+          {providerCustomerKey(booking) && (
             <Link
-              to={`/book/${booking.organization_slug}`}
+              to={customerProviderPage(providerCustomerKey(booking))}
               className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-800"
             >
               View provider

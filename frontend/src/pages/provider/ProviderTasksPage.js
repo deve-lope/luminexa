@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import TaskListItem from '../../components/tasks/TaskListItem';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { providerAddTask } from '../../utils/providerPaths';
@@ -14,10 +14,19 @@ const FILTERS = [
 
 export default function ProviderTasksPage() {
   const { orgSlug } = useProviderOrg();
-  const [filter, setFilter] = useState('open');
+  const [searchParams] = useSearchParams();
+  const urlFilter = searchParams.get('filter');
+  const initialFilter = FILTERS.some((f) => f.id === urlFilter) ? urlFilter : 'open';
+  const [filter, setFilter] = useState(initialFilter);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (FILTERS.some((f) => f.id === urlFilter)) {
+      setFilter(urlFilter);
+    }
+  }, [urlFilter]);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;

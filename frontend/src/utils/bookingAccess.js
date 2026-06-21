@@ -1,15 +1,23 @@
 /** Customer booking access for a public provider storefront. */
 
-export function getCustomerMembership(memberships, orgSlug) {
-  return (memberships || []).find(
-    (m) => m.organization_slug === orgSlug && m.role === 'customer'
+function membershipMatchesOrg(m, providerKey) {
+  if (!providerKey) return false;
+  return (
+    m.organization_slug === providerKey ||
+    m.organization_public_ref === providerKey
   );
 }
 
-export function isOrgStaff(memberships, orgSlug) {
+export function getCustomerMembership(memberships, providerKey) {
+  return (memberships || []).find(
+    (m) => membershipMatchesOrg(m, providerKey) && m.role === 'customer'
+  );
+}
+
+export function isOrgStaff(memberships, providerKey) {
   return (memberships || []).some(
     (m) =>
-      m.organization_slug === orgSlug &&
+      membershipMatchesOrg(m, providerKey) &&
       (m.role === 'owner' || m.role === 'staff')
   );
 }

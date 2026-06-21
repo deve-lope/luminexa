@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
-import { providerScheduleDetail } from '../../utils/providerPaths';
+import { providerRequestDetail, providerRequests } from '../../utils/providerPaths';
 import parseApiError from '../../utils/parseApiError';
 
 export default function ProviderNotificationsPage() {
@@ -40,6 +40,14 @@ export default function ProviderNotificationsPage() {
     <div className="space-y-6 pb-8">
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
+      <p className="text-sm text-slate-600">
+        Scheduling alerts live here. Approve bookings and chat with customers in{' '}
+        <Link to={providerRequests(orgSlug)} className="font-medium text-luminexa-accent">
+          Service requests
+        </Link>
+        .
+      </p>
+
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold uppercase text-slate-500">
           Pending bookings ({pending.length})
@@ -51,7 +59,7 @@ export default function ProviderNotificationsPage() {
             {pending.map((b) => (
               <li key={b.id}>
                 <Link
-                  to={providerScheduleDetail(orgSlug, 'booking', b.id)}
+                  to={providerRequestDetail(orgSlug, 'booking', b.id)}
                   className="block rounded-lg border border-amber-100 bg-amber-50/50 p-3"
                 >
                   <p className="font-medium text-slate-900">{b.service_name}</p>
@@ -66,22 +74,27 @@ export default function ProviderNotificationsPage() {
 
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold uppercase text-slate-500">
-          Service inquiries ({inquiries.length})
+          Custom requests ({inquiries.length})
         </h2>
         {inquiries.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">No open inquiries.</p>
+          <p className="mt-2 text-sm text-slate-500">No open custom requests.</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {inquiries.map((inq) => (
-              <li key={inq.id} className="rounded-lg border border-slate-100 p-3">
-                <p className="font-medium text-slate-900">
-                  {inq.service_name || inq.service_label}
-                </p>
-                <p className="text-sm text-slate-600">{inq.customer_name}</p>
-                {inq.preferred_date && (
-                  <p className="mt-1 text-xs text-slate-500">Preferred: {inq.preferred_date}</p>
-                )}
-                <p className="mt-1 text-sm text-slate-700 line-clamp-2">{inq.message}</p>
+              <li key={inq.id}>
+                <Link
+                  to={providerRequestDetail(orgSlug, 'inquiry', inq.id)}
+                  className="block rounded-lg border border-slate-100 p-3"
+                >
+                  <p className="font-medium text-slate-900">
+                    {inq.service_name || inq.service_label}
+                  </p>
+                  <p className="text-sm text-slate-600">{inq.customer_name}</p>
+                  {inq.preferred_date && (
+                    <p className="mt-1 text-xs text-slate-500">Preferred: {inq.preferred_date}</p>
+                  )}
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-700">{inq.message}</p>
+                </Link>
               </li>
             ))}
           </ul>

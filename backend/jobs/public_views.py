@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from businesses.models import BusinessType, Organization
+from businesses.public_refs import resolve_organization
 from businesses.serializers import BusinessTypeSerializer
 
 from .booking_services import booking_policy_meta, customer_can_view_calendar
@@ -25,16 +26,25 @@ from .serializers import (
 )
 
 
+def _public_organization(key):
+    org = resolve_organization(key)
+    if org and org.is_active and org.profile_public:
+        return org
+    return None
+
+
 class PublicProviderStorefrontAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request, slug):
-        org = (
-            Organization.objects.filter(slug=slug, is_active=True, profile_public=True)
-            .prefetch_related('gallery_images', 'business_types')
-            .first()
-        )
+        org = _public_organization(slug)
+        if org:
+            org = (
+                Organization.objects.filter(pk=org.pk)
+                .prefetch_related('gallery_images', 'business_types')
+                .first()
+            )
         if not org:
             return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -60,9 +70,7 @@ class PublicServiceCalendarAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, slug, service_id):
-        org = Organization.objects.filter(
-            slug=slug, is_active=True, profile_public=True,
-        ).first()
+        org = _public_organization(slug)
         if not org:
             return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -156,9 +164,7 @@ class PublicServiceDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug, service_id):
-        org = Organization.objects.filter(
-            slug=slug, is_active=True, profile_public=True,
-        ).first()
+        org = _public_organization(slug)
         if not org:
             return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -180,9 +186,7 @@ class PublicServiceReviewAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, slug, service_id):
-        org = Organization.objects.filter(
-            slug=slug, is_active=True, profile_public=True,
-        ).first()
+        org = _public_organization(slug)
         if not org:
             return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
 

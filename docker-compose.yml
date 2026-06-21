@@ -8,6 +8,13 @@ services:
     container_name: luminexa-redis
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: luminexa-mailpit
+    ports:
+      - "0.0.0.0:8025:8025"
+    restart: unless-stopped
+
   web:
     build:
       context: ./backend
@@ -24,6 +31,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       - redis
+      - mailpit
     volumes:
       - luminexa_prod_data:/app/data
       - luminexa_media:/app/media

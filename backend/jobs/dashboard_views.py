@@ -23,8 +23,9 @@ from .serializers import (
 
 # Home (Today) shows a short actionable slice; full lists live on Schedule / Tasks pages.
 HOME_JOB_LIMIT = 5
-HOME_TASK_OPEN_LIMIT = 8
-HOME_TASK_DONE_LIMIT = 3
+HOME_TASK_OPEN_LIMIT = 5
+HOME_TASK_DONE_LIMIT = 2
+HOME_TASK_DONE_DAYS = 2
 HOME_JOB_WINDOW_DAYS = 14
 
 
@@ -69,7 +70,7 @@ class ProviderDashboardAPIView(APIView):
         refresh_recurring_tasks(org, now=now)
 
         far = now + timedelta(days=365 * 20)
-        done_cutoff = now - timedelta(days=14)
+        done_cutoff = now - timedelta(days=HOME_TASK_DONE_DAYS)
         task_base = Task.objects.filter(organization=org).select_related(
             'job', 'job__service', 'job__customer',
         )
@@ -105,7 +106,8 @@ class ProviderDashboardAPIView(APIView):
         notifications = get_active_notifications(org)
         customer_inquiries = (
             CustomerServiceInquiry.objects.filter(
-                organization=org, dismissed_at__isnull=True,
+                organization=org,
+                status=CustomerServiceInquiry.Status.PENDING,
             )
             .select_related('customer')
             .order_by('-created_at')[:30]

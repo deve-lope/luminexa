@@ -28,8 +28,24 @@ export function providerServices(orgSlug) {
   return `/provider/${orgSlug}/services`;
 }
 
-export function providerTasks(orgSlug) {
-  return `/provider/${orgSlug}/tasks`;
+export function providerRequests(orgSlug) {
+  return `/provider/${orgSlug}/requests`;
+}
+
+export function providerRequestDetail(orgSlug, kind, id) {
+  return `/provider/${orgSlug}/requests/${kind}/${id}`;
+}
+
+export function providerAccount(orgSlug) {
+  return `/provider/${orgSlug}/account`;
+}
+
+export function providerTasks(orgSlug, filter) {
+  const base = `/provider/${orgSlug}/tasks`;
+  if (filter === 'open' || filter === 'done' || filter === 'all') {
+    return `${base}?filter=${filter}`;
+  }
+  return base;
 }
 
 export function providerAddTask(orgSlug, jobId) {

@@ -16,9 +16,10 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'email', 'full_name', 'phone', 'is_staff', 'has_booking_contact',
+            'id', 'public_ref', 'email', 'full_name', 'phone', 'default_service_address',
+            'is_staff', 'has_booking_contact',
         )
-        read_only_fields = ('id', 'email', 'is_staff', 'has_booking_contact')
+        read_only_fields = ('id', 'public_ref', 'email', 'is_staff', 'has_booking_contact')
 
 
 class RegisterSerializer(serializers.ModelSerializer):

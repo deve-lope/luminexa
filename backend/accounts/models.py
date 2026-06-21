@@ -28,8 +28,21 @@ class User(AbstractUser):
 
     username = None
     email = models.EmailField('email address', unique=True)
+    public_ref = models.CharField(
+        max_length=16,
+        unique=True,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Customer account ID, e.g. cus1, cus2',
+    )
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=32, blank=True, default='')
+    default_service_address = models.TextField(
+        blank=True,
+        default='',
+        help_text='Customer default address for service visits',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name']

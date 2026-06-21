@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
+import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
@@ -164,6 +165,8 @@ export default function ProviderSettingsPage() {
         organizationName={activeOrg?.organization_name}
         isOwner={isOwner}
       />
+
+      <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} />
 
       <p className="text-sm text-slate-600">
         <strong>Weekly schedule</strong> repeats the same hours and auto-creates bookable slots.{' '}

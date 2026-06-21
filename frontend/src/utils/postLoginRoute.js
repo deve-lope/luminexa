@@ -19,7 +19,10 @@ export function resolvePathAfterAuth(nextPath, user, memberships) {
   if (!nextPath || !nextPath.startsWith('/')) {
     return getPostLoginRoute(user, memberships);
   }
-  if (nextPath.startsWith('/book/')) return nextPath;
+  if (nextPath.startsWith('/book/')) {
+    if (isProviderMember(memberships)) return firstProviderHome(memberships);
+    return nextPath;
+  }
   if (nextPath.startsWith('/customer') && !isProviderMember(memberships)) return nextPath;
   if (nextPath.startsWith('/customer') && isProviderMember(memberships)) {
     return firstProviderHome(memberships);

@@ -1,5 +1,6 @@
 from django.utils.text import slugify
 
+from .location import parse_radius_miles
 from .models import Organization
 
 
@@ -37,3 +38,20 @@ def organization_location_full(org) -> str:
     if addr:
         return addr
     return short or ''
+
+
+def miles_to_km_label(miles: float) -> str:
+    km = round(float(miles) * 1.609344, 1)
+    km_text = int(km) if km == int(km) else km
+    mi_text = int(miles) if miles == int(miles) else round(float(miles), 1)
+    return f'{mi_text} mi ({km_text} km)'
+
+
+def organization_service_area_label(org) -> str:
+    """Marketplace-style service coverage label."""
+    radius = parse_radius_miles(getattr(org, 'service_radius_miles', None) or 25)
+    radius_label = miles_to_km_label(radius)
+    short = organization_location_short(org) or (org.service_address or '').strip()
+    if short:
+        return f'Serves within {radius_label} of {short}'
+    return f'Serves within {radius_label} of your map pin'

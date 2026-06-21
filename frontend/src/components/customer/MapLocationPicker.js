@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { businessesAPI } from '../../utils/api';
+import { canUseBrowserGeolocation } from '../../utils/geolocationSupport';
 
 const DEFAULT_CENTER = [43.6532, -79.3832]; // Toronto
 
@@ -112,9 +113,13 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
     window.setTimeout(() => mapRef.current?.invalidateSize(), 100);
   }, [open]);
 
+  const gpsAvailable = canUseBrowserGeolocation();
+
   const useCurrentLocation = () => {
-    if (!navigator.geolocation || !mapRef.current) {
-      setError('Browser location is not available.');
+    if (!gpsAvailable || !mapRef.current) {
+      setError(
+        'Current location needs HTTPS or localhost. Search an address above or tap the map.'
+      );
       return;
     }
     setLocating(true);
@@ -208,7 +213,8 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
           <div>
             <h2 className="font-semibold text-slate-900">Pick service location</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Search an address, use your current location, or click the map.
+              Search an address or click the map
+              {gpsAvailable ? ', or use your current location' : ''}.
             </p>
           </div>
           <button
@@ -271,14 +277,16 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
 
         <div className="space-y-3 border-t border-slate-100 p-4">
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={useCurrentLocation}
-              disabled={locating || resolving}
-              className="min-h-[44px] rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 disabled:opacity-50"
-            >
-              {locating ? 'Getting your location…' : 'Use my current location'}
-            </button>
+            {gpsAvailable ? (
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                disabled={locating || resolving}
+                className="min-h-[44px] rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 disabled:opacity-50"
+              >
+                {locating ? 'Getting your location…' : 'Use my current location'}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={!selected || resolving}

@@ -30,6 +30,14 @@ class Organization(models.Model):
         FLEXI = 'flexi', 'Flexi (open slots manually)'
 
     name = models.CharField(max_length=200)
+    public_ref = models.CharField(
+        max_length=16,
+        unique=True,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Customer-facing ID, e.g. pro1, pro2',
+    )
     slug = models.SlugField(max_length=80, unique=True, db_index=True)
     tagline = models.CharField(max_length=300, blank=True)
     description = models.TextField(blank=True)
@@ -102,6 +110,12 @@ class Organization(models.Model):
         null=True,
         blank=True,
         help_text='Geocoded from postal code for radius search',
+    )
+    service_radius_miles = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=25,
+        help_text='How far from the map center this provider serves customers',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

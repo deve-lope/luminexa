@@ -3,6 +3,7 @@ import { policyLabel } from '../../constants/bookingPolicies';
 import ExpandableText from '../ui/ExpandableText';
 import ServiceCategoryBrowse from '../services/ServiceCategoryBrowse';
 import { buildCatalogFromFlat } from '../services/ServiceCatalogView';
+import { formatProviderServiceArea, providerHasServiceArea } from '../../utils/serviceArea';
 
 /**
  * Read-only customer-facing booking page preview for providers.
@@ -65,26 +66,10 @@ export default function ProviderStorefrontPreview({
           {organization.tagline && (
             <p className="mt-1 text-slate-600">{organization.tagline}</p>
           )}
-          {(organization.service_postal_code ||
-            organization.service_city ||
-            organization.service_address) && (
+          {providerHasServiceArea(organization) && (
             <p className="mt-2 flex items-start gap-1.5 text-sm text-slate-600">
               <span aria-hidden>📍</span>
-              <span>
-                {[
-                  organization.service_address,
-                  [
-                    organization.service_postal_code,
-                    [organization.service_city, organization.service_state]
-                      .filter(Boolean)
-                      .join(', '),
-                  ]
-                    .filter(Boolean)
-                    .join(' · '),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
+              <span>{formatProviderServiceArea(organization)}</span>
             </p>
           )}
           {bookingPolicy && (

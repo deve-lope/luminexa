@@ -80,6 +80,7 @@ export const businessesAPI = {
   listBookableServices: (params) =>
     api.get('/api/v1/customer/services/', { params }),
   browseServices: (params) => api.get('/api/v1/public/services/', { params }),
+  locationOptions: (params) => api.get('/api/v1/location-options/', { params }),
   getMyMemberships: () => api.get('/api/v1/me/memberships/'),
   getPublicStorefront: (slug) => api.get(`/api/v1/public/providers/${slug}/`),
   connectToOrg: (slug) => api.post(`/api/v1/organizations/${slug}/connect/`),
@@ -118,6 +119,19 @@ export const jobsAPI = {
     api.get('/api/v1/provider-dashboard/', { params: { organization: organizationSlug } }),
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
+  listProviderServiceRequests: (orgSlug, params) =>
+    api.get('/api/v1/provider-service-requests/', { params: { organization: orgSlug, ...params } }),
+  getServiceInquiry: (orgSlug, inquiryId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/`),
+  patchServiceInquiry: (orgSlug, inquiryId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/`, data),
+  listBookingMessages: (bookingId) => api.get(`/api/v1/bookings/${bookingId}/messages/`),
+  sendBookingMessage: (bookingId, body) =>
+    api.post(`/api/v1/bookings/${bookingId}/messages/`, { body }),
+  listInquiryMessages: (orgSlug, inquiryId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`),
+  sendInquiryMessage: (orgSlug, inquiryId, body) =>
+    api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`, { body }),
   getBooking: (id) => api.get(`/api/v1/bookings/${id}/`),
   getSlot: (id) => api.get(`/api/v1/availability-slots/${id}/`),
   getUnavailableBlock: (id) => api.get(`/api/v1/unavailable-blocks/${id}/`),

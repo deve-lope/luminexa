@@ -13,7 +13,7 @@ import {
   isOrgStaff,
   needsExplicitConnect,
 } from '../../utils/bookingAccess';
-import { policyLabel } from '../../constants/bookingPolicies';
+import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import { Link } from 'react-router-dom';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { serviceDetail } from '../../utils/customerPaths';
@@ -28,8 +28,8 @@ function parseApiError(err) {
 }
 
 export default function CustomerBookServicePage() {
-  const { orgSlug, slug, serviceId } = useParams();
-  const businessSlug = orgSlug || slug;
+  const { orgSlug, slug, providerKey, serviceId } = useParams();
+  const businessSlug = providerKey || orgSlug || slug;
   const { memberships, user, setUserFromProfile, refreshSession } = useAuth();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -45,6 +45,12 @@ export default function CustomerBookServicePage() {
   const [notes, setNotes] = useState('');
   const [serviceAddress, setServiceAddress] = useState('');
   const [submittingId, setSubmittingId] = useState(null);
+
+  useEffect(() => {
+    if (user?.default_service_address && !serviceAddress) {
+      setServiceAddress(user.default_service_address);
+    }
+  }, [user?.default_service_address, serviceAddress]);
 
   const membership = getCustomerMembership(memberships, businessSlug);
   const staffOfOrg = isOrgStaff(memberships, businessSlug);
@@ -239,8 +245,8 @@ export default function CustomerBookServicePage() {
         </section>
       )}
 
-      {bookingPolicy && (
-        <p className="text-xs text-slate-500">{policyLabel(bookingPolicy)}</p>
+      {bookingPolicy && customerPolicyLabel(bookingPolicy) && (
+        <p className="text-xs text-slate-500">{customerPolicyLabel(bookingPolicy)}</p>
       )}
 
       {staffOfOrg && (

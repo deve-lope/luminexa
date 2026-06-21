@@ -12,6 +12,8 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import CustomerBookingsPage from './pages/customer/CustomerBookingsPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
+import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
+import CustomerBookServicePage from './pages/customer/CustomerBookServicePage';
 import AcceptStaffInvitePage from './pages/AcceptStaffInvitePage';
 import BookRouteLayout from './layouts/BookRouteLayout';
 import BookingStorefrontPage from './pages/BookingStorefrontPage';
@@ -25,6 +27,8 @@ import PublicProviderServicesPage from './pages/PublicProviderServicesPage';
 import CustomerServiceDetailPage from './pages/customer/CustomerServiceDetailPage';
 import ProviderSchedulePage from './pages/provider/ProviderSchedulePage';
 import ProviderScheduleDetailPage from './pages/provider/ProviderScheduleDetailPage';
+import ProviderRequestsPage from './pages/provider/ProviderRequestsPage';
+import ProviderRequestDetailPage from './pages/provider/ProviderRequestDetailPage';
 import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 import ProviderNotificationsPage from './pages/provider/ProviderNotificationsPage';
 import ProviderAddTaskPage from './pages/provider/ProviderAddTaskPage';
@@ -117,8 +121,11 @@ function AppRoutes() {
           <Route path="tasks/new" element={<ProviderAddTaskPage />} />
           <Route path="schedule" element={<ProviderSchedulePage />} />
           <Route path="schedule/:kind/:id" element={<ProviderScheduleDetailPage />} />
+          <Route path="requests" element={<ProviderRequestsPage />} />
+          <Route path="requests/:kind/:id" element={<ProviderRequestDetailPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
           <Route path="settings" element={<ProviderSettingsPage />} />
+          <Route path="account" element={<CustomerAccountPage variant="provider" />} />
           <Route path="my-page" element={<ProviderSharePage />} />
           <Route path="share" element={<Navigate to="my-page" replace />} />
           <Route path="services" element={<ProviderServicesPage />} />
@@ -137,6 +144,11 @@ function AppRoutes() {
           <Route path="account" element={<CustomerAccountPage />} />
           <Route path="find" element={<CustomerFindPage />} />
           <Route path="find/:typeSlug" element={<CustomerProvidersByTypePage />} />
+          <Route path="provider/:providerKey" element={<CustomerProviderRoutes />}>
+            <Route index element={<BookingStorefrontPage />} />
+            <Route path="services/:serviceId" element={<CustomerServiceDetailPage />} />
+            <Route path=":serviceId" element={<CustomerBookServicePage />} />
+          </Route>
         </Route>
         <Route path="/customer/provider/:orgSlug" element={<RedirectToBookProvider />} />
         <Route path="/customer/book/:orgSlug/:serviceId" element={<RedirectToBookService />} />

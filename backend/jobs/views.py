@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from businesses.models import Organization, OrganizationGalleryImage, OrganizationMembership
+from businesses.public_refs import resolve_organization
 
 from .booking_services import (
     accept_booking_request,
@@ -25,7 +26,11 @@ from .booking_services import (
     ensure_customer_membership,
     provider_book_customer,
 )
-from .booking_audit import log_booking_event, log_booking_status_change
+from .message_services import (
+    can_access_booking_messages,
+    list_booking_messages,
+    post_booking_message,
+)
 from .models import (
     AvailabilitySlot,
     Booking,
@@ -55,6 +60,7 @@ from .serializers import (
     ProviderNotificationSerializer,
     CustomerServiceInquiryCreateSerializer,
     CustomerServiceInquirySerializer,
+    ServiceRequestMessageSerializer,
     ServiceCategorySerializer,
     ServiceSerializer,
     TaskSerializer,
@@ -102,11 +108,12 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         if getattr(self, 'action', None) in ('connect', 'booking_context', 'service_inquiry'):
-            org = Organization.objects.filter(
-                slug=self.kwargs['slug'], is_active=True,
-            ).first()
-            if not org:
+            org = resolve_organization(self.kwargs.get('slug'))
+            if not org or not org.is_active:
                 raise ValidationError({'detail': 'Organization not found.'})
+            return org
+        org = resolve_organization(self.kwargs.get('slug'))
+        if org and self.get_queryset().filter(pk=org.pk).exists():
             return org
         return super().get_object()
 
@@ -127,6 +134,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'logo', 'banner', 'scheduling_mode',
             'schedule_valid_from', 'schedule_valid_until',
             'service_city', 'service_state', 'service_postal_code', 'service_address',
+            'service_latitude', 'service_longitude', 'service_radius_miles',
             'business_types',
         }
         extra = set(serializer.validated_data) - allowed
@@ -356,7 +364,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not inquiry:
             raise ValidationError({'detail': 'Inquiry not found.'})
         inquiry.dismissed_at = timezone.now()
-        inquiry.save(update_fields=['dismissed_at'])
+        inquiry.status = CustomerServiceInquiry.Status.DECLINED
+        inquiry.save(update_fields=['dismissed_at', 'status'])
         return Response({'detail': 'Dismissed.'})
 
     @action(detail=True, methods=['get'], url_path='customers')
@@ -784,12 +793,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             actor=request.user,
             new_status=booking.status,
         )
-        from .notifications import send_booking_email
-        if booking.status == Booking.Status.CONFIRMED:
-            send_booking_email('booking_confirmed', booking)
-            send_booking_email('booking_requested', booking)
-        else:
-            send_booking_email('booking_requested', booking)
+        from .notifications import notify_customer_booking_created
+
+        notify_customer_booking_created(booking)
         return Response(
             BookingSerializer(booking, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -925,6 +931,28 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .notifications import send_booking_email
         send_booking_email('booking_cancelled', booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        booking = self.get_object()
+        if not can_access_booking_messages(request.user, booking):
+            raise PermissionDenied('You cannot view messages on this booking.')
+        if request.method == 'GET':
+            messages = list_booking_messages(booking)
+            return Response(
+                ServiceRequestMessageSerializer(
+                    messages, many=True, context={'request': request},
+                ).data,
+            )
+        message = post_booking_message(
+            booking=booking,
+            sender=request.user,
+            body=request.data.get('body', ''),
+        )
+        return Response(
+            ServiceRequestMessageSerializer(message, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class CustomerMyInquiriesAPIView(APIView):

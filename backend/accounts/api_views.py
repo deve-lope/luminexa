@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth import login
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
@@ -64,7 +63,6 @@ class LoginAPIView(APIView):
         serializer = LoginSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
-        login(request, user)
         token, _ = Token.objects.get_or_create(user=user)
         return Response({'token': token.key, 'user': UserSerializer(user).data})
 
@@ -109,7 +107,14 @@ class ProfileAPIView(APIView):
             user.full_name = serializer.validated_data['full_name']
         if 'phone' in serializer.validated_data:
             user.phone = serializer.validated_data['phone'] or ''
-        user.save(update_fields=['full_name', 'phone'])
+        if 'default_service_address' in serializer.validated_data:
+            user.default_service_address = (
+                serializer.validated_data['default_service_address'] or ''
+            ).strip()
+        update_fields = ['full_name', 'phone']
+        if 'default_service_address' in serializer.validated_data:
+            update_fields.append('default_service_address')
+        user.save(update_fields=update_fields)
         return Response(UserSerializer(user).data)
 
 

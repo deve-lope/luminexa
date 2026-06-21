@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import CustomerLayout from './CustomerLayout';
 import { ProviderOrgProvider } from '../contexts/ProviderOrgContext';
@@ -14,7 +14,10 @@ import { isOrgStaff } from '../utils/bookingAccess';
 import { getCustomerBookingUrl, getPublicAppUrl } from '../utils/bookingLink';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
 import { businessPage, publicServicesCatalog } from '../utils/customerPaths';
+import { isProviderMember } from '../utils/postLoginRoute';
+import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 import {
+  providerAccount,
   providerHome,
   providerNotifications,
   providerSettings,
@@ -41,6 +44,7 @@ function BookOwnerShell({ orgSlug, children }) {
         publicServicesPreviewUrl,
         providerServicesPath: `/provider/${orgSlug}/services`,
         providerSettingsPath: providerSettings(orgSlug),
+        providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         isStaff: user?.is_staff,
@@ -111,12 +115,23 @@ export default function BookRouteLayout() {
   const ownerPreviewMode =
     searchParams.get('mode') === 'owner' || searchParams.get('view') === 'provider';
 
-  /** Public book URLs always use the customer/guest experience unless explicitly previewing as owner. */
+  const isProvider = isProviderMember(memberships);
+
+  /** Providers never use the customer booking shell on public /book URLs. */
   const variant = useMemo(() => {
     if (!isAuthenticated) return 'guest';
+    if (isProvider) {
+      if (staffOfOrg) return 'owner';
+      return 'provider_redirect';
+    }
     if (ownerPreviewMode && staffOfOrg) return 'owner';
     return 'customer';
-  }, [isAuthenticated, ownerPreviewMode, staffOfOrg]);
+  }, [isAuthenticated, isProvider, ownerPreviewMode, staffOfOrg]);
+
+  const providerRedirect = useMemo(
+    () => (variant === 'provider_redirect' ? providerBookingRedirectPath(memberships, slug) : null),
+    [variant, memberships, slug]
+  );
 
   const outletContext = useMemo(() => ({ variant, orgSlug: slug }), [variant, slug]);
 
@@ -126,6 +141,10 @@ export default function BookRouteLayout() {
         Loading…
       </div>
     );
+  }
+
+  if (providerRedirect) {
+    return <Navigate to={providerRedirect} replace />;
   }
 
   if (variant === 'owner') {

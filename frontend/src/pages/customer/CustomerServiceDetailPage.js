@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom';
 import ServicePictureCarousel from '../../components/services/ServicePictureCarousel';
 import ServiceRatingForm from '../../components/services/ServiceRatingForm';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
-import { bookService, businessPage } from '../../utils/customerPaths';
+import {
+  bookService,
+  businessPage,
+  customerProviderPage,
+  customerProviderService,
+} from '../../utils/customerPaths';
+import { providerRouteKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
 function ReviewDimensionBreakdown({ review }) {
@@ -27,7 +33,13 @@ function ReviewDimensionBreakdown({ review }) {
 }
 
 export default function CustomerServiceDetailPage() {
-  const { slug, serviceId } = useParams();
+  const params = useParams();
+  const location = useLocation();
+  const { variant = 'customer' } = useOutletContext() || {};
+  const isOwnerView = variant === 'owner';
+  const providerKey = providerRouteKey(params);
+  const isCustomerProviderRoute = location.pathname.startsWith('/customer/provider/');
+  const { serviceId } = params;
   const { isAuthenticated } = useAuth();
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +51,7 @@ export default function CustomerServiceDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await businessesAPI.getServiceDetail(slug, serviceId);
+      const { data } = await businessesAPI.getServiceDetail(providerKey, serviceId);
       setService(data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Service not found.');
@@ -47,7 +59,7 @@ export default function CustomerServiceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, serviceId]);
+  }, [providerKey, serviceId]);
 
   useEffect(() => {
     load();
@@ -58,7 +70,7 @@ export default function CustomerServiceDetailPage() {
     setMessage(null);
     setError(null);
     try {
-      await businessesAPI.submitServiceReview(slug, serviceId, payload);
+      await businessesAPI.submitServiceReview(providerKey, serviceId, payload);
       setMessage('Thank you for your rating!');
       await load();
     } catch (err) {
@@ -82,11 +94,19 @@ export default function CustomerServiceDetailPage() {
     return <p className="py-8 text-center text-slate-500">Loading service…</p>;
   }
 
+  const customerKey = service?.organization_public_ref || providerKey;
+  const providerPath = isCustomerProviderRoute
+    ? customerProviderPage(customerKey)
+    : businessPage(customerKey);
+  const bookPath = isCustomerProviderRoute
+    ? customerProviderService(customerKey, service?.id)
+    : bookService(customerKey, service?.id);
+
   if (error && !service) {
     return (
       <div className="py-8 text-center">
         <p className="text-red-600">{error}</p>
-        <Link to={businessPage(slug)} className="mt-4 inline-block text-luminexa-accent">
+        <Link to={providerPath} className="mt-4 inline-block text-luminexa-accent">
           Back to business
         </Link>
       </div>
@@ -99,7 +119,7 @@ export default function CustomerServiceDetailPage() {
     <div className="space-y-6">
       <header>
         <Link
-          to={businessPage(slug)}
+          to={providerPath}
           className="text-sm font-medium text-luminexa-accent"
         >
           ← {service.organization_name}
@@ -125,12 +145,22 @@ export default function CustomerServiceDetailPage() {
       </section>
 
       <div className="sticky bottom-0 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-        <Link
-          to={bookService(slug, service.id)}
-          className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-luminexa-accent font-medium text-white"
-        >
-          Book this service
-        </Link>
+        {isOwnerView ? (
+          <p className="text-center text-sm text-slate-600">
+            This is how customers book — share your{' '}
+            <Link to={providerPath} className="font-medium text-luminexa-accent">
+              booking page
+            </Link>{' '}
+            link for them to schedule.
+          </p>
+        ) : (
+          <Link
+            to={bookPath}
+            className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-luminexa-accent font-medium text-white"
+          >
+            Book this service
+          </Link>
+        )}
       </div>
 
       <section className="rounded-xl bg-white p-4 shadow-sm">

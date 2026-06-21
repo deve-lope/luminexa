@@ -1,12 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
-import { bookService, serviceDetail } from '../../utils/customerPaths';
+import {
+  bookService,
+  customerProviderService,
+  customerProviderServiceDetail,
+  serviceDetail,
+} from '../../utils/customerPaths';
+import { providerCustomerKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
-export default function BookableServiceCard({ service, bookTo }) {
-  const bookHref =
-    bookTo || bookService(service.organization_slug, service.id);
+export default function BookableServiceCard({ service, bookTo, useCustomerProviderUrls = true }) {
+  const providerKey = providerCustomerKey(service);
+  const defaultBookHref = useCustomerProviderUrls
+    ? customerProviderService(providerKey, service.id)
+    : bookService(providerKey, service.id);
+  const bookHref = bookTo || defaultBookHref;
+  const detailHref = useCustomerProviderUrls
+    ? customerProviderServiceDetail(providerKey, service.id)
+    : serviceDetail(providerKey, service.id);
   const types = service.business_types || [];
   const location = service.location || service.location_short;
 
@@ -70,9 +82,9 @@ export default function BookableServiceCard({ service, bookTo }) {
           <p className="text-xs text-slate-500">{formatServiceMeta(service)}</p>
         )}
         <div className="flex shrink-0 gap-2">
-          {service.organization_slug && (
+          {providerKey && (
             <Link
-              to={serviceDetail(service.organization_slug, service.id)}
+              to={detailHref}
               className="inline-flex min-h-[40px] items-center rounded-lg border border-luminexa-accent px-3 text-sm font-medium text-luminexa-accent"
             >
               Full details

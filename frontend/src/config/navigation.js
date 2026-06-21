@@ -1,14 +1,14 @@
-export function buildProviderTabs(orgSlug, { scheduleBadgeCount = 0 } = {}) {
+export function buildProviderTabs(orgSlug, { requestsBadgeCount = 0 } = {}) {
   const base = `/provider/${orgSlug}`;
   return [
     { id: 'today', label: 'Home', to: base, end: true },
+    { id: 'schedule', label: 'Schedule', to: `${base}/schedule` },
     {
-      id: 'schedule',
-      label: 'Schedule',
-      to: `${base}/schedule`,
-      badgeCount: scheduleBadgeCount > 0 ? scheduleBadgeCount : undefined,
+      id: 'requests',
+      label: 'Requests',
+      to: `${base}/requests`,
+      badgeCount: requestsBadgeCount > 0 ? requestsBadgeCount : undefined,
     },
-    { id: 'services', label: 'Services', to: `${base}/services` },
   ];
 }
 
@@ -64,6 +64,7 @@ export function buildProviderMenuItems({
   publicServicesPreviewUrl,
   providerServicesPath,
   providerSettingsPath,
+  providerAccountPath,
   providerSharePath,
   providerNotificationsPath,
   isStaff,
@@ -72,6 +73,14 @@ export function buildProviderMenuItems({
   const items = [];
 
   items.push({ id: 'section-business', divider: true, label: 'Business' });
+  if (providerAccountPath) {
+    items.push({
+      id: 'account',
+      label: 'My account',
+      to: providerAccountPath,
+      iconId: 'account',
+    });
+  }
   if (providerSettingsPath) {
     items.push({
       id: 'settings',

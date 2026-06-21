@@ -6,6 +6,7 @@ from .models import (
     Booking,
     Service,
     ServiceCategory,
+    ServiceRequestMessage,
     Task,
     UnavailableBlock,
 )
@@ -49,7 +50,13 @@ class TaskAdmin(admin.ModelAdmin):
     list_filter = ('is_done', 'recurrence', 'organization')
 
 
+@admin.register(ServiceRequestMessage)
+class ServiceRequestMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'booking', 'inquiry', 'sender', 'created_at')
+    list_filter = ('created_at',)
+
+
 @admin.register(CustomerServiceInquiry)
 class CustomerServiceInquiryAdmin(admin.ModelAdmin):
-    list_display = ('organization', 'customer', 'service_label', 'created_at', 'dismissed_at')
-    list_filter = ('organization', 'dismissed_at')
+    list_display = ('organization', 'customer', 'service_label', 'status', 'created_at', 'dismissed_at')
+    list_filter = ('organization', 'status', 'dismissed_at')

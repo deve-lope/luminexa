@@ -4,11 +4,11 @@ import TaskListItem from '../../components/tasks/TaskListItem';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import {
   providerAddTask,
-  providerNotifications,
+  providerRequests,
   providerSchedule,
   providerTasks,
 } from '../../utils/providerPaths';
-import { businessesAPI, jobsAPI } from '../../utils/api';
+import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import { parseApiError } from '../../utils/taskDisplay';
 
@@ -22,6 +22,10 @@ export default function ProviderTodayPage() {
   const [dashboard, setDashboard] = useState(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
+
+  const [openTasksExpanded, setOpenTasksExpanded] = useState(false);
+  const [expandedOpenTasks, setExpandedOpenTasks] = useState(null);
+  const [expandingOpen, setExpandingOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -40,6 +44,8 @@ export default function ProviderTodayPage() {
 
   useEffect(() => {
     load();
+    setOpenTasksExpanded(false);
+    setExpandedOpenTasks(null);
   }, [load]);
 
   useEffect(() => {
@@ -62,21 +68,35 @@ export default function ProviderTodayPage() {
     return { openTasks: open, doneTasks: done };
   }, [dashboard?.tasks]);
 
+  const loadMoreOpenTasks = async () => {
+    if (!orgSlug) return;
+    setExpandingOpen(true);
+    try {
+      const res = await jobsAPI.listTasks({ organization: orgSlug, is_done: 'false' });
+      setExpandedOpenTasks(res.data || []);
+      setOpenTasksExpanded(true);
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setExpandingOpen(false);
+    }
+  };
+
+  const collapseOpenTasks = () => {
+    setOpenTasksExpanded(false);
+    setExpandedOpenTasks(null);
+  };
+
   const toggleTask = async (task) => {
     try {
       await jobsAPI.patchTask(task.id, { is_done: !task.is_done });
       await load();
+      if (openTasksExpanded && orgSlug) {
+        const res = await jobsAPI.listTasks({ organization: orgSlug, is_done: 'false' });
+        setExpandedOpenTasks(res.data || []);
+      }
     } catch (e) {
       setError(parseApiError(e));
-    }
-  };
-
-  const dismissInquiry = async (id) => {
-    try {
-      await businessesAPI.dismissServiceInquiry(orgSlug, id);
-      load();
-    } catch {
-      setError('Could not dismiss inquiry.');
     }
   };
 
@@ -124,7 +144,8 @@ export default function ProviderTodayPage() {
   const moreJobs = Math.max(0, (stats.upcoming_count ?? jobs.length) - jobs.length);
   const moreOpenTasks = Math.max(0, (stats.tasks_open_total ?? 0) - (stats.tasks_open_shown ?? 0));
   const moreDoneTasks = Math.max(0, (stats.tasks_done_total ?? 0) - (stats.tasks_done_shown ?? 0));
-  const moreTasksTotal = moreOpenTasks + moreDoneTasks;
+  const visibleOpenTasks =
+    openTasksExpanded && expandedOpenTasks ? expandedOpenTasks : openTasks;
 
   return (
     <div className="space-y-5 pb-8">
@@ -182,10 +203,25 @@ export default function ProviderTodayPage() {
             {dashboard.pending_requests.length === 1 ? '' : 's'}
           </p>
           <Link
-            to={providerNotifications(orgSlug)}
+            to={providerRequests(orgSlug)}
             className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white"
           >
             Review
+          </Link>
+        </div>
+      )}
+
+      {!!dashboard.customer_inquiries?.length && (
+        <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+          <p className="text-sm font-medium text-violet-900">
+            {dashboard.customer_inquiries.length} custom request
+            {dashboard.customer_inquiries.length === 1 ? '' : 's'}
+          </p>
+          <Link
+            to={providerRequests(orgSlug)}
+            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white"
+          >
+            Open requests
           </Link>
         </div>
       )}
@@ -200,21 +236,40 @@ export default function ProviderTodayPage() {
             Add task
           </Link>
         </div>
-        {!openTasks.length && !doneTasks.length ? (
+        {!visibleOpenTasks.length && !doneTasks.length ? (
           <p className="mt-3 text-sm text-slate-500">No tasks yet.</p>
         ) : (
           <div className="mt-3 space-y-3">
-            {!!openTasks.length && (
+            {!!visibleOpenTasks.length && (
               <ul className="space-y-2">
-                {openTasks.map((task) => (
+                {visibleOpenTasks.map((task) => (
                   <TaskListItem key={task.id} task={task} onToggle={toggleTask} />
                 ))}
               </ul>
             )}
+            {moreOpenTasks > 0 && !openTasksExpanded && (
+              <button
+                type="button"
+                onClick={loadMoreOpenTasks}
+                disabled={expandingOpen}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 text-sm font-medium text-luminexa-accent disabled:opacity-60"
+              >
+                {expandingOpen ? 'Loading…' : `Show ${moreOpenTasks} more open task${moreOpenTasks === 1 ? '' : 's'}`}
+              </button>
+            )}
+            {openTasksExpanded && (
+              <button
+                type="button"
+                onClick={collapseOpenTasks}
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600"
+              >
+                Show fewer open tasks
+              </button>
+            )}
             {!!doneTasks.length && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Done
+                  Done · last 2 days
                 </p>
                 <ul className="space-y-2">
                   {doneTasks.map((task) => (
@@ -223,10 +278,20 @@ export default function ProviderTodayPage() {
                 </ul>
               </div>
             )}
-            {moreTasksTotal > 0 && (
+            {moreDoneTasks > 0 && (
+              <p className="text-center text-xs text-slate-500">
+                <Link
+                  to={providerTasks(orgSlug, 'done')}
+                  className="font-medium text-luminexa-accent"
+                >
+                  View {moreDoneTasks} more completed task{moreDoneTasks === 1 ? '' : 's'}
+                </Link>
+              </p>
+            )}
+            {(moreOpenTasks > 0 || moreDoneTasks > 0 || openTasksExpanded) && (
               <p className="text-center text-xs text-slate-500">
                 <Link to={providerTasks(orgSlug)} className="font-medium text-luminexa-accent">
-                  View all tasks (+{moreTasksTotal} more)
+                  All tasks
                 </Link>
               </p>
             )}
@@ -282,29 +347,6 @@ export default function ProviderTodayPage() {
         )}
       </section>
 
-      {!!dashboard.customer_inquiries?.length && (
-        <section className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-          <h2 className="text-sm font-semibold text-violet-900">Customer messages</h2>
-          <ul className="mt-2 space-y-2">
-            {dashboard.customer_inquiries.map((inq) => (
-              <li key={inq.id} className="rounded-lg bg-white p-3 text-sm">
-                {inq.service_label && <p className="font-medium">{inq.service_label}</p>}
-                {inq.preferred_date && (
-                  <p className="text-xs text-slate-500">Preferred date: {inq.preferred_date}</p>
-                )}
-                <p className="text-slate-700">{inq.message}</p>
-                <button
-                  type="button"
-                  onClick={() => dismissInquiry(inq.id)}
-                  className="mt-2 text-xs font-medium text-luminexa-accent"
-                >
-                  Mark handled
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

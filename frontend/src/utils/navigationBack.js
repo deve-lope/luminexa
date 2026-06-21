@@ -23,6 +23,17 @@ export function resolveCustomerBack(pathname) {
   if (path === '/customer/account') return { to: '/customer' };
   if (path === '/customer/bookings') return { to: '/customer' };
   if (path === '/customer/history') return { to: '/customer' };
+  if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(path)) {
+    const key = path.split('/')[3];
+    return { to: `/customer/provider/${key}` };
+  }
+  if (/^\/customer\/provider\/[^/]+\/services\/[^/]+$/.test(path)) {
+    const key = path.split('/')[3];
+    return { to: `/customer/provider/${key}` };
+  }
+  if (/^\/customer\/provider\/[^/]+$/.test(path)) {
+    return { to: '/customer' };
+  }
   if (path === '/services') return { to: '/customer' };
 
   if (/^\/book\/[^/]+\/services$/.test(path)) {
@@ -48,11 +59,16 @@ export function resolveProviderBack(pathname, orgSlug) {
   if (path === base) return null;
 
   if (path === `${base}/schedule`) return { to: base };
+  if (path === `${base}/requests`) return { to: base };
   if (path === `${base}/services`) return { to: base };
   if (path === `${base}/settings`) return { to: base };
+  if (path === `${base}/account`) return { to: base };
 
   if (path.startsWith(`${base}/schedule/`)) {
     return { to: `${base}/schedule` };
+  }
+  if (path.startsWith(`${base}/requests/`)) {
+    return { to: `${base}/requests` };
   }
   if (path === `${base}/notifications`) return { to: base };
   if (path === `${base}/my-page` || path === `${base}/share`) return { to: base };

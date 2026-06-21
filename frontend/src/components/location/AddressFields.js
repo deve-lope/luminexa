@@ -1,8 +1,15 @@
 import React, { useCallback } from 'react';
 import usePostalLookup from '../../hooks/usePostalLookup';
 import useCurrentLocation from '../../hooks/useCurrentLocation';
+import useGeolocationPermission from '../../hooks/useGeolocationPermission';
+import AddressSearchField from './AddressSearchField';
 import MapLocationPicker from '../customer/MapLocationPicker';
 import SearchableRegionInput from '../ui/SearchableRegionInput';
+import {
+  canUseBrowserGeolocation,
+  geolocationPermissionHint,
+  geolocationUnavailableReason,
+} from '../../utils/geolocationSupport';
 
 /**
  * Shared postal + city + state + optional street fields with auto lookup and map picker.
@@ -27,6 +34,10 @@ export default function AddressFields({
   dark = false,
 }) {
   const [mapOpen, setMapOpen] = React.useState(false);
+  const gpsAvailable = canUseBrowserGeolocation();
+  const gpsBlockedReason = geolocationUnavailableReason();
+  const permission = useGeolocationPermission();
+  const permissionHint = geolocationPermissionHint(permission);
   const { locating, error: locError, setError: setLocError, fetchCurrentLocation } =
     useCurrentLocation();
 
@@ -49,10 +60,7 @@ export default function AddressFields({
     : inputClassName;
 
   const handleMapSelect = (payload) => {
-    if (payload.address && onAddressChange) onAddressChange(payload.address);
-    if (payload.postal_code) onPostalCodeChange(payload.postal_code.replace(/[\s-]+/g, '').toUpperCase());
-    if (payload.city) onCityChange(payload.city);
-    if (payload.state) onStateChange(payload.state);
+    applyLocationPayload(payload);
     setMapOpen(false);
   };
 
@@ -60,29 +68,46 @@ export default function AddressFields({
     setLocError(null);
     const result = await fetchCurrentLocation();
     if (!result) return;
-    if (result.postal_code) {
-      onPostalCodeChange(result.postal_code.replace(/[\s-]+/g, '').toUpperCase());
-    }
-    if (result.city) onCityChange(result.city);
-    if (result.state) onStateChange(result.state);
-    if (result.address && onAddressChange) onAddressChange(result.address);
+    applyLocationPayload(result);
   };
+
+  const applyLocationPayload = (payload) => {
+    if (payload.postal_code) {
+      onPostalCodeChange(payload.postal_code.replace(/[\s-]+/g, '').toUpperCase());
+    }
+    if (payload.city) onCityChange(payload.city);
+    if (payload.state) onStateChange(payload.state);
+    if (payload.address && onAddressChange) onAddressChange(payload.address);
+  };
+
+  const permissionBlocked =
+    locError && /permission|blocked|allow/i.test(locError);
 
   return (
     <div className={`space-y-3 ${className}`}>
+      <AddressSearchField
+        id="addr-search"
+        label="Search your address"
+        placeholder="Start typing your street or area…"
+        dark={dark}
+        onSelect={applyLocationPayload}
+      />
+
       <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={handleUseCurrentLocation}
-          disabled={locating}
-          className={`min-h-[44px] flex-1 rounded-lg border px-3 text-sm font-medium disabled:opacity-50 ${
-            dark
-              ? 'border-violet-400/40 bg-violet-500/20 text-luminexa-accent'
-              : 'border-violet-200 bg-violet-50 text-luminexa-accent'
-          }`}
-        >
-          {locating ? 'Getting your location…' : 'Use my current location'}
-        </button>
+        {gpsAvailable ? (
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={locating}
+            className={`min-h-[44px] flex-1 rounded-lg border px-3 text-sm font-medium disabled:opacity-50 ${
+              dark
+                ? 'border-violet-400/40 bg-violet-500/20 text-luminexa-accent'
+                : 'border-violet-200 bg-violet-50 text-luminexa-accent'
+            }`}
+          >
+            {locating ? 'Getting your location…' : 'Use my current location'}
+          </button>
+        ) : null}
         {showMapPicker && (
           <button
             type="button"
@@ -95,7 +120,32 @@ export default function AddressFields({
           </button>
         )}
       </div>
-      {locError && <p className={`text-xs ${dark ? 'text-amber-300' : 'text-amber-700'}`}>{locError}</p>}
+      {!gpsAvailable && gpsBlockedReason && (
+        <p className={`text-xs ${dark ? 'text-luminexa-mist/70' : 'text-slate-500'}`}>
+          {gpsBlockedReason}
+        </p>
+      )}
+      {gpsAvailable && permissionHint && !locError && (
+        <p className={`text-xs ${dark ? 'text-luminexa-mist/70' : 'text-slate-500'}`}>
+          {permissionHint}
+        </p>
+      )}
+      {locError && gpsAvailable && (
+        <div
+          className={`rounded-lg px-3 py-2 text-xs ${
+            dark ? 'bg-amber-500/10 text-amber-200' : 'bg-amber-50 text-amber-800'
+          }`}
+        >
+          <p>{locError}</p>
+          {permissionBlocked && (
+            <p className={`mt-2 ${dark ? 'text-amber-100/90' : 'text-amber-900/80'}`}>
+              To allow location: click the lock or site icon in your browser&apos;s address bar →
+              Location → Allow, then try again. Or use <strong>Search your address</strong> or{' '}
+              <strong>Pick on map</strong> below.
+            </p>
+          )}
+        </div>
+      )}
       <div>
         <label htmlFor="addr-state" className={labelClass}>
           {stateLabel}

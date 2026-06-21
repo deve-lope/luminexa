@@ -8,6 +8,7 @@ import ProviderServicesPage from './ProviderServicesPage';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { getCustomerBookingUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerSettings } from '../../utils/providerPaths';
+import { providerHasServiceArea } from '../../utils/serviceArea';
 
 export default function ProviderSharePage() {
   const { orgSlug, activeOrg } = useProviderOrg();
@@ -67,13 +68,27 @@ export default function ProviderSharePage() {
   return (
     <div className="space-y-6">
       {!editing && (
-        <section className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-          <p className="font-medium">My page</p>
-          <p className="mt-1 text-violet-800">
-            This is what customers see — cover photo, bio, and services by category. Tap{' '}
-            <strong>Edit page</strong> to change anything.
-          </p>
-        </section>
+        <>
+          <section className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+            <p className="font-medium">My page</p>
+            <p className="mt-1 text-violet-800">
+              This is what customers see — cover photo, bio, and services by category. Tap{' '}
+              <strong>Edit page</strong> to change appearance and services.
+            </p>
+          </section>
+          {!providerHasServiceArea(data?.organization) && (
+            <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Set your service area</p>
+              <p className="mt-1 text-amber-800">
+                Customers search by PIN / postal code. Add where you operate in{' '}
+                <Link to={providerSettings(orgSlug)} className="font-semibold text-amber-900 underline">
+                  Settings
+                </Link>
+                .
+              </p>
+            </section>
+          )}
+        </>
       )}
 
       {editing ? (

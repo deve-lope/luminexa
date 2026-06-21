@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import dashboard_views, public_views, views
+from . import dashboard_views, public_views, service_request_views, views
 
 router = DefaultRouter()
 router.register(r'organizations', views.OrganizationViewSet, basename='organization')
@@ -15,6 +15,15 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 urlpatterns = [
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
     path('provider-dashboard/', dashboard_views.ProviderDashboardAPIView.as_view()),
+    path('provider-service-requests/', service_request_views.ProviderServiceRequestsAPIView.as_view()),
+    path(
+        'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/',
+        service_request_views.ProviderServiceInquiryDetailAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/messages/',
+        service_request_views.ServiceInquiryMessagesAPIView.as_view(),
+    ),
     path('public/providers/<slug>/', public_views.PublicProviderStorefrontAPIView.as_view()),
     path(
         'public/providers/<slug>/services/<int:service_id>/',
