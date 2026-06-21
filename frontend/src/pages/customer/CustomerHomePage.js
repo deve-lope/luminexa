@@ -4,11 +4,42 @@ import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid
 import CustomerSearchResults from '../../components/customer/CustomerSearchResults';
 import ScheduledProviderCard from '../../components/customer/ScheduledProviderCard';
 import ServiceSearchBar from '../../components/customer/ServiceSearchBar';
-import { DEFAULT_RADIUS_MILES } from '../../constants/locationSearch';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { customerBookings, customerFind } from '../../utils/customerPaths';
+
+const MAX_HOME_PROVIDERS = 3;
+
+function ProvidersSection({ providers }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = providers.length > MAX_HOME_PROVIDERS;
+  const visible = expanded ? providers : providers.slice(0, MAX_HOME_PROVIDERS);
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">Your providers</h2>
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-sm font-medium text-luminexa-accent"
+          >
+            {expanded ? 'Show less' : `See all (${providers.length})`}
+          </button>
+        )}
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {visible.map((p) => (
+          <li key={p.organization_slug}>
+            <ScheduledProviderCard provider={p} compact={hasMore && !expanded} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function bookingStatusClass(status) {
   if (status === 'requested') return 'bg-amber-100 text-amber-800';
@@ -28,8 +59,6 @@ export default function CustomerHomePage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [postal, setPostal] = useState('');
-  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
@@ -52,10 +81,9 @@ export default function CustomerHomePage() {
   }, []);
 
   const trimmedQuery = query.trim();
-  const trimmedPostal = postal.trim();
 
   useEffect(() => {
-    if (trimmedQuery.length < 2 && !trimmedPostal) {
+    if (trimmedQuery.length < 2) {
       setSearchResults(null);
       setSearchLoading(false);
       return undefined;
@@ -65,10 +93,6 @@ export default function CustomerHomePage() {
     const timer = setTimeout(() => {
       const params = {};
       if (trimmedQuery.length >= 2) params.q = trimmedQuery;
-      if (trimmedPostal) {
-        params.postal = trimmedPostal;
-        params.radius_miles = radiusMiles;
-      }
       businessesAPI
         .discoverServices(params)
         .then((res) => {
@@ -85,7 +109,7 @@ export default function CustomerHomePage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmedQuery, trimmedPostal, radiusMiles]);
+  }, [trimmedQuery]);
 
   const filteredTypes = useMemo(() => {
     const types = home?.business_types || [];
@@ -99,7 +123,7 @@ export default function CustomerHomePage() {
     );
   }, [home?.business_types, trimmedQuery]);
 
-  const isSearching = trimmedQuery.length >= 2 || Boolean(trimmedPostal);
+  const isSearching = trimmedQuery.length >= 2;
   const firstName = (user?.full_name || '').split(' ')[0] || 'there';
 
   if (loading) {
@@ -116,91 +140,56 @@ export default function CustomerHomePage() {
   return (
     <div className="space-y-5 pb-4">
       {!isSearching && (
-        <header className="rounded-2xl bg-gradient-to-br from-luminexa-navy via-violet-900 to-indigo-900 p-5 text-white shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold">
-              {initials(user?.full_name)}
+        <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-luminexa-navy via-violet-900 to-indigo-900 text-white shadow-lg">
+          <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold ring-1 ring-white/15">
+                {initials(user?.full_name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-violet-200">
+                  {new Date().toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight">Hi, {firstName}</h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-white/75">
+                  Search once, compare nearby providers, and book the service you need.
+                </p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-violet-200">
-                {new Date().toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </p>
-              <h2 className="text-xl font-bold">Hi, {firstName}</h2>
-              <p className="mt-0.5 text-sm text-white/70">What do you need booked today?</p>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
             <Link
               to={customerFind()}
-              className="flex min-h-[72px] flex-col items-center justify-center rounded-xl bg-white/10 px-2 text-center active:bg-white/20"
+              className="mt-5 inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-luminexa-navy shadow-sm transition hover:bg-violet-50 sm:w-auto"
             >
-              <span className="text-lg" aria-hidden>
-                🔍
-              </span>
-              <span className="mt-1 text-xs font-semibold">Find</span>
-            </Link>
-            <Link
-              to={customerBookings()}
-              className="flex min-h-[72px] flex-col items-center justify-center rounded-xl bg-white/10 px-2 text-center active:bg-white/20"
-            >
-              <span className="text-lg" aria-hidden>
-                📅
-              </span>
-              <span className="mt-1 text-xs font-semibold">Bookings</span>
-            </Link>
-            <Link
-              to="/services"
-              className="flex min-h-[72px] flex-col items-center justify-center rounded-xl bg-white/10 px-2 text-center active:bg-white/20"
-            >
-              <span className="text-lg" aria-hidden>
-                ✨
-              </span>
-              <span className="mt-1 text-xs font-semibold">Browse</span>
+              Browse services
             </Link>
           </div>
         </header>
       )}
 
-      <ServiceSearchBar
-        value={query}
-        onChange={setQuery}
-        placeholder="Search services, providers, or categories…"
-      />
-
-      <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Near you</p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <label className="block text-xs font-medium text-slate-600">
-            Postal code
-            <input
-              type="text"
-              autoComplete="postal-code"
-              value={postal}
-              onChange={(e) => setPostal(e.target.value.toUpperCase().replace(/[\s-]+/g, ''))}
-              placeholder="e.g. K1A0B1"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-            />
-          </label>
-          <label className="block text-xs font-medium text-slate-600">
-            Radius
-            <select
-              value={radiusMiles}
-              onChange={(e) => setRadiusMiles(Number(e.target.value))}
-              disabled={!trimmedPostal}
-              className="mt-1 w-full min-w-[7rem] rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-50"
-            >
-              <option value={5}>5 mi</option>
-              <option value={10}>10 mi</option>
-              <option value={25}>25 mi</option>
-              <option value={50}>50 mi</option>
-            </select>
-          </label>
+      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold text-slate-900">Find a service near you</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Search quickly here, or browse by location to see what's nearby.
+          </p>
         </div>
-      </div>
+        <ServiceSearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Search car wash, plumbing, pet grooming…"
+          sticky={false}
+        />
+        <Link
+          to={customerFind()}
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-4 text-sm font-semibold text-luminexa-accent sm:w-auto"
+        >
+          Browse by location
+        </Link>
+      </section>
 
       {isSearching ? (
         <CustomerSearchResults
@@ -239,21 +228,12 @@ export default function CustomerHomePage() {
           )}
 
           {providers.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-base font-semibold text-slate-900">Your providers</h2>
-              <ul className="space-y-3">
-                {providers.map((p) => (
-                  <li key={p.organization_slug}>
-                    <ScheduledProviderCard provider={p} />
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <ProvidersSection providers={providers} />
           )}
 
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-slate-900">Book a service</h2>
+              <h2 className="text-base font-semibold text-slate-900">Popular categories</h2>
               <Link to={customerFind()} className="shrink-0 text-sm font-medium text-luminexa-accent">
                 See all
               </Link>
@@ -275,10 +255,7 @@ export default function CustomerHomePage() {
 
           {providers.length === 0 && upcoming.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white/90 p-6 text-center">
-              <p className="text-4xl" aria-hidden>
-                📲
-              </p>
-              <p className="mt-2 text-sm font-medium text-slate-800">Ready for your first booking?</p>
+              <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
               <p className="mt-1 text-sm text-slate-500">
                 Search above or pick a category to find a local provider.
               </p>

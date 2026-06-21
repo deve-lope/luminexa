@@ -7,6 +7,7 @@ import {
   customerProviderServiceDetail,
   serviceDetail,
 } from '../../utils/customerPaths';
+import { formatWhen } from '../../utils/datetime';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
@@ -21,6 +22,7 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
     : serviceDetail(providerKey, service.id);
   const types = service.business_types || [];
   const location = service.location || service.location_short;
+  const availability = service.availability;
 
   return (
     <article className="rounded-xl bg-white p-4 shadow-sm">
@@ -75,6 +77,17 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
         </p>
       ) : (
         <p className="mt-2 text-sm text-slate-400">Location not listed</p>
+      )}
+
+      {availability?.open_slot_count > 0 && (
+        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          {availability.open_slot_count === 1
+            ? '1 free slot'
+            : `${availability.open_slot_count} free slots`}
+          {availability.first_available_at
+            ? ` · Next ${formatWhen(availability.first_available_at)}`
+            : ''}
+        </p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">

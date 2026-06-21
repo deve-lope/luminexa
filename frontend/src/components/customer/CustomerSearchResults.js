@@ -5,7 +5,9 @@ import { bookService, businessPage } from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
 export default function CustomerSearchResults({ results, query, loading }) {
-  if (!query || query.trim().length < 2) return null;
+  const searchTerm = query?.trim() || '';
+
+  if (!searchTerm && !loading && !results) return null;
 
   if (loading) {
     return <p className="text-sm text-slate-500">Searching…</p>;
@@ -19,7 +21,9 @@ export default function CustomerSearchResults({ results, query, loading }) {
   if (empty) {
     return (
       <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-        No results for &ldquo;{query}&rdquo;. Try another keyword or browse categories below.
+        {searchTerm
+          ? `No results for "${searchTerm}". Try another keyword or browse categories below.`
+          : 'No nearby services found. Try a different area or widen the radius.'}
       </p>
     );
   }

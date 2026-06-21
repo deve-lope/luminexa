@@ -1,8 +1,13 @@
 import React from 'react';
 
-export default function ServiceSearchBar({ value, onChange, placeholder = 'What do you need?' }) {
+export default function ServiceSearchBar({
+  value,
+  onChange,
+  placeholder = 'What do you need?',
+  sticky = true,
+}) {
   return (
-    <div className="sticky top-0 z-10 -mx-1 bg-slate-50/95 pb-3 pt-1 backdrop-blur">
+    <div className={sticky ? 'sticky top-0 z-10 -mx-1 bg-slate-50/95 pb-3 pt-1 backdrop-blur' : 'pb-3'}>
       <label htmlFor="service-search" className="sr-only">
         Search
       </label>

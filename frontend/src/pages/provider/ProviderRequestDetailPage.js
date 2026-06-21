@@ -92,7 +92,15 @@ export default function ProviderRequestDetailPage() {
   };
 
   if (loading) {
-    return <p className="text-center text-slate-500 py-12">Loading…</p>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+        <svg className="h-8 w-8 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <p className="text-sm">Loading request…</p>
+      </div>
+    );
   }
 
   if (error || !data) {
@@ -109,15 +117,87 @@ export default function ProviderRequestDetailPage() {
   return (
     <div className="space-y-5 pb-8">
       <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 p-5 text-white shadow-lg">
-        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass}`}>
-          {requestStatusLabel(kind, status)}
-        </span>
+        <div className="flex items-center justify-between">
+          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass}`}>
+            {requestStatusLabel(kind, status)}
+          </span>
+          {data.reference && (
+            <span className="rounded bg-white/20 px-2 py-0.5 font-mono text-xs text-white/90">
+              {data.reference}
+            </span>
+          )}
+        </div>
         <h1 className="mt-2 text-2xl font-bold">{title}</h1>
         {kind === 'booking' && data.start_at && (
           <p className="mt-2 text-white/90">{formatWhen(data.start_at)}</p>
         )}
         {kind === 'inquiry' && data.preferred_date && (
           <p className="mt-2 text-white/90">Preferred date: {data.preferred_date}</p>
+        )}
+        {kind === 'booking' && status === 'requested' && (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => runBookingAction(() => jobsAPI.acceptBooking(id), 'Request approved.')}
+              className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() =>
+                runBookingAction(async () => {
+                  await jobsAPI.declineBooking(id);
+                  navigate(providerRequests(orgSlug));
+                }, null)
+              }
+              className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+        {kind === 'booking' && status === 'confirmed' && (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => runBookingAction(() => jobsAPI.completeBooking(id), 'Marked as done.')}
+            className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+          >
+            Mark done
+          </button>
+        )}
+        {kind === 'inquiry' && status === 'pending' && (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => runInquiryAction('accept', 'Request approved.')}
+              className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => runInquiryAction('decline', 'Request declined.')}
+              className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+        {kind === 'inquiry' && status === 'active' && (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => runInquiryAction('complete', 'Marked as done.')}
+            className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+          >
+            Mark done
+          </button>
         )}
       </header>
 
@@ -203,6 +283,22 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
+      {kind === 'booking' && (status === 'confirmed' || status === 'completed') && (
+        <a
+          href={jobsAPI.bookingIcalUrl(id)}
+          download
+          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          <svg className="h-4 w-4 text-luminexa-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Add to calendar
+        </a>
+      )}
+
       <RequestMessageThread
         customerName={data.customer_name}
         loadMessages={() =>
@@ -217,74 +313,6 @@ export default function ProviderRequestDetailPage() {
         }
       />
 
-      {kind === 'booking' && status === 'requested' && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => runBookingAction(() => jobsAPI.acceptBooking(id), 'Request approved.')}
-            className="min-h-[48px] flex-1 rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() =>
-              runBookingAction(async () => {
-                await jobsAPI.declineBooking(id);
-                navigate(providerRequests(orgSlug));
-              }, null)
-            }
-            className="min-h-[48px] flex-1 rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
-          >
-            Decline
-          </button>
-        </div>
-      )}
-
-      {kind === 'booking' && status === 'confirmed' && (
-        <button
-          type="button"
-          disabled={actionBusy}
-          onClick={() => runBookingAction(() => jobsAPI.completeBooking(id), 'Marked as done.')}
-          className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
-        >
-          Mark done
-        </button>
-      )}
-
-      {kind === 'inquiry' && status === 'pending' && (
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => runInquiryAction('accept', 'Request approved.')}
-            className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => runInquiryAction('decline', 'Request declined.')}
-            className="min-h-[48px] w-full rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
-          >
-            Decline
-          </button>
-        </div>
-      )}
-
-      {kind === 'inquiry' && status === 'active' && (
-        <button
-          type="button"
-          disabled={actionBusy}
-          onClick={() => runInquiryAction('complete', 'Marked as done.')}
-          className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
-        >
-          Mark done
-        </button>
-      )}
     </div>
   );
 }

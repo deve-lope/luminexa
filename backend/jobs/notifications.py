@@ -134,11 +134,47 @@ def send_booking_email(event, booking):
             f'View: {provider_url}',
         ]
     elif event == 'booking_completed':
-        recipients = [booking.customer.email] if booking.customer.email else []
-        subject = f'Service completed — {org.name}'
+        ref = f'BK-{booking.pk:05d}'
+        review_url = (
+            f'{_public_app_url()}/book/{org.public_ref}/services/{booking.service_id}'
+            if booking.service_id
+            else None
+        )
+        # Receipt to customer
+        customer_lines = [
+            f'Receipt — {org.name}',
+            f'Reference: {ref}',
+            f'Service: {service_name}',
+            f'Date: {when}',
+        ]
+        if booking.service_id and hasattr(booking, 'service') and booking.service.base_price:
+            from decimal import Decimal
+            price = booking.service.base_price
+            customer_lines.append(f'Price: ${price:,.2f}')
+        customer_lines += [
+            '',
+            f'Thank you for choosing {org.name}!',
+        ]
+        if review_url:
+            customer_lines += [
+                '',
+                f'How was your experience? Leave a review:',
+                review_url,
+            ]
+        if booking.customer.email:
+            _send_to(
+                booking.customer.email,
+                f'Service complete — receipt from {org.name}',
+                customer_lines,
+            )
+        # Completion notice to provider staff
+        recipients = _provider_staff_emails(org)
+        subject = f'Job completed — {service_name} ({ref})'
         body_lines = [
-            f'Your appointment for {service_name} on {when} is marked complete.',
-            f'Thank you for choosing {org.name}.',
+            f'Booking {ref} is marked complete.',
+            *_booking_detail_lines(booking),
+            '',
+            f'View: {provider_booking_detail_url(org.slug, booking.id)}',
         ]
     elif event == 'booking_reminder':
         recipients = [booking.customer.email] if booking.customer.email else []

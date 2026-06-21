@@ -6,8 +6,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgContext';
 import { buildProviderMenuItems, buildProviderTabs } from '../config/navigation';
 import { isProviderMember } from '../utils/postLoginRoute';
-import { getCustomerBookingUrl, getPublicAppUrl } from '../utils/bookingLink';
-import { publicServicesCatalog } from '../utils/customerPaths';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
 import { jobsAPI } from '../utils/api';
 import {
@@ -50,19 +48,10 @@ function ProviderShell() {
     () => buildProviderTabs(orgSlug, { requestsBadgeCount: alertCount }),
     [orgSlug, alertCount]
   );
-  const bookingUrl = useMemo(() => getCustomerBookingUrl(orgSlug), [orgSlug]);
-
-  const publicServicesPreviewUrl = useMemo(
-    () => (orgSlug ? `${getPublicAppUrl()}${publicServicesCatalog(orgSlug)}` : null),
-    [orgSlug]
-  );
-
   const menuItems = useMemo(
     () =>
       buildProviderMenuItems({
         logout: () => logout().then(() => navigate('/')),
-        bookingUrl,
-        publicServicesPreviewUrl,
         providerServicesPath: providerServices(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
@@ -71,7 +60,7 @@ function ProviderShell() {
         isStaff: user?.is_staff,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, bookingUrl, publicServicesPreviewUrl, orgSlug, user?.is_staff]
+    [logout, navigate, orgSlug, user?.is_staff]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -142,7 +131,7 @@ function ProviderShell() {
       backTo={backNav?.to}
       homeTo={providerHomePath}
     >
-      <Outlet context={{ bookingUrl }} />
+      <Outlet />
     </AppShell>
   );
 }

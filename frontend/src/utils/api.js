@@ -145,6 +145,7 @@ export const jobsAPI = {
   rescheduleBooking: (id, slotId) =>
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),
+  bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
   inviteStaff: (orgSlug, email) =>
     api.post(`/api/v1/organizations/${orgSlug}/invite-staff/`, { email }),
   listStaffInvitations: (orgSlug) =>

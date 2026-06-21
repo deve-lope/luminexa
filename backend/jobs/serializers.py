@@ -137,16 +137,20 @@ class CustomerServiceInquirySerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
+    reference = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerServiceInquiry
         fields = (
-            'id', 'service', 'service_name', 'service_label', 'message', 'service_address',
-            'preferred_date', 'status', 'dismissed_at', 'organization_name', 'organization_slug',
-            'organization_public_ref',
+            'id', 'reference', 'service', 'service_name', 'service_label', 'message',
+            'service_address', 'preferred_date', 'status', 'dismissed_at',
+            'organization_name', 'organization_slug', 'organization_public_ref',
             'customer_name', 'customer_email', 'customer_phone', 'created_at',
         )
         read_only_fields = fields
+
+    def get_reference(self, obj):
+        return f'SR-{obj.pk:05d}'
 
 
 class ServiceRequestMessageSerializer(serializers.ModelSerializer):
@@ -180,6 +184,7 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
 class ProviderServiceRequestListSerializer(serializers.Serializer):
     kind = serializers.CharField()
     id = serializers.IntegerField()
+    reference = serializers.CharField()
     title = serializers.CharField()
     customer_name = serializers.CharField()
     customer_email = serializers.EmailField()
@@ -426,12 +431,19 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
     service_name = serializers.CharField(source='service.name', read_only=True)
+    service_duration_minutes = serializers.IntegerField(
+        source='service.duration_minutes', read_only=True,
+    )
+    service_base_price = serializers.DecimalField(
+        source='service.base_price', max_digits=10, decimal_places=2, read_only=True,
+    )
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     customer_name = serializers.CharField(source='customer.full_name', read_only=True)
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+    reference = serializers.SerializerMethodField()
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         source='availability_slot',
@@ -442,17 +454,19 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = (
-            'id', 'organization', 'organization_slug', 'organization_public_ref',
-            'service', 'service_name', 'organization_name', 'customer', 'customer_name',
+            'id', 'reference', 'organization', 'organization_slug', 'organization_public_ref',
+            'service', 'service_name', 'service_duration_minutes', 'service_base_price',
+            'organization_name', 'customer', 'customer_name',
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
             'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'customer_name', 'customer_email', 'customer_phone', 'service_name',
-            'organization_name', 'organization_slug', 'organization_public_ref', 'availability_slot',
-            'source', 'booked_by',
+            'id', 'reference', 'customer_name', 'customer_email', 'customer_phone',
+            'service_name', 'service_duration_minutes', 'service_base_price',
+            'organization_name', 'organization_slug', 'organization_public_ref',
+            'availability_slot', 'source', 'booked_by',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -462,6 +476,9 @@ class BookingSerializer(serializers.ModelSerializer):
             'end_at': {'required': False},
             'customer': {'required': False},
         }
+
+    def get_reference(self, obj):
+        return f'BK-{obj.pk:05d}'
 
     def validate(self, attrs):
         slot = attrs.get('availability_slot')

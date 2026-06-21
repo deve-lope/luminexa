@@ -14,9 +14,9 @@ export function buildProviderTabs(orgSlug, { requestsBadgeCount = 0 } = {}) {
 
 export const CUSTOMER_TABS = [
   { id: 'home', label: 'Home', to: '/customer', end: true },
+  { id: 'book', label: 'Book', to: '/customer/find' },
   { id: 'bookings', label: 'Bookings', to: '/customer/bookings' },
-  { id: 'history', label: 'History', to: '/customer/history' },
-  { id: 'explore', label: 'Services', to: '/services' },
+  { id: 'account', label: 'Account', to: '/customer/account' },
 ];
 
 /** Guest / public booking pages (/book/:slug) */
@@ -60,8 +60,6 @@ export function buildPublicBookMenuItems() {
 
 export function buildProviderMenuItems({
   logout,
-  bookingUrl,
-  publicServicesPreviewUrl,
   providerServicesPath,
   providerSettingsPath,
   providerAccountPath,
@@ -99,28 +97,6 @@ export function buildProviderMenuItems({
     items.push({ id: 'services', label: 'Services', to: providerServicesPath });
   }
 
-  if (bookingUrl || publicServicesPreviewUrl) {
-    items.push({ id: 'section-preview', divider: true, label: 'Preview' });
-    if (bookingUrl) {
-      items.push({
-        id: 'preview-booking',
-        label: 'Booking page',
-        href: bookingUrl,
-        external: true,
-        viewOnly: true,
-      });
-    }
-    if (publicServicesPreviewUrl) {
-      items.push({
-        id: 'preview-services',
-        label: 'Services page',
-        href: publicServicesPreviewUrl,
-        external: true,
-        viewOnly: true,
-      });
-    }
-  }
-
   items.push({ id: 'section-site', divider: true, label: 'Site' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/' });
   if (isStaff && adminUrl) {
@@ -133,14 +109,8 @@ export function buildProviderMenuItems({
 export function buildCustomerMenuItems({ logout }) {
   const items = [];
 
-  items.push({ id: 'section-customer', divider: true, label: 'Customer' });
-  items.push({ id: 'customer-home', label: 'Home', to: '/customer' });
-  items.push({ id: 'bookings', label: 'My appointments', to: '/customer/bookings' });
+  items.push({ id: 'section-more', divider: true, label: 'More' });
   items.push({ id: 'history', label: 'History', to: '/customer/history' });
-  items.push({ id: 'explore', label: 'Find & book services', to: '/services' });
-  items.push({ id: 'account', label: 'Account', to: '/customer/account' });
-
-  items.push({ id: 'section-site', divider: true, label: 'Site' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
   return items;

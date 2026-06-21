@@ -18,13 +18,15 @@ export default function TaskListItem({ task, onToggle }) {
         task.is_done ? 'bg-slate-50' : overdue ? 'border-red-100 bg-red-50' : 'bg-white ring-1 ring-slate-100'
       }`}
     >
-      <input
-        type="checkbox"
-        checked={task.is_done}
-        onChange={() => onToggle(task)}
-        className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300"
-        aria-label={task.is_done ? 'Mark incomplete' : 'Mark done'}
-      />
+      <label className="flex shrink-0 cursor-pointer items-center self-stretch pt-0.5">
+        <input
+          type="checkbox"
+          checked={task.is_done}
+          onChange={() => onToggle(task)}
+          className="h-5 w-5 rounded border-slate-300 accent-violet-600"
+          aria-label={task.is_done ? 'Mark incomplete' : 'Mark done'}
+        />
+      </label>
       <div className="min-w-0 flex-1">
         <p
           className={`text-sm font-medium ${
@@ -51,3 +53,4 @@ export default function TaskListItem({ task, onToggle }) {
     </li>
   );
 }
+

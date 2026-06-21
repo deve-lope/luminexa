@@ -4,8 +4,10 @@ import TaskListItem from '../../components/tasks/TaskListItem';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import {
   providerAddTask,
+  providerRequestDetail,
   providerRequests,
   providerSchedule,
+  providerScheduleDetail,
   providerTasks,
 } from '../../utils/providerPaths';
 import { jobsAPI } from '../../utils/api';
@@ -168,14 +170,20 @@ export default function ProviderTodayPage() {
             <p className="text-lg font-bold">{stats.jobs_today ?? 0}</p>
             <p className="text-[10px] uppercase text-white/70">Today</p>
           </div>
-          <div className="rounded-lg bg-white/10 py-2">
+          <Link
+            to={providerSchedule(orgSlug)}
+            className="rounded-lg bg-white/10 py-2 transition hover:bg-white/20"
+          >
             <p className="text-lg font-bold">{stats.upcoming_count ?? 0}</p>
             <p className="text-[10px] uppercase text-white/70">Upcoming</p>
-          </div>
-          <div className="rounded-lg bg-white/10 py-2">
+          </Link>
+          <Link
+            to={providerRequests(orgSlug)}
+            className="rounded-lg bg-white/10 py-2 transition hover:bg-white/20"
+          >
             <p className="text-lg font-bold">{stats.pending_requests_count ?? 0}</p>
             <p className="text-[10px] uppercase text-white/70">Requests</p>
-          </div>
+          </Link>
         </div>
       </header>
 
@@ -196,35 +204,28 @@ export default function ProviderTodayPage() {
         </div>
       ))}
 
-      {!!dashboard.pending_requests?.length && (
-        <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-medium text-amber-900">
-            {dashboard.pending_requests.length} booking request
-            {dashboard.pending_requests.length === 1 ? '' : 's'}
-          </p>
+      {(() => {
+        const pendingCount =
+          (dashboard.pending_requests?.length ?? 0) +
+          (dashboard.customer_inquiries?.length ?? 0);
+        if (!pendingCount) return null;
+        return (
           <Link
             to={providerRequests(orgSlug)}
-            className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white"
+            className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
           >
-            Review
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {pendingCount} request{pendingCount === 1 ? '' : 's'} need your attention
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">Tap to review and respond</p>
+            </div>
+            <span className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white">
+              Review
+            </span>
           </Link>
-        </div>
-      )}
-
-      {!!dashboard.customer_inquiries?.length && (
-        <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
-          <p className="text-sm font-medium text-violet-900">
-            {dashboard.customer_inquiries.length} custom request
-            {dashboard.customer_inquiries.length === 1 ? '' : 's'}
-          </p>
-          <Link
-            to={providerRequests(orgSlug)}
-            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white"
-          >
-            Open requests
-          </Link>
-        </div>
-      )}
+        );
+      })()}
 
       <section className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
         <div className="flex items-center justify-between gap-2">
@@ -313,27 +314,32 @@ export default function ProviderTodayPage() {
         ) : (
           <ul className="space-y-2">
             {jobs.map((job) => (
-              <li
-                key={job.id}
-                className="overflow-hidden rounded-xl bg-white ring-1 ring-slate-100"
-              >
-                <div className={`h-1 bg-gradient-to-r ${jobAccent(job.status)}`} />
-                <div className="flex gap-3 p-3">
-                  <div className="shrink-0 text-center">
-                    <p className="text-[10px] font-medium uppercase text-slate-500">
-                      {new Date(job.start_at).toLocaleDateString(undefined, { weekday: 'short' })}
-                    </p>
-                    <p className="text-base font-bold text-slate-900">
-                      {new Date(job.start_at).getDate()}
-                    </p>
-                    <p className="text-xs text-slate-600">{formatTime(job.start_at)}</p>
+              <li key={job.id}>
+                <Link
+                  to={providerScheduleDetail(orgSlug, 'booking', job.id)}
+                  className="block overflow-hidden rounded-xl bg-white ring-1 ring-slate-100 transition hover:ring-violet-200 hover:shadow-sm"
+                >
+                  <div className={`h-1 bg-gradient-to-r ${jobAccent(job.status)}`} />
+                  <div className="flex gap-3 p-3">
+                    <div className="shrink-0 text-center">
+                      <p className="text-[10px] font-medium uppercase text-slate-500">
+                        {new Date(job.start_at).toLocaleDateString(undefined, { weekday: 'short' })}
+                      </p>
+                      <p className="text-base font-bold text-slate-900">
+                        {new Date(job.start_at).getDate()}
+                      </p>
+                      <p className="text-xs text-slate-600">{formatTime(job.start_at)}</p>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900">{job.service_name}</p>
+                      <p className="text-sm text-slate-600">{job.customer_name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatWhen(job.start_at)}</p>
+                    </div>
+                    <div className="flex items-center text-slate-300">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900">{job.service_name}</p>
-                    <p className="text-sm text-slate-600">{job.customer_name}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatWhen(job.start_at)}</p>
-                  </div>
-                </div>
+                </Link>
               </li>
             ))}
           </ul>

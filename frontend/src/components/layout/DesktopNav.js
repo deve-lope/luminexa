@@ -54,9 +54,6 @@ export default function DesktopNav({
 
         {menuItems.length > 0 && (
           <nav className="border-t border-slate-200 p-3 pb-6" aria-label="More">
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              More
-            </p>
             <ul className="space-y-1">
               {menuItems.map((item) =>
                 item.divider ? (

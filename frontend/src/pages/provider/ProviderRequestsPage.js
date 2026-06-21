@@ -46,11 +46,6 @@ export default function ProviderRequestsPage() {
 
   return (
     <div className="space-y-4 pb-8">
-      <p className="text-sm text-slate-600">
-        Booking requests and custom service messages from customers — approve, track status, and chat
-        in one place.
-      </p>
-
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map((key) => (
           <button
@@ -72,11 +67,24 @@ export default function ProviderRequestsPage() {
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
 
-      {loading && <p className="text-center text-slate-500 py-8">Loading requests…</p>}
+      {loading && (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+          <svg className="h-8 w-8 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm">Loading requests…</p>
+        </div>
+      )}
 
       {!loading && !items.length && (
-        <div className="rounded-xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-100">
-          <p className="font-medium text-slate-900">No requests here</p>
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-100">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+            <svg className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <p className="font-semibold text-slate-900">No requests here</p>
           <p className="mt-1 text-sm text-slate-500">
             {filter === 'all'
               ? 'When customers book or send a custom request, it will show up here.'
@@ -91,32 +99,38 @@ export default function ProviderRequestsPage() {
             <li key={`${item.kind}-${item.id}`}>
               <Link
                 to={providerRequestDetail(orgSlug, item.kind, item.id)}
-                className="block rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-200"
+                className="flex items-start gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-200 hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-slate-900">{item.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600">{item.customer_name}</p>
+                    <StatusBadge kind={item.kind} status={item.status} />
                   </div>
-                  <StatusBadge kind={item.kind} status={item.status} />
-                </div>
-                {item.start_at && (
-                  <p className="mt-2 text-sm text-slate-500">{formatWhen(item.start_at)}</p>
-                )}
-                {!item.start_at && item.preferred_date && (
-                  <p className="mt-2 text-sm text-slate-500">Preferred: {item.preferred_date}</p>
-                )}
-                {item.summary && (
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-700">{item.summary}</p>
-                )}
-                <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
-                  <span>{item.kind === 'booking' ? 'Booking' : 'Custom request'}</span>
-                  {item.message_count > 0 && (
-                    <span>
-                      {item.message_count} message{item.message_count === 1 ? '' : 's'}
-                    </span>
+                  <p className="mt-0.5 text-sm text-slate-600">
+                    {item.customer_name}
+                    {item.reference && (
+                      <span className="ml-2 font-mono text-xs text-slate-400">{item.reference}</span>
+                    )}
+                  </p>
+                  {item.start_at && (
+                    <p className="mt-1.5 text-sm text-slate-500">{formatWhen(item.start_at)}</p>
                   )}
+                  {!item.start_at && item.preferred_date && (
+                    <p className="mt-1.5 text-sm text-slate-500">Preferred: {item.preferred_date}</p>
+                  )}
+                  {item.summary && (
+                    <p className="mt-1.5 line-clamp-2 text-sm text-slate-500">{item.summary}</p>
+                  )}
+                  <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
+                    <span>{item.kind === 'booking' ? 'Booking' : 'Custom request'}</span>
+                    {item.message_count > 0 && (
+                      <span>· {item.message_count} message{item.message_count === 1 ? '' : 's'}</span>
+                    )}
+                  </div>
                 </div>
+                <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
               </Link>
             </li>
           ))}

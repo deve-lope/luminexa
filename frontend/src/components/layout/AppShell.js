@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { IconMenu } from '../icons/NavIcons';
 import AppMenuDrawer from './AppMenuDrawer';
 import BottomTabBar from './BottomTabBar';
@@ -19,6 +20,7 @@ export default function AppShell({
   showBack = Boolean(backTo),
   children,
 }) {
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu = menuItems.length > 0;
   const hasTabs = tabs?.length > 0;
@@ -70,7 +72,9 @@ export default function AppShell({
         </header>
 
         <main className="mx-auto max-w-lg px-4 py-6 pb-28 lg:max-w-3xl lg:px-6 lg:pb-8">
-          {children}
+          <div key={location.pathname} className="page-enter">
+            {children}
+          </div>
         </main>
       </div>
 

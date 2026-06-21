@@ -33,45 +33,45 @@ export default function LandingPage() {
           className="mx-auto w-full max-w-2xl text-center"
         >
           <p className="mb-3 inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-luminexa-accent">
-            Built for local service teams
+            Local help, right where you are
           </p>
           <h1 className="text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl lg:text-[3.25rem]">
-            Run your day like a mobile app.
+            Get help from people<br className="hidden sm:inline" /> near you.
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-luminexa-mist/75">
-            Today&apos;s jobs, tasks, and booking requests in one thumb-friendly dashboard.
-            Customers book you online — you stay in control.
+            Whatever you need done — cleaning, repairs, care, and more —
+            we connect you with trusted local providers who are ready to help.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
-              to="/register/business"
+              to="/services"
               className="min-h-[52px] rounded-2xl bg-luminexa-accent px-8 flex items-center justify-center font-semibold text-white shadow-xl shadow-violet-900/35"
             >
-              Start free for your business
+              Find help near you
             </Link>
             <Link
-              to="/services"
+              to="/register/business"
               className="min-h-[52px] rounded-2xl border border-white/20 bg-white/5 px-8 flex items-center justify-center font-semibold backdrop-blur"
             >
-              Find a service
+              Offer your services
             </Link>
           </div>
           <ul className="mt-10 grid gap-3 text-left sm:grid-cols-3">
             {[
-              { title: 'Morning board', text: 'Jobs, tasks, and alerts at a glance.' },
-              { title: 'Smart booking', text: 'Instant or approval — your rules.' },
-              { title: 'Share your link', text: 'Customers book from any phone.' },
+              { icon: '🔍', title: 'Find the right person', text: 'Browse local providers by what you need.' },
+              { icon: '📅', title: 'Book in seconds', text: 'Pick a time that works for you, online.' },
+              { icon: '💬', title: 'Stay in touch', text: 'Message your provider and track your request.' },
             ].map((item) => (
               <li
                 key={item.title}
-                className="flex gap-3 rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
+                className="flex gap-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-luminexa-accent/30 text-sm">
-                  ✓
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-luminexa-accent/30 text-base">
+                  {item.icon}
                 </span>
                 <span>
                   <p className="text-sm font-semibold">{item.title}</p>
-                  <p className="text-xs text-luminexa-mist/60">{item.text}</p>
+                  <p className="mt-0.5 text-xs text-luminexa-mist/60">{item.text}</p>
                 </span>
               </li>
             ))}
@@ -80,7 +80,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="relative z-10 border-t border-white/10 px-4 py-5 text-center text-sm text-luminexa-mist/45 md:px-8">
-        © {new Date().getFullYear()} Luminexa · Scheduling for service providers
+        © {new Date().getFullYear()} Luminexa · Connecting people with local help
       </footer>
     </div>
   );

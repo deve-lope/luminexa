@@ -1,3 +1,5 @@
+from datetime import datetime, time
+
 from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -7,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from jobs.booking_services import customer_can_book
-from jobs.models import Booking, Service
+from jobs.models import AvailabilitySlot, Booking, Service
 from jobs.serializers import BookingSerializer, PublicServiceReadSerializer
 
 from .models import BusinessType, Organization, OrganizationMembership
@@ -238,9 +240,14 @@ def _serialize_bookable_service(service, *, ctx):
         'location_short': organization_location_short(org),
         'location': organization_location_full(org) or None,
         'business_types': types,
+        'org_lat': float(org.service_latitude) if org.service_latitude is not None else None,
+        'org_lng': float(org.service_longitude) if org.service_longitude is not None else None,
     }
     if org.id in dist_map:
         payload['distance_miles'] = dist_map[org.id]
+    availability = (ctx.get('availability_by_service_id') or {}).get(service.id)
+    if availability:
+        payload['availability'] = availability
     return payload
 
 
@@ -255,6 +262,93 @@ def _bookable_services_queryset():
         .prefetch_related('organization__business_types', 'reviews')
         .order_by('organization__service_city', 'organization__name', 'sort_order', 'name')
     )
+
+
+def _parse_date_key(value):
+    if not value:
+        return None
+    return datetime.strptime(value, '%Y-%m-%d').date()
+
+
+def _availability_window_from_params(params):
+    date_from_raw = (
+        params.get('date_from')
+        or params.get('start_date')
+        or params.get('date')
+        or ''
+    ).strip()
+    date_to_raw = (
+        params.get('date_to')
+        or params.get('end_date')
+        or ''
+    ).strip()
+    if not date_from_raw and not date_to_raw:
+        return None
+
+    try:
+        date_from = _parse_date_key(date_from_raw) or _parse_date_key(date_to_raw)
+        date_to = _parse_date_key(date_to_raw) or date_from
+    except ValueError:
+        return {'error': 'Use dates in YYYY-MM-DD format.'}
+
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    return {
+        'date_from': date_from.isoformat(),
+        'date_to': date_to.isoformat(),
+        'start': timezone.make_aware(datetime.combine(date_from, time.min)),
+        'end': timezone.make_aware(datetime.combine(date_to, time.max)),
+    }
+
+
+def _available_slot_queryset(window):
+    return AvailabilitySlot.objects.filter(
+        status=AvailabilitySlot.Status.OPEN,
+        start_at__gt=timezone.now(),
+        start_at__gte=window['start'],
+        start_at__lte=window['end'],
+        organization__is_active=True,
+        organization__profile_public=True,
+    )
+
+
+def _apply_availability_filter(qs, window):
+    if not window:
+        return qs
+    slots = _available_slot_queryset(window)
+    service_slot_ids = slots.exclude(service__isnull=True).values_list('service_id', flat=True)
+    general_org_ids = slots.filter(service__isnull=True).values_list('organization_id', flat=True)
+    return qs.filter(
+        Q(id__in=service_slot_ids) | Q(organization_id__in=general_org_ids)
+    ).distinct()
+
+
+def _availability_summary_for_services(services, window):
+    if not window or not services:
+        return {}
+
+    service_ids = [s.id for s in services]
+    org_ids = [s.organization_id for s in services]
+    slots = (
+        _available_slot_queryset(window)
+        .filter(Q(service_id__in=service_ids) | Q(service__isnull=True, organization_id__in=org_ids))
+        .order_by('start_at')
+    )
+    summary = {s.id: {'open_slot_count': 0, 'first_available_at': None} for s in services}
+    services_by_org = {}
+    for service in services:
+        services_by_org.setdefault(service.organization_id, []).append(service.id)
+
+    for slot in slots:
+        target_ids = [slot.service_id] if slot.service_id else services_by_org.get(slot.organization_id, [])
+        for service_id in target_ids:
+            if service_id not in summary:
+                continue
+            summary[service_id]['open_slot_count'] += 1
+            if summary[service_id]['first_available_at'] is None:
+                summary[service_id]['first_available_at'] = slot.start_at.isoformat()
+    return summary
 
 
 def _apply_service_filters(
@@ -480,6 +574,9 @@ def public_services_browse_api(request):
     postal = (request.query_params.get('postal') or request.query_params.get('pin') or '').strip()
     radius_raw = request.query_params.get('radius_miles') or request.query_params.get('miles')
     radius_miles = parse_radius_miles(radius_raw) if postal else None
+    availability_window = _availability_window_from_params(request.query_params)
+    if availability_window and availability_window.get('error'):
+        return Response({'detail': availability_window['error']}, status=status.HTTP_400_BAD_REQUEST)
 
     types_qs = BusinessType.objects.filter(is_active=True).annotate(
         provider_count=Count(
@@ -493,6 +590,53 @@ def public_services_browse_api(request):
             Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=q.lower()),
         )
 
+    # Allow direct lat/lng from map view (bypasses postal lookup)
+    raw_lat = request.query_params.get('lat')
+    raw_lng = request.query_params.get('lng')
+
+    if raw_lat and raw_lng and not postal:
+        try:
+            center_lat = float(raw_lat)
+            center_lng = float(raw_lng)
+            miles = parse_radius_miles(radius_raw) if radius_raw else 25
+            dist_map = organization_distances_within_radius(
+                center_lat,
+                center_lng,
+                miles,
+                base_qs=Organization.objects.filter(is_active=True, profile_public=True),
+            )
+            qs = _bookable_services_queryset()
+            qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
+            if q:
+                qs = qs.filter(
+                    Q(name__icontains=q)
+                    | Q(organization__name__icontains=q)
+                ).distinct()
+            qs = _apply_availability_filter(qs, availability_window)
+            service_list = list(qs[:200])
+            ctx = {
+                'request': request,
+                'distance_by_org_id': dist_map,
+                'availability_by_service_id': _availability_summary_for_services(
+                    service_list, availability_window
+                ),
+            }
+            services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
+            return Response({
+                'services': services,
+                'count': len(services),
+                'availability_search': (
+                    {
+                        'date_from': availability_window['date_from'],
+                        'date_to': availability_window['date_to'],
+                    }
+                    if availability_window
+                    else None
+                ),
+            })
+        except (ValueError, TypeError):
+            pass
+
     qs, dist_map = _apply_service_filters(
         _bookable_services_queryset(),
         q=q,
@@ -501,8 +645,16 @@ def public_services_browse_api(request):
         postal=postal,
         radius_miles=radius_miles,
     )
-    ctx = {'request': request, 'distance_by_org_id': dist_map}
-    services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:200]]
+    qs = _apply_availability_filter(qs, availability_window)
+    service_list = list(qs[:200])
+    ctx = {
+        'request': request,
+        'distance_by_org_id': dist_map,
+        'availability_by_service_id': _availability_summary_for_services(
+            service_list, availability_window
+        ),
+    }
+    services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
     picker = _location_picker_payload(state=state, city=city)
 
     return Response({
@@ -513,6 +665,14 @@ def public_services_browse_api(request):
         'postal_codes': picker['postal_codes'],
         'count': len(services),
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),
+        'availability_search': (
+            {
+                'date_from': availability_window['date_from'],
+                'date_to': availability_window['date_to'],
+            }
+            if availability_window
+            else None
+        ),
     })
 
 
@@ -552,12 +712,47 @@ def customer_services_catalog_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def customer_discover_api(request):
-    """Search business types, providers, and services by keyword."""
+    """Search business types, providers, and services by keyword or lat/lng."""
     q = (request.query_params.get('q') or '').strip()
     postal = (request.query_params.get('postal') or request.query_params.get('pin') or '').strip()
     city = (request.query_params.get('city') or '').strip()
     state = (request.query_params.get('state') or '').strip()
     radius_raw = request.query_params.get('radius_miles') or request.query_params.get('miles')
+    raw_lat = request.query_params.get('lat')
+    raw_lng = request.query_params.get('lng')
+
+    # Support lat/lng direct coordinate search (same as public browse API)
+    if raw_lat and raw_lng and not postal:
+        try:
+            center_lat = float(raw_lat)
+            center_lng = float(raw_lng)
+            miles = parse_radius_miles(radius_raw) if radius_raw else 25
+            dist_map = organization_distances_within_radius(
+                center_lat,
+                center_lng,
+                miles,
+                base_qs=Organization.objects.filter(is_active=True, profile_public=True),
+            )
+            qs = _bookable_services_queryset()
+            qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
+            if q:
+                qs = qs.filter(
+                    Q(name__icontains=q) | Q(organization__name__icontains=q)
+                ).distinct()
+            ctx = {'request': request, 'distance_by_org_id': dist_map}
+            services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:40]]
+            orgs_qs = Organization.objects.filter(
+                is_active=True, profile_public=True, id__in=dist_map.keys()
+            ).order_by('name')[:15]
+            types_qs = _business_types_for_discover()[:12]
+            return Response({
+                'business_types': BusinessTypeSerializer(types_qs, many=True).data,
+                'providers': PublicProviderCardSerializer(orgs_qs, many=True, context=ctx).data,
+                'services': services,
+            })
+        except (ValueError, TypeError):
+            pass
+
     radius_miles = parse_radius_miles(radius_raw) if postal else None
     if len(q) < 2 and not postal:
         return Response({'business_types': [], 'providers': [], 'services': []})

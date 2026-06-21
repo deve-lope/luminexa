@@ -954,6 +954,61 @@ class BookingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(detail=True, methods=['get'], url_path='ical')
+    def ical(self, request, pk=None):
+        """Return an iCalendar (.ics) file for this booking."""
+        from django.http import HttpResponse
+
+        booking = self.get_object()
+        # Allow both the customer and provider staff to download the calendar file
+        is_customer = booking.customer_id == request.user.id
+        if not is_customer and not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('You cannot access this booking.')
+
+        org = booking.organization
+        service_name = booking.service.name if booking.service_id else 'Appointment'
+        ref = f'BK-{booking.pk:05d}'
+
+        def fmt(dt):
+            """Format datetime to iCal UTC format."""
+            from django.utils import timezone as tz
+            utc = tz.utc
+            return dt.astimezone(utc).strftime('%Y%m%dT%H%M%SZ')
+
+        uid = f'{ref}@luminexa'
+        now_stamp = fmt(__import__('django.utils.timezone', fromlist=['now']).timezone.now())
+        dtstart = fmt(booking.start_at)
+        dtend = fmt(booking.end_at)
+        summary = f'{service_name} — {org.name}'
+        location = booking.service_address or ''
+        description = f'Reference: {ref}\\nProvider: {org.name}'
+        if booking.customer_notes:
+            description += f'\\nNotes: {booking.customer_notes}'
+
+        lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Luminexa//Booking//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
+            f'DTSTAMP:{now_stamp}',
+            f'DTSTART:{dtstart}',
+            f'DTEND:{dtend}',
+            f'SUMMARY:{summary}',
+            f'DESCRIPTION:{description}',
+            f'LOCATION:{location}',
+            'STATUS:CONFIRMED',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ]
+        content = '\r\n'.join(lines) + '\r\n'
+        filename = f'luminexa-{ref}.ics'
+        response = HttpResponse(content, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
 
 class CustomerMyInquiriesAPIView(APIView):
     """Past custom service requests submitted by the logged-in customer."""

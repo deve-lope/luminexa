@@ -11,9 +11,8 @@ import {
   buildPublicBookMenuItems,
 } from '../config/navigation';
 import { isOrgStaff } from '../utils/bookingAccess';
-import { getCustomerBookingUrl, getPublicAppUrl } from '../utils/bookingLink';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
-import { businessPage, publicServicesCatalog } from '../utils/customerPaths';
+import { businessPage } from '../utils/customerPaths';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 import {
@@ -30,18 +29,10 @@ function BookOwnerShell({ orgSlug, children }) {
   const location = useLocation();
 
   const tabs = useMemo(() => buildProviderTabs(orgSlug), [orgSlug]);
-  const bookingUrl = useMemo(() => getCustomerBookingUrl(orgSlug), [orgSlug]);
-  const publicServicesPreviewUrl = useMemo(
-    () => (orgSlug ? `${getPublicAppUrl()}${publicServicesCatalog(orgSlug)}` : null),
-    [orgSlug]
-  );
-
   const menuItems = useMemo(
     () =>
       buildProviderMenuItems({
         logout: () => logout().then(() => navigate('/')),
-        bookingUrl,
-        publicServicesPreviewUrl,
         providerServicesPath: `/provider/${orgSlug}/services`,
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
@@ -50,7 +41,7 @@ function BookOwnerShell({ orgSlug, children }) {
         isStaff: user?.is_staff,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, bookingUrl, publicServicesPreviewUrl, orgSlug, user?.is_staff]
+    [logout, navigate, orgSlug, user?.is_staff]
   );
 
   const onServicesPage = location.pathname.endsWith('/services');

@@ -69,6 +69,7 @@ class ProviderServiceRequestsAPIView(APIView):
             items.append({
                 'kind': 'booking',
                 'id': booking.id,
+                'reference': f'BK-{booking.pk:05d}',
                 'title': booking.service.name,
                 'customer_name': booking.customer.full_name,
                 'customer_email': booking.customer.email,
@@ -96,6 +97,7 @@ class ProviderServiceRequestsAPIView(APIView):
             items.append({
                 'kind': 'inquiry',
                 'id': inquiry.id,
+                'reference': f'SR-{inquiry.pk:05d}',
                 'title': title,
                 'customer_name': inquiry.customer.full_name,
                 'customer_email': inquiry.customer.email,

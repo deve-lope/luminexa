@@ -41,6 +41,14 @@ export function IconSettings({ className = iconClass }) {
   );
 }
 
+export function IconAccount({ className = iconClass }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A8.966 8.966 0 0112 15a8.966 8.966 0 016.879 2.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
 export function IconShare({ className = iconClass }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -106,6 +114,7 @@ export const TAB_ICONS = {
   share: IconShare,
   'my-page': IconShare,
   settings: IconSettings,
+  account: IconAccount,
   bookings: IconBookings,
   book: IconBook,
   more: IconMenu,

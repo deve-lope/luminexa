@@ -24,19 +24,27 @@ export default function BottomTabBar({ tabs }) {
               key={tab.id}
               to={tab.to}
               end={tab.end}
-              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 px-1 text-xs ${
-                active ? 'font-semibold text-luminexa-accent' : 'font-medium text-slate-500'
-              }`}
+              className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 px-1 text-xs"
             >
-              <span className="relative">
-                {Icon && <Icon className="h-6 w-6" />}
+              <span
+                className={`relative flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                  active
+                    ? 'bg-violet-100 px-4 py-1 text-luminexa-accent'
+                    : 'px-4 py-1 text-slate-400'
+                }`}
+              >
+                {Icon && <Icon className="h-5 w-5" />}
                 {tab.badgeCount > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                     {tab.badgeCount > 9 ? '9+' : tab.badgeCount}
                   </span>
                 )}
               </span>
-              <span>{tab.label}</span>
+              <span
+                className={`text-[10px] font-medium ${active ? 'text-luminexa-accent' : 'text-slate-400'}`}
+              >
+                {tab.label}
+              </span>
             </NavLink>
           );
         })}
