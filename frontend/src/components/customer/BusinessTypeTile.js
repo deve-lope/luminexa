@@ -3,12 +3,7 @@ import { Link } from 'react-router-dom';
 
 export default function BusinessTypeTile({ type, linkTo }) {
   const count = type.provider_count ?? 0;
-  const subtitle =
-    count === 0
-      ? 'Coming soon'
-      : count === 1
-        ? '1 provider'
-        : `${count} providers`;
+  const subtitle = count === 1 ? '1 provider' : `${count} providers`;
   const to = linkTo ? linkTo(type.slug) : `/customer/find/${type.slug}`;
 
   return (

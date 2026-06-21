@@ -42,6 +42,7 @@ import {
   RedirectToBookService,
 } from './components/booking/BookRedirect';
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -68,6 +69,7 @@ function AppRoutes() {
 
   return (
     <div className={isAuthShell ? 'min-h-screen bg-luminexa-navy' : 'min-h-screen bg-slate-50'}>
+      <PwaInstallPrompt />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
