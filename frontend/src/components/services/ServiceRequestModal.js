@@ -78,7 +78,7 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
           <button
             type="submit"
             disabled={submitting}
-            className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
           >
             {submitting ? 'Sending…' : 'Send request'}
           </button>

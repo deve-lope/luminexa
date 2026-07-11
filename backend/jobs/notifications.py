@@ -5,6 +5,8 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.formats import date_format
 
+from .models import ProviderNotification
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,11 +58,27 @@ def notify_customer_booking_created(booking):
     """Email provider staff and the customer after a customer books a slot."""
     from .models import Booking
 
+    create_provider_booking_notification(booking)
     if booking.status == Booking.Status.CONFIRMED:
         send_booking_email('booking_new_to_provider', booking)
         send_booking_email('booking_confirmed', booking)
     else:
         send_booking_email('booking_requested', booking)
+
+
+def create_provider_booking_notification(booking):
+    """Create an in-app provider alert when a customer finishes booking."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    customer_name = _customer_label(booking)
+    action = 'booked' if booking.status == booking.Status.CONFIRMED else 'requested'
+    ProviderNotification.objects.create(
+        organization=booking.organization,
+        kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
+        message=(
+            f'{customer_name} {action} {service_name} for {_format_when(booking.start_at)}. '
+            'Open Service requests to review or manage it.'
+        ),
+    )
 
 
 def send_booking_email(event, booking):
@@ -100,6 +118,25 @@ def send_booking_email(event, booking):
                     f'Your request for {service_name} at {org.name} was submitted.',
                     f'When: {when}',
                     'The business will confirm your appointment.',
+                ],
+            )
+    elif event == 'booking_reschedule_requested':
+        recipients = _provider_staff_emails(org)
+        subject = f'Reschedule request — {service_name}'
+        body_lines = [
+            f'A customer asked to reschedule {service_name}.',
+            *_booking_detail_lines(booking, include_address=True),
+            '',
+            f'Open in Luminexa: {provider_url}',
+        ]
+        if booking.customer.email:
+            _send_to(
+                booking.customer.email,
+                f'Reschedule request sent — {org.name}',
+                [
+                    f'Your reschedule request for {service_name} at {org.name} was submitted.',
+                    f'New time: {when}',
+                    'The business will confirm your new appointment time.',
                 ],
             )
     elif event == 'booking_confirmed':

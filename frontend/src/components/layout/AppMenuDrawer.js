@@ -27,17 +27,17 @@ export default function AppMenuDrawer({ open, onClose, title, items }) {
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={title}>
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/40"
+        className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
         aria-label="Close menu"
         onClick={onClose}
       />
-      <aside className="absolute left-0 top-0 flex h-full w-[min(100%,20rem)] animate-[slideIn_0.2s_ease-out] flex-col bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <aside className="absolute left-0 top-0 flex h-full w-[min(100%,20rem)] animate-[slideIn_0.22s_cubic-bezier(0.22,1,0.36,1)] flex-col border-r border-white/60 bg-white/95 shadow-lx-elevated backdrop-blur-xl">
+        <header className="flex items-center justify-between border-b border-slate-100/80 px-4 py-4">
+          <p className="text-sm font-semibold tracking-tight text-slate-900">{title}</p>
           <button
             type="button"
             onClick={onClose}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-600"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100"
             aria-label="Close"
           >
             <IconClose className="h-5 w-5" />
@@ -48,7 +48,7 @@ export default function AppMenuDrawer({ open, onClose, title, items }) {
             {items.map((item) =>
               item.divider ? (
                 <li key={item.id} className="px-4 pb-1 pt-4 first:pt-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
                     {item.label}
                   </p>
                 </li>
@@ -75,13 +75,13 @@ function MenuRow({ item, onNavigate }) {
       ? location.pathname === item.to
       : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
 
-  const className = `flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-base ${
+  const className = `flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-base transition ${
     item.danger
-      ? 'text-red-600'
+      ? 'text-red-600 hover:bg-red-50/80'
       : isActive
-        ? 'bg-violet-50 font-medium text-luminexa-accent'
-        : 'text-slate-800'
-  } hover:bg-slate-100`;
+        ? 'lx-nav-active font-medium'
+        : 'text-slate-800 hover:bg-slate-50/80'
+  }`;
 
   const label = (
     <>
@@ -93,7 +93,7 @@ function MenuRow({ item, onNavigate }) {
         </span>
       )}
       {item.badgeCount > 0 && (
-        <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+        <span className="shrink-0 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
           {item.badgeCount > 9 ? '9+' : item.badgeCount}
         </span>
       )}

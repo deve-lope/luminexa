@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerServiceDetailsForm from './CustomerServiceDetailsForm';
+import { validateServiceLocationValue } from './ServiceLocationInput';
 import { businessesAPI } from '../../utils/api';
 
 function parseError(err) {
@@ -44,6 +45,16 @@ export default function CustomerServiceRequestForm({
     const trimmed = message.trim();
     if (trimmed.length < 10) {
       setError('Please describe what you need in at least 10 characters.');
+      return;
+    }
+    if (serviceAddress.trim()) {
+      const locationCheck = validateServiceLocationValue(serviceAddress);
+      if (!locationCheck.valid) {
+        setError(locationCheck.error || 'Please enter a valid postal code.');
+        return;
+      }
+    } else {
+      setError('Please enter the service location.');
       return;
     }
     setSubmitting(true);
@@ -183,7 +194,7 @@ export default function CustomerServiceRequestForm({
         <button
           type="submit"
           disabled={submitting}
-          className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+          className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
         >
           {submitting ? 'Sending…' : 'Send request'}
         </button>

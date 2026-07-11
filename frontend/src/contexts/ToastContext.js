@@ -18,16 +18,16 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-[100] flex flex-col items-center gap-2 px-4 lg:bottom-6">
+      <div className="fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 px-safe pb-safe lg:bottom-6 lg:pb-0">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto max-w-md rounded-xl px-4 py-3 text-sm shadow-lg ${
+            className={`pointer-events-auto max-w-md rounded-2xl px-4 py-3 text-sm font-medium shadow-lx-elevated backdrop-blur-xl ${
               t.type === 'error'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-600/95 text-white'
                 : t.type === 'success'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-800 text-white'
+                  ? 'bg-emerald-600/95 text-white'
+                  : 'bg-slate-900/90 text-white'
             }`}
           >
             {t.message}

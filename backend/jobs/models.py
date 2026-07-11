@@ -156,6 +156,7 @@ class WeeklyScheduleBlock(models.Model):
 class ProviderNotification(models.Model):
     class Kind(models.TextChoices):
         FLEXI_NO_SLOTS_NEXT_WEEK = 'flexi_no_slots_next_week', 'No slots open next week'
+        NEW_CUSTOMER_BOOKING = 'new_customer_booking', 'New customer booking'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'

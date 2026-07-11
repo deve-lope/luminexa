@@ -7,6 +7,9 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError('Email is required')
         email = self.normalize_email(email)
+        if not extra_fields.get('public_ref'):
+            from .public_refs import next_user_public_ref
+            extra_fields['public_ref'] = next_user_public_ref()
         user = self.model(email=email, full_name=full_name, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -42,6 +45,12 @@ class User(AbstractUser):
         blank=True,
         default='',
         help_text='Customer default address for service visits',
+    )
+    address_country = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        help_text='Preferred Americas country for address search (e.g. Canada)',
     )
 
     USERNAME_FIELD = 'email'

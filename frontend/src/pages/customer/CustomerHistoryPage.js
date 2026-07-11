@@ -54,14 +54,14 @@ export default function CustomerHistoryPage() {
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {!hasActivity && !error && (
-        <div className="rounded-xl bg-white p-6 text-center shadow-sm">
+        <div className="lx-empty">
           <p className="text-slate-600">No past activity yet.</p>
           <p className="mt-1 text-sm text-slate-500">
             Completed bookings, cancelled requests, and custom service messages will appear here.
           </p>
           <Link
             to={customerFind()}
-            className="mt-4 inline-flex min-h-[48px] items-center rounded-xl bg-luminexa-accent px-6 font-medium text-white"
+            className="lx-btn-primary mt-4 inline-flex min-h-[48px] items-center px-6"
           >
             Find a service
           </Link>
@@ -90,7 +90,7 @@ export default function CustomerHistoryPage() {
           <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Service requests</h2>
           <ul className="space-y-3">
             {inquiries.map((inq) => (
-              <li key={inq.id} className="rounded-xl bg-white p-4 shadow-sm">
+              <li key={inq.id} className="lx-card">
                 <p className="font-semibold text-slate-900">
                   {inq.service_name || inq.service_label || 'Custom service request'}
                 </p>

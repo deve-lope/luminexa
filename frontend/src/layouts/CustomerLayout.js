@@ -62,6 +62,9 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/customer/account')) {
       return { eyebrow: 'Account', title: 'Profile & password' };
     }
+    if (location.pathname.endsWith('/customer/about')) {
+      return { eyebrow: 'More', title: 'About Luminexa' };
+    }
     if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(location.pathname)) {
       return { eyebrow: 'Book', title: 'Book appointment' };
     }

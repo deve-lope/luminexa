@@ -27,25 +27,22 @@ export default function AppShell({
   const hasHeaderNav = showBack && Boolean(backTo);
 
   return (
-    <div className="min-h-screen bg-slate-100 lg:bg-slate-50">
+    <div className="lx-app-bg">
       <DesktopNav
         brand={brand}
         tabs={tabs}
         menuItems={menuItems}
         homeTo={homeTo}
-        showBack={showBack}
-        backTo={backTo}
-        backLabel={backLabel}
       />
 
-      <div className={hasTabs ? 'lg:pl-56' : ''}>
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-lg items-center gap-2 px-4 py-3 lg:max-w-3xl lg:px-6 lg:py-4">
+      <div className={`w-full ${hasTabs ? 'lg:pl-60' : ''}`}>
+        <header className="lx-header">
+          <div className="lx-container flex items-center gap-2 py-3 lg:py-4">
             {hasMenu && (
               <button
                 type="button"
                 onClick={() => setMenuOpen(true)}
-                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 lg:hidden"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-sm transition hover:bg-white lg:hidden"
                 aria-label="Open menu"
                 aria-expanded={menuOpen}
               >
@@ -56,23 +53,21 @@ export default function AppShell({
               <HeaderNavButtons showBack={showBack} backFallback={backTo} />
             )}
             <div className="min-w-0 flex-1">
-              {eyebrow && (
-                <p className="truncate text-xs font-medium uppercase tracking-wide text-luminexa-accent">
-                  {eyebrow}
-                </p>
-              )}
-              <h1 className="truncate text-lg font-bold text-slate-900 lg:text-xl">{title}</h1>
+              {eyebrow && <p className="lx-eyebrow truncate">{eyebrow}</p>}
+              <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 lg:text-xl">
+                {title}
+              </h1>
             </div>
           </div>
           {headerExtra && (
-            <div className="mx-auto max-w-lg border-t border-slate-100 px-4 pb-3 lg:max-w-3xl lg:px-6">
+            <div className="lx-container border-t border-slate-100/80 pb-3">
               {headerExtra}
             </div>
           )}
         </header>
 
-        <main className="mx-auto max-w-lg px-4 py-6 pb-28 lg:max-w-3xl lg:px-6 lg:pb-8">
-          <div key={location.pathname} className="page-enter">
+        <main className="lx-container py-5 pb-28 lg:py-6 lg:pb-8">
+          <div key={location.pathname} className="page-enter min-w-0">
             {children}
           </div>
         </main>

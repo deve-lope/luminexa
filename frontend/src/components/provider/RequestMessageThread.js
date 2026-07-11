@@ -16,7 +16,7 @@ function MessageBubble({ msg }) {
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
           msg.is_mine
-            ? 'bg-luminexa-accent text-white'
+            ? 'lx-toggle-active'
             : 'bg-white text-slate-900 ring-1 ring-slate-200'
         }`}
       >
@@ -192,7 +192,7 @@ export default function RequestMessageThread({
 
   return (
     <>
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+      <section className="lx-card">
         <div className="flex items-start gap-3">
           <div
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700"

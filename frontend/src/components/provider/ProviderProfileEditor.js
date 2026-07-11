@@ -152,7 +152,7 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
   };
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="lx-card">
       <h2 className="text-sm font-semibold uppercase text-slate-500">{title}</h2>
       <p className="mt-1 text-sm text-slate-600">
         Cover photo, logo, bio, service area, and gallery — everything customers see at the top of

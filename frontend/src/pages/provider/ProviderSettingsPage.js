@@ -191,7 +191,7 @@ export default function ProviderSettingsPage() {
         }}
       />
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
+      <section className="lx-card">
         <h2 className="text-sm font-semibold uppercase text-slate-500">Availability mode</h2>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button
@@ -219,7 +219,7 @@ export default function ProviderSettingsPage() {
 
       {mode === 'recurring' && (
         <>
-          <section className="rounded-xl bg-white p-4 shadow-sm">
+          <section className="lx-card">
             <h2 className="text-sm font-semibold uppercase text-slate-500">Date range</h2>
             <p className="mt-1 text-sm text-slate-600">
               Slide the handles or pick dates — open slots are auto-generated only in this range.
@@ -237,7 +237,7 @@ export default function ProviderSettingsPage() {
             </div>
           </section>
 
-          <section className="rounded-xl bg-white p-4 shadow-sm">
+          <section className="lx-card">
             <h2 className="text-sm font-semibold uppercase text-slate-500">Weekly hours</h2>
             <p className="mt-1 text-sm text-slate-600">Start and end time for each working day.</p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -247,7 +247,7 @@ export default function ProviderSettingsPage() {
                   type="button"
                   onClick={() => toggleDay(d.value)}
                   className={`min-h-[40px] min-w-[48px] rounded-lg text-sm font-medium ${
-                    isDayActive(d.value) ? 'bg-luminexa-accent text-white' : 'bg-slate-100 text-slate-600'
+                    isDayActive(d.value) ? 'lx-toggle-active' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
                   {d.label}
@@ -287,7 +287,7 @@ export default function ProviderSettingsPage() {
       )}
 
       {mode === 'flexi' && (
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+        <section className="lx-card">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Open times by date</h2>
           <FlexiQuickOpenSlots orgSlug={orgSlug} organizationId={orgId} />
           <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">

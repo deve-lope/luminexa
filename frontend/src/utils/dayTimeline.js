@@ -1,4 +1,6 @@
 /** Python weekday on WeeklyScheduleBlock: 0=Mon … 6=Sun */
+import { slotLocalDayKey } from './slotCalendar';
+
 export function jsDateToModelWeekday(date) {
   const js = date.getDay();
   return js === 0 ? 6 : js - 1;
@@ -74,8 +76,8 @@ function typeAt(ms, { slots, unavailable, workingWindows }) {
 export function buildDayTimeline(dayKey, { slots = [], unavailable = [], weeklyBlocks = [] }) {
   const { startMs, endMs, workingWindows } = defaultDayBounds(dayKey, weeklyBlocks);
 
-  const daySlots = slots.filter((s) => s.start_at.startsWith(dayKey));
-  const dayUnavailable = unavailable.filter((u) => u.start_at.startsWith(dayKey));
+  const daySlots = slots.filter((s) => slotLocalDayKey(s.start_at) === dayKey);
+  const dayUnavailable = unavailable.filter((u) => slotLocalDayKey(u.start_at) === dayKey);
 
   const points = new Set([startMs, endMs]);
   for (const s of daySlots) {

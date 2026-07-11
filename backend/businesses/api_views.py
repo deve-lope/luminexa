@@ -151,11 +151,25 @@ def reverse_geocode_api(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def detect_country_api(request):
+    from .country_detection import detect_country_from_request, country_to_nominatim_code
+
+    country, source = detect_country_from_request(request)
+    return Response({
+        'country': country,
+        'country_code': country_to_nominatim_code(country).upper(),
+        'source': source,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def map_search_api(request):
     query = (request.query_params.get('q') or '').strip()
-    if len(query) < 3:
+    if len(query) < 1 or (len(query) < 2 and not query.isdigit()):
         return Response({'results': []})
-    results = search_locations(query)
+    country = (request.query_params.get('country') or '').strip()
+    results = search_locations(query, country=country)
     return Response({
         'results': [
             {
@@ -523,6 +537,7 @@ def customer_home_api(request):
         )
         .exclude(status=Booking.Status.CANCELLED)
         .select_related('organization', 'service')
+        .prefetch_related('status_events')
         .order_by('start_at')[:12]
     )
     upcoming_by_org = {}

@@ -12,10 +12,11 @@ export default function BottomTabBar({ tabs }) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white pb-safe lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/90 bg-white/95 backdrop-blur-xl lg:hidden"
       aria-label="Primary"
+      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
     >
-      <div className="mx-auto flex max-w-lg">
+      <div className="flex w-full px-safe">
         {tabs.map((tab) => {
           const Icon = TAB_ICONS[tab.id];
           const active = isTabActive(tab);
@@ -24,24 +25,24 @@ export default function BottomTabBar({ tabs }) {
               key={tab.id}
               to={tab.to}
               end={tab.end}
-              className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 px-1 text-xs"
+              className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 px-0.5 text-xs"
             >
               <span
-                className={`relative flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                className={`relative flex items-center justify-center rounded-xl px-3 py-1.5 transition-all duration-200 sm:px-4 ${
                   active
-                    ? 'bg-violet-100 px-4 py-1 text-luminexa-accent'
-                    : 'px-4 py-1 text-slate-400'
+                    ? 'bg-violet-50 text-luminexa-accent ring-1 ring-violet-100/80'
+                    : 'text-slate-400'
                 }`}
               >
                 {Icon && <Icon className="h-5 w-5" />}
                 {tab.badgeCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-1 text-[10px] font-bold text-white shadow-sm">
                     {tab.badgeCount > 9 ? '9+' : tab.badgeCount}
                   </span>
                 )}
               </span>
               <span
-                className={`text-[10px] font-medium ${active ? 'text-luminexa-accent' : 'text-slate-400'}`}
+                className={`max-w-full truncate text-[10px] font-semibold ${active ? 'text-luminexa-accent' : 'text-slate-400'}`}
               >
                 {tab.label}
               </span>

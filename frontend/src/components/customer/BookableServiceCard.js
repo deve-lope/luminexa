@@ -25,21 +25,21 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
   const availability = service.availability;
 
   return (
-    <article className="rounded-xl bg-white p-4 shadow-sm">
+    <article className="lx-card-interactive">
       <div className="flex gap-3">
         {service.image_url ? (
           <img
             src={service.image_url}
             alt=""
-            className="h-16 w-16 shrink-0 rounded-lg object-cover"
+            className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-slate-900/[0.04]"
           />
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-2xl">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 text-2xl ring-1 ring-violet-100/60">
             {types[0]?.icon || '🔧'}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-slate-900">{service.name}</h3>
+          <h3 className="font-semibold tracking-tight text-slate-900">{service.name}</h3>
           <p className="text-sm text-slate-600">{service.organization_name}</p>
           {service.rating_summary?.count > 0 && (
             <div className="mt-1">
@@ -54,7 +54,7 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
           {types.map((t) => (
             <span
               key={t.slug}
-              className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5"
+              className="inline-flex items-center gap-0.5 rounded-full bg-slate-100/90 px-2 py-0.5 ring-1 ring-slate-200/60"
             >
               {t.icon && <span aria-hidden>{t.icon}</span>}
               {t.name}
@@ -80,7 +80,7 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
       )}
 
       {availability?.open_slot_count > 0 && (
-        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+        <p className="mt-3 rounded-xl bg-emerald-50/90 px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100/80">
           {availability.open_slot_count === 1
             ? '1 free slot'
             : `${availability.open_slot_count} free slots`}
@@ -90,23 +90,17 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-3">
         {formatServiceMeta(service) && (
           <p className="text-xs text-slate-500">{formatServiceMeta(service)}</p>
         )}
         <div className="flex shrink-0 gap-2">
           {providerKey && (
-            <Link
-              to={detailHref}
-              className="inline-flex min-h-[40px] items-center rounded-lg border border-luminexa-accent px-3 text-sm font-medium text-luminexa-accent"
-            >
+            <Link to={detailHref} className="lx-btn-secondary min-h-[40px] px-3">
               Full details
             </Link>
           )}
-          <Link
-            to={bookHref}
-            className="inline-flex min-h-[40px] items-center rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
-          >
+          <Link to={bookHref} className="lx-btn-primary min-h-[40px] px-4">
             Book
           </Link>
         </div>

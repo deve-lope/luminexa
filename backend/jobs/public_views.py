@@ -17,6 +17,7 @@ from businesses.serializers import BusinessTypeSerializer
 from .booking_services import booking_policy_meta, customer_can_view_calendar
 from .catalog import build_service_catalog
 from .models import AvailabilitySlot, Booking, Service, ServiceReview
+from .scheduling_services import sync_recurring_slots
 from .ratings import customer_can_rate_service
 from .serializers import (
     PublicOrganizationReadSerializer,
@@ -86,6 +87,16 @@ class PublicServiceCalendarAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        now = timezone.now()
+        if org.scheduling_mode == Organization.SchedulingMode.RECURRING:
+            has_future_open = AvailabilitySlot.objects.filter(
+                organization=org,
+                status=AvailabilitySlot.Status.OPEN,
+                start_at__gt=now,
+            ).exists()
+            if not has_future_open:
+                sync_recurring_slots(org, weeks_ahead=12)
+
         try:
             year = int(request.query_params.get('year', timezone.localdate().year))
             month = int(request.query_params.get('month', timezone.localdate().month))
@@ -111,7 +122,6 @@ class PublicServiceCalendarAPIView(APIView):
             .select_related('service')
             .order_by('start_at')
         )
-        now = timezone.now()
 
         days_meta = {}
         slots_by_day = defaultdict(list)

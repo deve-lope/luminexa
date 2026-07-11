@@ -1,3 +1,5 @@
+import { providerCustomerKey } from './providerRouteKey';
+
 export function bookingStatusLabel(status, { isPast = false } = {}) {
   if (status === 'requested') {
     return isPast ? 'Not confirmed' : 'Awaiting provider approval';
@@ -31,6 +33,13 @@ export function isHistoryBooking(booking, now = new Date()) {
   return !isUpcomingBooking(booking, now);
 }
 
+/** Booking request still waiting on the provider (not approved or declined). */
+export function isUntouchedBookingRequest(booking) {
+  if (booking.status !== 'requested') return false;
+  const events = booking.status_events || [];
+  return !events.some((ev) => ev.action === 'accepted' || ev.action === 'declined');
+}
+
 export function canCancelBooking(booking, now = new Date()) {
   return (
     (booking.status === 'requested' || booking.status === 'confirmed') &&
@@ -39,11 +48,16 @@ export function canCancelBooking(booking, now = new Date()) {
 }
 
 export function canRescheduleBooking(booking, now = new Date()) {
-  return (
-    canCancelBooking(booking, now) &&
-    booking.organization_slug &&
-    booking.service
-  );
+  if (!providerCustomerKey(booking) || !booking.service) return false;
+  if (new Date(booking.start_at) <= now) return false;
+
+  // Pending request with no provider decision yet — customer may pick another slot.
+  if (isUntouchedBookingRequest(booking)) return true;
+
+  // Confirmed appointments — customer may request a new time (provider approves).
+  if (booking.status === 'confirmed') return true;
+
+  return false;
 }
 
 export function wasApprovedByProvider(booking) {

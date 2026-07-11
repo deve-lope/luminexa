@@ -337,7 +337,7 @@ export default function BookingStorefrontPage() {
             </section>
             )}
 
-            <section className="rounded-xl bg-white p-4 shadow-sm">
+            <section className="lx-card">
               <h2 className="text-sm font-semibold uppercase text-slate-500">About</h2>
               {organization.description ? (
                 <ExpandableText
@@ -356,7 +356,7 @@ export default function BookingStorefrontPage() {
             </section>
 
             {gallery.length > 0 && (
-              <section className="rounded-xl bg-white p-4 shadow-sm">
+              <section className="lx-card">
                 <h2 className="text-sm font-semibold uppercase text-slate-500">Gallery</h2>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {gallery.map((img) => (

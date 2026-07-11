@@ -1,28 +1,25 @@
 import React from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { TAB_ICONS } from '../icons/NavIcons';
-import HeaderNavButtons from '../navigation/HeaderNavButtons';
 
 export default function DesktopNav({
   brand,
   tabs = [],
   menuItems = [],
   homeTo,
-  showBack,
-  backTo,
-  backLabel = 'Back',
 }) {
   return (
-    <aside className="fixed left-0 top-0 z-20 hidden h-full w-56 flex-col border-r border-slate-200 bg-white lg:flex">
-      <div className="shrink-0 border-b border-slate-200 px-5 py-5">
-        <Link to={homeTo || '/'} className="text-lg font-bold text-slate-900">
+    <aside className="lx-sidebar fixed left-0 top-0 z-20 hidden h-full w-60 flex-col lg:flex">
+      <div className="shrink-0 border-b border-slate-100/80 px-5 py-5">
+        <Link
+          to={homeTo || '/'}
+          className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-luminexa-accent to-violet-600 text-sm font-bold text-white shadow-sm">
+            L
+          </span>
           {brand}
         </Link>
-        {showBack && backTo && (
-          <div className="mt-3">
-            <HeaderNavButtons showBack={showBack} backFallback={backTo} />
-          </div>
-        )}
       </div>
 
       <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
@@ -36,14 +33,14 @@ export default function DesktopNav({
                 end={tab.end}
                 className={({ isActive }) =>
                   `flex min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm font-medium ${
-                    isActive ? 'bg-violet-50 text-luminexa-accent' : 'text-slate-600 hover:bg-slate-50'
+                    isActive ? 'lx-nav-active' : 'lx-nav-idle'
                   }`
                 }
               >
                 {Icon && <Icon className="h-5 w-5 shrink-0" />}
                 <span className="flex-1 truncate">{tab.label}</span>
                 {tab.badgeCount > 0 && (
-                  <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                  <span className="shrink-0 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
                     {tab.badgeCount > 9 ? '9+' : tab.badgeCount}
                   </span>
                 )}
@@ -53,13 +50,13 @@ export default function DesktopNav({
         </nav>
 
         {menuItems.length > 0 && (
-          <nav className="border-t border-slate-200 p-3 pb-6" aria-label="More">
+          <nav className="border-t border-slate-100/80 p-3 pb-6" aria-label="More">
             <ul className="space-y-1">
               {menuItems.map((item) =>
                 item.divider ? (
                   <li key={item.id} className="px-3 pb-1 pt-3 first:pt-0">
                     <p
-                      className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400"
+                      className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400"
                       title={item.label}
                     >
                       {item.label}
@@ -80,8 +77,8 @@ export default function DesktopNav({
 }
 
 function DesktopMenuRow({ item }) {
-  const className = `flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium hover:bg-slate-50 ${
-    item.danger ? 'text-red-600' : item.viewOnly ? 'text-slate-600' : 'text-slate-600'
+  const className = `flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium transition ${
+    item.danger ? 'text-red-600 hover:bg-red-50/80' : 'lx-nav-idle'
   }`;
 
   const label = (

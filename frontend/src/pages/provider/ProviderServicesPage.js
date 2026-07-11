@@ -324,7 +324,7 @@ function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow,
           onClick={() => onDetails(service)}
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             detailsOpen
-              ? 'bg-luminexa-accent text-white'
+              ? 'lx-toggle-active'
               : needsDetails
                 ? 'border border-violet-200 bg-violet-50 text-luminexa-accent hover:bg-violet-100'
                 : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -590,7 +590,7 @@ export default function ProviderServicesPage({ embedded = false }) {
   return (
     <div className="space-y-6">
       {!embedded && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
+        <section className="lx-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold uppercase text-slate-500">Service catalog</h2>

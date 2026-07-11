@@ -4,38 +4,202 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-body {
-  margin: 0;
-  font-family: Inter, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  :root {
+    --lx-accent: 124 58 237;
+    --lx-surface: 255 255 255;
+    --lx-border: 226 232 240;
+  }
+
+  body {
+    margin: 0;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    color: #0f172a;
+    overflow-x: hidden;
+  }
+
+  html {
+    overflow-x: hidden;
+  }
+
+  #root {
+    overflow-x: hidden;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background-color: rgba(124, 58, 237, 0.2);
+    color: #4c1d95;
+  }
+}
+
+@layer components {
+  .lx-app-bg {
+    @apply min-h-[100dvh] w-full overflow-x-hidden bg-luminexa-canvas bg-lx-mesh;
+  }
+
+  .lx-container {
+    @apply mx-auto w-full lg:max-w-3xl;
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .lx-container {
+      padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .lx-container {
+      padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    }
+  }
+
+  .lx-auth-page {
+    @apply flex min-h-[100dvh] w-full flex-col justify-center bg-luminexa-navy text-luminexa-mist;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+      max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+  }
+
+  .lx-auth-card {
+    @apply w-full max-w-md rounded-2xl border border-white/10 bg-luminexa-slate/80 p-5 shadow-xl backdrop-blur sm:p-8;
+  }
+
+  .lx-header {
+    @apply sticky top-0 z-20 border-b border-white/70 bg-white/75 backdrop-blur-xl backdrop-saturate-150;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .lx-card {
+    @apply rounded-2xl bg-white/95 p-4 shadow-lx-card backdrop-blur-sm;
+  }
+
+  .lx-card-lg {
+    @apply rounded-3xl bg-white/95 p-5 shadow-lx-card backdrop-blur-sm sm:p-6;
+  }
+
+  .lx-card-interactive {
+    @apply lx-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lx-elevated;
+  }
+
+  .lx-panel {
+    @apply rounded-2xl bg-white/90 p-4 ring-1 ring-slate-900/[0.04] shadow-lx-soft backdrop-blur-sm;
+  }
+
+  .lx-hero {
+    @apply overflow-hidden rounded-3xl bg-lx-hero text-white shadow-lx-elevated;
+  }
+
+  .lx-hero-soft {
+    @apply overflow-hidden rounded-3xl bg-lx-hero-soft ring-1 ring-violet-100/80 shadow-lx-soft;
+  }
+
+  .lx-btn-primary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-luminexa-accent to-violet-600 px-5 text-sm font-semibold text-white shadow-sm shadow-violet-500/20 transition duration-200 hover:shadow-md hover:shadow-violet-500/25 hover:brightness-105 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .lx-btn-secondary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-violet-200/80 bg-violet-50/90 px-4 text-sm font-semibold text-luminexa-accent transition duration-200 hover:border-violet-300 hover:bg-violet-100/90 active:scale-[0.98];
+  }
+
+  .lx-btn-ghost {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 px-4 text-sm font-medium text-slate-700 shadow-sm transition duration-200 hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98];
+  }
+
+  .lx-input {
+    @apply w-full rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-luminexa-accent focus:ring-2 focus:ring-luminexa-accent/20;
+  }
+
+  .lx-section-title {
+    @apply text-base font-semibold tracking-tight text-slate-900;
+  }
+
+  .lx-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-luminexa-accent;
+  }
+
+  .lx-link {
+    @apply text-sm font-medium text-luminexa-accent transition hover:text-luminexa-accent-dark;
+  }
+
+  .lx-nav-active {
+    @apply bg-violet-50 text-luminexa-accent shadow-sm ring-1 ring-violet-100/80;
+  }
+
+  .lx-nav-idle {
+    @apply text-slate-600 transition hover:bg-slate-50/80 hover:text-slate-900;
+  }
+
+  .lx-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .lx-badge-amber {
+    @apply lx-badge bg-amber-100 text-amber-800;
+  }
+
+  .lx-badge-emerald {
+    @apply lx-badge bg-emerald-100 text-emerald-800;
+  }
+
+  .lx-badge-slate {
+    @apply lx-badge bg-slate-100 text-slate-700;
+  }
+
+  .lx-empty {
+    @apply rounded-2xl border border-dashed border-slate-200/90 bg-white/70 p-6 text-center backdrop-blur-sm;
+  }
+
+  .lx-sidebar {
+    @apply border-r border-white/60 bg-white/80 shadow-lx-nav backdrop-blur-xl backdrop-saturate-150;
+  }
+
+  .lx-toggle-active {
+    @apply bg-gradient-to-r from-luminexa-accent to-violet-600 text-white shadow-sm;
+  }
+
+  .lx-toggle-idle {
+    @apply text-slate-600 transition hover:bg-slate-50/80;
+  }
 }
 
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+.px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
 }
 
 .sidebar-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f8fafc;
+  scrollbar-color: rgba(124, 58, 237, 0.25) transparent;
 }
 
 .sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .sidebar-scroll::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: transparent;
 }
 
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: rgba(124, 58, 237, 0.22);
   border-radius: 9999px;
 }
 
 @keyframes pageFadeIn {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -44,7 +208,7 @@ body {
 }
 
 .page-enter {
-  animation: pageFadeIn 0.22s ease-out both;
+  animation: pageFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes slideIn {
@@ -63,4 +227,24 @@ body {
   to {
     transform: translateX(0);
   }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.lx-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 0%,
+    rgba(237, 233, 254, 0.9) 50%,
+    rgba(226, 232, 240, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }

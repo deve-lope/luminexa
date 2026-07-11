@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function Skeleton({ className = '' }) {
-  return <div className={`animate-pulse rounded-md bg-slate-200/80 ${className}`} />;
+  return <div className={`lx-skeleton rounded-xl ${className}`} />;
 }
 
 export function SkeletonText({ lines = 3, className = '' }) {
@@ -19,7 +19,7 @@ export function SkeletonText({ lines = 3, className = '' }) {
 
 export function SkeletonCard({ className = '' }) {
   return (
-    <div className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 ${className}`}>
+    <div className={`lx-card ${className}`}>
       <div className="flex items-center gap-3">
         <Skeleton className="h-10 w-10 rounded-xl" />
         <div className="flex-1 space-y-2">

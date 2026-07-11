@@ -17,6 +17,7 @@ from .serializers import (
 from .message_services import (
     can_access_inquiry_messages,
     list_inquiry_messages,
+    post_inquiry_approval_message,
     post_inquiry_message,
 )
 
@@ -155,6 +156,7 @@ class ProviderServiceInquiryDetailAPIView(APIView):
                 raise ValidationError({'action': 'Only pending requests can be accepted.'})
             inquiry.status = CustomerServiceInquiry.Status.ACTIVE
             inquiry.save(update_fields=['status'])
+            post_inquiry_approval_message(inquiry=inquiry, sender=request.user)
         elif action == 'complete':
             if inquiry.status not in (
                 CustomerServiceInquiry.Status.PENDING,

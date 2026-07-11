@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function BackButton({
   fallback = '/',
   children = '← Back',
-  className = 'text-sm font-medium text-luminexa-accent',
+  className = 'lx-link',
   ariaLabel = 'Go back',
 }) {
   const navigate = useNavigate();

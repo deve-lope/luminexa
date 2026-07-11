@@ -11,6 +11,11 @@ import {
 } from '../../constants/locationSearch';
 import { canUseBrowserGeolocation } from '../../utils/geolocationSupport';
 import { bookService } from '../../utils/customerPaths';
+import {
+  formatPostalLabel,
+  isPostalSearchReady,
+  normalizePostalInput,
+} from '../../utils/postalInput';
 
 const DEFAULT_CENTER = [43.6532, -79.3832];
 
@@ -63,14 +68,14 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
   const providerMarkersRef = useRef([]);
   const radiusRef = useRef(DEFAULT_RADIUS_MILES);
 
+  const [postal, setPostal] = useState('');
   const [centerLat, setCenterLat] = useState(null);
   const [centerLng, setCenterLng] = useState(null);
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState('idle');
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState(null);
+  const lookupSeq = useRef(0);
   const gpsAvailable = canUseBrowserGeolocation();
 
   // Keep radius ref in sync
@@ -132,10 +137,63 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
       circleRef.current.setRadius(next * MILES_TO_METERS);
       mapRef.current?.fitBounds(circleRef.current.getBounds(), { padding: [32, 32], maxZoom: 13 });
     }
-    if (centerLat != null) {
-      onLocationSearch?.({ lat: centerLat, lng: centerLng, radiusMiles: next });
+    if (centerLat != null && postal) {
+      onLocationSearch?.({
+        postal: normalizePostalInput(postal),
+        lat: centerLat,
+        lng: centerLng,
+        radiusMiles: next,
+      });
     }
   };
+
+  const searchFromPostal = useCallback(
+    async (rawPostal) => {
+      const normalized = normalizePostalInput(rawPostal);
+      if (!isPostalSearchReady(normalized)) return;
+
+      const seq = ++lookupSeq.current;
+      setLookupStatus('loading');
+      setError(null);
+
+      let lat = null;
+      let lng = null;
+      try {
+        const res = await businessesAPI.lookupPostalCode(normalized);
+        lat = res.data?.latitude ?? null;
+        lng = res.data?.longitude ?? null;
+      } catch {
+        lat = null;
+        lng = null;
+      }
+      if (seq !== lookupSeq.current) return;
+
+      setPostal(normalized);
+      setLookupStatus('success');
+      if (lat != null && lng != null) {
+        applyCenter(lat, lng, radiusRef.current);
+      }
+      onLocationSearch?.({
+        postal: normalized,
+        lat,
+        lng,
+        radiusMiles: radiusRef.current,
+      });
+    },
+    [applyCenter, onLocationSearch]
+  );
+
+  useEffect(() => {
+    const normalized = normalizePostalInput(postal);
+    if (!normalized || !isPostalSearchReady(normalized)) {
+      setLookupStatus('idle');
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      searchFromPostal(normalized);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [postal, searchFromPostal]);
 
   // Draw provider markers whenever services change
   useEffect(() => {
@@ -179,11 +237,16 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
   }, [services]);
 
   const doLocationSearch = useCallback(
-    (lat, lng) => {
+    (lat, lng, nextPostal) => {
       applyCenter(lat, lng, radiusRef.current);
-      onLocationSearch?.({ lat, lng, radiusMiles: radiusRef.current });
+      onLocationSearch?.({
+        postal: nextPostal ? normalizePostalInput(nextPostal) : normalizePostalInput(postal),
+        lat,
+        lng,
+        radiusMiles: radiusRef.current,
+      });
     },
-    [applyCenter, onLocationSearch]
+    [applyCenter, onLocationSearch, postal]
   );
 
   const handleUseLocation = () => {
@@ -191,67 +254,71 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
     setLocating(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        doLocationSearch(pos.coords.latitude, pos.coords.longitude);
+      async (pos) => {
+        try {
+          const res = await businessesAPI.reverseGeocode({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+          const code = normalizePostalInput(res.data?.postal_code);
+          if (code) {
+            setPostal(code);
+          } else {
+            doLocationSearch(pos.coords.latitude, pos.coords.longitude);
+          }
+        } catch {
+          doLocationSearch(pos.coords.latitude, pos.coords.longitude);
+        } finally {
+          setLocating(false);
+        }
       },
       () => {
         setLocating(false);
-        setError('Could not get your location. Try searching an address.');
+        setError('Could not get your location. Enter your ZIP / postal code instead.');
       },
       { enableHighAccuracy: true, timeout: 12000 }
     );
-  };
-
-  const runSearch = useCallback(async (q) => {
-    if ((q || '').trim().length < 3) return;
-    setSearching(true);
-    setError(null);
-    try {
-      const res = await businessesAPI.searchMapLocations(q.trim());
-      const results = Array.isArray(res.data?.results) ? res.data.results : [];
-      setSearchResults(results);
-      if (!results.length) setError('No locations found.');
-    } catch {
-      setError('Search failed. Try again.');
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 3) { setSearchResults([]); return undefined; }
-    const t = window.setTimeout(() => runSearch(q), 450);
-    return () => window.clearTimeout(t);
-  }, [runSearch, searchQuery]);
-
-  const selectResult = (item) => {
-    setSearchResults([]);
-    setSearchQuery(item.display_name || '');
-    doLocationSearch(item.latitude, item.longitude);
   };
 
   const orgsOnMap = groupByOrg(services || []);
 
   return (
     <div className="space-y-3">
-      {/* Search bar */}
-      <div className="relative">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && runSearch(searchQuery)}
-              placeholder="Search city or address to center map…"
-              className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-            />
-            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><path strokeLinecap="round" d="M21 21l-4.35-4.35"/>
-            </svg>
-          </div>
-          {gpsAvailable && (
+      {/* ZIP / postal code */}
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label htmlFor="map-postal-search" className="mb-1 block text-xs font-medium text-slate-600">
+            ZIP / postal code
+          </label>
+          <input
+            id="map-postal-search"
+            value={formatPostalLabel(postal)}
+            onChange={(e) => setPostal(normalizePostalInput(e.target.value))}
+            placeholder="e.g. 90210 or M5V 2T6"
+            autoComplete="postal-code"
+            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
+          />
+        </div>
+        <div className="w-32">
+          <label htmlFor="map-radius-search" className="mb-1 block text-xs font-medium text-slate-600">
+            Within
+          </label>
+          <select
+            id="map-radius-search"
+            value={radiusMiles}
+            onChange={handleRadiusChange}
+            disabled={!isPostalSearchReady(postal)}
+            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-2 text-sm outline-none focus:border-luminexa-accent disabled:bg-slate-50"
+          >
+            {RADIUS_MILE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {gpsAvailable && (
+          <div className="flex flex-col justify-end">
             <button
               type="button"
               onClick={handleUseLocation}
@@ -259,39 +326,18 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
               title="Use my location"
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-50"
             >
-              {locating ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-              ) : (
+              {locating ? '…' : (
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="3"/><path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
                 </svg>
               )}
             </button>
-          )}
-        </div>
-
-        {searchResults.length > 0 && (
-          <ul className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-            {searchResults.slice(0, 6).map((item) => (
-              <li key={`${item.latitude}-${item.longitude}`}>
-                <button
-                  type="button"
-                  onClick={() => selectResult(item)}
-                  className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-sm text-slate-800 last:border-b-0 hover:bg-slate-50"
-                >
-                  <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-                  </svg>
-                  <span className="truncate">{item.display_name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          </div>
         )}
       </div>
+      {lookupStatus === 'loading' && (
+        <p className="text-xs text-slate-500">Looking up your area…</p>
+      )}
 
       {error && <p className="text-xs text-amber-700">{error}</p>}
 
@@ -325,7 +371,7 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
       {/* Provider count summary */}
       {centerLat == null ? (
         <p className="text-center text-sm text-slate-500">
-          Search an address or tap "Use my location" to find nearby providers.
+          Enter your ZIP / postal code or use your location to find nearby providers.
         </p>
       ) : orgsOnMap.length === 0 ? (
         <p className="rounded-xl bg-white px-4 py-4 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-100">

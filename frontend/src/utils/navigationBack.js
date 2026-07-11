@@ -23,6 +23,7 @@ export function resolveCustomerBack(pathname) {
   if (path === '/customer/account') return { to: '/customer' };
   if (path === '/customer/bookings') return { to: '/customer' };
   if (path === '/customer/history') return { to: '/customer' };
+  if (path === '/customer/about') return { to: '/customer' };
   if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(path)) {
     const key = path.split('/')[3];
     return { to: `/customer/provider/${key}` };
@@ -63,6 +64,7 @@ export function resolveProviderBack(pathname, orgSlug) {
   if (path === `${base}/services`) return { to: base };
   if (path === `${base}/settings`) return { to: base };
   if (path === `${base}/account`) return { to: base };
+  if (path === `${base}/about`) return { to: base };
 
   if (path.startsWith(`${base}/schedule/`)) {
     return { to: `${base}/schedule` };

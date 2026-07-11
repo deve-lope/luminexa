@@ -4,8 +4,8 @@
   "description": "Book local services. Effortlessly.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0F172A",
-  "theme_color": "#0F172A",
+  "background_color": "#F3F4F8",
+  "theme_color": "#7C3AED",
   "orientation": "portrait-primary",
   "icons": [
     {

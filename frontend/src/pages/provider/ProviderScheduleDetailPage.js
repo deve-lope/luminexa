@@ -112,7 +112,7 @@ export default function ProviderScheduleDetailPage() {
       : null;
     return (
       <div className="space-y-5 pb-8">
-        <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 p-5 text-white shadow-lg">
+        <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-800 p-5 text-white shadow-lg">
           <p className="text-sm text-violet-200 capitalize">{data.status?.replace('_', ' ')}</p>
           <h1 className="mt-1 text-2xl font-bold">{data.service_name}</h1>
           <p className="mt-2 text-white/90">{formatWhen(data.start_at)}</p>
@@ -186,7 +186,7 @@ export default function ProviderScheduleDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-xl bg-white p-4 shadow-sm">
+        <section className="lx-card">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Share</h2>
           <p className="mt-1 text-sm text-slate-600">Copy a direct link to this booking.</p>
           <button
@@ -213,7 +213,7 @@ export default function ProviderScheduleDetailPage() {
         </section>
 
         {data.status === 'requested' && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               disabled={actionBusy}
@@ -221,14 +221,25 @@ export default function ProviderScheduleDetailPage() {
                 setActionBusy(true);
                 try {
                   await jobsAPI.acceptBooking(data.id);
+                  showToast('Request approved.', 'success');
                   load();
+                } catch (e) {
+                  setError(parseApiError(e));
                 } finally {
                   setActionBusy(false);
                 }
               }}
-              className="min-h-[48px] flex-1 rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+              className="lx-btn-primary min-h-[48px] disabled:opacity-60"
             >
-              Accept request
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy || new Date(data.start_at) <= new Date()}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
+            >
+              Reschedule
             </button>
             <button
               type="button"
@@ -242,15 +253,14 @@ export default function ProviderScheduleDetailPage() {
                   setActionBusy(false);
                 }
               }}
-              className="min-h-[48px] flex-1 rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
+              className="min-h-[48px] rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
             >
               Decline
             </button>
           </div>
         )}
 
-        {(data.status === 'confirmed' || data.status === 'requested') &&
-          new Date(data.start_at) > new Date() && (
+        {data.status === 'confirmed' && new Date(data.start_at) > new Date() && (
           <button
             type="button"
             disabled={actionBusy}
@@ -326,6 +336,7 @@ export default function ProviderScheduleDetailPage() {
 
         <RescheduleBookingModal
           open={rescheduleOpen}
+          audience="provider"
           booking={{
             ...data,
             organization_slug: data.organization_slug || orgSlug,
@@ -333,6 +344,7 @@ export default function ProviderScheduleDetailPage() {
           onClose={() => setRescheduleOpen(false)}
           onRescheduled={() => {
             showToast('Booking rescheduled.', 'success');
+            setRescheduleOpen(false);
             load();
           }}
         />

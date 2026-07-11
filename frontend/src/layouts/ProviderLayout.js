@@ -11,6 +11,7 @@ import { jobsAPI } from '../utils/api';
 import {
   firstProviderHome,
   providerAccount,
+  providerAbout,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -52,6 +53,7 @@ function ProviderShell() {
     () =>
       buildProviderMenuItems({
         logout: () => logout().then(() => navigate('/')),
+        aboutPath: providerAbout(orgSlug),
         providerServicesPath: providerServices(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
@@ -96,6 +98,9 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/account`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My account' };
+    }
+    if (location.pathname.startsWith(`${base}/about`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'About Luminexa' };
     }
     if (location.pathname.match(/\/schedule\/booking\//)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Booking details' };

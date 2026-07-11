@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { userAPI } from '../utils/api';
 import BackButton from '../components/navigation/BackButton';
+import PasswordInput from '../components/ui/PasswordInput';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -37,7 +38,8 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
+    <div className="lx-auth-page items-center py-12">
+      <div className="lx-auth-card w-full max-w-md">
       <BackButton fallback="/login" className="mb-6 text-sm text-luminexa-mist" />
       <h1 className="text-2xl font-bold text-white">Choose a new password</h1>
       <form onSubmit={submit} className="mt-8 space-y-4">
@@ -45,37 +47,35 @@ export default function ResetPasswordPage() {
           <label htmlFor="password" className="mb-1 block text-sm font-medium text-luminexa-mist">
             New password
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
+            variant="dark-slate"
             required
             minLength={8}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full min-h-[48px] rounded-xl border border-slate-600 bg-slate-800 px-3 text-white"
           />
         </div>
         <div>
           <label htmlFor="confirm" className="mb-1 block text-sm font-medium text-luminexa-mist">
             Confirm password
           </label>
-          <input
+          <PasswordInput
             id="confirm"
-            type="password"
+            variant="dark-slate"
             required
             minLength={8}
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full min-h-[48px] rounded-xl border border-slate-600 bg-slate-800 px-3 text-white"
           />
         </div>
         {error && <p className="rounded-lg bg-red-900/40 px-4 py-3 text-sm text-red-200">{error}</p>}
         <button
           type="submit"
           disabled={submitting}
-          className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+          className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
         >
           {submitting ? 'Saving…' : 'Update password'}
         </button>
@@ -85,6 +85,7 @@ export default function ResetPasswordPage() {
           Request a new link
         </Link>
       </p>
+      </div>
     </div>
   );
 }

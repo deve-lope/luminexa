@@ -8,7 +8,7 @@ import SchedulingModeBanner from '../../components/provider/SchedulingModeBanner
 import { providerRequests, providerSettings } from '../../utils/providerPaths';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
-import { buildOpenSlotDays } from '../../utils/slotCalendar';
+import { buildOpenSlotDays, slotLocalDayKey } from '../../utils/slotCalendar';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import TimelineTimeAdjust from '../../components/scheduling/TimelineTimeAdjust';
 
@@ -114,7 +114,10 @@ export default function ProviderSchedulePage() {
   );
   const openSlotDays = useMemo(() => buildOpenSlotDays(openSlots), [openSlots]);
   const daySlotsAll = useMemo(
-    () => (selectedDay ? slots.filter((s) => s.start_at.startsWith(selectedDay)) : []),
+    () =>
+      selectedDay
+        ? slots.filter((s) => slotLocalDayKey(s.start_at) === selectedDay)
+        : [],
     [slots, selectedDay]
   );
 
@@ -267,7 +270,7 @@ export default function ProviderSchedulePage() {
       )}
 
       {!loading && !!pendingCustomers.length && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
+        <section className="lx-card">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Pending customers</h2>
           <ul className="mt-4 space-y-3">
             {pendingCustomers.map((c) => (

@@ -112,7 +112,7 @@ export default function ProviderServiceAreaSettings({ orgSlug, isOwner, onSaved 
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="lx-card">
       <h2 className="text-sm font-semibold uppercase text-slate-500">Service area</h2>
       <p className="mt-1 text-sm text-slate-600">
         Like Marketplace — choose your city or address, then set how far you travel. The circle shows
@@ -148,7 +148,7 @@ export default function ProviderServiceAreaSettings({ orgSlug, isOwner, onSaved 
             type="button"
             onClick={save}
             disabled={saving}
-            className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save service area'}
           </button>

@@ -1,7 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import BookingContactForm from '../../components/BookingContactForm';
+import BookingServiceLocationSection from '../../components/customer/BookingServiceLocationSection';
 import CustomerServiceDetailsForm from '../../components/customer/CustomerServiceDetailsForm';
+import {
+  validateServiceLocationValue,
+} from '../../components/customer/ServiceLocationInput';
 import BookingCalendar from '../../components/booking/BookingCalendar';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI, jobsAPI } from '../../utils/api';
@@ -14,10 +18,12 @@ import {
   needsExplicitConnect,
 } from '../../utils/bookingAccess';
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
-import { Link } from 'react-router-dom';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
-import { serviceDetail } from '../../utils/customerPaths';
+import { serviceDetail, customerBookings } from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
+import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -29,6 +35,8 @@ function parseApiError(err) {
 
 export default function CustomerBookServicePage() {
   const { orgSlug, slug, providerKey, serviceId } = useParams();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const businessSlug = providerKey || orgSlug || slug;
   const { memberships, user, setUserFromProfile, refreshSession } = useAuth();
   const today = new Date();
@@ -36,6 +44,8 @@ export default function CustomerBookServicePage() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [storefront, setStorefront] = useState(null);
   const [calendar, setCalendar] = useState(null);
+  const [calendarFetching, setCalendarFetching] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -43,14 +53,27 @@ export default function CustomerBookServicePage() {
   const [message, setMessage] = useState(null);
   const [serviceLabel, setServiceLabel] = useState('');
   const [notes, setNotes] = useState('');
-  const [serviceAddress, setServiceAddress] = useState('');
+  const [serviceAddress, setServiceAddress] = useState(
+    () => (user?.default_service_address || '').trim()
+  );
   const [submittingId, setSubmittingId] = useState(null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
+  const [successPopup, setSuccessPopup] = useState(null);
+  const [alertPopup, setAlertPopup] = useState(null);
+  const confirmPanelRef = useRef(null);
 
   useEffect(() => {
-    if (user?.default_service_address && !serviceAddress) {
-      setServiceAddress(user.default_service_address);
+    const saved = (user?.default_service_address || '').trim();
+    if (saved && !serviceAddress) {
+      setServiceAddress(saved);
     }
   }, [user?.default_service_address, serviceAddress]);
+
+  useEffect(() => {
+    setSelectedSlot(null);
+    setBookingConfirmSlot(null);
+  }, [selectedDay, year, month]);
 
   const membership = getCustomerMembership(memberships, businessSlug);
   const staffOfOrg = isOrgStaff(memberships, businessSlug);
@@ -88,23 +111,26 @@ export default function CustomerBookServicePage() {
 
   const loadCalendar = useCallback(() => {
     if (!mayLoadCalendar || mustConnect) return;
-    setLoading(true);
-    setError(null);
+    setCalendarFetching(true);
+    setCalendarError(null);
     businessesAPI
       .getServiceCalendar(businessSlug, serviceId, { year, month })
       .then((res) => {
         setCalendar(res.data);
-        const days = res.data?.days || {};
-        const firstAvailable = Object.keys(days).find((k) => days[k].status === 'available');
+        const normalized = normalizeBookingCalendar(res.data);
+        const days = normalized?.days || {};
+        const firstAvailable = firstBookableDayKey(days);
         setSelectedDay((prev) => {
           if (prev && days[prev]?.status === 'available') return prev;
           return firstAvailable || null;
         });
       })
       .catch((e) => {
-        setError(parseApiError(e));
+        const msg = parseApiError(e);
+        setCalendarError(msg);
+        setError(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => setCalendarFetching(false));
   }, [mayLoadCalendar, mustConnect, businessSlug, serviceId, year, month]);
 
   useEffect(() => {
@@ -141,55 +167,146 @@ export default function CustomerBookServicePage() {
     }
   };
 
-  const openOnlyDays = useMemo(() => {
-    const days = calendar?.days || {};
-    const out = {};
-    for (const [key, meta] of Object.entries(days)) {
-      if (meta?.status === 'available') out[key] = meta;
-    }
-    return out;
-  }, [calendar]);
+  const { days: calendarDays, slots_by_day: slotsByDay } = useMemo(
+    () => calendarDataForMonth(calendar, year, month),
+    [calendar, year, month]
+  );
+
+  const calendarInSync = calendar?.year === year && calendar?.month === month;
+  const hasOpenDays = useMemo(
+    () => Object.values(calendarDays).some((d) => d?.status === 'available'),
+    [calendarDays]
+  );
 
   const slotsForDay = useMemo(() => {
-    if (!selectedDay || !calendar?.slots_by_day) return [];
-    return (calendar.slots_by_day[selectedDay] || []).filter((s) => s.available);
-  }, [calendar, selectedDay]);
+    if (!selectedDay) return [];
+    return (slotsByDay[selectedDay] || []).filter((s) => s.available);
+  }, [slotsByDay, selectedDay]);
 
-  const requestSlot = async (slot) => {
+  const canSubmitBooking = canBook && !needsContact;
+  const selectedDayLabel = selectedDay
+    ? new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+      })
+    : '';
+
+  const scrollToConfirmPanel = useCallback(() => {
+    window.setTimeout(() => {
+      confirmPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }, []);
+
+  const showAlertPopup = useCallback((messageText) => {
+    if (!messageText) return;
+    setAlertPopup({
+      title: 'Complete required details',
+      message: messageText,
+    });
+  }, []);
+
+  const validateBookingDetails = useCallback(() => {
     const detail = notes.trim();
     if (detail.length < 10) {
-      setError('Please describe what you need in at least 10 characters (Job details section).');
-      return;
+      showAlertPopup('Please describe what you need in at least 10 characters.');
+      return false;
     }
     if (!serviceAddress.trim()) {
-      setError('Please enter the service location.');
-      return;
+      showAlertPopup('Please enter the service location.');
+      return false;
     }
-    setSubmittingId(slot.id);
-    setError(null);
-    try {
-      const label = serviceLabel.trim();
-      const combinedNotes = [label && `Service: ${label}`, detail].filter(Boolean).join('\n\n');
-      await jobsAPI.requestBooking({
-        slot_id: slot.id,
-        service: Number(serviceId),
-        customer_notes: combinedNotes,
-        service_address: serviceAddress.trim(),
-      });
-      const instant = bookingCtx?.instant_confirm;
-      setMessage(
-        instant
-          ? 'Booking confirmed!'
-          : 'Request sent. You will see it confirmed once the business accepts.'
-      );
-      setNotes('');
-      loadCalendar();
-    } catch (e) {
-      setError(parseApiError(e));
-    } finally {
-      setSubmittingId(null);
+    const locationCheck = validateServiceLocationValue(serviceAddress);
+    if (!locationCheck.valid) {
+      showAlertPopup(locationCheck.error || 'Please enter a valid postal code.');
+      return false;
     }
-  };
+    if (!canSubmitBooking) {
+      showAlertPopup('Complete the steps above before booking.');
+      return false;
+    }
+    return true;
+  }, [notes, serviceAddress, canSubmitBooking, showAlertPopup]);
+
+  const handleSlotTap = useCallback(
+    (slot) => {
+      setError(null);
+      setSelectedSlot(slot);
+      scrollToConfirmPanel();
+    },
+    [scrollToConfirmPanel]
+  );
+
+  const promptBookingConfirm = useCallback(
+    (slot) => {
+      if (!slot || !validateBookingDetails()) return;
+      setBookingConfirmSlot(slot);
+    },
+    [validateBookingDetails]
+  );
+
+  const requestSlot = useCallback(
+    async (slot) => {
+      if (!slot) return;
+
+      setSubmittingId(slot.id);
+      setError(null);
+      try {
+        const label = serviceLabel.trim();
+        const detail = notes.trim();
+        const combinedNotes = [label && `Service: ${label}`, detail].filter(Boolean).join('\n\n');
+        await jobsAPI.requestBooking({
+          slot_id: slot.id,
+          service: Number(serviceId),
+          customer_notes: combinedNotes,
+          service_address: serviceAddress.trim(),
+        });
+        const instant = bookingCtx?.instant_confirm;
+        const successTitle = instant ? 'Booking confirmed' : 'Request sent';
+        const successMessage = instant
+          ? 'Your appointment is confirmed.'
+          : 'Your booking request was sent to the provider for approval.';
+        const successDetail = `${selectedDayLabel} · ${formatTimeRange(slot.start_at, slot.end_at)}`;
+        const toastMessage = instant
+          ? `Booking confirmed for ${successDetail}`
+          : `Request sent for ${successDetail}`;
+
+        setMessage(
+          instant
+            ? `Booking confirmed for ${successDetail}.`
+            : `Request sent for ${successDetail}. The provider will confirm your appointment.`
+        );
+        showToast(toastMessage, 'success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setSuccessPopup({
+          title: successTitle,
+          message: `${successMessage}\n\n${successDetail}`,
+        });
+        setNotes('');
+        setSelectedSlot(null);
+        loadCalendar();
+      } catch (e) {
+        showAlertPopup(parseApiError(e));
+      } finally {
+        setSubmittingId(null);
+      }
+    },
+    [
+      notes,
+      serviceLabel,
+      serviceId,
+      serviceAddress,
+      bookingCtx?.instant_confirm,
+      selectedDayLabel,
+      loadCalendar,
+      showAlertPopup,
+      showToast,
+    ]
+  );
+
+  const bookingConfirmLabel = bookingConfirmSlot
+    ? `${selectedDayLabel} · ${formatTimeRange(bookingConfirmSlot.start_at, bookingConfirmSlot.end_at)}`
+    : '';
 
   const shiftMonth = (delta) => {
     let m = month + delta;
@@ -219,7 +336,7 @@ export default function CustomerBookServicePage() {
   return (
     <div className="space-y-4">
       {service && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
+        <section className="lx-card">
           <div className="flex gap-4">
             {service.image_url && (
               <img src={service.image_url} alt="" className="h-20 w-20 rounded-lg object-cover" />
@@ -279,12 +396,20 @@ export default function CustomerBookServicePage() {
 
       {!staffOfOrg && !mustConnect && connection === 'implicit' && (
         <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Sign in is all you need — pick a date and time below to book.
+          Pick a date and time below, then complete your booking details.
         </p>
       )}
 
       {message && (
-        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>
+        <div
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          <p className="font-semibold">{message}</p>
+          <Link to={customerBookings()} className="mt-2 inline-block font-medium text-emerald-700 underline">
+            View my bookings
+          </Link>
+        </div>
       )}
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
@@ -295,6 +420,7 @@ export default function CustomerBookServicePage() {
               user={user}
               onSaved={(profile) => {
                 setUserFromProfile(profile);
+                setServiceAddress((profile.default_service_address || '').trim());
                 setMessage('Contact details saved.');
                 loadCalendar();
               }}
@@ -308,47 +434,61 @@ export default function CustomerBookServicePage() {
             </p>
           )}
 
-          {!needsContact && canBook && (
-            <section className="rounded-xl bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Job details</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Tell the business exactly what you need before you pick a time.
-              </p>
-              <div className="mt-3">
-                <CustomerServiceDetailsForm
-                  serviceLabel={serviceLabel}
-                  onServiceLabelChange={setServiceLabel}
-                  message={notes}
-                  onMessageChange={setNotes}
-                  serviceAddress={serviceAddress}
-                  onServiceAddressChange={setServiceAddress}
-                  showServiceLabel
-                  compact
-                />
-              </div>
-            </section>
+          {!needsContact && (
+            <BookingServiceLocationSection
+              user={user}
+              value={serviceAddress}
+              onChange={setServiceAddress}
+              label="Service location"
+              hint="Enter the address where the provider should come."
+            />
           )}
 
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Choose a date</h2>
-            {loading && !calendar ? (
+            {calendarFetching ? (
               <p className="text-sm text-slate-500">Loading calendar…</p>
+            ) : !calendarInSync ? (
+              <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                <p>{calendarError || 'Could not load availability.'}</p>
+                {calendarError && (
+                  <p className="mt-2 text-xs text-red-600">
+                    On your phone, open the app using your computer&apos;s network address (e.g.
+                    http://192.168.x.x:3000), not localhost.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={loadCalendar}
+                  className="mt-3 min-h-[44px] rounded-lg bg-red-100 px-4 text-sm font-medium text-red-800"
+                >
+                  Try again
+                </button>
+              </div>
             ) : (
-              <BookingCalendar
-                year={year}
-                month={month}
-                days={openOnlyDays}
-                selectedDay={selectedDay}
-                onSelectDay={setSelectedDay}
-                onPrevMonth={() => shiftMonth(-1)}
-                onNextMonth={() => shiftMonth(1)}
-                openOnly
-              />
+              <>
+                <BookingCalendar
+                  year={year}
+                  month={month}
+                  days={calendarDays}
+                  selectedDay={selectedDay}
+                  onSelectDay={setSelectedDay}
+                  onPrevMonth={() => shiftMonth(-1)}
+                  onNextMonth={() => shiftMonth(1)}
+                  openOnly
+                />
+                {!hasOpenDays && (
+                  <p className="mt-3 text-sm text-slate-500">
+                    No open appointments this month. Try another month or ask the business to add
+                    availability.
+                  </p>
+                )}
+              </>
             )}
           </section>
 
           {selectedDay && (
-            <section className="rounded-xl bg-white p-4 shadow-sm">
+            <section className="lx-card">
               <h3 className="text-sm font-semibold text-slate-800">
                 Available times —{' '}
                 {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
@@ -361,32 +501,155 @@ export default function CustomerBookServicePage() {
                 <p className="mt-3 text-sm text-slate-500">No open slots this day.</p>
               ) : (
                 <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {slotsForDay.map((slot) => (
-                    <li key={slot.id}>
-                      {canBook && !needsContact ? (
+                  {slotsForDay.map((slot) => {
+                    const isSelected = selectedSlot?.id === slot.id;
+                    return (
+                      <li key={slot.id}>
                         <button
                           type="button"
-                          disabled={submittingId === slot.id}
-                          onClick={() => requestSlot(slot)}
-                          className="w-full min-h-[44px] rounded-lg border-2 border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+                          onClick={() => handleSlotTap(slot)}
+                          className={`w-full min-h-[44px] rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                            isSelected
+                              ? 'border-violet-600 bg-violet-50 text-violet-900 ring-2 ring-violet-200'
+                              : 'border-slate-200 bg-white text-slate-800 hover:border-violet-300 hover:bg-violet-50/50'
+                          }`}
                         >
-                          {submittingId === slot.id
-                            ? 'Booking…'
-                            : formatTimeRange(slot.start_at, slot.end_at)}
-                        </button>
-                      ) : (
-                        <span className="block rounded-lg bg-slate-100 px-3 py-2 text-center text-sm text-slate-500">
                           {formatTimeRange(slot.start_at, slot.end_at)}
-                        </span>
-                      )}
-                    </li>
-                  ))}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
           )}
+
+          {selectedSlot && (
+            <section
+              ref={confirmPanelRef}
+              className="lx-card space-y-4 border-2 border-violet-200 scroll-mt-24"
+            >
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Complete your booking</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Selected time:{' '}
+                  <span className="font-medium text-slate-800">
+                    {selectedDayLabel}{' '}
+                    · {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)}
+                  </span>
+                </p>
+              </div>
+
+              {needsContact && (
+                <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Add your phone number in the contact section above to continue.
+                </div>
+              )}
+
+              <CustomerServiceDetailsForm
+                serviceLabel={serviceLabel}
+                onServiceLabelChange={setServiceLabel}
+                message={notes}
+                onMessageChange={setNotes}
+                serviceAddress={serviceAddress}
+                onServiceAddressChange={setServiceAddress}
+                showServiceLabel
+                showLocation={false}
+                showAddressPreview={Boolean((serviceAddress || '').trim())}
+                compact
+              />
+
+              {!canSubmitBooking && connection === 'pending' && (
+                <p className="text-sm text-amber-800">
+                  Booking unlocks once the business approves your access request.
+                </p>
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  disabled={submittingId != null}
+                  onClick={() => promptBookingConfirm(selectedSlot)}
+                  className="lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60"
+                >
+                  {submittingId === selectedSlot.id
+                    ? 'Booking…'
+                    : bookingCtx?.instant_confirm
+                      ? 'Confirm booking'
+                      : 'Request appointment'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlot(null)}
+                  className="lx-btn-ghost min-h-[48px]"
+                >
+                  Change time
+                </button>
+              </div>
+
+            </section>
+          )}
+
+          {selectedSlot && (
+            <div className="fixed inset-x-0 bottom-20 z-40 px-4 sm:hidden">
+              <div className="mx-auto max-w-lg rounded-2xl border border-violet-200 bg-white/95 p-3 shadow-xl backdrop-blur">
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
+                  Time selected
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {selectedDayLabel} · {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)}
+                </p>
+                <button
+                  type="button"
+                  onClick={scrollToConfirmPanel}
+                  className="lx-btn-primary mt-3 min-h-[44px] w-full"
+                >
+                  Review & confirm booking
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
+
+      <ConfirmDialog
+        open={!!bookingConfirmSlot}
+        title={bookingCtx?.instant_confirm ? 'Confirm booking?' : 'Send booking request?'}
+        message={`Book ${service?.name || 'this service'} for:\n\n${bookingConfirmLabel}`}
+        confirmLabel={bookingCtx?.instant_confirm ? 'Confirm booking' : 'Send request'}
+        cancelLabel="Go back"
+        tone="default"
+        busy={submittingId != null}
+        onConfirm={() => {
+          const slot = bookingConfirmSlot;
+          setBookingConfirmSlot(null);
+          requestSlot(slot);
+        }}
+        onClose={() => !submittingId && setBookingConfirmSlot(null)}
+      />
+      <ConfirmDialog
+        open={!!successPopup}
+        title={successPopup?.title}
+        message={successPopup?.message}
+        confirmLabel="View my bookings"
+        cancelLabel="OK"
+        tone="success"
+        onConfirm={() => {
+          setSuccessPopup(null);
+          navigate(customerBookings());
+        }}
+        onClose={() => setSuccessPopup(null)}
+      />
+      <ConfirmDialog
+        open={!!alertPopup}
+        title={alertPopup?.title}
+        message={alertPopup?.message}
+        confirmLabel="OK"
+        cancelLabel=""
+        tone="default"
+        onConfirm={() => setAlertPopup(null)}
+        onClose={() => setAlertPopup(null)}
+      />
     </div>
   );
 }

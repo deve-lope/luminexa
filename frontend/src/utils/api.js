@@ -2,10 +2,36 @@ import axios from 'axios';
 import { storage } from './helpers';
 
 // Empty string = same-origin (Docker nginx → Django). Unset = local dev default.
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL === ''
-    ? ''
-    : (process.env.REACT_APP_API_URL || 'http://localhost:9001');
+// When the app is opened from a phone via LAN IP but .env still says localhost,
+// rewrite the API host to match the page host so calendar/booking calls succeed.
+function resolveApiBaseUrl() {
+  if (process.env.REACT_APP_API_URL === '') return '';
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    const pageHost = window.location.hostname;
+    const onLocalMachine = pageHost === 'localhost' || pageHost === '127.0.0.1';
+    // Phone/tablet on LAN: route API via setupProxy.js (same origin :3000).
+    if (!onLocalMachine) return '';
+  }
+  const fallback = process.env.REACT_APP_API_URL || 'http://localhost:9001';
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const api = new URL(fallback);
+    const pageHost = window.location.hostname;
+    if (
+      (api.hostname === 'localhost' || api.hostname === '127.0.0.1') &&
+      pageHost !== 'localhost' &&
+      pageHost !== '127.0.0.1'
+    ) {
+      api.hostname = pageHost;
+      return api.origin;
+    }
+  } catch {
+    /* keep fallback */
+  }
+  return fallback;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -88,9 +114,17 @@ export const businessesAPI = {
     api.post(`/api/v1/organizations/${slug}/service-inquiry/`, data),
   dismissServiceInquiry: (orgSlug, inquiryId) =>
     api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/dismiss/`),
-  lookupPostalCode: (postal) => api.get('/api/v1/postal-lookup/', { params: { postal } }),
+  lookupPostalCode: (postal, country) =>
+    api.get('/api/v1/postal-lookup/', {
+      params: { postal, ...(country ? { country } : {}) },
+    }),
+  detectAddressCountry: () => api.get('/api/v1/detect-country/'),
   reverseGeocode: ({ lat, lng }) => api.get('/api/v1/reverse-geocode/', { params: { lat, lng } }),
-  searchMapLocations: (q) => api.get('/api/v1/map-search/', { params: { q } }),
+  searchMapLocations: (q, country, config = {}) =>
+    api.get('/api/v1/map-search/', {
+      ...config,
+      params: { q, ...(country ? { country } : {}) },
+    }),
   listBusinessTypes: (params) => api.get('/api/v1/business-types/', { params }),
   createBusinessType: (data) => api.post('/api/v1/business-types/', data),
   listProvidersByType: (typeSlug) =>

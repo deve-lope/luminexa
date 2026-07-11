@@ -53,7 +53,7 @@ export default function BookingPolicySettings({
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+    <section className="lx-card">
       <h2 className="text-sm font-semibold uppercase text-slate-500">How customers book</h2>
       <p className="mt-1 text-sm text-slate-600">
         Choose whether appointments are confirmed automatically or need your approval.

@@ -209,7 +209,7 @@ export default function ScheduleAddSheet({
               (activeMode === 'book' && !serviceId)
             }
             onClick={handleConfirm}
-            className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-semibold text-white disabled:opacity-50"
+            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-50"
           >
             {submitting ? 'Saving…' : `Save ${meta.label.toLowerCase()}`}
           </button>

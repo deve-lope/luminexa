@@ -9,6 +9,7 @@ import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { DEFAULT_RADIUS_MILES } from '../../constants/locationSearch';
 import { businessesAPI } from '../../utils/api';
 import { compareDateKeys, todayKey } from '../../utils/dateRange';
+import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 
 export default function CustomerFindPage() {
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
@@ -16,16 +17,16 @@ export default function CustomerFindPage() {
   const [dateMode, setDateMode] = useState('any'); // 'any' | 'single' | 'range'
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [postal, setPostal] = useState('');
   const [locationLat, setLocationLat] = useState(null);
   const [locationLng, setLocationLng] = useState(null);
-  const [locationLabel, setLocationLabel] = useState('');
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [types, setTypes] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const hasLocation = locationLat != null && locationLng != null;
+  const hasLocation = isPostalSearchReady(postal);
 
   const loadCatalog = useCallback(() => {
     if (!hasLocation) {
@@ -37,8 +38,7 @@ export default function CustomerFindPage() {
     setLoading(true);
     setError(null);
     const params = {
-      lat: locationLat.toFixed(6),
-      lng: locationLng.toFixed(6),
+      postal: normalizePostalInput(postal),
       radius_miles: radiusMiles,
     };
     const q = query.trim();
@@ -61,7 +61,7 @@ export default function CustomerFindPage() {
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
-  }, [hasLocation, query, locationLat, locationLng, radiusMiles, dateMode, dateFrom, dateTo]);
+  }, [hasLocation, query, postal, radiusMiles, dateMode, dateFrom, dateTo]);
 
   useEffect(() => {
     const timer = setTimeout(loadCatalog, 250);
@@ -79,25 +79,26 @@ export default function CustomerFindPage() {
     );
   }, [types, query]);
 
-  const handleLocationChange = useCallback(({ lat, lng, label, radiusMiles: r }) => {
-    setLocationLat(lat);
-    setLocationLng(lng);
-    setLocationLabel(label || '');
+  const handleLocationChange = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
+    setPostal(normalizePostalInput(nextPostal || ''));
+    setLocationLat(lat ?? null);
+    setLocationLng(lng ?? null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
   const handleRadiusChange = useCallback((next) => setRadiusMiles(next), []);
 
   const handleLocationClear = useCallback(() => {
+    setPostal('');
     setLocationLat(null);
     setLocationLng(null);
-    setLocationLabel('');
     setRadiusMiles(DEFAULT_RADIUS_MILES);
   }, []);
 
-  const handleMapLocationSearch = useCallback(({ lat, lng, radiusMiles: r }) => {
-    setLocationLat(lat);
-    setLocationLng(lng);
+  const handleMapLocationSearch = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
+    if (nextPostal) setPostal(normalizePostalInput(nextPostal));
+    setLocationLat(lat ?? null);
+    setLocationLng(lng ?? null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -135,12 +136,12 @@ export default function CustomerFindPage() {
   return (
     <div className="space-y-6">
       {/* List / Map toggle */}
-      <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 p-1 shadow-lx-soft">
         <button
           type="button"
           onClick={() => setViewMode('list')}
-          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition ${
-            viewMode === 'list' ? 'bg-luminexa-accent text-white' : 'text-slate-600 hover:bg-slate-50'
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition ${
+            viewMode === 'list' ? 'lx-toggle-active' : 'lx-toggle-idle'
           }`}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -153,8 +154,8 @@ export default function CustomerFindPage() {
         <button
           type="button"
           onClick={() => setViewMode('map')}
-          className={`flex flex-1 items-center justify-center gap-1.5 border-l border-slate-200 py-2.5 text-sm font-medium transition ${
-            viewMode === 'map' ? 'bg-luminexa-accent text-white' : 'text-slate-600 hover:bg-slate-50'
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition ${
+            viewMode === 'map' ? 'lx-toggle-active' : 'lx-toggle-idle'
           }`}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -173,7 +174,6 @@ export default function CustomerFindPage() {
         <>
           <LocationSearchBar
             radiusMiles={radiusMiles}
-            locationLabel={locationLabel}
             onLocationChange={handleLocationChange}
             onRadiusChange={handleRadiusChange}
             onClear={handleLocationClear}
@@ -189,7 +189,7 @@ export default function CustomerFindPage() {
           )}
 
           {hasLocation && (
-          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+          <section className="lx-card">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">When do you need it?</h2>
@@ -206,7 +206,7 @@ export default function CustomerFindPage() {
               )}
             </div>
 
-            <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 text-sm">
+            <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100/80 p-1 text-sm">
               {[
                 ['any', 'Any'],
                 ['single', 'Single date'],
@@ -216,10 +216,8 @@ export default function CustomerFindPage() {
                   key={mode}
                   type="button"
                   onClick={() => updateDateMode(mode)}
-                  className={`min-h-[44px] px-2 font-medium transition ${
-                    dateMode === mode
-                      ? 'bg-luminexa-accent text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  className={`min-h-[44px] rounded-lg px-2 font-semibold transition ${
+                    dateMode === mode ? 'lx-toggle-active' : 'lx-toggle-idle bg-transparent'
                   }`}
                 >
                   {label}
@@ -262,9 +260,9 @@ export default function CustomerFindPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
               </svg>
-              <p className="mt-3 text-base font-semibold text-slate-800">Set your location to get started</p>
+              <p className="mt-3 text-base font-semibold text-slate-800">Enter your ZIP / postal code</p>
               <p className="mt-1 text-sm text-slate-500">
-                Choose a city, address, or use GPS above so we can show providers near you.
+                We&apos;ll show providers within your chosen distance of that area.
               </p>
             </div>
           ) : (
@@ -307,10 +305,10 @@ export default function CustomerFindPage() {
                       )}
                     </h2>
                     {services.length === 0 ? (
-                      <div className="rounded-xl bg-white p-6 text-center shadow-sm">
+                      <div className="lx-empty">
                         <p className="text-slate-600">No services found in this area.</p>
                         <p className="mt-2 text-sm text-slate-500">
-                          Try a different city, widen the radius, or search by service name.
+                          Try a different ZIP / postal code, widen the radius, or search by service name.
                         </p>
                         {hasFilter && (
                           <button

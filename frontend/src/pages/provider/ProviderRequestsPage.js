@@ -54,7 +54,7 @@ export default function ProviderRequestsPage() {
             onClick={() => setFilter(key)}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
               filter === key
-                ? 'bg-luminexa-accent text-white'
+                ? 'lx-toggle-active'
                 : 'bg-white text-slate-700 ring-1 ring-slate-200'
             }`}
           >
@@ -99,7 +99,7 @@ export default function ProviderRequestsPage() {
             <li key={`${item.kind}-${item.id}`}>
               <Link
                 to={providerRequestDetail(orgSlug, item.kind, item.id)}
-                className="flex items-start gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-200 hover:shadow-md"
+                className="flex items-start gap-3 lx-card transition hover:ring-violet-200 hover:shadow-md"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

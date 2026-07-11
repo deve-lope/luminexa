@@ -138,6 +138,15 @@ CORS_ALLOWED_ORIGINS = [
     ).split(',')
     if origin.strip()
 ]
+# Dev: allow phones on the local network (e.g. http://192.168.1.5:3000).
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r'^http://192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$',
+        r'^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$',
+        r'^http://172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}(:\d+)?$',
+    ]
+else:
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 CORS_ALLOW_CREDENTIALS = True
 
 _csrf_origins = config('CSRF_TRUSTED_ORIGINS', default='')

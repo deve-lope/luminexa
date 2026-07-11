@@ -196,6 +196,9 @@ def accept_booking_request(booking, staff_user):
         slot = booking.availability_slot
         slot.status = AvailabilitySlot.Status.BOOKED
         slot.save(update_fields=['status', 'updated_at'])
+    from .message_services import post_booking_approval_message
+
+    post_booking_approval_message(booking=booking, sender=staff_user)
     return booking
 
 
@@ -305,12 +308,15 @@ def reschedule_booking(booking, *, new_slot, by_user):
     booking.start_at = new_slot.start_at
     booking.end_at = new_slot.end_at
     booking.reminder_sent_at = None
-    if booking.organization.booking_policy == Organization.BookingPolicy.INSTANT:
-        booking.status = Booking.Status.CONFIRMED
-        new_slot.status = AvailabilitySlot.Status.BOOKED
-    else:
+    # Customer reschedules always go back to the provider for approval, even if the
+    # original booking was already confirmed or the business uses instant booking.
+    if is_customer:
         booking.status = Booking.Status.REQUESTED
         new_slot.status = AvailabilitySlot.Status.PENDING
+    else:
+        # Provider reschedules take effect immediately — no customer approval needed.
+        booking.status = Booking.Status.CONFIRMED
+        new_slot.status = AvailabilitySlot.Status.BOOKED
     booking.save(update_fields=[
         'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at', 'updated_at',
     ])

@@ -43,12 +43,35 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
 
     org_tz = organization.get_timezone()
     today = timezone.localdate(timezone=org_tz)
+    default_end = today + timedelta(weeks=weeks_ahead)
     range_start = coerce_org_date(organization.schedule_valid_from) or today
-    range_end = coerce_org_date(organization.schedule_valid_until) or (
-        today + timedelta(weeks=weeks_ahead)
-    )
+    range_end = coerce_org_date(organization.schedule_valid_until) or default_end
+
+    # If the saved date range has ended, roll forward so customers can book again.
+    if range_end < today:
+        range_start = today
+        range_end = default_end
+        organization.schedule_valid_from = range_start
+        organization.schedule_valid_until = range_end
+        organization.save(
+            update_fields=['schedule_valid_from', 'schedule_valid_until', 'updated_at']
+        )
+
     if range_end < range_start:
         return 0
+
+    # Replace previously auto-generated open slots so updated weekly hours
+    # actually take effect. Manual slots have created_by set; recurring slots don't.
+    purge_start = _combine(max(range_start, today), time.min, org_tz)
+    purge_end = _combine(range_end + timedelta(days=1), time.min, org_tz)
+    AvailabilitySlot.objects.filter(
+        organization=organization,
+        created_by__isnull=True,
+        status=AvailabilitySlot.Status.OPEN,
+        start_at__gte=purge_start,
+        start_at__lt=purge_end,
+    ).delete()
+
     created = 0
     day = max(range_start, today)
 

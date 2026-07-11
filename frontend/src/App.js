@@ -3,7 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
-import LandingPage from './pages/LandingPage';
+import LandingRoute from './pages/LandingRoute';
+import AboutPage from './pages/AboutPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import RegisterBusinessPage from './pages/RegisterBusinessPage';
@@ -68,10 +69,10 @@ function AppRoutes() {
     location.pathname === '/reset-password';
 
   return (
-    <div className={isAuthShell ? 'min-h-screen bg-luminexa-navy' : 'min-h-screen bg-slate-50'}>
+    <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-navy' : 'min-h-[100dvh] bg-slate-50'}>
       <PwaInstallPrompt />
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<LandingRoute />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register/business" element={<RegisterBusinessPage />} />
@@ -128,6 +129,7 @@ function AppRoutes() {
           <Route path="notifications" element={<ProviderNotificationsPage />} />
           <Route path="settings" element={<ProviderSettingsPage />} />
           <Route path="account" element={<CustomerAccountPage variant="provider" />} />
+          <Route path="about" element={<AboutPage embedded />} />
           <Route path="my-page" element={<ProviderSharePage />} />
           <Route path="share" element={<Navigate to="my-page" replace />} />
           <Route path="services" element={<ProviderServicesPage />} />
@@ -144,6 +146,7 @@ function AppRoutes() {
           <Route path="bookings" element={<CustomerBookingsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />
           <Route path="account" element={<CustomerAccountPage />} />
+          <Route path="about" element={<AboutPage embedded />} />
           <Route path="find" element={<CustomerFindPage />} />
           <Route path="find/:typeSlug" element={<CustomerProvidersByTypePage />} />
           <Route path="provider/:providerKey" element={<CustomerProviderRoutes />}>

@@ -6,8 +6,10 @@ import { businessesAPI, userAPI } from '../utils/api';
 import { storage } from '../utils/helpers';
 import { providerHome } from '../utils/providerPaths';
 import AddressFields from '../components/location/AddressFields';
+import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import { BOOKING_POLICIES } from '../constants/bookingPolicies';
 import BackButton from '../components/navigation/BackButton';
+import PasswordInput from '../components/ui/PasswordInput';
 
 export default function RegisterBusinessPage() {
   const navigate = useNavigate();
@@ -23,6 +25,9 @@ export default function RegisterBusinessPage() {
   const [servicePostalCode, setServicePostalCode] = useState('');
   const [serviceState, setServiceState] = useState('');
   const [serviceAddress, setServiceAddress] = useState('');
+  const [addressCountry, setAddressCountry] = useState(
+    () => countryFromNavigator() || defaultAddressCountry()
+  );
   const [selectedSlugs, setSelectedSlugs] = useState([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -64,6 +69,7 @@ export default function RegisterBusinessPage() {
       if (serviceState.trim()) payload.service_state = serviceState.trim();
       if (serviceAddress.trim()) payload.service_address = serviceAddress.trim();
       if (phone.trim()) payload.phone = phone.trim();
+      if (addressCountry) payload.address_country = addressCountry;
       const { data } = await userAPI.registerBusiness(payload);
       storage.set('token', data.token);
       await refreshSession();
@@ -91,8 +97,8 @@ export default function RegisterBusinessPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-luminexa-navy px-4 py-10 text-luminexa-mist">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-luminexa-slate/80 p-8 shadow-xl backdrop-blur">
+    <div className="lx-auth-page items-center py-10">
+      <div className="lx-auth-card w-full">
         <BackButton fallback="/" className="mb-6 inline-block text-sm text-luminexa-mist/60 hover:text-luminexa-mist">
           ← Back
         </BackButton>
@@ -155,6 +161,8 @@ export default function RegisterBusinessPage() {
             </p>
             <AddressFields
               dark
+              initialCountry={addressCountry}
+              onCountryChange={setAddressCountry}
               postalCode={servicePostalCode}
               onPostalCodeChange={setServicePostalCode}
               city={serviceCity}
@@ -208,15 +216,14 @@ export default function RegisterBusinessPage() {
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium">Password</label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
+              variant="dark"
               required
               minLength={8}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
             />
           </div>
           <button

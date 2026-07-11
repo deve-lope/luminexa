@@ -13,6 +13,7 @@ export default function SearchableRegionInput({
   onChange,
   placeholder = 'Type to search…',
   extraOptions = [],
+  country = '',
   className = '',
   inputClassName,
   disabled = false,
@@ -26,8 +27,8 @@ export default function SearchableRegionInput({
   const [highlight, setHighlight] = useState(0);
 
   const groups = useMemo(
-    () => filterRegionGroups(value, extraOptions),
-    [value, extraOptions]
+    () => filterRegionGroups(value, extraOptions, { country }),
+    [value, extraOptions, country]
   );
 
   const flatOptions = useMemo(

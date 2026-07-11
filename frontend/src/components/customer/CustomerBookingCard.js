@@ -6,6 +6,7 @@ import {
   bookingStatusClass,
   bookingStatusLabel,
   isPastBooking,
+  isUntouchedBookingRequest,
   wasApprovedByProvider,
   wasDeclinedByProvider,
 } from '../../utils/customerBookings';
@@ -27,10 +28,13 @@ export default function CustomerBookingCard({
   const declined = wasDeclinedByProvider(booking);
 
   let statusHint = null;
-  if (booking.status === 'requested' && !past) {
-    statusHint = 'Waiting for the business to approve your booking.';
+  if (isUntouchedBookingRequest(booking) && !past) {
+    statusHint =
+      'Waiting for the business to respond. You can reschedule to another day or time, or cancel.';
   } else if (booking.status === 'requested' && past) {
     statusHint = 'This request was not confirmed before the appointment time.';
+  } else if (approved && booking.status === 'confirmed' && !past) {
+    statusHint = 'Approved by the business. You can request a new time if needed.';
   } else if (approved && booking.status === 'confirmed') {
     statusHint = 'Approved by the business.';
   } else if (declined) {
@@ -40,22 +44,22 @@ export default function CustomerBookingCard({
   }
 
   return (
-    <li className="rounded-xl bg-white p-4 shadow-sm">
-      <p className="font-semibold text-slate-900">{booking.service_name}</p>
+    <li className="lx-card">
+      <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
       <p className="text-sm text-slate-600">{booking.organization_name}</p>
       <p className="mt-1 text-sm text-slate-500">{formatWhen(booking.start_at)}</p>
       <span
-        className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs capitalize ${bookingStatusClass(booking.status)}`}
+        className={`mt-2 inline-block capitalize ${bookingStatusClass(booking.status)}`}
       >
         {bookingStatusLabel(booking.status, { isPast: past })}
       </span>
       {statusHint && <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
       {booking.status_events?.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-slate-100/80 pt-4">
           <button
             type="button"
             onClick={() => onToggleExpand?.(booking.id)}
-            className="text-sm font-medium text-luminexa-accent"
+            className="lx-link"
           >
             {expanded ? 'Hide activity' : 'View activity'}
           </button>
@@ -71,7 +75,7 @@ export default function CustomerBookingCard({
           {providerCustomerKey(booking) && (
             <Link
               to={customerProviderPage(providerCustomerKey(booking))}
-              className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-800"
+              className="lx-btn-ghost"
             >
               View provider
             </Link>
@@ -80,7 +84,7 @@ export default function CustomerBookingCard({
             <a
               href={jobsAPI.bookingIcalUrl(booking.id)}
               download
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700"
+              className="lx-btn-ghost gap-1.5"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -95,7 +99,7 @@ export default function CustomerBookingCard({
             <button
               type="button"
               onClick={() => onReschedule(booking)}
-              className="min-h-[44px] rounded-lg border border-violet-200 px-4 text-sm font-medium text-violet-800"
+              className="lx-btn-secondary"
             >
               Reschedule
             </button>
@@ -105,7 +109,7 @@ export default function CustomerBookingCard({
               type="button"
               disabled={cancelling}
               onClick={() => onCancel(booking.id)}
-              className="min-h-[44px] rounded-lg border border-red-200 px-4 text-sm font-medium text-red-700 disabled:opacity-60"
+              className="min-h-[44px] rounded-xl border border-red-200/80 bg-red-50/80 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100/80 disabled:opacity-60"
             >
               {cancelling ? 'Cancelling…' : 'Cancel booking'}
             </button>

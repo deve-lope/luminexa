@@ -9,11 +9,11 @@ function isReadyForLookup(postal) {
   if (/^[A-Z]\d[A-Z]$/.test(postal)) return true; // Canadian FSA
   if (/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(postal)) return true; // Canada
   if (/^\d{5}$/.test(postal)) return true; // US ZIP
-  if (/^\d{6}$/.test(postal)) return true; // India PIN
+  if (/^\d{8}$/.test(postal)) return true; // Brazil CEP
   return postal.length >= 5;
 }
 
-export default function usePostalLookup(postalCode, { onResolved } = {}) {
+export default function usePostalLookup(postalCode, { onResolved, country } = {}) {
   const normalized = useMemo(() => normalizePostal(postalCode), [postalCode]);
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
@@ -29,7 +29,7 @@ export default function usePostalLookup(postalCode, { onResolved } = {}) {
     setStatus('loading');
     setMessage('Looking up city and province…');
     return businessesAPI
-      .lookupPostalCode(normalized)
+      .lookupPostalCode(normalized, country)
       .then((res) => {
         const city = res.data?.city || '';
         const state = res.data?.province || res.data?.state || '';
@@ -52,7 +52,7 @@ export default function usePostalLookup(postalCode, { onResolved } = {}) {
         setMessage('Could not auto-fill city/province for this code.');
         return null;
       });
-  }, [canLookup, normalized, onResolved]);
+  }, [canLookup, normalized, onResolved, country]);
 
   useEffect(() => {
     if (!normalized) {

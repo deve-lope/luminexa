@@ -86,7 +86,7 @@ export default function ProviderSharePage() {
 
       {editing ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 lx-card">
             <div>
               <h2 className="font-semibold text-slate-900">Edit public page</h2>
               <p className="mt-1 text-sm text-slate-600">
@@ -126,7 +126,7 @@ export default function ProviderSharePage() {
 
       {!editing && (
         <>
-          <section className="rounded-xl bg-white p-4 shadow-sm">
+          <section className="lx-card">
             <h2 className="text-sm font-semibold uppercase text-slate-500">Customer link</h2>
             <p className="mt-1 text-sm text-slate-600">
               Send this link so customers can view your page, connect, and book appointments.
@@ -168,7 +168,7 @@ export default function ProviderSharePage() {
           </section>
 
           {isOwner && (
-            <section className="rounded-xl bg-white p-4 shadow-sm">
+            <section className="lx-card">
               <h2 className="text-sm font-semibold uppercase text-slate-500">Invite staff</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Add team members who can manage schedule and bookings for{' '}

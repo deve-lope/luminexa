@@ -1,7 +1,34 @@
+from django.utils import timezone
+from django.utils.formats import date_format
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from .models import Booking, CustomerServiceInquiry, ServiceRequestMessage
 from .permissions import is_org_staff
+
+
+def _format_when(dt):
+    if not dt:
+        return ''
+    return date_format(timezone.localtime(dt), 'DATETIME_FORMAT')
+
+
+def booking_approval_message_body(booking):
+    service_name = booking.service.name if booking.service_id else 'your service'
+    when = _format_when(booking.start_at)
+    if when:
+        return f'Your request for {service_name} on {when} has been approved.'
+    return f'Your request for {service_name} has been approved.'
+
+
+def inquiry_approval_message_body(inquiry):
+    label = (
+        inquiry.service.name
+        if inquiry.service_id
+        else (inquiry.service_label or 'your request')
+    )
+    if inquiry.preferred_date:
+        return f'Your request for {label} (preferred date: {inquiry.preferred_date}) has been approved.'
+    return f'Your request for {label} has been approved.'
 
 
 def can_access_booking_messages(user, booking):
@@ -135,3 +162,21 @@ def post_inquiry_message(*, inquiry, sender, body):
     msg = ServiceRequestMessage.objects.create(inquiry=inquiry, sender=sender, body=text)
     _notify_new_message(msg)
     return msg
+
+
+def post_booking_approval_message(*, booking, sender):
+    """Post an automated thread message when staff approves a booking request."""
+    return post_booking_message(
+        booking=booking,
+        sender=sender,
+        body=booking_approval_message_body(booking),
+    )
+
+
+def post_inquiry_approval_message(*, inquiry, sender):
+    """Post an automated thread message when staff approves a custom service request."""
+    return post_inquiry_message(
+        inquiry=inquiry,
+        sender=sender,
+        body=inquiry_approval_message_body(inquiry),
+    )

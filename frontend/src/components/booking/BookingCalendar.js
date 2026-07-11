@@ -14,14 +14,14 @@ function dayCellClass({
 }) {
   if (isPast) return 'bg-slate-100 text-slate-300 cursor-not-allowed';
   if (isSelected) {
-    return 'bg-violet-600 text-white shadow-md ring-2 ring-violet-400 ring-offset-2 scale-105 z-10';
+    return 'bg-violet-600 text-white shadow-sm ring-2 ring-inset ring-violet-300';
   }
   if (isInRange) return 'bg-violet-100 text-violet-900 ring-1 ring-violet-200';
   if (status === 'available') {
-    return 'bg-emerald-400 text-white hover:bg-emerald-500';
+    return 'bg-emerald-400 text-white active:bg-emerald-600';
   }
   if (openOnly) {
-    return 'bg-slate-50 text-slate-400 cursor-default';
+    return 'bg-slate-50 text-slate-400 cursor-not-allowed';
   }
   if (allowSelectFutureDays) {
     return 'border border-slate-200 bg-white text-slate-800 hover:border-violet-400 hover:bg-violet-50 active:bg-violet-100';
@@ -81,10 +81,16 @@ export default function BookingCalendar({
       ? 'mx-auto w-full max-w-[14rem] rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm'
       : 'w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4';
 
-  const cellH = size === 'compact' ? 'h-8' : 'h-10 sm:h-11';
+  const cellH = size === 'compact' ? 'h-9 min-h-[36px]' : 'h-11 min-h-[44px] sm:h-11';
   const cellText = size === 'compact' ? 'text-[11px]' : 'text-sm';
   const weekText = size === 'compact' ? 'text-[9px]' : 'text-xs';
   const gridGap = size === 'compact' ? 'gap-px' : 'gap-1';
+
+  const selectDay = (cell) => {
+    if (cell.isPast) return;
+    if (openOnly && !cell.hasOpen) return;
+    onSelectDay(cell.key);
+  };
 
   return (
     <div className={shellClass}>
@@ -136,17 +142,14 @@ export default function BookingCalendar({
             <button
               key={cell.key}
               type="button"
-              disabled={cell.isPast || (openOnly && !cell.hasOpen)}
-              onClick={() => {
-                if (cell.isPast) return;
-                if (openOnly && !cell.hasOpen) return;
-                onSelectDay(cell.key);
-              }}
+              onClick={() => selectDay(cell)}
+              tabIndex={cell.isPast || (openOnly && !cell.hasOpen) ? -1 : 0}
               aria-pressed={selectedDay === cell.key}
               aria-label={`${cell.day}${cell.isToday ? ', today' : ''}${
                 selectedDay === cell.key ? ', selected' : ''
-              }`}
-              className={`relative flex w-full items-center justify-center rounded-lg font-semibold leading-none transition ${cellH} ${cellText} ${dayCellClass(
+              }${cell.hasOpen ? ', has open slots' : ''}`}
+              aria-disabled={cell.isPast || (openOnly && !cell.hasOpen)}
+              className={`relative flex w-full touch-manipulation select-none items-center justify-center rounded-lg font-semibold leading-none transition ${cellH} ${cellText} ${dayCellClass(
                 {
                   status: cell.status,
                   isSelected: selectedDay === cell.key,

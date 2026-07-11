@@ -133,8 +133,8 @@ export default function CustomerServiceDetailPage() {
 
       <ServicePictureCarousel images={pictures} alt={service.name} />
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase text-slate-500">About this service</h2>
+      <section className="lx-card">
+        <h2 className="lx-eyebrow">About this service</h2>
         {service.description ? (
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
             {service.description}
@@ -144,35 +144,32 @@ export default function CustomerServiceDetailPage() {
         )}
       </section>
 
-      <div className="sticky bottom-0 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+      <div className="sticky bottom-[4.75rem] z-10 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:py-0 lg:bottom-0">
         {isOwnerView ? (
           <p className="text-center text-sm text-slate-600">
             This is how customers book — share your{' '}
-            <Link to={providerPath} className="font-medium text-luminexa-accent">
+            <Link to={providerPath} className="lx-link">
               booking page
             </Link>{' '}
             link for them to schedule.
           </p>
         ) : (
-          <Link
-            to={bookPath}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-luminexa-accent font-medium text-white"
-          >
+          <Link to={bookPath} className="lx-btn-primary w-full min-h-[48px]">
             Book this service
           </Link>
         )}
       </div>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase text-slate-500">Ratings</h2>
+      <section className="lx-card">
+        <h2 className="lx-eyebrow">Ratings</h2>
         <div className="mt-3">
           <ServiceRatingSummary summary={service.rating_summary} showBreakdown />
         </div>
       </section>
 
       {service.reviews?.length > 0 && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Customer comments</h2>
+        <section className="lx-card">
+          <h2 className="lx-eyebrow">Customer comments</h2>
           <ul className="mt-3 space-y-4">
             {service.reviews.map((review) => (
               <li
@@ -207,7 +204,7 @@ export default function CustomerServiceDetailPage() {
       )}
 
       {service.can_rate && (
-        <section className="rounded-xl bg-violet-50 p-4 ring-1 ring-violet-100">
+        <section className="rounded-2xl bg-gradient-to-br from-violet-50 to-violet-100 p-4 ring-1 ring-violet-100/80">
           <h2 className="font-semibold text-slate-900">Rate this service</h2>
           <p className="mt-1 text-sm text-slate-600">
             You completed a booking for this service. Share your rating and a comment.
@@ -219,8 +216,8 @@ export default function CustomerServiceDetailPage() {
       )}
 
       {service.my_review && !service.can_rate && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Your rating</h2>
+        <section className="lx-card">
+          <h2 className="lx-eyebrow">Your rating</h2>
           <p className="mt-2 text-sm font-medium text-amber-500">
             ★ {service.my_review.average} average
           </p>

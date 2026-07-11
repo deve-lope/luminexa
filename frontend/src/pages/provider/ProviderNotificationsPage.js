@@ -41,14 +41,14 @@ export default function ProviderNotificationsPage() {
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       <p className="text-sm text-slate-600">
-        Scheduling alerts live here. Approve bookings and chat with customers in{' '}
+        Booking alerts and scheduling reminders live here. Approve bookings and chat with customers in{' '}
         <Link to={providerRequests(orgSlug)} className="font-medium text-luminexa-accent">
           Service requests
         </Link>
         .
       </p>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
+      <section className="lx-card">
         <h2 className="text-sm font-semibold uppercase text-slate-500">
           Pending bookings ({pending.length})
         </h2>
@@ -72,7 +72,7 @@ export default function ProviderNotificationsPage() {
         )}
       </section>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
+      <section className="lx-card">
         <h2 className="text-sm font-semibold uppercase text-slate-500">
           Custom requests ({inquiries.length})
         </h2>
@@ -102,8 +102,8 @@ export default function ProviderNotificationsPage() {
       </section>
 
       {notifications.length > 0 && (
-        <section className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Scheduling alerts</h2>
+        <section className="lx-card">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Alerts</h2>
           <ul className="mt-3 space-y-2">
             {notifications.map((n) => (
               <li key={n.id} className="rounded-lg bg-violet-50 p-3 text-sm text-violet-900">

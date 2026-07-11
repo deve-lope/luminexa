@@ -111,9 +111,13 @@ class ProfileAPIView(APIView):
             user.default_service_address = (
                 serializer.validated_data['default_service_address'] or ''
             ).strip()
+        if 'address_country' in serializer.validated_data:
+            user.address_country = (serializer.validated_data['address_country'] or '').strip()
         update_fields = ['full_name', 'phone']
         if 'default_service_address' in serializer.validated_data:
             update_fields.append('default_service_address')
+        if 'address_country' in serializer.validated_data:
+            update_fields.append('address_country')
         user.save(update_fields=update_fields)
         return Response(UserSerializer(user).data)
 

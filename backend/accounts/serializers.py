@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'public_ref', 'email', 'full_name', 'phone', 'default_service_address',
-            'is_staff', 'has_booking_contact',
+            'address_country', 'is_staff', 'has_booking_contact',
         )
         read_only_fields = ('id', 'public_ref', 'email', 'is_staff', 'has_booking_contact')
 
@@ -25,14 +25,20 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    address_country = serializers.CharField(required=False, allow_blank=True, max_length=80)
 
     class Meta:
         model = User
-        fields = ('email', 'full_name', 'password', 'phone')
+        fields = ('email', 'full_name', 'password', 'phone', 'address_country')
 
     def create(self, validated_data):
         phone = validated_data.pop('phone', '') or ''
-        return User.objects.create_user(phone=phone, **validated_data)
+        address_country = (validated_data.pop('address_country', '') or '').strip()
+        user = User.objects.create_user(phone=phone, **validated_data)
+        if address_country:
+            user.address_country = address_country
+            user.save(update_fields=['address_country'])
+        return user
 
 
 class RegisterBusinessSerializer(serializers.Serializer):
@@ -50,6 +56,7 @@ class RegisterBusinessSerializer(serializers.Serializer):
     service_postal_code = serializers.CharField(max_length=12)
     service_state = serializers.CharField(max_length=80, required=False, allow_blank=True, default='')
     service_address = serializers.CharField(max_length=300, required=False, allow_blank=True, default='')
+    address_country = serializers.CharField(required=False, allow_blank=True, max_length=80)
     business_type_slugs = serializers.ListField(
         child=serializers.SlugField(),
         allow_empty=False,
@@ -90,6 +97,7 @@ class RegisterBusinessSerializer(serializers.Serializer):
         service_postal_code = validated_data.pop('service_postal_code')
         service_state = (validated_data.pop('service_state', '') or '').strip()
         service_address = (validated_data.pop('service_address', '') or '').strip()
+        address_country = (validated_data.pop('address_country', '') or '').strip()
         phone = validated_data.pop('phone', '') or ''
         password = validated_data.pop('password')
 
@@ -99,6 +107,9 @@ class RegisterBusinessSerializer(serializers.Serializer):
             phone=phone,
             password=password,
         )
+        if address_country:
+            user.address_country = address_country
+            user.save(update_fields=['address_country'])
         org = Organization.objects.create(
             name=business_name,
             slug=unique_organization_slug(business_name),

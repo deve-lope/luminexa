@@ -1,4 +1,4 @@
-const CACHE = 'luminexa-v1';
+const CACHE = 'luminexa-v3';
 const PRECACHE = ['/'];
 
 self.addEventListener('install', (e) => {

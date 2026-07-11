@@ -9,21 +9,19 @@ export default function GuestPageShell({
   children,
 }) {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-lg items-center gap-2 px-4 py-3 lg:max-w-3xl">
+    <div className="lx-app-bg">
+      <header className="lx-header">
+        <div className="lx-container flex items-center gap-2 py-3">
           <HeaderNavButtons showBack={showBack} backFallback={backTo} />
           <div className="min-w-0 flex-1">
-            {eyebrow && (
-              <p className="truncate text-xs font-medium uppercase tracking-wide text-luminexa-accent">
-                {eyebrow}
-              </p>
-            )}
-            <h1 className="truncate text-lg font-bold text-slate-900">{title}</h1>
+            {eyebrow && <p className="lx-eyebrow truncate">{eyebrow}</p>}
+            <h1 className="truncate text-lg font-bold tracking-tight text-slate-900">{title}</h1>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-4 py-6 pb-12 lg:max-w-3xl">{children}</main>
+      <main className="lx-container py-5 pb-12">
+        <div className="min-w-0">{children}</div>
+      </main>
     </div>
   );
 }

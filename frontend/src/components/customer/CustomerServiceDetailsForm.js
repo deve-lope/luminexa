@@ -1,5 +1,5 @@
 import React from 'react';
-import ServiceLocationInput from './ServiceLocationInput';
+import ServiceLocationInput, { formatServiceAddressDisplay } from './ServiceLocationInput';
 
 /**
  * Shared fields: what service they need, where, and extra details.
@@ -12,6 +12,8 @@ export default function CustomerServiceDetailsForm({
   serviceAddress,
   onServiceAddressChange,
   showServiceLabel = true,
+  showLocation = true,
+  showAddressPreview = false,
   compact = false,
 }) {
   return (
@@ -46,11 +48,21 @@ export default function CustomerServiceDetailsForm({
         />
         <p className="mt-1 text-xs text-slate-500">At least 10 characters so the business knows how to help.</p>
       </div>
-      <ServiceLocationInput
-        value={serviceAddress}
-        onChange={onServiceAddressChange}
-        label="Service location"
-      />
+      {showAddressPreview && (serviceAddress || '').trim() && !showLocation && (
+        <div>
+          <p className="mb-1 text-sm font-medium text-slate-700">Service location</p>
+          <p className="whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
+            {formatServiceAddressDisplay(serviceAddress)}
+          </p>
+        </div>
+      )}
+      {showLocation && (
+        <ServiceLocationInput
+          value={serviceAddress}
+          onChange={onServiceAddressChange}
+          label="Service location"
+        />
+      )}
     </div>
   );
 }

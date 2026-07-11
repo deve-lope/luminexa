@@ -42,7 +42,7 @@ export default function ProviderServicesEditor({ orgSlug: orgSlugProp }) {
   if (!orgSlug) return null;
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="lx-card">
       <h2 className="text-sm font-semibold uppercase text-slate-500">Your services</h2>
       <p className="mt-1 text-sm text-slate-600">
         Organize offerings by category (Automobile, House work, etc.), set fixed or range

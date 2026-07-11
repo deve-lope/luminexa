@@ -60,6 +60,7 @@ export function buildPublicBookMenuItems() {
 
 export function buildProviderMenuItems({
   logout,
+  aboutPath,
   providerServicesPath,
   providerSettingsPath,
   providerAccountPath,
@@ -98,7 +99,9 @@ export function buildProviderMenuItems({
   }
 
   items.push({ id: 'section-site', divider: true, label: 'Site' });
-  items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/' });
+  if (aboutPath) {
+    items.push({ id: 'luminexa-home', label: 'About Luminexa', to: aboutPath });
+  }
   if (isStaff && adminUrl) {
     items.push({ id: 'admin', label: 'Platform admin', href: adminUrl, external: true });
   }
@@ -111,7 +114,7 @@ export function buildCustomerMenuItems({ logout }) {
 
   items.push({ id: 'section-more', divider: true, label: 'More' });
   items.push({ id: 'history', label: 'History', to: '/customer/history' });
-  items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/' });
+  items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
   return items;
 }

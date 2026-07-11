@@ -189,7 +189,7 @@ export default function ProviderAddTaskPage() {
           <button
             type="submit"
             disabled={saving || !title.trim()}
-            className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-semibold text-white disabled:opacity-50"
+            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save task'}
           </button>

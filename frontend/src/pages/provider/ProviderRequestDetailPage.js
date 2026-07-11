@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
+import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
-import { providerRequests } from '../../utils/providerPaths';
+import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
 
 const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
@@ -31,6 +32,7 @@ export default function ProviderRequestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,7 +118,7 @@ export default function ProviderRequestDetailPage() {
 
   return (
     <div className="space-y-5 pb-8">
-      <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 p-5 text-white shadow-lg">
+      <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-800 p-5 text-white shadow-lg">
         <div className="flex items-center justify-between">
           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass}`}>
             {requestStatusLabel(kind, status)}
@@ -135,14 +137,22 @@ export default function ProviderRequestDetailPage() {
           <p className="mt-2 text-white/90">Preferred date: {data.preferred_date}</p>
         )}
         {kind === 'booking' && status === 'requested' && (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               disabled={actionBusy}
               onClick={() => runBookingAction(() => jobsAPI.acceptBooking(id), 'Request approved.')}
-              className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+              className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
             >
               Approve
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy || new Date(data.start_at) <= new Date()}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Reschedule
             </button>
             <button
               type="button"
@@ -153,21 +163,31 @@ export default function ProviderRequestDetailPage() {
                   navigate(providerRequests(orgSlug));
                 }, null)
               }
-              className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+              className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Decline
             </button>
           </div>
         )}
         {kind === 'booking' && status === 'confirmed' && (
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => runBookingAction(() => jobsAPI.completeBooking(id), 'Marked as done.')}
-            className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
-          >
-            Mark done
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => runBookingAction(() => jobsAPI.completeBooking(id), 'Marked as done.')}
+              className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+            >
+              Mark done
+            </button>
+          </div>
         )}
         {kind === 'inquiry' && status === 'pending' && (
           <div className="mt-4 flex gap-2">
@@ -299,6 +319,22 @@ export default function ProviderRequestDetailPage() {
         </a>
       )}
 
+      {kind === 'booking' && status === 'confirmed' && (
+        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Schedule</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            If you become unavailable for this time, you can move the booking to another open slot.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(providerScheduleDetail(orgSlug, 'booking', data.id))}
+            className="mt-3 min-h-[44px] w-full rounded-xl border border-slate-200 font-medium text-slate-700"
+          >
+            Open full booking
+          </button>
+        </section>
+      )}
+
       <RequestMessageThread
         customerName={data.customer_name}
         loadMessages={() =>
@@ -312,6 +348,23 @@ export default function ProviderRequestDetailPage() {
             : jobsAPI.sendInquiryMessage(orgSlug, id, body)
         }
       />
+
+      {kind === 'booking' && (
+        <RescheduleBookingModal
+          open={rescheduleOpen}
+          audience="provider"
+          booking={{
+            ...data,
+            organization_slug: data.organization_slug || orgSlug,
+          }}
+          onClose={() => setRescheduleOpen(false)}
+          onRescheduled={() => {
+            showToast('Booking rescheduled.', 'success');
+            setRescheduleOpen(false);
+            load();
+          }}
+        />
+      )}
 
     </div>
   );

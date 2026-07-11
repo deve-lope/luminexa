@@ -86,7 +86,7 @@ export default function OrganizationTimezoneField({
   };
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="lx-card">
       <h2 className="text-sm font-semibold uppercase text-slate-500">Timezone</h2>
       <p className="mt-1 text-sm text-slate-600">
         Weekly hours and generated slots use this timezone.

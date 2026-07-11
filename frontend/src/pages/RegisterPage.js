@@ -4,7 +4,10 @@ import { storage } from '../utils/helpers';
 import { userAPI } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { applyPostLoginNavigation } from '../utils/postLoginRoute';
+import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
+import AddressCountrySelect from '../components/location/AddressCountrySelect';
 import BackButton from '../components/navigation/BackButton';
+import PasswordInput from '../components/ui/PasswordInput';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -15,6 +18,9 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [addressCountry, setAddressCountry] = useState(
+    () => countryFromNavigator() || defaultAddressCountry()
+  );
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,7 +29,7 @@ export default function RegisterPage() {
     setError('');
     setSubmitting(true);
     try {
-      const payload = { email, full_name: fullName, password };
+      const payload = { email, full_name: fullName, password, address_country: addressCountry };
       if (phone.trim()) payload.phone = phone.trim();
       const { data } = await userAPI.register(payload);
       storage.set('token', data.token);
@@ -40,8 +46,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-luminexa-navy px-4 text-luminexa-mist">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-luminexa-slate/80 p-8 shadow-xl backdrop-blur">
+    <div className="lx-auth-page items-center">
+      <div className="lx-auth-card w-full">
         <BackButton fallback="/" className="mb-6 inline-block text-sm text-luminexa-mist/60 hover:text-luminexa-mist">
           ← Back
         </BackButton>
@@ -89,16 +95,24 @@ export default function RegisterPage() {
             />
           </div>
           <div>
+            <AddressCountrySelect
+              id="register-country"
+              value={addressCountry}
+              onChange={setAddressCountry}
+              dark
+              hint="Americas only — pick the country where you receive services."
+            />
+          </div>
+          <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium">Password</label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
+              variant="dark"
               required
               minLength={8}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
             />
           </div>
           <button

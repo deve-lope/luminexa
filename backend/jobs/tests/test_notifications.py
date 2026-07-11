@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from businesses.models import Organization, OrganizationMembership
-from jobs.models import AvailabilitySlot, Booking, Service
+from jobs.models import AvailabilitySlot, Booking, ProviderNotification, Service
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
@@ -98,3 +98,8 @@ class BookingNotificationTests(TestCase):
         self.assertIn('Booking request sent — Test Co', subjects)
         provider_mail = next(m for m in mail.outbox if m.to == ['provider@test.local'])
         self.assertIn('123 Main St', provider_mail.body)
+        note = ProviderNotification.objects.get(
+            organization=self.org,
+            kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
+        )
+        self.assertIn('Customer requested Oil change', note.message)

@@ -104,7 +104,7 @@ export default function BookJobPanel({
                 onClick={() => onServiceChange(String(s.id))}
                 className={`shrink-0 min-h-[44px] rounded-full px-4 text-sm font-medium transition ${
                   String(bookService) === String(s.id)
-                    ? 'bg-luminexa-accent text-white'
+                    ? 'lx-toggle-active'
                     : 'bg-white text-slate-700 ring-1 ring-slate-200'
                 }`}
               >

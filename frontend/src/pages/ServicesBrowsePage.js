@@ -9,15 +9,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { DEFAULT_RADIUS_MILES } from '../constants/locationSearch';
 import { businessesAPI } from '../utils/api';
 import { bookService } from '../utils/customerPaths';
+import { isPostalSearchReady, normalizePostalInput } from '../utils/postalInput';
 
 export default function ServicesBrowsePage({ embedded = false }) {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState('list');
   const [query, setQuery] = useState('');
-  const [locationLat, setLocationLat] = useState(null);
-  const [locationLng, setLocationLng] = useState(null);
-  const [locationLabel, setLocationLabel] = useState('');
+  const [postal, setPostal] = useState('');
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [types, setTypes] = useState([]);
   const [services, setServices] = useState([]);
@@ -30,9 +29,8 @@ export default function ServicesBrowsePage({ embedded = false }) {
     const params = {};
     const q = query.trim();
     if (q) params.q = q;
-    if (locationLat != null && locationLng != null) {
-      params.lat = locationLat.toFixed(6);
-      params.lng = locationLng.toFixed(6);
+    if (isPostalSearchReady(postal)) {
+      params.postal = normalizePostalInput(postal);
       params.radius_miles = radiusMiles;
     }
 
@@ -45,7 +43,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
-  }, [query, locationLat, locationLng, radiusMiles]);
+  }, [query, postal, radiusMiles]);
 
   useEffect(() => {
     const timer = setTimeout(loadBrowse, 250);
@@ -74,10 +72,8 @@ export default function ServicesBrowsePage({ embedded = false }) {
     return `/login?next=${encodeURIComponent(path)}`;
   };
 
-  const handleLocationChange = useCallback(({ lat, lng, label, radiusMiles: r }) => {
-    setLocationLat(lat);
-    setLocationLng(lng);
-    setLocationLabel(label || '');
+  const handleLocationChange = useCallback(({ postal: nextPostal, radiusMiles: r }) => {
+    setPostal(normalizePostalInput(nextPostal || ''));
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -86,20 +82,14 @@ export default function ServicesBrowsePage({ embedded = false }) {
   }, []);
 
   const handleLocationClear = useCallback(() => {
-    setLocationLat(null);
-    setLocationLng(null);
-    setLocationLabel('');
+    setPostal('');
     setRadiusMiles(DEFAULT_RADIUS_MILES);
   }, []);
 
-  const handleMapLocationSearch = useCallback(
-    ({ lat, lng, radiusMiles: r }) => {
-      setLocationLat(lat);
-      setLocationLng(lng);
-      if (r != null) setRadiusMiles(r);
-    },
-    []
-  );
+  const handleMapLocationSearch = useCallback(({ postal: nextPostal, radiusMiles: r }) => {
+    if (nextPostal) setPostal(normalizePostalInput(nextPostal));
+    if (r != null) setRadiusMiles(r);
+  }, []);
 
   const viewToggle = (
     <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -107,7 +97,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
         type="button"
         onClick={() => setViewMode('list')}
         className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition ${
-          viewMode === 'list' ? 'bg-luminexa-accent text-white' : 'text-slate-600 hover:bg-slate-50'
+          viewMode === 'list' ? 'lx-toggle-active' : 'text-slate-600 hover:bg-slate-50'
         }`}
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -124,7 +114,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
         type="button"
         onClick={() => setViewMode('map')}
         className={`flex flex-1 items-center justify-center gap-1.5 border-l border-slate-200 py-2.5 text-sm font-medium transition ${
-          viewMode === 'map' ? 'bg-luminexa-accent text-white' : 'text-slate-600 hover:bg-slate-50'
+          viewMode === 'map' ? 'lx-toggle-active' : 'text-slate-600 hover:bg-slate-50'
         }`}
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -165,7 +155,6 @@ export default function ServicesBrowsePage({ embedded = false }) {
 
           <LocationSearchBar
             radiusMiles={radiusMiles}
-            locationLabel={locationLabel}
             onLocationChange={handleLocationChange}
             onRadiusChange={handleRadiusChange}
             onClear={handleLocationClear}

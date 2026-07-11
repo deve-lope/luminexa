@@ -1,24 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import PasswordInput from '../components/ui/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
 import { applyPostLoginNavigation } from '../utils/postLoginRoute';
+import parseApiError from '../utils/parseApiError';
 
 function parseLoginError(err) {
-  if (!err.response) {
-    if (err.code === 'ECONNABORTED') {
-      return 'Request timed out. The server may be restarting — wait a moment and try again.';
-    }
-    return 'Cannot reach the server. Make sure Docker is running and open http://localhost:3000';
-  }
-  if (err.response.status === 429) {
-    return 'Too many login attempts. Please wait a minute and try again.';
-  }
-  const d = err.response.data;
-  if (typeof d === 'string') return d;
-  if (d?.non_field_errors?.[0]) return d.non_field_errors[0];
-  if (d?.detail) return typeof d.detail === 'string' ? d.detail : 'Login failed.';
-  return 'Invalid email or password.';
+  return parseApiError(err, 'Invalid email or password.');
 }
 
 export default function LoginPage() {
@@ -47,14 +36,14 @@ export default function LoginPage() {
 
   return (
     <motion.div
-      className="relative min-h-screen flex flex-col items-center justify-center bg-luminexa-navy px-4 text-luminexa-mist"
+      className="lx-auth-page items-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-luminexa-slate/80 p-8 shadow-xl backdrop-blur"
+        className="lx-auth-card relative z-10"
       >
         <h1 className="mb-2 text-2xl font-bold">Sign in</h1>
         <p className="mb-8 text-sm text-luminexa-mist/65">
@@ -85,14 +74,13 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
+              variant="dark"
               required
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 text-luminexa-mist outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
             />
           </motion.div>
           <button

@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  ADDRESS_SEARCH_MIN_CHARS,
+  addressSearchDebounceMs,
+  addressSearchTerm,
+  shouldSearchAddressQuery,
+} from '../../constants/addressSearch';
 import { businessesAPI } from '../../utils/api';
-import { canUseBrowserGeolocation } from '../../utils/geolocationSupport';
+import { canUseBrowserGeolocation, requestGeolocationCoordinates, shareLocationButtonLabel } from '../../utils/geolocationSupport';
+import useAddressCountry from '../../hooks/useAddressCountry';
+import { useAuth } from '../../contexts/AuthContext';
 
 const DEFAULT_CENTER = [43.6532, -79.3832]; // Toronto
 
@@ -17,17 +25,38 @@ function formatCoords(lat, lng) {
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
-export default function MapLocationPicker({ open, onClose, onSelect }) {
+function buildPayload(lat, lng, address) {
+  if (typeof address === 'string') {
+    return { lat, lng, address, city: '', state: '', postal_code: '', country: '' };
+  }
+  return {
+    lat,
+    lng,
+    address: address?.display_name || formatCoords(lat, lng),
+    city: address?.city || '',
+    state: address?.state || address?.province || '',
+    postal_code: address?.postal_code || '',
+    country: address?.country || '',
+  };
+}
+
+export default function MapLocationPicker({ open, onClose, onSelect, country: countryProp }) {
+  const { user } = useAuth();
+  const { country: detectedCountry } = useAddressCountry({
+    initialCountry: countryProp || user?.address_country,
+  });
+  const country = countryProp || detectedCountry;
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const [selected, setSelected] = useState(null);
+  const resolvingRef = useRef(false);
   const [resolving, setResolving] = useState(false);
   const [locating, setLocating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState(null);
+  const [pendingLabel, setPendingLabel] = useState('');
 
   const placeMarker = useCallback((lat, lng) => {
     const map = mapRef.current;
@@ -39,48 +68,62 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
     }
   }, []);
 
-  const selectCoordinates = useCallback(async (lat, lng, { zoom = 16, address } = {}) => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.setView([lat, lng], zoom);
-    placeMarker(lat, lng);
+  const confirmLocation = useCallback(async (lat, lng, { zoom = 16, address } = {}) => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
     setResolving(true);
     setError(null);
-    if (address) {
-      setSelected({
-        lat,
-        lng,
-        address: typeof address === 'string' ? address : address.display_name || formatCoords(lat, lng),
-        city: address.city || '',
-        state: address.state || address.province || '',
-        postal_code: address.postal_code || '',
-      });
-      setResolving(false);
-      return;
+
+    const map = mapRef.current;
+    if (map) {
+      map.setView([lat, lng], zoom);
+      placeMarker(lat, lng);
     }
+
     try {
-      const res = await businessesAPI.reverseGeocode({ lat, lng });
-      const data = res.data || {};
-      const displayName = data.display_name || formatCoords(lat, lng);
-      setSelected({
-        lat,
-        lng,
-        address: displayName,
-        city: data.city || '',
-        state: data.state || data.province || '',
-        postal_code: data.postal_code || '',
-        country: data.country || '',
-      });
+      let payload;
+      if (address) {
+        payload = buildPayload(lat, lng, address);
+      } else {
+        const res = await businessesAPI.reverseGeocode({ lat, lng });
+        const data = res.data || {};
+        payload = {
+          lat,
+          lng,
+          address: data.display_name || formatCoords(lat, lng),
+          city: data.city || '',
+          state: data.state || data.province || '',
+          postal_code: data.postal_code || '',
+          country: data.country || '',
+        };
+      }
+      setPendingLabel(payload.address);
+      onSelect(payload);
+      onClose();
     } catch {
-      setSelected({ lat, lng, address: formatCoords(lat, lng), city: '', state: '', postal_code: '' });
-      setError('Could not find an address for that point. Coordinates will be used.');
+      const payload = buildPayload(lat, lng, formatCoords(lat, lng));
+      setPendingLabel(payload.address);
+      onSelect(payload);
+      onClose();
     } finally {
+      resolvingRef.current = false;
       setResolving(false);
     }
-  }, [placeMarker]);
+  }, [onClose, onSelect, placeMarker]);
 
   useEffect(() => {
-    if (!open || !mapEl.current || mapRef.current) return undefined;
+    if (!open) {
+      setSearchQuery('');
+      setSearchResults([]);
+      setError(null);
+      setPendingLabel('');
+      setResolving(false);
+      setLocating(false);
+      resolvingRef.current = false;
+      return undefined;
+    }
+
+    if (!mapEl.current || mapRef.current) return undefined;
 
     const map = L.map(mapEl.current, {
       center: DEFAULT_CENTER,
@@ -94,11 +137,10 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
 
     map.on('click', (event) => {
       const { lat, lng } = event.latlng;
-      selectCoordinates(lat, lng, { zoom: map.getZoom() });
+      confirmLocation(lat, lng, { zoom: map.getZoom() });
     });
 
     mapRef.current = map;
-
     window.setTimeout(() => map.invalidateSize(), 100);
 
     return () => {
@@ -106,7 +148,7 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [open, selectCoordinates]);
+  }, [open, confirmLocation]);
 
   useEffect(() => {
     if (!open || !mapRef.current) return;
@@ -124,80 +166,107 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
     }
     setLocating(true);
     setError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+    requestGeolocationCoordinates()
+      .then((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        selectCoordinates(lat, lng, { zoom: 17 }).finally(() => setLocating(false));
-      },
-      (err) => {
-        setLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
+        return confirmLocation(lat, lng, { zoom: 17 });
+      })
+      .catch((err) => {
+        if (err?.code === 1) {
           setError('Location permission was blocked. Allow location access in your browser, or search the address above.');
-        } else if (err.code === err.TIMEOUT) {
+        } else if (err?.code === 3) {
           setError('Could not get your current location in time. Try again or search the address.');
         } else {
-          setError('Could not access your current location. Try searching the address.');
+          setError(err?.message || 'Could not access your current location. Try searching the address.');
         }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      }
-    );
+      })
+      .finally(() => setLocating(false));
   };
 
-  const runSearch = useCallback(async (query, { selectFirst = false } = {}) => {
+  const runSearch = useCallback(async (query, { selectFirst = false, signal } = {}) => {
     const q = (query || '').trim();
-    if (q.length < 3) {
-      setError('Type at least 3 characters to search.');
+    if (q.length < ADDRESS_SEARCH_MIN_CHARS) {
+      setError(`Type at least ${ADDRESS_SEARCH_MIN_CHARS} characters to search.`);
       return [];
     }
     setSearching(true);
     setError(null);
     try {
-      const res = await businessesAPI.searchMapLocations(q);
+      const res = await businessesAPI.searchMapLocations(q, country, { signal });
       const results = Array.isArray(res.data?.results) ? res.data.results : [];
       setSearchResults(results);
       if (selectFirst && results.length > 0) {
         const first = results[0];
-        await selectCoordinates(first.latitude, first.longitude, {
+        await confirmLocation(first.latitude, first.longitude, {
           zoom: 16,
           address: {
             display_name: first.display_name,
             city: first.city || '',
             state: first.state || first.province || '',
             postal_code: first.postal_code || '',
+            country: first.country || '',
           },
         });
       } else if (!results.length) {
-        setError('No locations found. Try a more specific address or city.');
+        setError(
+          country
+            ? `No locations found in ${country}. Try a more specific address or city.`
+            : 'No locations found. Try a more specific address or city.'
+        );
       }
       return results;
-    } catch {
+    } catch (err) {
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return [];
       setError('Could not search locations right now.');
       return [];
     } finally {
       setSearching(false);
     }
-  }, [selectCoordinates]);
+  }, [confirmLocation, country]);
 
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 3) {
+    if (!open || !shouldSearchAddressQuery(searchQuery)) {
       setSearchResults([]);
       return undefined;
     }
-    const timer = window.setTimeout(() => {
-      runSearch(q, { selectFirst: false });
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [runSearch, searchQuery]);
+    const q = addressSearchTerm(searchQuery);
+    setSearching(true);
+    const controller = new AbortController();
+    const delay = addressSearchDebounceMs(searchQuery);
+    const run = () => {
+      runSearch(q, { selectFirst: false, signal: controller.signal }).finally(() => {
+        if (!controller.signal.aborted) setSearching(false);
+      });
+    };
+    const timer = delay === 0 ? null : window.setTimeout(run, delay);
+    if (delay === 0) run();
+    return () => {
+      controller.abort();
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [open, runSearch, searchQuery]);
 
   const searchLocations = async (e) => {
     e.preventDefault();
     await runSearch(searchQuery, { selectFirst: true });
+  };
+
+  const pickSearchResult = (item) => {
+    confirmLocation(item.latitude, item.longitude, {
+      zoom: 16,
+      address: {
+        display_name: item.display_name,
+        city: item.city || '',
+        state: item.state || item.province || '',
+        postal_code: item.postal_code || '',
+        country: item.country || '',
+      },
+    });
+  };
+
+  const preventBlurForPick = (e) => {
+    e.preventDefault();
   };
 
   if (!open) return null;
@@ -213,14 +282,15 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
           <div>
             <h2 className="font-semibold text-slate-900">Pick service location</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Search an address or click the map
-              {gpsAvailable ? ', or use your current location' : ''}.
+              Tap a search result or click the map
+              {gpsAvailable ? ' — your location is saved right away' : ''}.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+            disabled={resolving || locating}
+            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50"
           >
             Close
           </button>
@@ -233,37 +303,33 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
           <div className="flex gap-2">
             <input
               id="map-location-search"
+              type="text"
+              inputMode="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search address, landmark, city..."
-              className="min-h-[44px] flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
+              className="min-h-[44px] flex-1 rounded-lg border border-slate-200 px-3 text-base outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
             />
             <button
               type="submit"
-              disabled={searching}
+              disabled={searching || resolving}
               className="min-h-[44px] rounded-lg bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-60"
             >
               {searching ? 'Searching…' : 'Search'}
             </button>
           </div>
           {searchResults.length > 0 && (
-            <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+            <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white">
               {searchResults.map((item) => (
                 <li key={`${item.latitude}-${item.longitude}-${item.display_name}`}>
                   <button
                     type="button"
-                    onClick={() =>
-                      selectCoordinates(item.latitude, item.longitude, {
-                        zoom: 16,
-                        address: {
-                          display_name: item.display_name,
-                          city: item.city || '',
-                          state: item.state || item.province || '',
-                          postal_code: item.postal_code || '',
-                        },
-                      })
-                    }
-                    className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                    onPointerDown={preventBlurForPick}
+                    onTouchStart={preventBlurForPick}
+                    onMouseDown={preventBlurForPick}
+                    onClick={() => pickSearchResult(item)}
+                    disabled={resolving}
+                    className="block w-full border-b border-slate-100 px-3 py-3 text-left text-sm text-slate-700 last:border-b-0 active:bg-violet-50 disabled:opacity-50"
                   >
                     {item.display_name}
                   </button>
@@ -273,34 +339,29 @@ export default function MapLocationPicker({ open, onClose, onSelect }) {
           )}
         </form>
 
-        <div ref={mapEl} className="h-[360px] w-full bg-slate-100" />
+        <div className="relative">
+          <div ref={mapEl} className="h-[360px] w-full bg-slate-100" />
+          {(resolving || locating) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium text-slate-700">
+              {locating ? 'Getting your location…' : 'Saving location…'}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-3 border-t border-slate-100 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {gpsAvailable ? (
-              <button
-                type="button"
-                onClick={useCurrentLocation}
-                disabled={locating || resolving}
-                className="min-h-[44px] rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 disabled:opacity-50"
-              >
-                {locating ? 'Getting your location…' : 'Use my current location'}
-              </button>
-            ) : null}
+          {gpsAvailable ? (
             <button
               type="button"
-              disabled={!selected || resolving}
-              onClick={() => selected && onSelect(selected)}
-              className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white disabled:opacity-50"
+              onClick={useCurrentLocation}
+              disabled={locating || resolving}
+              className="min-h-[44px] w-full rounded-lg border border-violet-200 bg-violet-50 px-4 text-sm font-semibold text-luminexa-accent disabled:opacity-50"
             >
-              {resolving ? 'Finding address…' : 'Use selected location'}
+              {shareLocationButtonLabel({ locating })}
             </button>
-          </div>
+          ) : null}
 
-          {selected && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              {selected.address}
-            </p>
+          {pendingLabel && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{pendingLabel}</p>
           )}
           {error && <p className="text-sm text-amber-700">{error}</p>}
         </div>

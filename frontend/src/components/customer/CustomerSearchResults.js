@@ -4,10 +4,11 @@ import BusinessTypeTileGrid from './BusinessTypeTileGrid';
 import { bookService, businessPage } from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
-export default function CustomerSearchResults({ results, query, loading }) {
+export default function CustomerSearchResults({ results, query, areaLabel, loading }) {
   const searchTerm = query?.trim() || '';
+  const hasArea = Boolean(areaLabel?.trim());
 
-  if (!searchTerm && !loading && !results) return null;
+  if (!searchTerm && !hasArea && !loading && !results) return null;
 
   if (loading) {
     return <p className="text-sm text-slate-500">Searching…</p>;
@@ -22,14 +23,21 @@ export default function CustomerSearchResults({ results, query, loading }) {
     return (
       <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
         {searchTerm
-          ? `No results for "${searchTerm}". Try another keyword or browse categories below.`
-          : 'No nearby services found. Try a different area or widen the radius.'}
+          ? `No results for "${searchTerm}"${hasArea ? ` near ${areaLabel}` : ''}. Try another keyword or ZIP code.`
+          : hasArea
+            ? `No services found near ${areaLabel}. Try a wider radius or another ZIP / postal code.`
+            : 'No nearby services found. Try a different area or widen the radius.'}
       </p>
     );
   }
 
   return (
     <div className="space-y-5">
+      {hasArea && (
+        <p className="text-sm text-slate-600">
+          Showing results near <span className="font-medium text-slate-800">{areaLabel}</span>
+        </p>
+      )}
       {types.length > 0 && (
         <section>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">

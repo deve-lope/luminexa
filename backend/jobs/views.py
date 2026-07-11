@@ -206,7 +206,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         created = 0
         if org.scheduling_mode == Organization.SchedulingMode.RECURRING:
-            created = sync_recurring_slots(org)
+            created = sync_recurring_slots(org, weeks_ahead=12)
         ensure_flexi_slot_alert(org)
 
         blocks = WeeklyScheduleBlock.objects.filter(organization=org)
@@ -936,7 +936,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             note=f'New time: {booking.start_at.isoformat()}',
         )
         from .notifications import send_booking_email
-        send_booking_email('booking_requested', booking)
+
+        if booking.customer_id == request.user.id:
+            send_booking_email('booking_reschedule_requested', booking)
+        else:
+            send_booking_email('booking_confirmed', booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='no-show')

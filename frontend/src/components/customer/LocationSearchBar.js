@@ -2,14 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AddressSearchField from '../location/AddressSearchField';
-import useCurrentLocation from '../../hooks/useCurrentLocation';
 import {
   DEFAULT_RADIUS_MILES,
   MILES_TO_METERS,
   RADIUS_MILE_OPTIONS,
   formatRadiusMiles,
 } from '../../constants/locationSearch';
-import { canUseBrowserGeolocation } from '../../utils/geolocationSupport';
 import { bookService } from '../../utils/customerPaths';
 
 const centerPin = L.divIcon({
@@ -51,8 +49,7 @@ function groupByOrg(services) {
 
 /**
  * Customer location search bar with embedded live map.
- * Uses AddressSearchField + useCurrentLocation (same as provider side).
- * Shows a Leaflet map with radius circle + provider markers once a location is set.
+ * Uses address search to set the search center, then shows providers on the map.
  */
 export default function LocationSearchBar({
   radiusMiles = DEFAULT_RADIUS_MILES,
@@ -66,11 +63,7 @@ export default function LocationSearchBar({
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [pendingRadius, setPendingRadius] = useState(radiusMiles);
-  const gpsAvailable = canUseBrowserGeolocation();
-  const { locating, error: locError, setError: setLocError, fetchCurrentLocation } =
-    useCurrentLocation();
 
-  // Map refs
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const circleRef = useRef(null);
@@ -179,12 +172,6 @@ export default function LocationSearchBar({
     applyLocation(payload, payload.address || payload.display_name || '');
   };
 
-  const handleGPS = async () => {
-    setLocError(null);
-    const result = await fetchCurrentLocation();
-    if (result) applyLocation(result, result.address || '');
-  };
-
   const handleRadiusChange = (e) => {
     const next = Number(e.target.value);
     setPendingRadius(next);
@@ -204,7 +191,6 @@ export default function LocationSearchBar({
     setLng(null);
     setHasLocation(false);
     setPendingRadius(DEFAULT_RADIUS_MILES);
-    setLocError(null);
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
@@ -242,39 +228,12 @@ export default function LocationSearchBar({
           </button>
         </div>
       ) : (
-        <>
-          <AddressSearchField
-            id="customer-location-search"
-            label=""
-            placeholder="City, postal code, or address…"
-            onSelect={handleAddressSelect}
-          />
-          {gpsAvailable && (
-            <button
-              type="button"
-              onClick={handleGPS}
-              disabled={locating}
-              className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 text-sm font-medium text-luminexa-accent disabled:opacity-50"
-            >
-              {locating ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  Getting your location…
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="3"/><path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-                  </svg>
-                  Use my current location
-                </>
-              )}
-            </button>
-          )}
-        </>
+        <AddressSearchField
+          id="customer-location-search"
+          label=""
+          placeholder="City, postal code, or address…"
+          onSelect={handleAddressSelect}
+        />
       )}
 
       {/* Live map — shown once a location is set */}
@@ -314,8 +273,6 @@ export default function LocationSearchBar({
           )}
         </>
       )}
-
-      {locError && <p className="text-xs text-amber-700">{locError}</p>}
     </div>
   );
 }

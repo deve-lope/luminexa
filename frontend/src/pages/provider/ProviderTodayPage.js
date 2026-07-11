@@ -18,7 +18,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import { parseApiError } from '../../utils/taskDisplay';
 
 function jobAccent(status) {
-  if (status === 'in_progress') return 'from-violet-500 to-indigo-600';
+  if (status === 'in_progress') return 'from-violet-500 to-violet-700';
   return 'from-luminexa-accent to-violet-600';
 }
 
@@ -136,13 +136,9 @@ export default function ProviderTodayPage() {
 
   if (!dashboard) {
     return (
-      <div className="rounded-xl bg-white p-6 text-center shadow-sm">
+      <div className="lx-empty">
         <p className="text-slate-600">{error || 'Could not load dashboard.'}</p>
-        <button
-          type="button"
-          onClick={load}
-          className="mt-4 min-h-[44px] rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
-        >
+        <button type="button" onClick={load} className="lx-btn-primary mt-4">
           Try again
         </button>
       </div>
@@ -163,35 +159,38 @@ export default function ProviderTodayPage() {
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
 
-      <header className="rounded-2xl bg-gradient-to-br from-luminexa-navy to-violet-900 p-5 text-white">
-        <p className="text-sm text-violet-200">{greeting()}</p>
-        <h1 className="mt-0.5 text-xl font-bold">{dashboard.organization?.name}</h1>
-        <p className="text-sm text-white/70">
-          {new Date().toLocaleDateString(undefined, {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </p>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-white/10 py-2">
-            <p className="text-lg font-bold">{stats.jobs_today ?? 0}</p>
-            <p className="text-[10px] uppercase text-white/70">Today</p>
+      <header className="lx-hero">
+        <div className="relative p-5">
+          <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-violet-400/20 blur-2xl" />
+          <p className="text-sm text-violet-200">{greeting()}</p>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight">{dashboard.organization?.name}</h1>
+          <p className="text-sm text-white/75">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            })}
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-white/10 py-2 ring-1 ring-white/10 backdrop-blur-sm">
+              <p className="text-lg font-bold">{stats.jobs_today ?? 0}</p>
+              <p className="text-[10px] uppercase tracking-wide text-white/70">Today</p>
+            </div>
+            <Link
+              to={providerSchedule(orgSlug)}
+              className="rounded-xl bg-white/10 py-2 ring-1 ring-white/10 backdrop-blur-sm transition hover:bg-white/20"
+            >
+              <p className="text-lg font-bold">{stats.upcoming_count ?? 0}</p>
+              <p className="text-[10px] uppercase tracking-wide text-white/70">Upcoming</p>
+            </Link>
+            <Link
+              to={providerRequests(orgSlug)}
+              className="rounded-xl bg-white/10 py-2 ring-1 ring-white/10 backdrop-blur-sm transition hover:bg-white/20"
+            >
+              <p className="text-lg font-bold">{stats.pending_requests_count ?? 0}</p>
+              <p className="text-[10px] uppercase tracking-wide text-white/70">Requests</p>
+            </Link>
           </div>
-          <Link
-            to={providerSchedule(orgSlug)}
-            className="rounded-lg bg-white/10 py-2 transition hover:bg-white/20"
-          >
-            <p className="text-lg font-bold">{stats.upcoming_count ?? 0}</p>
-            <p className="text-[10px] uppercase text-white/70">Upcoming</p>
-          </Link>
-          <Link
-            to={providerRequests(orgSlug)}
-            className="rounded-lg bg-white/10 py-2 transition hover:bg-white/20"
-          >
-            <p className="text-lg font-bold">{stats.pending_requests_count ?? 0}</p>
-            <p className="text-[10px] uppercase text-white/70">Requests</p>
-          </Link>
         </div>
       </header>
 
@@ -235,13 +234,10 @@ export default function ProviderTodayPage() {
         );
       })()}
 
-      <section className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
+      <section className="lx-panel">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold text-slate-900">Tasks</h2>
-          <Link
-            to={providerAddTask(orgSlug)}
-            className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
-          >
+          <h2 className="lx-section-title">Tasks</h2>
+          <Link to={providerAddTask(orgSlug)} className="lx-btn-primary min-h-[40px] px-3 py-2 text-sm">
             Add task
           </Link>
         </div>
@@ -316,7 +312,7 @@ export default function ProviderTodayPage() {
           </Link>
         </div>
         {!jobs.length ? (
-          <p className="rounded-xl bg-white px-4 py-6 text-center text-sm text-slate-500 ring-1 ring-slate-100">
+          <p className="lx-empty py-6 text-sm text-slate-500">
             No upcoming jobs.
           </p>
         ) : (
@@ -325,7 +321,7 @@ export default function ProviderTodayPage() {
               <li key={job.id}>
                 <Link
                   to={providerScheduleDetail(orgSlug, 'booking', job.id)}
-                  className="block overflow-hidden rounded-xl bg-white ring-1 ring-slate-100 transition hover:ring-violet-200 hover:shadow-sm"
+                  className="lx-card-interactive block overflow-hidden p-0 hover:ring-violet-100/80"
                 >
                   <div className={`h-1 bg-gradient-to-r ${jobAccent(job.status)}`} />
                   <div className="flex gap-3 p-3">
@@ -373,7 +369,7 @@ export default function ProviderTodayPage() {
             <Link
               key={item.label}
               to={item.to}
-              className="flex min-h-[64px] items-center justify-center rounded-xl bg-white px-3 text-center text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-200"
+              className="lx-card-interactive flex min-h-[64px] items-center justify-center px-3 text-center text-sm font-medium text-slate-700 hover:ring-violet-100/80"
             >
               {item.label}
             </Link>

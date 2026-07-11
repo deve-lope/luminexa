@@ -25,7 +25,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
+    <div className="lx-auth-page items-center py-12">
+      <div className="lx-auth-card w-full max-w-md">
       <BackButton fallback="/login" className="mb-6 text-sm text-luminexa-mist" />
       <h1 className="text-2xl font-bold text-white">Reset password</h1>
       <p className="mt-2 text-luminexa-mist">
@@ -53,7 +54,7 @@ export default function ForgotPasswordPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+          className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
         >
           {submitting ? 'Sending…' : 'Send reset link'}
         </button>
@@ -63,6 +64,7 @@ export default function ForgotPasswordPage() {
           Back to sign in
         </Link>
       </p>
+      </div>
     </div>
   );
 }

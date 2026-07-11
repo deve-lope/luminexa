@@ -10,8 +10,9 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 
+from .country_detection import countries_match, country_to_nominatim_code
 from .models import PostalGeocode
-from .postal import normalize_postal_code
+from .postal import is_canadian_postal, normalize_postal_code
 
 _USER_AGENT = getattr(
     settings,
@@ -20,6 +21,8 @@ _USER_AGENT = getattr(
 )
 _NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 _NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse'
+_PHOTON_URL = 'https://photon.komoot.io/api/'
+_PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse'
 _ZIPPOPOTAM_URL = 'https://api.zippopotam.us'
 _GEOCODER_CA_URL = 'https://geocoder.ca/'
 
@@ -155,9 +158,11 @@ def guess_country(postal: str, state: str = '') -> str:
     p = normalize_postal_code(postal)
     if p and re.match(r'^[A-Z]\d[A-Z]', p):
         return 'Canada'
-    if p and re.match(r'^\d{6}$', p):
-        return 'India'
-    return 'United States'
+    if p and re.match(r'^\d{5}$', p):
+        return 'United States'
+    if p and re.match(r'^\d{8}$', p):
+        return 'Brazil'
+    return 'Canada'
 
 
 def _build_query(postal: str, city: str, state: str, country: str) -> str:
@@ -171,15 +176,7 @@ def _build_query(postal: str, city: str, state: str, country: str) -> str:
 
 
 def _postal_for_zippopotam(postal_norm: str, country: str) -> tuple[str, str] | None:
-    country_name = (country or '').strip().lower()
-    country_codes = {
-        'canada': 'ca',
-        'united states': 'us',
-        'usa': 'us',
-        'us': 'us',
-        'india': 'in',
-    }
-    code = country_codes.get(country_name)
+    code = country_to_nominatim_code(country)
     if not code:
         return None
     postal_value = postal_norm
@@ -246,24 +243,373 @@ def _geocoder_ca_lookup(postal_norm: str) -> dict | None:
     }
 
 
+def format_postal_display(code: str) -> str:
+    norm = normalize_postal_code(code)
+    if not norm:
+        return ''
+    if is_canadian_postal(norm) and len(norm) == 6:
+        return f'{norm[:3]} {norm[3:]}'
+    if norm.isdigit() and len(norm) == 9:
+        return f'{norm[:5]}-{norm[5:]}'
+    return norm
+
+
+def build_display_name(
+    *,
+    street: str = '',
+    city: str = '',
+    state: str = '',
+    postal_code: str = '',
+    country: str = '',
+) -> str:
+    parts: list[str] = []
+    street_line = (street or '').strip()
+    if street_line:
+        parts.append(street_line)
+    for value in (city, state):
+        text = (value or '').strip()
+        if text and text not in parts:
+            parts.append(text)
+    postal_display = format_postal_display(postal_code)
+    if postal_display:
+        parts.append(postal_display)
+    country_text = (country or '').strip()
+    if country_text and country_text not in parts:
+        parts.append(country_text)
+    return ', '.join(parts)
+
+
+def _finalize_location_payload(payload: dict) -> dict:
+    """Rebuild display_name from structured fields so postal codes stay consistent."""
+    street = payload.get('street') or ''
+    if not street and payload.get('display_name'):
+        # Keep photon/nominatim street in display_name only when we have no structured street.
+        display = (payload.get('display_name') or '').strip()
+    else:
+        display = build_display_name(
+            street=street,
+            city=payload.get('city') or '',
+            state=payload.get('state') or '',
+            postal_code=payload.get('postal_code') or '',
+            country=payload.get('country') or '',
+        )
+        if not display:
+            display = (payload.get('display_name') or '').strip()
+    out = {**payload, 'display_name': display}
+    out.pop('street', None)
+    out.pop('source', None)
+    return out
+
+
+def _result_coord_key(payload: dict) -> str:
+    try:
+        lat = round(float(payload['latitude']), 4)
+        lng = round(float(payload['longitude']), 4)
+    except (KeyError, TypeError, ValueError):
+        return (payload.get('display_name') or '').strip().lower()
+    return f'{lat},{lng}'
+
+
+def _merge_location_results(*groups: list[dict], limit: int = 5) -> list[dict]:
+    """Merge provider results; prefer geocoder.ca and rows with a postal code."""
+    source_rank = {
+        'geocoder.ca': 0,
+        'geocoder.ca_reverse': 1,
+        'nominatim': 2,
+        'photon': 3,
+    }
+
+    merged: dict[str, dict] = {}
+    for group in groups:
+        for item in group or []:
+            if not item.get('display_name') and not item.get('city'):
+                continue
+            key = _result_coord_key(item)
+            rank = source_rank.get(item.get('source', ''), 5)
+            has_postal = bool((item.get('postal_code') or '').strip())
+            existing = merged.get(key)
+            if not existing:
+                merged[key] = item
+                continue
+            existing_rank = source_rank.get(existing.get('source', ''), 5)
+            existing_postal = bool((existing.get('postal_code') or '').strip())
+            if rank < existing_rank or (rank == existing_rank and has_postal and not existing_postal):
+                merged[key] = item
+
+    ordered = sorted(
+        merged.values(),
+        key=lambda row: (
+            source_rank.get(row.get('source', ''), 5),
+            0 if (row.get('postal_code') or '').strip() else 1,
+            row.get('display_name') or '',
+        ),
+    )
+    return ordered[:limit]
+
+
+def _parse_geocoder_ca_standard(item: dict) -> dict | None:
+    standard = item.get('standard') or {}
+    stnumber = standard.get('stnumber')
+    if isinstance(stnumber, dict) or stnumber in (None, ''):
+        stnumber_str = ''
+    else:
+        stnumber_str = str(stnumber).strip()
+    street = (standard.get('staddress') or '').strip()
+    street_line = ' '.join(p for p in (stnumber_str, street) if p).strip()
+    city = (standard.get('city') or '').strip()
+    prov_code = (standard.get('prov') or '').upper()
+    province = _CA_PROVINCES.get(prov_code, prov_code)
+    postal = normalize_postal_code(item.get('postal') or standard.get('postal') or '')
+    lat = item.get('latt')
+    lng = item.get('longt')
+    country = 'Canada'
+    if prov_code in {
+        'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA',
+        'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+        'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT',
+        'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+    }:
+        country = 'United States'
+    display_name = build_display_name(
+        street=street_line,
+        city=city,
+        state=province,
+        postal_code=postal,
+        country=country,
+    )
+    if not display_name:
+        return None
+    try:
+        latitude = float(lat) if lat not in (None, '') else None
+        longitude = float(lng) if lng not in (None, '') else None
+    except (TypeError, ValueError):
+        latitude = None
+        longitude = None
+    return {
+        'display_name': display_name,
+        'latitude': latitude,
+        'longitude': longitude,
+        'city': city,
+        'state': province,
+        'postal_code': postal,
+        'country': country,
+        'street': street_line,
+        'source': 'geocoder.ca',
+    }
+
+
+def _geocoder_ca_reverse(lat: float, lng: float, *, allna: bool = False) -> dict | None:
+    params = {
+        'latt': f'{lat:.6f}',
+        'longt': f'{lng:.6f}',
+        'reverse': 1,
+        'json': 1,
+    }
+    if allna:
+        params['allna'] = 1
+    url = f'{_GEOCODER_CA_URL}?{urlencode(params)}'
+    req = Request(url, headers={'User-Agent': _USER_AGENT})
+    try:
+        with urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+    except (URLError, TimeoutError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return None
+    items = data if isinstance(data, list) else [data]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        parsed = _parse_geocoder_ca_standard(item)
+        if parsed and parsed.get('latitude') is not None:
+            parsed['source'] = 'geocoder.ca_reverse'
+            return parsed
+    return None
+
+
+def _enrich_search_results(results: list[dict], *, country: str) -> list[dict]:
+    """Fill missing or low-quality postcodes using geocoder.ca reverse lookup."""
+    na_country = country and countries_match(country, 'Canada') or countries_match(country, 'United States')
+    enriched: list[dict] = []
+    for row in results:
+        lat = row.get('latitude')
+        lng = row.get('longitude')
+        needs_postal = not (row.get('postal_code') or '').strip()
+        if lat is not None and lng is not None and (needs_postal or na_country):
+            reverse = _geocoder_ca_reverse(float(lat), float(lng), allna=countries_match(country, 'United States'))
+            if reverse:
+                row = {
+                    **row,
+                    'postal_code': reverse.get('postal_code') or row.get('postal_code') or '',
+                    'city': row.get('city') or reverse.get('city') or '',
+                    'state': row.get('state') or reverse.get('state') or '',
+                    'country': row.get('country') or reverse.get('country') or country,
+                    'street': row.get('street') or reverse.get('street') or '',
+                }
+                if reverse.get('source') == 'geocoder.ca_reverse' and reverse.get('street'):
+                    row['street'] = reverse['street']
+        enriched.append(_finalize_location_payload(row))
+    return enriched
+
+
 def _address_payload(result: dict) -> dict:
     address = result.get('address') or {}
+    street_line = ' '.join(
+        p for p in (address.get('house_number'), address.get('road') or address.get('street')) if p
+    ).strip()
+    city = (
+        address.get('city')
+        or address.get('town')
+        or address.get('village')
+        or address.get('municipality')
+        or address.get('county')
+        or ''
+    )
+    state = address.get('state') or address.get('province') or address.get('region') or ''
+    postal_code = normalize_postal_code(address.get('postcode') or '')
+    country = address.get('country') or ''
     return {
-        'display_name': result.get('display_name') or '',
+        'display_name': build_display_name(
+            street=street_line,
+            city=city,
+            state=state,
+            postal_code=postal_code,
+            country=country,
+        ) or (result.get('display_name') or ''),
         'latitude': float(result.get('lat')),
         'longitude': float(result.get('lon')),
-        'city': (
-            address.get('city')
-            or address.get('town')
-            or address.get('village')
-            or address.get('municipality')
-            or address.get('county')
-            or ''
-        ),
-        'state': address.get('state') or address.get('province') or address.get('region') or '',
-        'postal_code': normalize_postal_code(address.get('postcode') or ''),
-        'country': address.get('country') or '',
+        'city': city,
+        'state': state,
+        'postal_code': postal_code,
+        'country': country,
+        'street': street_line,
+        'source': 'nominatim',
     }
+
+
+def _photon_payload(feature: dict) -> dict | None:
+    props = feature.get('properties') or {}
+    coords = (feature.get('geometry') or {}).get('coordinates') or []
+    if len(coords) < 2:
+        return None
+    lon, lat = coords[0], coords[1]
+    street_line = ' '.join(
+        p for p in (props.get('housenumber'), props.get('street')) if p
+    ).strip()
+    city = props.get('city') or props.get('locality') or props.get('district') or ''
+    state = props.get('state') or ''
+    postal_code = normalize_postal_code(props.get('postcode') or '')
+    country = props.get('country') or ''
+    return {
+        'display_name': build_display_name(
+            street=street_line,
+            city=city,
+            state=state,
+            postal_code=postal_code,
+            country=country,
+        ),
+        'latitude': float(lat),
+        'longitude': float(lon),
+        'city': city,
+        'state': state,
+        'postal_code': postal_code,
+        'country': country,
+        'street': street_line,
+        'source': 'photon',
+    }
+
+
+def _photon_search(q: str, *, limit: int, country: str) -> list[dict]:
+    queries = [q]
+    if country and country.lower() not in q.lower():
+        queries.append(f'{q}, {country}')
+
+    for query_text in queries:
+        results = _photon_search_request(query_text, limit=limit, country=country)
+        if results:
+            return results
+    return []
+
+
+def _photon_search_request(q: str, *, limit: int, country: str) -> list[dict]:
+    params = [
+        ('q', q),
+        ('limit', str(max(1, min(limit, 8)))),
+        ('lang', 'en'),
+        ('layer', 'house'),
+        ('layer', 'street'),
+        ('layer', 'locality'),
+    ]
+    url = f'{_PHOTON_URL}?{urlencode(params)}'
+    req = Request(url, headers={'User-Agent': _USER_AGENT})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except (URLError, TimeoutError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return []
+
+    results: list[dict] = []
+    for feature in data.get('features') or []:
+        try:
+            payload = _photon_payload(feature)
+            if not payload or not payload.get('display_name'):
+                continue
+            if country and not countries_match(payload.get('country', ''), country):
+                continue
+            results.append(payload)
+        except (TypeError, ValueError):
+            continue
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _geocoder_ca_address_search(q: str, *, limit: int) -> list[dict]:
+    url = f'{_GEOCODER_CA_URL}?{urlencode({"locate": q, "json": 1})}'
+    req = Request(url, headers={'User-Agent': _USER_AGENT})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except (URLError, TimeoutError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return []
+
+    # geocoder.ca returns one object or a list depending on matches.
+    items = data if isinstance(data, list) else [data]
+    results: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        standard = item.get('standard') or {}
+        stnumber = standard.get('stnumber')
+        if isinstance(stnumber, dict) or stnumber in (None, ''):
+            stnumber_str = ''
+        else:
+            stnumber_str = str(stnumber).strip()
+        street = (standard.get('staddress') or '').strip()
+        street_line = ' '.join(p for p in (stnumber_str, street) if p).strip()
+        city = (standard.get('city') or '').strip()
+        prov_code = (standard.get('prov') or '').upper()
+        province = _CA_PROVINCES.get(prov_code, prov_code)
+        postal = normalize_postal_code(item.get('postal') or '')
+        lat = item.get('latt')
+        lng = item.get('longt')
+        parts = [p for p in (street_line, city, province, postal, 'Canada') if p]
+        display_name = ', '.join(parts)
+        if not display_name:
+            continue
+        try:
+            results.append({
+                'display_name': display_name,
+                'latitude': float(lat) if lat not in (None, '') else None,
+                'longitude': float(lng) if lng not in (None, '') else None,
+                'city': city,
+                'state': province,
+                'postal_code': postal,
+                'country': 'Canada',
+            })
+        except (TypeError, ValueError):
+            continue
+        if len(results) >= limit:
+            break
+    return results
 
 
 def _nominatim_lookup(query: str) -> dict | None:
@@ -280,18 +626,24 @@ def _nominatim_lookup(query: str) -> dict | None:
     return data[0]
 
 
-def search_locations(query: str, *, limit: int = 5) -> list[dict]:
-    """Return address search results from Nominatim for map selection."""
-    q = (query or '').strip()
-    if len(q) < 3:
-        return []
-    params = urlencode({
+def _min_search_length(q: str) -> int:
+    return 1 if q.isdigit() else 2
+
+
+def _nominatim_search(q: str, *, limit: int, country: str) -> list[dict]:
+    nominatim_limit = max(1, min(limit, 8))
+    if country:
+        nominatim_limit = min(nominatim_limit * 2, 12)
+    params: dict[str, str | int] = {
         'q': q,
         'format': 'json',
         'addressdetails': 1,
-        'limit': max(1, min(limit, 8)),
-    })
-    url = f'{_NOMINATIM_URL}?{params}'
+        'limit': nominatim_limit,
+    }
+    country_code = country_to_nominatim_code(country)
+    if country_code:
+        params['countrycodes'] = country_code
+    url = f'{_NOMINATIM_URL}?{urlencode(params)}'
     req = Request(url, headers={'User-Agent': _USER_AGENT})
     try:
         with urlopen(req, timeout=12) as resp:
@@ -301,14 +653,82 @@ def search_locations(query: str, *, limit: int = 5) -> list[dict]:
     results = []
     for result in data or []:
         try:
-            results.append(_address_payload(result))
+            payload = _address_payload(result)
+            if country and not countries_match(payload.get('country', ''), country):
+                continue
+            results.append(payload)
         except (TypeError, ValueError):
             continue
+        if len(results) >= limit:
+            break
     return results
+
+
+def _search_fallback_queries(q: str) -> list[str]:
+    """Extra queries when the exact string returns nothing (typos / partial words)."""
+    fallbacks: list[str] = []
+    if ' ' in q:
+        first_word = q.split()[0]
+        if first_word and first_word != q and len(first_word) >= _min_search_length(first_word):
+            fallbacks.append(first_word)
+    elif len(q) >= 5:
+        for trim in range(1, min(4, len(q) - 2)):
+            shorter = q[:-trim].rstrip()
+            if len(shorter) >= 3 and shorter not in fallbacks:
+                fallbacks.append(shorter)
+    return fallbacks
+
+
+def search_locations(query: str, *, limit: int = 5, country: str = '') -> list[dict]:
+    """Return address search results for map / booking location pickers."""
+    q = (query or '').strip()
+    if len(q) < _min_search_length(q):
+        return []
+
+    # Photon first — Nominatim public API is heavily rate-limited (HTTP 429).
+    results = _photon_search(q, limit=limit, country=country)
+    if results:
+        return results
+
+    if country and countries_match(country, 'Canada'):
+        results = _geocoder_ca_address_search(q, limit=limit)
+        if results:
+            return results
+
+    results = _nominatim_search(q, limit=limit, country=country)
+    if results:
+        return results
+
+    for alt in _search_fallback_queries(q):
+        results = _photon_search(alt, limit=limit, country=country)
+        if results:
+            return results
+        results = _nominatim_search(alt, limit=limit, country=country)
+        if results:
+            return results
+    return []
+
+
+def _photon_reverse(lat: float, lng: float) -> dict | None:
+    url = f'{_PHOTON_REVERSE_URL}?{urlencode({"lat": lat, "lon": lng})}'
+    req = Request(url, headers={'User-Agent': _USER_AGENT})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except (URLError, TimeoutError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return None
+    features = data.get('features') or []
+    if not features:
+        return None
+    return _photon_payload(features[0])
 
 
 def reverse_geocode(lat: float, lng: float) -> dict | None:
     """Return an address-like payload for latitude/longitude."""
+    result = _photon_reverse(lat, lng)
+    if result and result.get('display_name'):
+        return result
+
     params = urlencode({
         'lat': lat,
         'lon': lng,

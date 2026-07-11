@@ -1,97 +1,339 @@
-import React, { useState } from 'react';
-import AddressSearchField from '../location/AddressSearchField';
-import MapLocationPicker from './MapLocationPicker';
-import useCurrentLocation from '../../hooks/useCurrentLocation';
-import useGeolocationPermission from '../../hooks/useGeolocationPermission';
-import { canUseBrowserGeolocation, geolocationPermissionHint, geolocationUnavailableReason } from '../../utils/geolocationSupport';
+import React, { useEffect, useRef, useState } from 'react';
+import AddressCountrySelect from '../location/AddressCountrySelect';
+import RegionSelect from '../location/RegionSelect';
+import useAddressCountry from '../../hooks/useAddressCountry';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  normalizeAddressCountry,
+  postalLabelForCountry,
+  stateLabelForCountry,
+} from '../../constants/addressCountries';
+import { validateProvince } from '../../constants/regions';
+import {
+  formatPostalLabel,
+  normalizePostalInput,
+  validatePostalCode,
+} from '../../utils/postalInput';
+
+const FIELD_ORDER = ['country', 'province', 'city', 'address1', 'address2', 'postalCode'];
+
+const FIELD_LABELS = {
+  country: 'Country',
+  province: 'Province',
+  city: 'City',
+  address1: 'Address 1',
+  address2: 'Address 2',
+  postalCode: 'Postal code',
+};
+
+const LABEL_TO_FIELD = Object.fromEntries(
+  Object.entries(FIELD_LABELS).map(([key, label]) => [label.toLowerCase(), key])
+);
+
+const EMPTY_FIELDS = {
+  country: '',
+  province: '',
+  city: '',
+  address1: '',
+  address2: '',
+  postalCode: '',
+};
+
+function isCountryToken(part) {
+  return Boolean(normalizeAddressCountry(part));
+}
+
+function parseLegacyCommaAddress(value) {
+  const parts = String(value || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const result = { ...EMPTY_FIELDS };
+  if (!parts.length) return result;
+
+  let index = 0;
+  if (isCountryToken(parts[0])) {
+    result.country = normalizeAddressCountry(parts[0]);
+    index = 1;
+  }
+
+  const tailKeys = FIELD_ORDER.slice(1);
+  for (let i = 0; i < tailKeys.length && index + i < parts.length; i += 1) {
+    result[tailKeys[i]] = parts[index + i];
+  }
+  return result;
+}
+
+export function parseServiceAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return { ...EMPTY_FIELDS };
+
+  if (/^country:/im.test(raw)) {
+    const result = { ...EMPTY_FIELDS };
+    raw.split('\n').forEach((line) => {
+      const match = /^([^:]+):\s*(.*)$/.exec(line.trim());
+      if (!match) return;
+      const field = LABEL_TO_FIELD[match[1].trim().toLowerCase()];
+      if (field) result[field] = match[2].trim();
+    });
+    if (result.country) {
+      result.country = normalizeAddressCountry(result.country) || result.country;
+    }
+    return result;
+  }
+
+  return parseLegacyCommaAddress(raw);
+}
+
+export function formatServiceAddress(fields) {
+  return FIELD_ORDER.filter((key) => String(fields[key] || '').trim())
+    .map((key) => `${FIELD_LABELS[key]}: ${String(fields[key]).trim()}`)
+    .join('\n');
+}
+
+/** Human-readable lines for profile / booking summaries. */
+export function formatServiceAddressDisplay(value) {
+  const fields = parseServiceAddress(value);
+  const lines = [];
+  if (fields.address1) lines.push(fields.address1);
+  if (fields.address2) lines.push(fields.address2);
+  const cityLine = [fields.city, fields.province, fields.postalCode].filter(Boolean).join(', ');
+  if (cityLine) lines.push(cityLine);
+  if (fields.country) lines.push(fields.country);
+  const formatted = lines.join('\n');
+  return formatted || String(value || '').trim();
+}
+
+export function hasValidSavedServiceAddress(user) {
+  const raw = (user?.default_service_address || '').trim();
+  if (!raw) return false;
+  return validateServiceLocationValue(raw).valid;
+}
+
+export function validateServiceLocationValue(value) {
+  const fields = parseServiceAddress(value);
+  const hasLocation =
+    fields.address1.trim() ||
+    fields.city.trim() ||
+    fields.province.trim() ||
+    fields.postalCode.trim();
+
+  if (!hasLocation) {
+    return { valid: false, error: 'Please enter the service location.' };
+  }
+
+  if (!fields.address1.trim()) {
+    return { valid: false, error: 'Please enter address line 1.' };
+  }
+
+  if (!fields.city.trim()) {
+    return { valid: false, error: 'Please enter the city.' };
+  }
+
+  const provinceCheck = validateProvince(fields.province, { country: fields.country });
+  if (!provinceCheck.valid) {
+    return provinceCheck;
+  }
+
+  const postalCheck = validatePostalCode(fields.postalCode, {
+    country: fields.country,
+    mode: 'complete',
+  });
+  if (!postalCheck.valid) {
+    return postalCheck;
+  }
+
+  return {
+    valid: true,
+    error: null,
+    fields: {
+      ...fields,
+      province: provinceCheck.normalized,
+      postalCode: postalCheck.normalized,
+    },
+    normalizedPostal: postalCheck.normalized,
+    normalizedProvince: provinceCheck.normalized,
+  };
+}
 
 /**
- * Service location with search, optional GPS, map picker, and address field.
+ * Service location: manual address fields only.
  */
 export default function ServiceLocationInput({
   value,
   onChange,
   label = 'Service location',
   required = false,
-  hint = 'Street, city, postcode — where should they come?',
+  hint = 'Enter the service address below.',
   id = 'service-address',
+  country: countryProp,
+  onCountryChange,
+  onValidityChange,
 }) {
-  const [mapOpen, setMapOpen] = useState(false);
-  const gpsAvailable = canUseBrowserGeolocation();
-  const gpsBlockedReason = geolocationUnavailableReason();
-  const permission = useGeolocationPermission();
-  const permissionHint = geolocationPermissionHint(permission);
-  const { locating, error: locError, setError: setLocError, fetchCurrentLocation } =
-    useCurrentLocation();
-
-  const handleUseCurrentLocation = async () => {
-    setLocError(null);
-    const result = await fetchCurrentLocation();
-    if (result?.address) {
-      onChange(result.address);
+  const { user } = useAuth();
+  const { country: profileCountry, setCountry, loading: countryLoading } = useAddressCountry({
+    initialCountry: countryProp || user?.address_country,
+  });
+  const lastEmittedRef = useRef(value || '');
+  const [postalTouched, setPostalTouched] = useState(false);
+  const [fields, setFields] = useState(() => {
+    const parsed = parseServiceAddress(value);
+    if (!parsed.country && profileCountry) {
+      parsed.country = profileCountry;
     }
+    return parsed;
+  });
+
+  useEffect(() => {
+    const nextValue = value || '';
+    if (nextValue === lastEmittedRef.current) return;
+
+    const parsed = parseServiceAddress(nextValue);
+    if (!parsed.country && profileCountry) {
+      parsed.country = profileCountry;
+    }
+    lastEmittedRef.current = nextValue;
+    setFields(parsed);
+  }, [value, profileCountry]);
+
+  const updateFields = (patch) => {
+    setFields((prev) => {
+      const next = { ...prev, ...patch };
+      const formatted = formatServiceAddress(next);
+      lastEmittedRef.current = formatted;
+      onChange(formatted);
+      return next;
+    });
   };
 
+  const handleCountryChange = (nextCountry) => {
+    const normalized = normalizeAddressCountry(nextCountry) || nextCountry;
+    setCountry(normalized);
+    onCountryChange?.(normalized);
+    const provinceStillValid = validateProvince(fields.province, { country: normalized }).valid;
+    updateFields({
+      country: normalized,
+      province: provinceStillValid ? fields.province : '',
+    });
+  };
+
+  const activeCountry = fields.country || profileCountry;
+  const provinceLabel = stateLabelForCountry(activeCountry);
+  const postalLabel = postalLabelForCountry(activeCountry);
+  const postalCheck = validatePostalCode(fields.postalCode, {
+    country: activeCountry,
+    mode: 'complete',
+  });
+  const showPostalError = postalTouched && !postalCheck.valid;
+
+  useEffect(() => {
+    onValidityChange?.(postalCheck.valid);
+  }, [postalCheck.valid, onValidityChange]);
+
+  const inputClassName =
+    'w-full min-h-[48px] rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent';
+  const invalidInputClassName =
+    'w-full min-h-[48px] rounded-xl border border-red-300 px-3 text-sm outline-none focus:border-red-500 focus:ring-1 focus:ring-red-200';
+
   return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-slate-700">
+    <div className="space-y-3">
+      <p className="block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="text-red-600"> *</span>}
-      </label>
+      </p>
 
-      <AddressSearchField
-        id={`${id}-search`}
-        label="Search your address"
-        placeholder="Start typing your street or area…"
-        onSelect={(item) => onChange(item.address || value)}
-        className="mb-3"
+      <AddressCountrySelect
+        id={`${id}-country`}
+        value={fields.country || profileCountry}
+        disabled={countryLoading && !fields.country && !profileCountry}
+        onChange={handleCountryChange}
+        hint=""
       />
 
-      <div className="mb-2 flex flex-col gap-2 sm:flex-row">
-        {gpsAvailable ? (
-          <button
-            type="button"
-            onClick={handleUseCurrentLocation}
-            disabled={locating}
-            className="min-h-[44px] flex-1 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-medium text-luminexa-accent disabled:opacity-60"
-          >
-            {locating ? 'Getting your location…' : 'Use my current location'}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setMapOpen(true)}
-          className={`min-h-[44px] rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 ${
-            gpsAvailable ? 'flex-1' : 'w-full'
-          }`}
-        >
-          Pick on map
-        </button>
+      <div>
+        <label htmlFor={`${id}-province`} className="mb-1 block text-sm font-medium text-slate-700">
+          {provinceLabel}
+        </label>
+        <RegionSelect
+          id={`${id}-province`}
+          value={fields.province}
+          onChange={(nextProvince) => updateFields({ province: nextProvince })}
+          country={activeCountry}
+          label={provinceLabel}
+          selectClassName={inputClassName}
+          inputClassName={inputClassName}
+        />
       </div>
-      {!gpsAvailable && gpsBlockedReason && (
-        <p className="mb-2 text-xs text-slate-500">{gpsBlockedReason}</p>
-      )}
-      {gpsAvailable && permissionHint && !locError && (
-        <p className="mb-2 text-xs text-slate-500">{permissionHint}</p>
-      )}
-      {locError && gpsAvailable && <p className="mb-2 text-xs text-amber-700">{locError}</p>}
-      <textarea
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={hint}
-        rows={2}
-        required={required}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-      />
-      <MapLocationPicker
-        open={mapOpen}
-        onClose={() => setMapOpen(false)}
-        onSelect={({ address }) => {
-          onChange(address);
-          setMapOpen(false);
-        }}
-      />
+
+      <div>
+        <label htmlFor={`${id}-city`} className="mb-1 block text-sm font-medium text-slate-700">
+          City
+        </label>
+        <input
+          id={`${id}-city`}
+          type="text"
+          autoComplete="address-level2"
+          value={fields.city}
+          onChange={(e) => updateFields({ city: e.target.value })}
+          placeholder="City"
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={`${id}-address1`} className="mb-1 block text-sm font-medium text-slate-700">
+          Address 1
+        </label>
+        <input
+          id={`${id}-address1`}
+          type="text"
+          autoComplete="address-line1"
+          value={fields.address1}
+          onChange={(e) => updateFields({ address1: e.target.value })}
+          placeholder="Street address"
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={`${id}-address2`} className="mb-1 block text-sm font-medium text-slate-700">
+          Address 2
+        </label>
+        <input
+          id={`${id}-address2`}
+          type="text"
+          autoComplete="address-line2"
+          value={fields.address2}
+          onChange={(e) => updateFields({ address2: e.target.value })}
+          placeholder="Apartment, suite, unit"
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={`${id}-postal`} className="mb-1 block text-sm font-medium text-slate-700">
+          {postalLabel}
+        </label>
+        <input
+          id={`${id}-postal`}
+          type="text"
+          autoComplete="postal-code"
+          value={formatPostalLabel(fields.postalCode)}
+          onChange={(e) =>
+            updateFields({ postalCode: normalizePostalInput(e.target.value) })
+          }
+          onBlur={() => setPostalTouched(true)}
+          placeholder={postalLabel}
+          aria-invalid={showPostalError}
+          className={showPostalError ? invalidInputClassName : inputClassName}
+        />
+        {showPostalError && (
+          <p className="mt-1 text-xs text-red-600">{postalCheck.error}</p>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-500">{hint}</p>
     </div>
   );
 }

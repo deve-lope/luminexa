@@ -12,6 +12,7 @@ urlpatterns = [
     path('location-options/', api_views.location_options_api, name='location-options'),
     path('postal-lookup/', api_views.postal_lookup_api, name='postal-lookup'),
     path('reverse-geocode/', api_views.reverse_geocode_api, name='reverse-geocode'),
+    path('detect-country/', api_views.detect_country_api, name='detect-country'),
     path('map-search/', api_views.map_search_api, name='map-search'),
     path('me/memberships/', api_views.my_memberships_api, name='my-memberships'),
     path('business-types/', api_views.business_types_list_api, name='business-types-list'),

@@ -9,6 +9,7 @@ import {
   TIMELINE_LABELS,
 } from '../../utils/dayTimeline';
 import { formatTime } from '../../utils/datetime';
+import { slotLocalDayKey } from '../../utils/slotCalendar';
 
 function segmentDetailPath(seg, orgSlug) {
   if (!orgSlug) return null;
@@ -272,10 +273,10 @@ export default function DayTimelineBar({
         </form>
       )}
 
-      {unavailable?.filter((u) => u.start_at.startsWith(dayKey)).length > 0 && (
+      {unavailable?.filter((u) => slotLocalDayKey(u.start_at) === dayKey).length > 0 && (
         <ul className="space-y-1 text-sm text-slate-600">
           {unavailable
-            .filter((u) => u.start_at.startsWith(dayKey))
+            .filter((u) => slotLocalDayKey(u.start_at) === dayKey)
             .map((u) => (
               <li key={u.id} className="flex items-center justify-between gap-2">
                 <button

@@ -11,6 +11,7 @@ import {
   canCancelBooking,
   canRescheduleBooking,
   isUpcomingBooking,
+  isUntouchedBookingRequest,
 } from '../../utils/customerBookings';
 import { customerFind, customerHistory } from '../../utils/customerPaths';
 
@@ -55,11 +56,11 @@ export default function CustomerBookingsPage() {
       <BookingsSubNav />
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {upcoming.length === 0 ? (
-        <div className="rounded-xl bg-white p-6 text-center shadow-sm">
+        <div className="lx-empty">
           <p className="text-slate-600">No upcoming appointments.</p>
           <Link
             to={customerFind()}
-            className="mt-4 inline-flex min-h-[48px] items-center rounded-xl bg-luminexa-accent px-6 font-medium text-white"
+            className="lx-btn-primary mt-4 inline-flex min-h-[48px] items-center px-6"
           >
             Find a service
           </Link>
@@ -91,9 +92,17 @@ export default function CustomerBookingsPage() {
       <RescheduleBookingModal
         open={!!rescheduleBooking}
         booking={rescheduleBooking}
+        audience="customer"
         onClose={() => setRescheduleBooking(null)}
-        onRescheduled={() => {
-          showToast('Appointment rescheduled.', 'success');
+        onRescheduled={(updated) => {
+          const pending = isUntouchedBookingRequest(updated) || updated?.status === 'requested';
+          showToast(
+            pending
+              ? 'New time submitted. Still waiting for the business to approve.'
+              : 'Reschedule request sent. The business will confirm your new time.',
+            'success',
+          );
+          setRescheduleBooking(null);
           load();
         }}
       />
