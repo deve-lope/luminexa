@@ -29,6 +29,12 @@ from .ratings import aggregate_service_ratings
 
 class InvoiceSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
+    provider_name = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    service_name = serializers.SerializerMethodField()
+    booking_reference = serializers.SerializerMethodField()
+    discount = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -38,11 +44,41 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'subtotal', 'amount', 'tax_total', 'tax_lines',
             'tax_country', 'tax_region',
             'description', 'notes', 'issued_at', 'paid_at', 'download_url',
+            'provider_name', 'customer_name', 'customer_email',
+            'service_name', 'booking_reference', 'discount',
         )
         read_only_fields = fields
 
     def get_download_url(self, obj):
         return f'/api/v1/bookings/{obj.booking_id}/invoice/download/'
+
+    def get_provider_name(self, obj):
+        return obj.booking.organization.name if obj.booking_id else ''
+
+    def get_customer_name(self, obj):
+        if not obj.booking_id:
+            return ''
+        customer = obj.booking.customer
+        return customer.full_name or customer.email or ''
+
+    def get_customer_email(self, obj):
+        if not obj.booking_id:
+            return ''
+        return obj.booking.customer.email or ''
+
+    def get_service_name(self, obj):
+        if obj.description:
+            return obj.description
+        if obj.booking_id and obj.booking.service_id:
+            return obj.booking.service.name
+        return 'Service'
+
+    def get_booking_reference(self, obj):
+        return f'BK-{obj.booking_id:05d}' if obj.booking_id else ''
+
+    def get_discount(self, obj):
+        # Reserved for future discount support; always expose for invoice UI.
+        return '0.00'
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -215,6 +251,7 @@ class ProviderServiceRequestListSerializer(serializers.Serializer):
     message_count = serializers.IntegerField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+    invoice = InvoiceSerializer(allow_null=True, required=False)
 
 
 class ServiceCategorySerializer(serializers.ModelSerializer):

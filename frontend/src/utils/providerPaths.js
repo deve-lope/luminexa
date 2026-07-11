@@ -44,6 +44,10 @@ export function providerAbout(orgSlug) {
   return `/provider/${orgSlug}/about`;
 }
 
+export function providerAnalytics(orgSlug) {
+  return `/provider/${orgSlug}/analytics`;
+}
+
 export function providerTasks(orgSlug, filter) {
   const base = `/provider/${orgSlug}/tasks`;
   if (filter === 'open' || filter === 'done' || filter === 'all') {

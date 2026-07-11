@@ -151,7 +151,7 @@ function SiteHeader() {
   );
 }
 
-function Hero() {
+function Hero({ embedded = false, findPath = '/services' }) {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -162,7 +162,12 @@ function Hero() {
   const opacity = useTransform(scrollYProgress, [0, 0.75], [1, 0.35]);
 
   return (
-    <section ref={ref} className="relative min-h-[100svh] overflow-hidden bg-teal-950 text-white">
+    <section
+      ref={ref}
+      className={`relative overflow-hidden bg-teal-950 text-white ${
+        embedded ? 'min-h-[70svh] rounded-3xl' : 'min-h-[100svh]'
+      }`}
+    >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
           src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
@@ -175,7 +180,9 @@ function Hero() {
 
       <motion.div
         style={{ y: contentY, opacity }}
-        className="relative z-10 mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-end px-4 pb-16 pt-28 md:px-8 md:pb-24"
+        className={`relative z-10 mx-auto flex max-w-6xl flex-col justify-end px-4 pb-12 md:px-8 md:pb-16 ${
+          embedded ? 'min-h-[70svh] pt-16' : 'min-h-[100svh] pt-28 pb-16 md:pb-24'
+        }`}
       >
         <motion.p
           initial={{ opacity: 0, y: 16 }}
@@ -209,7 +216,7 @@ function Hero() {
           className="mt-8 flex flex-col gap-3 sm:flex-row"
         >
           <Link
-            to="/services"
+            to={findPath}
             className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 shadow-xl shadow-teal-950/30 transition hover:bg-teal-300"
           >
             Find help near you
@@ -226,7 +233,7 @@ function Hero() {
   );
 }
 
-function NeedPrompts() {
+function NeedPrompts({ findPath = '/services' }) {
   return (
     <section id="needs" className="bg-luminexa-canvas py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-4 md:px-8">
@@ -253,7 +260,7 @@ function NeedPrompts() {
           {NEED_PROMPTS.map((item) => (
             <motion.li key={item.q} variants={staggerChild}>
               <Link
-                to="/services"
+                to={findPath}
                 className="group flex flex-col gap-2 py-7 transition sm:flex-row sm:items-end sm:justify-between sm:gap-8 sm:py-9"
               >
                 <div className="min-w-0">
@@ -324,7 +331,7 @@ function HowItWorks() {
   );
 }
 
-function PlatformBand() {
+function PlatformBand({ findPath = '/services' }) {
   return (
     <section className="bg-white py-20 md:py-28">
       <div className="mx-auto grid max-w-6xl gap-12 px-4 md:grid-cols-12 md:gap-10 md:px-8">
@@ -341,7 +348,7 @@ function PlatformBand() {
             the way.
           </p>
           <Link
-            to="/services"
+            to={findPath}
             className="mt-8 inline-flex min-h-[48px] items-center rounded-full bg-luminexa-accent px-6 text-sm font-semibold text-white shadow-sm shadow-teal-600/25 transition hover:bg-luminexa-accent-dark"
           >
             Explore services nearby
@@ -461,9 +468,9 @@ function SplitShowcase() {
           className="relative order-1 min-h-[320px] md:order-2 md:min-h-[480px]"
         >
           <img
-            src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80"
-            alt="Service professional planning work"
-            className="absolute inset-0 h-full w-full object-cover"
+            src="https://images.unsplash.com/photo-1599082267768-4815b2ea6bd2?auto=format&fit=crop&w=1600&q=80"
+            alt="Mechanic changing a car tire"
+            className="absolute inset-0 h-full w-full object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-teal-950/45 to-transparent md:bg-gradient-to-l md:from-transparent md:to-teal-950/10" />
         </motion.div>
@@ -472,7 +479,7 @@ function SplitShowcase() {
   );
 }
 
-function FinalCta() {
+function FinalCta({ embedded = false, findPath = '/services' }) {
   return (
     <section className="relative overflow-hidden bg-teal-900 py-20 text-white md:py-24">
       <motion.div
@@ -501,17 +508,19 @@ function FinalCta() {
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            to="/services"
+            to={findPath}
             className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 transition hover:bg-teal-300 sm:w-auto"
           >
             Find help near you
           </Link>
-          <Link
-            to="/register"
-            className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border border-white/25 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto"
-          >
-            Create a customer account
-          </Link>
+          {!embedded && (
+            <Link
+              to="/register"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border border-white/25 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto"
+            >
+              Create a customer account
+            </Link>
+          )}
         </div>
       </motion.div>
     </section>
@@ -548,17 +557,27 @@ function SiteFooter() {
 }
 
 /** Public marketing homepage (Calian-inspired structure, teal Luminexa brand). */
-export default function LuminexaHomePage() {
+export default function LuminexaHomePage({ embedded = false }) {
+  const findPath =
+    embedded && typeof window !== 'undefined' && window.location.pathname.startsWith('/customer')
+      ? '/customer/find'
+      : '/services';
+
   return (
     <div className="bg-luminexa-canvas text-slate-900">
-      <SiteHeader />
-      <Hero />
-      <NeedPrompts />
+      {!embedded && <SiteHeader />}
+      <Hero embedded={embedded} findPath={findPath} />
+      <NeedPrompts findPath={findPath} />
       <HowItWorks />
-      <PlatformBand />
+      <PlatformBand findPath={findPath} />
       <SplitShowcase />
-      <FinalCta />
-      <SiteFooter />
+      <FinalCta embedded={embedded} findPath={findPath} />
+      {!embedded && <SiteFooter />}
+      {embedded && (
+        <p className="px-4 pb-8 text-center text-xs text-slate-500">
+          © {new Date().getFullYear()} Luminexa
+        </p>
+      )}
     </div>
   );
 }

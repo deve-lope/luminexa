@@ -69,21 +69,39 @@ export function parseServiceAddress(value) {
   const raw = String(value || '').trim();
   if (!raw) return { ...EMPTY_FIELDS };
 
-  if (/^country:/im.test(raw)) {
-    const result = { ...EMPTY_FIELDS };
-    raw.split('\n').forEach((line) => {
-      const match = /^([^:]+):\s*(.*)$/.exec(line.trim());
-      if (!match) return;
-      const field = LABEL_TO_FIELD[match[1].trim().toLowerCase()];
-      if (field) result[field] = match[2].trim();
-    });
-    if (result.country) {
-      result.country = normalizeAddressCountry(result.country) || result.country;
-    }
-    return result;
+  // Labeled storage: "Country: …\nProvince: …" (also tolerate missing newlines).
+  if (/country\s*:/i.test(raw) && /(?:address\s*1|city)\s*:/i.test(raw)) {
+    return parseLabeledAddress(raw);
   }
 
   return parseLegacyCommaAddress(raw);
+}
+
+function parseLabeledAddress(raw) {
+  const result = { ...EMPTY_FIELDS };
+  const labelAlts = Object.values(FIELD_LABELS)
+    .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const re = new RegExp(`(${labelAlts})\\s*:\\s*`, 'gi');
+  const hits = [];
+  let match;
+  while ((match = re.exec(raw)) !== null) {
+    hits.push({
+      label: match[1],
+      valueStart: match.index + match[0].length,
+      nextAt: match.index,
+    });
+  }
+  for (let i = 0; i < hits.length; i += 1) {
+    const end = i + 1 < hits.length ? hits[i + 1].nextAt : raw.length;
+    const field = LABEL_TO_FIELD[hits[i].label.toLowerCase()];
+    if (!field) continue;
+    result[field] = raw.slice(hits[i].valueStart, end).trim();
+  }
+  if (result.country) {
+    result.country = normalizeAddressCountry(result.country) || result.country;
+  }
+  return result;
 }
 
 export function formatServiceAddress(fields) {
@@ -92,17 +110,55 @@ export function formatServiceAddress(fields) {
     .join('\n');
 }
 
+function usefulAddress2(address1, address2) {
+  const a1 = String(address1 || '').trim();
+  const a2 = String(address2 || '').trim();
+  if (!a2) return '';
+  if (!a1) return a2;
+  // Skip unit/line2 when it's only the street number already in address1.
+  const streetNum = a1.match(/^\d+[A-Za-z]?/)?.[0];
+  if (streetNum && a2 === streetNum) return '';
+  if (a1.toLowerCase().includes(a2.toLowerCase())) return '';
+  return a2;
+}
+
 /** Human-readable lines for profile / booking summaries. */
 export function formatServiceAddressDisplay(value) {
   const fields = parseServiceAddress(value);
   const lines = [];
   if (fields.address1) lines.push(fields.address1);
-  if (fields.address2) lines.push(fields.address2);
+  const line2 = usefulAddress2(fields.address1, fields.address2);
+  if (line2) lines.push(line2);
   const cityLine = [fields.city, fields.province, fields.postalCode].filter(Boolean).join(', ');
   if (cityLine) lines.push(cityLine);
   if (fields.country) lines.push(fields.country);
   const formatted = lines.join('\n');
   return formatted || String(value || '').trim();
+}
+
+/**
+ * Single-line destination for Google / Apple Maps (never send labeled storage format).
+ */
+export function formatServiceAddressForMaps(value) {
+  const fields = parseServiceAddress(value);
+  const parts = [];
+  if (fields.address1) parts.push(fields.address1);
+  const line2 = usefulAddress2(fields.address1, fields.address2);
+  if (line2) parts.push(line2);
+  if (fields.city) parts.push(fields.city);
+  if (fields.province) parts.push(fields.province);
+  if (fields.postalCode) {
+    parts.push(formatPostalLabel(fields.postalCode) || fields.postalCode);
+  }
+  if (fields.country) parts.push(fields.country);
+  if (parts.length) return parts.join(', ');
+
+  // Last resort: strip "Label: " prefixes if present.
+  const stripped = String(value || '')
+    .replace(/(?:^|\n)\s*(?:Country|Province|City|Address 1|Address 2|Postal code)\s*:\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped;
 }
 
 export function hasValidSavedServiceAddress(user) {

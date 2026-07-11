@@ -5,6 +5,7 @@ import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import {
   providerAddTask,
+  providerAnalytics,
   providerRequests,
   providerSchedule,
   providerScheduleDetail,
@@ -398,6 +399,7 @@ export default function ProviderTodayPage() {
         <h2 className="mb-2 font-semibold text-slate-900">Manage your business</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
+            { label: 'Analytics', to: providerAnalytics(orgSlug) },
             { label: 'Services', to: providerServices(orgSlug) },
             { label: 'Schedule', to: providerSchedule(orgSlug) },
             { label: 'My page', to: providerShare(orgSlug) },

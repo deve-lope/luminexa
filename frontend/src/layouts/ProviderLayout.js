@@ -12,6 +12,7 @@ import {
   firstProviderHome,
   providerAccount,
   providerAbout,
+  providerAnalytics,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -59,6 +60,7 @@ function ProviderShell() {
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
+        providerAnalyticsPath: providerAnalytics(orgSlug),
         isStaff: user?.is_staff,
         adminUrl: getDjangoAdminUrl(),
       }),
@@ -78,6 +80,9 @@ function ProviderShell() {
 
   const { eyebrow, title } = useMemo(() => {
     const base = `/provider/${orgSlug}`;
+    if (location.pathname.startsWith(`${base}/analytics`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Analytics' };
+    }
     if (location.pathname.startsWith(`${base}/notifications`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Notifications' };
     }

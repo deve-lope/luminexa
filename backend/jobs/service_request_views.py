@@ -63,7 +63,7 @@ class ProviderServiceRequestsAPIView(APIView):
         bookings = (
             Booking.objects.filter(organization=org)
             .exclude(source=Booking.Source.PROVIDER_DIRECT)
-            .select_related('service', 'customer')
+            .select_related('service', 'customer', 'invoice', 'organization')
             .annotate(message_count=Count('request_messages'))
             .order_by('-created_at')
         )
@@ -71,6 +71,7 @@ class ProviderServiceRequestsAPIView(APIView):
             bucket = _booking_bucket(booking.status)
             if filter_key != 'all' and bucket != filter_key:
                 continue
+            invoice = getattr(booking, 'invoice', None)
             items.append({
                 'kind': 'booking',
                 'id': booking.id,
@@ -86,6 +87,7 @@ class ProviderServiceRequestsAPIView(APIView):
                 'message_count': booking.message_count,
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
+                'invoice': invoice,
             })
 
         inquiries = (
@@ -114,6 +116,7 @@ class ProviderServiceRequestsAPIView(APIView):
                 'message_count': inquiry.message_count,
                 'created_at': inquiry.created_at,
                 'updated_at': inquiry.created_at,
+                'invoice': None,
             })
 
         items.sort(key=lambda row: row['created_at'], reverse=True)

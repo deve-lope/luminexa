@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
+import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -26,13 +29,14 @@ function DetailRow({ label, children }) {
 export default function ProviderRequestDetailPage() {
   const { orgSlug, kind, id } = useParams();
   const navigate = useNavigate();
-  useProviderOrg();
+  const { activeOrg } = useProviderOrg();
   const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,11 +115,6 @@ export default function ProviderRequestDetailPage() {
     );
   }
 
-  const mapsUrl =
-    data.service_address
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.service_address)}`
-      : null;
-
   return (
     <div className="space-y-5 pb-8">
       <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-800 p-5 text-white shadow-lg">
@@ -182,12 +181,22 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() => runBookingAction(() => jobsAPI.completeBooking(id), 'Marked as done.')}
+              onClick={() => setCompleteOpen(true)}
               className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
-              Mark done
+              Mark complete
             </button>
           </div>
+        )}
+        {kind === 'booking' && status === 'in_progress' && (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => setCompleteOpen(true)}
+            className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+          >
+            Mark complete
+          </button>
         )}
         {kind === 'inquiry' && status === 'pending' && (
           <div className="mt-4 flex gap-2">
@@ -256,28 +265,11 @@ export default function ProviderRequestDetailPage() {
       )}
 
       {(data.service_address || kind === 'inquiry') && (
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">
-            {kind === 'booking' ? 'Service address' : 'Location'}
-          </h2>
-          {data.service_address ? (
-            <div className="mt-3">
-              <p className="whitespace-pre-wrap text-slate-900">{data.service_address}</p>
-              {mapsUrl && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex min-h-[44px] items-center rounded-lg bg-slate-100 px-4 text-sm font-medium text-slate-800"
-                >
-                  Open in Maps →
-                </a>
-              )}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">No address provided.</p>
-          )}
-        </section>
+        <ServiceAddressBlock
+          address={data.service_address}
+          title={kind === 'booking' ? 'Service address' : 'Location'}
+          emptyLabel="No address provided."
+        />
       )}
 
       {kind === 'inquiry' && data.message && (
@@ -303,6 +295,39 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
+      {kind === 'booking' && data.invoice && (
+        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Invoice</h2>
+          <div className="mt-3">
+            <InvoicePanel
+              invoice={data.invoice}
+              bookingId={data.id}
+              providerName={
+                data.invoice.provider_name ||
+                data.organization_name ||
+                activeOrg?.organization_name
+              }
+            />
+          </div>
+        </section>
+      )}
+
+      {kind === 'booking' && status === 'completed' && !data.invoice && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="text-sm font-semibold text-amber-900">Invoice</h2>
+          <p className="mt-2 text-sm text-amber-800">
+            This job is complete but no invoice is on file yet.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(providerScheduleDetail(orgSlug, 'booking', data.id))}
+            className="mt-3 min-h-[44px] w-full rounded-xl bg-white text-sm font-semibold text-amber-900 ring-1 ring-amber-200"
+          >
+            Open booking to issue invoice
+          </button>
+        </section>
+      )}
+
       {kind === 'booking' && (status === 'confirmed' || status === 'completed') && (
         <a
           href={jobsAPI.bookingIcalUrl(id)}
@@ -319,11 +344,12 @@ export default function ProviderRequestDetailPage() {
         </a>
       )}
 
-      {kind === 'booking' && status === 'confirmed' && (
+      {kind === 'booking' &&
+        (status === 'confirmed' || status === 'in_progress' || status === 'completed' || status === 'needs_return') && (
         <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Schedule</h2>
           <p className="mt-2 text-sm text-slate-600">
-            If you become unavailable for this time, you can move the booking to another open slot.
+            Open the full booking page for start/complete, invoice, and return-visit actions.
           </p>
           <button
             type="button"
@@ -362,6 +388,28 @@ export default function ProviderRequestDetailPage() {
             showToast('Booking rescheduled.', 'success');
             setRescheduleOpen(false);
             load();
+          }}
+        />
+      )}
+
+      {kind === 'booking' && (
+        <CompleteBookingInvoiceModal
+          open={completeOpen}
+          booking={data}
+          busy={actionBusy}
+          onClose={() => setCompleteOpen(false)}
+          onConfirm={async (payload) => {
+            setActionBusy(true);
+            try {
+              await jobsAPI.completeBooking(id, payload);
+              showToast('Booking completed and invoice issued.', 'success');
+              setCompleteOpen(false);
+              await load();
+            } catch (e) {
+              setError(parseApiError(e));
+            } finally {
+              setActionBusy(false);
+            }
           }}
         />
       )}

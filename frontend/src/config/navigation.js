@@ -66,12 +66,21 @@ export function buildProviderMenuItems({
   providerAccountPath,
   providerSharePath,
   providerNotificationsPath,
+  providerAnalyticsPath,
   isStaff,
   adminUrl,
 }) {
   const items = [];
 
   items.push({ id: 'section-business', divider: true, label: 'Business' });
+  if (providerAnalyticsPath) {
+    items.push({
+      id: 'analytics',
+      label: 'Analytics',
+      to: providerAnalyticsPath,
+      iconId: 'analytics',
+    });
+  }
   if (providerAccountPath) {
     items.push({
       id: 'account',

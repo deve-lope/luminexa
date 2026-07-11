@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import InvoicePanel from '../../components/booking/InvoicePanel';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
@@ -20,7 +21,7 @@ function StatusBadge({ kind, status }) {
 }
 
 export default function ProviderRequestsPage() {
-  const { orgSlug } = useProviderOrg();
+  const { orgSlug, activeOrg } = useProviderOrg();
   const [filter, setFilter] = useState('all');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,8 @@ export default function ProviderRequestsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const providerName = activeOrg?.organization_name;
 
   return (
     <div className="space-y-4 pb-8">
@@ -96,10 +99,10 @@ export default function ProviderRequestsPage() {
       {!loading && !!items.length && (
         <ul className="space-y-3">
           {items.map((item) => (
-            <li key={`${item.kind}-${item.id}`}>
+            <li key={`${item.kind}-${item.id}`} className="lx-card space-y-3 p-4">
               <Link
                 to={providerRequestDetail(orgSlug, item.kind, item.id)}
-                className="flex items-start gap-3 lx-card transition hover:ring-violet-200 hover:shadow-md"
+                className="flex items-start gap-3 transition"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -132,6 +135,20 @@ export default function ProviderRequestsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
                 </svg>
               </Link>
+
+              {item.invoice && (
+                <InvoicePanel
+                  compact
+                  invoice={item.invoice}
+                  bookingId={item.id}
+                  providerName={item.invoice.provider_name || providerName}
+                />
+              )}
+              {filter === 'done' && item.kind === 'booking' && item.status === 'completed' && !item.invoice && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Completed — no invoice on file yet. Open the booking to issue one.
+                </p>
+              )}
             </li>
           ))}
         </ul>

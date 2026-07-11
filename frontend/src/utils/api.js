@@ -167,6 +167,10 @@ export const orgProfileAPI = {
 export const jobsAPI = {
   getProviderDashboard: (organizationSlug) =>
     api.get('/api/v1/provider-dashboard/', { params: { organization: organizationSlug } }),
+  getProviderAnalytics: (organizationSlug, period = 'month') =>
+    api.get('/api/v1/provider-analytics/', {
+      params: { organization: organizationSlug, period },
+    }),
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
   listProviderServiceRequests: (orgSlug, params) =>

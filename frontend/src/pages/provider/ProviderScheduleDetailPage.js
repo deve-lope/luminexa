@@ -6,7 +6,8 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import IncompleteReturnVisitModal from '../../components/booking/IncompleteReturnVisitModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
-import InvoiceDownloadButton from '../../components/booking/InvoiceDownloadButton';
+import InvoicePanel from '../../components/booking/InvoicePanel';
+import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
@@ -114,9 +115,6 @@ export default function ProviderScheduleDetailPage() {
   }
 
   if (kind === 'booking') {
-    const mapsUrl = data.service_address
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.service_address)}`
-      : null;
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-800 p-5 text-white shadow-lg">
@@ -201,7 +199,11 @@ export default function ProviderScheduleDetailPage() {
           </dl>
           {data.invoice && (
             <div className="mt-4">
-              <InvoiceDownloadButton invoice={data.invoice} bookingId={data.id} />
+              <InvoicePanel
+                invoice={data.invoice}
+                bookingId={data.id}
+                providerName={data.invoice.provider_name || data.organization_name}
+              />
             </div>
           )}
           {data.status === 'completed' && !data.invoice && (
@@ -216,26 +218,10 @@ export default function ProviderScheduleDetailPage() {
           )}
         </section>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Service address</h2>
-          {data.service_address ? (
-            <div className="mt-3">
-              <p className="whitespace-pre-wrap text-slate-900">{data.service_address}</p>
-              {mapsUrl && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex min-h-[44px] items-center rounded-lg bg-slate-100 px-4 text-sm font-medium text-slate-800"
-                >
-                  Open in Maps →
-                </a>
-              )}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">No address on file for this booking.</p>
-          )}
-        </section>
+        <ServiceAddressBlock
+          address={data.service_address}
+          emptyLabel="No address on file for this booking."
+        />
 
         {data.customer_notes && (
           <section className="rounded-xl border border-amber-100 bg-amber-50/50 p-5">

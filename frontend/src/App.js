@@ -36,6 +36,7 @@ import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 import ProviderNotificationsPage from './pages/provider/ProviderNotificationsPage';
 import ProviderAddTaskPage from './pages/provider/ProviderAddTaskPage';
 import ProviderTasksPage from './pages/provider/ProviderTasksPage';
+import ProviderAnalyticsPage from './pages/provider/ProviderAnalyticsPage';
 import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
 import CustomerProvidersByTypePage from './pages/customer/CustomerProvidersByTypePage';
@@ -139,6 +140,7 @@ function AppRoutes() {
           <Route path="my-page" element={<ProviderSharePage />} />
           <Route path="share" element={<Navigate to="my-page" replace />} />
           <Route path="services" element={<ProviderServicesPage />} />
+          <Route path="analytics" element={<ProviderAnalyticsPage />} />
         </Route>
         <Route
           path="/customer"
