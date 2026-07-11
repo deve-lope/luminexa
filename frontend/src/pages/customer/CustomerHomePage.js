@@ -14,6 +14,7 @@ import { businessesAPI } from '../../utils/api';
 import { canRescheduleBooking, isUntouchedBookingRequest } from '../../utils/customerBookings';
 import { formatWhen } from '../../utils/datetime';
 import { customerBookings, customerFind } from '../../utils/customerPaths';
+import { lxPillTone } from '../../utils/pillGradients';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 
 const MAX_HOME_PROVIDERS = 3;
@@ -22,11 +23,15 @@ function ProvidersSection({ providers }) {
   const [expanded, setExpanded] = useState(false);
   const hasMore = providers.length > MAX_HOME_PROVIDERS;
   const visible = expanded ? providers : providers.slice(0, MAX_HOME_PROVIDERS);
+  const toneCount = Math.max(visible.length, 1);
 
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="lx-section-title">Your providers</h2>
+    <section className="min-w-0">
+      <div className="mb-3 flex items-end justify-between gap-2">
+        <div>
+          <p className="lx-eyebrow">Network</p>
+          <h2 className="lx-section-title mt-1">Your providers</h2>
+        </div>
         {hasMore && (
           <button
             type="button"
@@ -37,10 +42,21 @@ function ProvidersSection({ providers }) {
           </button>
         )}
       </div>
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {visible.map((p) => (
-          <li key={p.organization_slug}>
-            <ScheduledProviderCard provider={p} compact={hasMore && !expanded} />
+      <ul
+        className={`grid gap-3 ${
+          visible.length === 1
+            ? 'grid-cols-1'
+            : 'grid-cols-1 sm:grid-cols-2'
+        }`}
+      >
+        {visible.map((p, i) => (
+          <li key={p.organization_slug} className="min-w-0">
+            <ScheduledProviderCard
+              provider={p}
+              compact={hasMore && !expanded}
+              toneIndex={i}
+              toneCount={toneCount}
+            />
           </li>
         ))}
       </ul>
@@ -48,10 +64,10 @@ function ProvidersSection({ providers }) {
   );
 }
 
-function bookingStatusClass(status) {
-  if (status === 'requested') return 'bg-amber-100 text-amber-800';
-  if (status === 'confirmed') return 'bg-emerald-100 text-emerald-800';
-  return 'bg-slate-100 text-slate-700';
+function bookingStatusClass(status, tone) {
+  if (status === 'requested') return tone.statusWarn;
+  if (status === 'confirmed') return tone.statusOk;
+  return tone.statusNeutral;
 }
 
 function initials(name) {
@@ -164,63 +180,100 @@ export default function CustomerHomePage() {
   const upcoming = home?.upcoming_bookings || [];
 
   return (
-    <div className="space-y-5 pb-4">
+    <div className="space-y-6 pb-4 lg:space-y-8">
       {!isSearching && (
-        <header className="lx-hero">
-          <div className="relative p-5 sm:p-6">
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/20 blur-3xl" />
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold ring-1 ring-white/20 backdrop-blur-sm">
-                {initials(user?.full_name)}
+        <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+          <header className="lx-hero flex min-h-0 flex-col">
+            <div className="relative flex flex-1 flex-col justify-between p-5 sm:p-6 lg:p-7">
+              <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-emerald-300/20 blur-3xl" />
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold tracking-tight ring-1 ring-white/20 backdrop-blur-sm lg:h-14 lg:w-14 lg:text-xl">
+                  {initials(user?.full_name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-teal-100/90">
+                    {new Date().toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold tracking-tight lg:text-3xl">
+                    Hi, {firstName}
+                  </h2>
+                  <p className="mt-2 max-w-lg text-sm leading-relaxed text-white/80 lg:text-[15px]">
+                    Search once, compare nearby providers, and book the service you need.
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-violet-200">
-                  {new Date().toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </p>
-                <h2 className="mt-1 text-2xl font-bold tracking-tight">Hi, {firstName}</h2>
-                <p className="mt-2 max-w-md text-sm leading-6 text-white/80">
-                  Search once, compare nearby providers, and book the service you need.
-                </p>
-              </div>
+              <Link
+                to={customerFind()}
+                className="lx-btn-ghost mt-5 w-full border-transparent bg-white text-teal-900 hover:bg-teal-50 sm:w-auto lg:mt-7"
+              >
+                Browse services
+              </Link>
             </div>
-            <Link to={customerFind()} className="lx-btn-ghost mt-5 w-full bg-white text-luminexa-navy hover:bg-violet-50 sm:w-auto">
-              Browse services
+          </header>
+
+          <section className="lx-find-panel flex min-h-0 flex-col lg:p-7">
+            <div className="mb-4">
+              <h2 className="lx-section-title text-lg lg:text-xl">Find a service near you</h2>
+              <p className="lx-muted mt-1.5">
+                Search quickly here, or browse by ZIP / postal code to see what&apos;s nearby.
+              </p>
+            </div>
+            <ServiceSearchBar
+              value={query}
+              onChange={setQuery}
+              placeholder="Search car wash, plumbing, pet grooming…"
+              sticky={false}
+            />
+            <div className="mt-4 flex-1 border-t border-slate-900/5 pt-4">
+              <PostalRadiusFields
+                postal={searchPostal}
+                onPostalChange={setSearchPostal}
+                radiusMiles={searchRadius}
+                onRadiusChange={setSearchRadius}
+                onLocationReady={({ label }) => setSearchAreaLabel(label || '')}
+                idPrefix="home-search"
+              />
+            </div>
+            <Link to={customerFind()} className="lx-btn-primary mt-4 w-full sm:w-auto">
+              Browse by location
             </Link>
-          </div>
-        </header>
+          </section>
+        </div>
       )}
 
-      <section className="lx-card-lg">
-        <div className="mb-3">
-          <h2 className="lx-section-title">Find a service near you</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Search quickly here, or browse by ZIP / postal code to see what&apos;s nearby.
-          </p>
-        </div>
-        <ServiceSearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder="Search car wash, plumbing, pet grooming…"
-          sticky={false}
-        />
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <PostalRadiusFields
-            postal={searchPostal}
-            onPostalChange={setSearchPostal}
-            radiusMiles={searchRadius}
-            onRadiusChange={setSearchRadius}
-            onLocationReady={({ label }) => setSearchAreaLabel(label || '')}
-            idPrefix="home-search"
+      {isSearching && (
+        <section className="lx-find-panel lg:p-7">
+          <div className="mb-4">
+            <h2 className="lx-section-title text-lg">Find a service near you</h2>
+            <p className="lx-muted mt-1.5">
+              Refine your search or clear filters to return home.
+            </p>
+          </div>
+          <ServiceSearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder="Search car wash, plumbing, pet grooming…"
+            sticky={false}
           />
-        </div>
-        <Link to={customerFind()} className="lx-btn-secondary mt-4 w-full sm:w-auto">
-          Browse by location
-        </Link>
-      </section>
+          <div className="mt-4 border-t border-slate-900/5 pt-4">
+            <PostalRadiusFields
+              postal={searchPostal}
+              onPostalChange={setSearchPostal}
+              radiusMiles={searchRadius}
+              onRadiusChange={setSearchRadius}
+              onLocationReady={({ label }) => setSearchAreaLabel(label || '')}
+              idPrefix="home-search"
+            />
+          </div>
+          <Link to={customerFind()} className="lx-btn-primary mt-4 w-full sm:w-auto">
+            Browse by location
+          </Link>
+        </section>
+      )}
 
       {isSearching ? (
         <CustomerSearchResults
@@ -231,74 +284,92 @@ export default function CustomerHomePage() {
         />
       ) : (
         <>
-          {upcoming.length > 0 && (
-            <section>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="lx-section-title">Up next</h2>
-                <Link to={customerBookings()} className="lx-link">
-                  All
-                </Link>
-              </div>
-              <ul className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {upcoming.map((b) => (
-                  <li
-                    key={b.id}
-                    className="lx-card w-[min(78vw,280px)] shrink-0 snap-start sm:w-[min(320px,42vw)]"
+          {(upcoming.length > 0 || providers.length > 0) && (
+            <div className="space-y-6 lg:space-y-8">
+              {upcoming.length > 0 && (
+                <section className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="lx-eyebrow">Schedule</p>
+                      <h2 className="lx-section-title mt-1">Up next</h2>
+                    </div>
+                    <Link to={customerBookings()} className="lx-link">
+                      All
+                    </Link>
+                  </div>
+                  {/* Full-width row: dark (left) → lighter (right), same direction as page */}
+                  <ul
+                    className={`grid gap-3 ${
+                      upcoming.length === 1
+                        ? 'grid-cols-1 sm:max-w-md'
+                        : upcoming.length === 2
+                          ? 'grid-cols-1 sm:grid-cols-2'
+                          : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
+                    }`}
                   >
-                    <p className="font-semibold text-slate-900">{b.service_name}</p>
-                    <p className="text-sm text-slate-600">{b.organization_name}</p>
-                    <p className="mt-2 text-sm font-medium text-slate-800">{formatWhen(b.start_at)}</p>
-                    <span
-                      className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status)}`}
-                    >
-                      {b.status === 'requested' ? 'Awaiting provider' : b.status}
-                    </span>
-                    {canRescheduleBooking(b) && (
-                      <button
-                        type="button"
-                        onClick={() => setRescheduleBooking(b)}
-                        className="mt-3 min-h-[40px] w-full rounded-lg border border-violet-200 bg-violet-50 text-sm font-medium text-violet-800"
+                    {upcoming.map((b, i) => {
+                      const tone = lxPillTone(i, upcoming.length);
+                      return (
+                      <li
+                        key={b.id}
+                        className={`flex min-h-[148px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 ${tone.surface} ${tone.ring}`}
                       >
-                        Reschedule
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
+                        <div>
+                          <p className={`font-semibold tracking-tight ${tone.title}`}>{b.service_name}</p>
+                          <p className={`mt-0.5 text-sm ${tone.body}`}>{b.organization_name}</p>
+                          <p className={`mt-3 text-sm font-medium ${tone.title}`}>{formatWhen(b.start_at)}</p>
+                          <span
+                            className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status, tone)}`}
+                          >
+                            {b.status === 'requested' ? 'Awaiting provider' : b.status}
+                          </span>
+                        </div>
+                        {canRescheduleBooking(b) && (
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleBooking(b)}
+                            className={`mt-3 min-h-[40px] w-full rounded-xl border text-sm font-medium backdrop-blur-sm transition ${tone.btn}`}
+                          >
+                            Reschedule
+                          </button>
+                        )}
+                      </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+
+              {providers.length > 0 && (
+                <ProvidersSection providers={providers} />
+              )}
+            </div>
           )}
 
-          {providers.length > 0 && (
-            <ProvidersSection providers={providers} />
-          )}
-
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="lx-section-title">Popular categories</h2>
+          <section className="lx-section-band">
+            <div className="mb-4 flex items-end justify-between gap-2">
+              <div>
+                <p className="lx-eyebrow">Browse</p>
+                <h2 className="lx-section-title mt-1">Popular categories</h2>
+              </div>
               <Link to={customerFind()} className="lx-link shrink-0">
                 See all
               </Link>
             </div>
             {filteredTypes.length === 0 ? (
               <div className="lx-empty">
-                <p className="text-sm text-slate-600">No categories available yet.</p>
-                <Link to={customerFind()} className="lx-link mt-3 inline-flex min-h-[44px] items-center">
-                  Explore providers →
+                <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
+                <p className="lx-muted mt-1">
+                  Search above or browse providers when categories appear.
+                </p>
+                <Link to={customerFind()} className="lx-btn-primary mt-4 inline-flex">
+                  Explore providers
                 </Link>
               </div>
             ) : (
               <BusinessTypeTileGrid types={filteredTypes} />
             )}
           </section>
-
-          {providers.length === 0 && upcoming.length === 0 && (
-            <div className="lx-empty">
-              <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Search above or pick a category to find a local provider.
-              </p>
-            </div>
-          )}
         </>
       )}
 

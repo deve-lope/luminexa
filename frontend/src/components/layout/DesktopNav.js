@@ -10,12 +10,12 @@ export default function DesktopNav({
 }) {
   return (
     <aside className="lx-sidebar fixed left-0 top-0 z-20 hidden h-full w-60 flex-col lg:flex">
-      <div className="shrink-0 border-b border-slate-100/80 px-5 py-5">
+      <div className="shrink-0 border-b border-luminexa-line px-5 py-5">
         <Link
           to={homeTo || '/'}
-          className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900"
+          className="flex items-center gap-2.5 text-lg font-extrabold tracking-tight text-slate-900"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-luminexa-accent to-violet-600 text-sm font-bold text-white shadow-sm">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-700 to-teal-500 text-sm font-bold text-white shadow-sm">
             L
           </span>
           {brand}
@@ -50,12 +50,12 @@ export default function DesktopNav({
         </nav>
 
         {menuItems.length > 0 && (
-          <nav className="border-t border-slate-100/80 p-3 pb-6" aria-label="More">
+          <nav className="border-t border-luminexa-line p-3 pb-6" aria-label="More">
             <ul className="space-y-1">
               {menuItems.map((item) =>
                 item.divider ? (
                   <li key={item.id} className="px-3 pb-1 pt-3 first:pt-0">
-                    <p
+                      <p
                       className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400"
                       title={item.label}
                     >
@@ -78,7 +78,7 @@ export default function DesktopNav({
 
 function DesktopMenuRow({ item }) {
   const className = `flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium transition ${
-    item.danger ? 'text-red-600 hover:bg-red-50/80' : 'lx-nav-idle'
+    item.danger ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700' : 'lx-nav-idle'
   }`;
 
   const label = (

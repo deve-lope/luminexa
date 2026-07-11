@@ -30,7 +30,7 @@ export default function BottomTabBar({ tabs }) {
               <span
                 className={`relative flex items-center justify-center rounded-xl px-3 py-1.5 transition-all duration-200 sm:px-4 ${
                   active
-                    ? 'bg-violet-50 text-luminexa-accent ring-1 ring-violet-100/80'
+                    ? 'bg-teal-50 text-teal-700 ring-1 ring-teal-100'
                     : 'text-slate-400'
                 }`}
               >

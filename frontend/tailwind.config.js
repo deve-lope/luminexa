@@ -4,25 +4,26 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'luminexa-navy': '#0F172A',
-        'luminexa-accent': '#7C3AED',
-        'luminexa-accent-dark': '#6D28D9',
-        'luminexa-mist': '#F8FAFC',
-        'luminexa-slate': '#1E293B',
-        'luminexa-canvas': '#F8F7FC',
-        'luminexa-canvas-warm': '#F5F3FF',
+        'luminexa-ink': '#10231F',
+        'luminexa-navy': '#10231F',
+        'luminexa-accent': '#0D9488',
+        'luminexa-accent-dark': '#0F766E',
+        'luminexa-mist': '#F0FDFA',
+        'luminexa-slate': '#1F2A33',
+        'luminexa-canvas': '#F6F7F5',
+        'luminexa-canvas-warm': '#F2F4F1',
+        'luminexa-line': '#E4E7E4',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'lx-soft': '0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(124, 58, 237, 0.06)',
-        'lx-card':
-          '0 0 0 1px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.03), 0 12px 32px rgba(124, 58, 237, 0.08)',
+        'lx-soft': '0 1px 2px rgba(16, 35, 31, 0.04), 0 4px 14px rgba(16, 35, 31, 0.05)',
+        'lx-card': '0 1px 2px rgba(16, 35, 31, 0.04), 0 6px 20px rgba(16, 35, 31, 0.06)',
         'lx-elevated':
-          '0 0 0 1px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.06), 0 24px 48px rgba(124, 58, 237, 0.12)',
-        'lx-tab': '0 -8px 32px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.6)',
-        'lx-nav': '4px 0 24px rgba(15, 23, 42, 0.04)',
+          '0 2px 6px rgba(16, 35, 31, 0.06), 0 16px 36px rgba(13, 148, 136, 0.12)',
+        'lx-tab': '0 -6px 24px rgba(16, 35, 31, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.7)',
+        'lx-nav': '4px 0 20px rgba(16, 35, 31, 0.04)',
       },
       borderRadius: {
         lx: '1rem',
@@ -30,10 +31,11 @@ module.exports = {
         'lx-xl': '1.5rem',
       },
       backgroundImage: {
+        /* Barely-there wash so the ground isn't sterile flat gray */
         'lx-mesh':
-          'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.1), transparent), radial-gradient(ellipse 50% 40% at 100% 0%, rgba(139, 92, 246, 0.07), transparent), radial-gradient(ellipse 40% 30% at 0% 100%, rgba(167, 139, 250, 0.05), transparent)',
-        'lx-hero': 'linear-gradient(135deg, #0F172A 0%, #4C1D95 50%, #6D28D9 100%)',
-        'lx-hero-soft': 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 50%, #FAFAFA 100%)',
+          'radial-gradient(ellipse 70% 45% at 50% -12%, rgba(13, 148, 136, 0.07), transparent), radial-gradient(ellipse 45% 35% at 100% 0%, rgba(56, 189, 248, 0.05), transparent)',
+        'lx-hero': 'linear-gradient(to bottom right, #134E4A 0%, #0D9488 60%, #14B8A6 100%)',
+        'lx-hero-soft': 'linear-gradient(to bottom right, #F0FDFA 0%, #E7F6F1 55%, #F6F7F5 100%)',
       },
     },
   },

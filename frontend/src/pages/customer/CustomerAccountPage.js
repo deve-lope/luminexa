@@ -8,18 +8,29 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { userAPI } from '../../utils/api';
 
-function ReadOnlyRow({ label, value, empty = 'Not set' }) {
+const inputClass =
+  'w-full min-h-[48px] rounded-xl border border-slate-200 px-3 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20';
+
+function ReadOnlyRow({ label, value, empty = 'Not set', teal = false }) {
   const display = (value || '').trim() ? value : empty;
   const isEmpty = !(value || '').trim();
   return (
-    <div className="border-b border-slate-100 py-3 last:border-b-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+    <div className={`border-b py-3 last:border-b-0 ${teal ? 'border-teal-50' : 'border-slate-100'}`}>
+      <dt
+        className={
+          teal
+            ? 'text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700'
+            : 'text-xs font-medium uppercase tracking-wide text-slate-500'
+        }
+      >
+        {label}
+      </dt>
       <dd className={`mt-1 text-sm ${isEmpty ? 'text-slate-400' : 'text-slate-900'}`}>{display}</dd>
     </div>
   );
 }
 
-function ChangePasswordDialog({ open, onClose, onSuccess }) {
+function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState(null);
@@ -60,10 +71,20 @@ function ChangePasswordDialog({ open, onClose, onSuccess }) {
       aria-modal="true"
       aria-labelledby="change-password-title"
     >
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+      <div
+        className={`w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ${
+          teal ? 'border border-teal-100' : ''
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="change-password-title" className="text-lg font-semibold text-slate-900">
+            {teal && (
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Security</p>
+            )}
+            <h2
+              id="change-password-title"
+              className={`text-lg font-semibold text-slate-900 ${teal ? 'mt-1 font-bold tracking-tight' : ''}`}
+            >
               Change password
             </h2>
             <p className="mt-1 text-sm text-slate-600">Use a strong password you don&apos;t use elsewhere.</p>
@@ -71,7 +92,9 @@ function ChangePasswordDialog({ open, onClose, onSuccess }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+            className={`rounded-lg px-2 py-1 text-sm text-slate-500 ${
+              teal ? 'hover:bg-teal-50 hover:text-teal-800' : 'hover:bg-slate-100'
+            }`}
           >
             Close
           </button>
@@ -109,14 +132,20 @@ function ChangePasswordDialog({ open, onClose, onSuccess }) {
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[48px] flex-1 rounded-xl border border-slate-200 font-medium text-slate-700"
+              className={`min-h-[48px] flex-1 border border-slate-200 font-medium text-slate-700 ${
+                teal ? 'rounded-full hover:bg-slate-50' : 'rounded-xl'
+              }`}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60"
+              className={
+                teal
+                  ? 'inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700 disabled:opacity-60'
+                  : 'lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60'
+              }
             >
               {busy ? 'Saving…' : 'Update password'}
             </button>
@@ -205,13 +234,35 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
   const needsPhone = user && !user.has_booking_contact;
   const needsAddress = isCustomerAccount && !(user?.default_service_address || '').trim();
   const formattedAddress = formatServiceAddressDisplay(user?.default_service_address);
+  const fieldClass = isCustomerAccount
+    ? inputClass
+    : 'w-full min-h-[48px] rounded-xl border border-slate-200 px-3';
+  const primaryBtn = isCustomerAccount
+    ? 'inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700 disabled:opacity-60'
+    : 'lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60';
+  const secondaryBtn = isCustomerAccount
+    ? 'min-h-[48px] flex-1 rounded-full border border-slate-200 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60'
+    : 'min-h-[48px] flex-1 rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60';
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl bg-white p-5 shadow-sm">
+      <section
+        className={
+          isCustomerAccount
+            ? 'rounded-3xl border border-teal-100 bg-white p-5 shadow-sm sm:p-6'
+            : 'rounded-xl bg-white p-5 shadow-sm'
+        }
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold uppercase text-slate-500">My details</h2>
+            {isCustomerAccount ? (
+              <>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Profile</p>
+                <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">My details</h2>
+              </>
+            ) : (
+              <h2 className="text-sm font-semibold uppercase text-slate-500">My details</h2>
+            )}
             <p className="mt-1 text-sm text-slate-600">
               {isCustomerAccount
                 ? 'Phone and address used when you book appointments.'
@@ -222,7 +273,11 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
             <button
               type="button"
               onClick={startEditing}
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className={
+                isCustomerAccount
+                  ? 'shrink-0 rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:border-teal-300 hover:bg-teal-100'
+                  : 'shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
+              }
             >
               Edit
             </button>
@@ -231,12 +286,12 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
 
         {isCustomerAccount && user?.public_ref && !editing && (
           <p className="mt-3 text-xs font-medium text-slate-500">
-            Customer ID: <span className="text-slate-700">{user.public_ref}</span>
+            Customer ID: <span className="font-semibold text-teal-800">{user.public_ref}</span>
           </p>
         )}
 
         {isCustomerAccount && !editing && (needsPhone || needsAddress) && (
-          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {needsPhone && needsAddress
               ? 'Add your mobile number and service address so bookings are faster.'
               : needsPhone
@@ -248,7 +303,9 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
         {editing ? (
           <form onSubmit={saveProfile} className="mt-4 space-y-6">
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-800">Contact</h3>
+              <h3 className={`text-sm font-semibold ${isCustomerAccount ? 'text-teal-800' : 'text-slate-800'}`}>
+                Contact
+              </h3>
               <div>
                 <label htmlFor="full-name" className="mb-1 block text-sm font-medium text-slate-700">
                   Full name
@@ -259,7 +316,7 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-200 px-3"
+                  className={fieldClass}
                 />
               </div>
               <div>
@@ -271,7 +328,9 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
                   type="email"
                   readOnly
                   value={user?.email || ''}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-600"
+                  className={`w-full min-h-[48px] rounded-xl border border-slate-200 px-3 text-slate-600 ${
+                    isCustomerAccount ? 'bg-teal-50/40' : 'bg-slate-50'
+                  }`}
                 />
                 <p className="mt-1 text-xs text-slate-500">Used to sign in. Contact support to change.</p>
               </div>
@@ -285,14 +344,14 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+1 555 123 4567"
-                  className="w-full min-h-[48px] rounded-xl border border-slate-200 px-3"
+                  className={fieldClass}
                 />
               </div>
             </div>
 
             {isCustomerAccount && (
-              <div className="space-y-3 border-t border-slate-100 pt-4">
-                <h3 className="text-sm font-semibold text-slate-800">Service address</h3>
+              <div className="space-y-3 border-t border-teal-50 pt-4">
+                <h3 className="text-sm font-semibold text-teal-800">Service address</h3>
                 <p className="text-sm text-slate-600">
                   Where providers should come by default. You can change it for a single booking if needed.
                 </p>
@@ -314,27 +373,23 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
                 type="button"
                 onClick={cancelEditing}
                 disabled={profileBusy}
-                className="min-h-[48px] flex-1 rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
+                className={secondaryBtn}
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={profileBusy}
-                className="lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60"
-              >
+              <button type="submit" disabled={profileBusy} className={primaryBtn}>
                 {profileBusy ? 'Saving…' : 'Save'}
               </button>
             </div>
           </form>
         ) : (
           <dl className="mt-4">
-            <ReadOnlyRow label="Full name" value={user?.full_name} />
-            <ReadOnlyRow label="Email" value={user?.email} />
-            <ReadOnlyRow label="Mobile" value={user?.phone} />
+            <ReadOnlyRow label="Full name" value={user?.full_name} teal={isCustomerAccount} />
+            <ReadOnlyRow label="Email" value={user?.email} teal={isCustomerAccount} />
+            <ReadOnlyRow label="Mobile" value={user?.phone} teal={isCustomerAccount} />
             {isCustomerAccount && (
-              <div className="border-b border-slate-100 py-3 last:border-b-0">
-                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <div className="border-b border-teal-50 py-3 last:border-b-0">
+                <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">
                   Service address
                 </dt>
                 <dd
@@ -350,16 +405,36 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
         )}
       </section>
 
-      <section className="rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase text-slate-500">Security</h2>
-        <p className="mt-1 text-sm text-slate-600">Keep your account secure.</p>
+      <section
+        className={
+          isCustomerAccount
+            ? 'rounded-3xl border border-teal-100 bg-white p-5 shadow-sm sm:p-6'
+            : 'rounded-xl bg-white p-5 shadow-sm'
+        }
+      >
+        {isCustomerAccount ? (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Security</p>
+            <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">Keep your account secure</h2>
+            <p className="mt-1 text-sm text-slate-600">Update your password anytime.</p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Security</h2>
+            <p className="mt-1 text-sm text-slate-600">Keep your account secure.</p>
+          </>
+        )}
         <button
           type="button"
           onClick={() => setPasswordOpen(true)}
-          className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+          className={
+            isCustomerAccount
+              ? 'mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-teal-100 bg-teal-50/50 px-4 text-left text-sm font-semibold text-teal-900 transition hover:border-teal-200 hover:bg-teal-50'
+              : 'mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50'
+          }
         >
           <span>Change password</span>
-          <span className="text-slate-400" aria-hidden>
+          <span className={isCustomerAccount ? 'text-teal-600' : 'text-slate-400'} aria-hidden>
             →
           </span>
         </button>
@@ -369,6 +444,7 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
         open={passwordOpen}
         onClose={() => setPasswordOpen(false)}
         onSuccess={(message) => showToast(message, 'success')}
+        teal={isCustomerAccount}
       />
     </div>
   );
