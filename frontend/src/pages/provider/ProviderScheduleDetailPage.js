@@ -4,6 +4,9 @@ import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import IncompleteReturnVisitModal from '../../components/booking/IncompleteReturnVisitModal';
+import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import InvoiceDownloadButton from '../../components/booking/InvoiceDownloadButton';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
@@ -11,8 +14,9 @@ import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail } from '../../utils/providerPaths';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
+import { bookingStatusLabel } from '../../utils/customerBookings';
 
-const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CAD' });
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -34,6 +38,9 @@ export default function ProviderScheduleDetailPage() {
   const [copied, setCopied] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [returnVisitOpen, setReturnVisitOpen] = useState(false);
+  const [returnVisitMode, setReturnVisitMode] = useState('full');
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const { showToast } = useToast();
 
@@ -113,10 +120,53 @@ export default function ProviderScheduleDetailPage() {
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-800 p-5 text-white shadow-lg">
-          <p className="text-sm text-violet-200 capitalize">{data.status?.replace('_', ' ')}</p>
+          <p className="text-sm text-violet-200">
+            {bookingStatusLabel(data.status)}
+          </p>
           <h1 className="mt-1 text-2xl font-bold">{data.service_name}</h1>
           <p className="mt-2 text-white/90">{formatWhen(data.start_at)}</p>
+          {data.parent_booking_id && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(providerScheduleDetail(orgSlug, 'booking', data.parent_booking_id))
+              }
+              className="mt-3 text-sm font-medium text-violet-100 underline"
+            >
+              View original job →
+            </button>
+          )}
         </header>
+
+        {(data.status === 'needs_return' || data.return_visit_id) && (
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <h2 className="text-sm font-semibold text-amber-900">Return visit</h2>
+            {data.return_visit_id ? (
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-amber-900">
+                  Scheduled{' '}
+                  {data.return_visit_start_at
+                    ? formatWhen(data.return_visit_start_at)
+                    : ''}{' '}
+                  · {bookingStatusLabel(data.return_visit_status)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(providerScheduleDetail(orgSlug, 'booking', data.return_visit_id))
+                  }
+                  className="min-h-[40px] rounded-lg bg-white px-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200"
+                >
+                  Open return visit
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-amber-900">
+                Job marked incomplete. Schedule a return visit when ready.
+              </p>
+            )}
+          </section>
+        )}
 
         <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Customer</h2>
@@ -149,6 +199,21 @@ export default function ProviderScheduleDetailPage() {
               {formatTime(data.start_at)} – {formatTime(data.end_at)}
             </DetailRow>
           </dl>
+          {data.invoice && (
+            <div className="mt-4">
+              <InvoiceDownloadButton invoice={data.invoice} bookingId={data.id} />
+            </div>
+          )}
+          {data.status === 'completed' && !data.invoice && (
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setCompleteOpen(true)}
+              className="mt-4 min-h-[44px] w-full rounded-xl border border-violet-200 text-sm font-medium text-violet-800 disabled:opacity-60"
+            >
+              Issue invoice
+            </button>
+          )}
         </section>
 
         <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
@@ -297,22 +362,24 @@ export default function ProviderScheduleDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                try {
-                  await jobsAPI.completeBooking(data.id);
-                  showToast('Booking marked complete.', 'success');
-                  load();
-                } catch (e) {
-                  setError(parseApiError(e));
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
+              onClick={() => setCompleteOpen(true)}
               className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
             >
               Mark complete
             </button>
+            {data.status === 'in_progress' && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => {
+                  setReturnVisitMode('full');
+                  setReturnVisitOpen(true);
+                }}
+                className="min-h-[48px] w-full rounded-xl border border-amber-300 bg-amber-50 font-medium text-amber-900 disabled:opacity-60"
+              >
+                Incomplete — return visit
+              </button>
+            )}
             {data.status === 'confirmed' && (
               <button
                 type="button"
@@ -334,6 +401,20 @@ export default function ProviderScheduleDetailPage() {
           </div>
         )}
 
+        {data.status === 'needs_return' && !data.return_visit_id && (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => {
+              setReturnVisitMode('schedule');
+              setReturnVisitOpen(true);
+            }}
+            className="min-h-[48px] w-full rounded-xl bg-violet-600 font-medium text-white disabled:opacity-60"
+          >
+            Schedule return visit
+          </button>
+        )}
+
         <RescheduleBookingModal
           open={rescheduleOpen}
           audience="provider"
@@ -346,6 +427,56 @@ export default function ProviderScheduleDetailPage() {
             showToast('Booking rescheduled.', 'success');
             setRescheduleOpen(false);
             load();
+          }}
+        />
+
+        <IncompleteReturnVisitModal
+          open={returnVisitOpen}
+          mode={returnVisitMode}
+          booking={{
+            ...data,
+            organization_slug: data.organization_slug || orgSlug,
+          }}
+          onClose={() => setReturnVisitOpen(false)}
+          onDone={(payload) => {
+            const returnId = payload?.return_booking?.id;
+            showToast(
+              returnId
+                ? 'Return visit scheduled and customer notified.'
+                : 'Marked incomplete — schedule the return visit when ready.',
+              'success'
+            );
+            setReturnVisitOpen(false);
+            if (returnId) {
+              navigate(providerScheduleDetail(orgSlug, 'booking', returnId));
+            } else {
+              load();
+            }
+          }}
+        />
+
+        <CompleteBookingInvoiceModal
+          open={completeOpen}
+          booking={data}
+          busy={actionBusy}
+          onClose={() => setCompleteOpen(false)}
+          onConfirm={async (payload) => {
+            setActionBusy(true);
+            try {
+              if (data.status === 'completed' && !data.invoice) {
+                await jobsAPI.issueBookingInvoice(data.id, payload);
+                showToast('Invoice issued.', 'success');
+              } else {
+                await jobsAPI.completeBooking(data.id, payload);
+                showToast('Booking completed and invoice issued.', 'success');
+              }
+              setCompleteOpen(false);
+              load();
+            } catch (e) {
+              setError(parseApiError(e));
+            } finally {
+              setActionBusy(false);
+            }
           }}
         />
 

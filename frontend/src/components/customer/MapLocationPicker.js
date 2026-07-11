@@ -5,6 +5,7 @@ import {
   ADDRESS_SEARCH_MIN_CHARS,
   addressSearchDebounceMs,
   addressSearchTerm,
+  guessCountryFromAddressQuery,
   shouldSearchAddressQuery,
 } from '../../constants/addressSearch';
 import { businessesAPI } from '../../utils/api';
@@ -193,7 +194,11 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
     setSearching(true);
     setError(null);
     try {
-      const res = await businessesAPI.searchMapLocations(q, country, { signal });
+      const res = await businessesAPI.searchMapLocations(
+        q,
+        guessCountryFromAddressQuery(q) || country,
+        { signal }
+      );
       const results = Array.isArray(res.data?.results) ? res.data.results : [];
       setSearchResults(results);
       if (selectFirst && results.length > 0) {

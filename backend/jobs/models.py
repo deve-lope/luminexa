@@ -314,6 +314,7 @@ class Booking(models.Model):
         REQUESTED = 'requested', 'Requested'
         CONFIRMED = 'confirmed', 'Confirmed'
         IN_PROGRESS = 'in_progress', 'In progress'
+        NEEDS_RETURN = 'needs_return', 'Needs return visit'
         COMPLETED = 'completed', 'Completed'
         CANCELLED = 'cancelled', 'Cancelled'
 
@@ -336,6 +337,14 @@ class Booking(models.Model):
         null=True,
         blank=True,
         related_name='booking',
+    )
+    parent_booking = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='return_visits',
+        help_text='Original booking when this is a return visit for incomplete work.',
     )
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
@@ -383,6 +392,58 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Invoice(models.Model):
+    """Shared invoice for a booking — visible to customer and provider."""
+
+    class Status(models.TextChoices):
+        ISSUED = 'issued', 'Issued'
+        PAID = 'paid', 'Paid'
+        VOID = 'void', 'Void'
+
+    booking = models.OneToOneField(
+        Booking, on_delete=models.CASCADE, related_name='invoice',
+    )
+    number = models.CharField(max_length=32, unique=True, db_index=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ISSUED,
+    )
+    currency = models.CharField(max_length=3, default='CAD')
+    # Snapshot of catalog pricing at issue time
+    pricing_type = models.CharField(max_length=10, blank=True, default='fixed')
+    estimated_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    estimated_max = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    # Final amount charged
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    description = models.CharField(max_length=255, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoices_issued',
+    )
+    issued_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-issued_at']
+
+    def __str__(self):
+        return f'{self.number} ({self.status})'
 
 
 class ServiceReview(models.Model):
@@ -452,6 +513,8 @@ class BookingStatusEvent(models.Model):
         COMPLETED = 'completed', 'Completed'
         RESCHEDULED = 'rescheduled', 'Rescheduled'
         NO_SHOW = 'no_show', 'No-show'
+        INCOMPLETE = 'incomplete', 'Marked incomplete'
+        RETURN_SCHEDULED = 'return_scheduled', 'Return visit scheduled'
 
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='status_events')
     actor = models.ForeignKey(
@@ -461,7 +524,7 @@ class BookingStatusEvent(models.Model):
         blank=True,
         related_name='booking_status_events',
     )
-    action = models.CharField(max_length=20, choices=Action.choices)
+    action = models.CharField(max_length=24, choices=Action.choices)
     old_status = models.CharField(max_length=20, blank=True, default='')
     new_status = models.CharField(max_length=20, blank=True, default='')
     note = models.CharField(max_length=500, blank=True, default='')

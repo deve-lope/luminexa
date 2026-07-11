@@ -26,7 +26,8 @@ export default function CustomerFindPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const hasLocation = isPostalSearchReady(postal);
+  const hasCoords = locationLat != null && locationLng != null;
+  const hasLocation = hasCoords || isPostalSearchReady(postal);
 
   const loadCatalog = useCallback(() => {
     if (!hasLocation) {
@@ -37,10 +38,15 @@ export default function CustomerFindPage() {
     }
     setLoading(true);
     setError(null);
-    const params = {
-      postal: normalizePostalInput(postal),
-      radius_miles: radiusMiles,
-    };
+    // Prefer lat/lng from the selected address — more accurate than re-geocoding
+    // a postal that may have been resolved under the wrong country (e.g. en-US → US).
+    const params = { radius_miles: radiusMiles };
+    if (hasCoords) {
+      params.lat = locationLat;
+      params.lng = locationLng;
+    } else {
+      params.postal = normalizePostalInput(postal);
+    }
     const q = query.trim();
     if (q) params.q = q;
     if (dateMode === 'single' && dateFrom) {
@@ -61,7 +67,7 @@ export default function CustomerFindPage() {
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
-  }, [hasLocation, query, postal, radiusMiles, dateMode, dateFrom, dateTo]);
+  }, [hasLocation, hasCoords, query, postal, locationLat, locationLng, radiusMiles, dateMode, dateFrom, dateTo]);
 
   useEffect(() => {
     const timer = setTimeout(loadCatalog, 250);
@@ -81,8 +87,8 @@ export default function CustomerFindPage() {
 
   const handleLocationChange = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
     setPostal(normalizePostalInput(nextPostal || ''));
-    setLocationLat(lat ?? null);
-    setLocationLng(lng ?? null);
+    setLocationLat(lat != null ? Number(lat) : null);
+    setLocationLng(lng != null ? Number(lng) : null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -96,9 +102,11 @@ export default function CustomerFindPage() {
   }, []);
 
   const handleMapLocationSearch = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
+    // Map browse uses lat/lng; postal is optional.
     if (nextPostal) setPostal(normalizePostalInput(nextPostal));
-    setLocationLat(lat ?? null);
-    setLocationLng(lng ?? null);
+    else if (lat != null && lng != null) setPostal('');
+    setLocationLat(lat != null ? Number(lat) : null);
+    setLocationLng(lng != null ? Number(lng) : null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -167,7 +175,13 @@ export default function CustomerFindPage() {
       </div>
 
       {viewMode === 'map' && (
-        <CustomerSearchMapView services={services} onLocationSearch={handleMapLocationSearch} />
+        <CustomerSearchMapView
+          services={services}
+          onLocationSearch={handleMapLocationSearch}
+          initialLat={locationLat}
+          initialLng={locationLng}
+          initialRadius={radiusMiles}
+        />
       )}
 
       {viewMode === 'list' && (

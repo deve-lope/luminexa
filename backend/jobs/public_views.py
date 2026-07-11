@@ -10,10 +10,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from businesses.models import BusinessType, Organization
+from businesses.models import BusinessType, Organization, OrganizationMembership
 from businesses.public_refs import resolve_organization
 from businesses.serializers import BusinessTypeSerializer
 
+from .booking_lead import earliest_customer_bookable_at
 from .booking_services import booking_policy_meta, customer_can_view_calendar
 from .catalog import build_service_catalog
 from .models import AvailabilitySlot, Booking, Service, ServiceReview
@@ -88,11 +89,22 @@ class PublicServiceCalendarAPIView(APIView):
             )
 
         now = timezone.now()
+        is_staff = OrganizationMembership.objects.filter(
+            organization=org,
+            user=request.user,
+            role__in=(
+                OrganizationMembership.Role.OWNER,
+                OrganizationMembership.Role.STAFF,
+            ),
+        ).exists()
+        # Customers need a lead-time buffer; staff can still pick nearer open slots
+        # (e.g. return visits / provider reschedule).
+        bookable_after = now if is_staff else earliest_customer_bookable_at(now=now)
         if org.scheduling_mode == Organization.SchedulingMode.RECURRING:
             has_future_open = AvailabilitySlot.objects.filter(
                 organization=org,
                 status=AvailabilitySlot.Status.OPEN,
-                start_at__gt=now,
+                start_at__gte=bookable_after,
             ).exists()
             if not has_future_open:
                 sync_recurring_slots(org, weeks_ahead=12)
@@ -127,7 +139,11 @@ class PublicServiceCalendarAPIView(APIView):
         slots_by_day = defaultdict(list)
         for slot in slots_qs:
             day_key = timezone.localtime(slot.start_at).strftime('%Y-%m-%d')
-            is_open = slot.status == AvailabilitySlot.Status.OPEN and slot.start_at > now
+            # Hide past and within-lead-time slots from the customer booking UI.
+            is_open = (
+                slot.status == AvailabilitySlot.Status.OPEN
+                and slot.start_at >= bookable_after
+            )
             entry = {
                 'id': slot.id,
                 'start_at': slot.start_at.isoformat(),

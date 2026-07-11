@@ -15,13 +15,16 @@ from businesses.models import Organization, OrganizationGalleryImage, Organizati
 from businesses.public_refs import resolve_organization
 
 from .booking_audit import log_booking_event, log_booking_status_change
+from .booking_lead import earliest_customer_bookable_at
 from .booking_services import (
     accept_booking_request,
     booking_policy_meta,
     cancel_booking,
     complete_booking,
+    mark_booking_incomplete,
     mark_booking_no_show,
     reschedule_booking,
+    schedule_return_visit,
     customer_can_view_calendar,
     customer_request_slot,
     decline_booking_request,
@@ -32,6 +35,7 @@ from .booking_services import (
 from .message_services import (
     can_access_booking_messages,
     list_booking_messages,
+    post_booking_incomplete_message,
     post_booking_message,
 )
 from .models import (
@@ -645,9 +649,10 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
 
         open_only = self.request.query_params.get('open_only')
         if open_only and open_only.lower() in ('1', 'true', 'yes'):
+            # Customer-facing open slots must respect the booking lead-time buffer.
             qs = qs.filter(
                 status=AvailabilitySlot.Status.OPEN,
-                start_at__gt=timezone.now(),
+                start_at__gte=earliest_customer_bookable_at(),
             )
         return qs.distinct().order_by('start_at')
 
@@ -741,7 +746,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         user = self.request.user
         staff_org_ids = _staff_organization_ids(user)
         qs = Booking.objects.select_related(
-            'organization', 'service', 'customer', 'availability_slot'
+            'organization', 'service', 'customer', 'availability_slot', 'invoice',
         ).filter(
             Q(customer=user) | Q(organization_id__in=staff_org_ids),
         )
@@ -752,7 +757,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         if status_filter:
             qs = qs.filter(status=status_filter)
         if self.action in ('retrieve', 'list'):
-            qs = qs.prefetch_related('status_events__actor')
+            qs = qs.prefetch_related('status_events__actor', 'return_visits')
         return qs.distinct().order_by('-start_at')
 
     def create(self, request, *args, **kwargs):
@@ -900,6 +905,8 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
+        from .invoice_services import default_invoice_amount, issue_or_update_invoice
+
         booking = self.get_object()
         if not is_org_staff(request.user, booking.organization):
             raise PermissionDenied('Only staff can complete bookings.')
@@ -912,9 +919,110 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
+
+        amount = request.data.get('amount', None)
+        if amount is None or amount == '':
+            amount = default_invoice_amount(booking)
+        notes = request.data.get('notes', '') or ''
+        mark_paid = bool(request.data.get('mark_paid'))
+        invoice = issue_or_update_invoice(
+            booking,
+            staff_user=request.user,
+            amount=amount,
+            notes=notes,
+            mark_paid=mark_paid,
+        )
+
         from .notifications import send_booking_email
         send_booking_email('booking_completed', booking)
+        booking = (
+            Booking.objects.select_related(
+                'invoice', 'service', 'organization', 'customer', 'availability_slot',
+            )
+            .prefetch_related('status_events__actor')
+            .get(pk=booking.pk)
+        )
         return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='invoice')
+    def invoice(self, request, pk=None):
+        """GET invoice JSON; POST create/update (staff)."""
+        from .invoice_services import issue_or_update_invoice, suggested_invoice_payload
+        from .models import Invoice
+        from .serializers import InvoiceSerializer
+
+        booking = self.get_object()
+        if request.method == 'GET':
+            try:
+                inv = booking.invoice
+            except Invoice.DoesNotExist:
+                if is_org_staff(request.user, booking.organization):
+                    return Response({
+                        'invoice': None,
+                        'suggestion': {
+                            **{
+                                k: (str(v) if v is not None else None)
+                                for k, v in suggested_invoice_payload(booking).items()
+                            },
+                        },
+                    })
+                return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(InvoiceSerializer(inv, context={'request': request}).data)
+
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can issue invoices.')
+        amount = request.data.get('amount')
+        notes = request.data.get('notes', '') or ''
+        mark_paid = bool(request.data.get('mark_paid'))
+        description = request.data.get('description', '') or ''
+        inv = issue_or_update_invoice(
+            booking,
+            staff_user=request.user,
+            amount=amount,
+            notes=notes,
+            mark_paid=mark_paid,
+            description=description,
+        )
+        return Response(InvoiceSerializer(inv, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='invoice/mark-paid')
+    def invoice_mark_paid(self, request, pk=None):
+        from .invoice_services import mark_invoice_paid
+        from .models import Invoice
+        from .serializers import InvoiceSerializer
+
+        booking = self.get_object()
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can mark invoices paid.')
+        try:
+            inv = booking.invoice
+        except Invoice.DoesNotExist:
+            return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
+        inv = mark_invoice_paid(inv, staff_user=request.user)
+        return Response(InvoiceSerializer(inv, context={'request': request}).data)
+
+    @action(detail=True, methods=['get'], url_path='invoice/download')
+    def invoice_download(self, request, pk=None):
+        """Download invoice as PDF (customer or staff)."""
+        from django.http import HttpResponse
+
+        from .invoice_pdf import build_invoice_pdf
+        from .models import Invoice
+
+        booking = self.get_object()
+        is_customer = booking.customer_id == request.user.id
+        if not is_customer and not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('You cannot access this invoice.')
+        try:
+            inv = booking.invoice
+        except Invoice.DoesNotExist:
+            return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+        pdf = build_invoice_pdf(inv)
+        filename = f'{inv.number}.pdf'
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
     @action(detail=True, methods=['post'])
     def reschedule(self, request, pk=None):
@@ -960,6 +1068,138 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .notifications import send_booking_email
         send_booking_email('booking_cancelled', booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def incomplete(self, request, pk=None):
+        """Mark in-progress job incomplete; optionally schedule a linked return visit."""
+        booking = self.get_object()
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can mark bookings incomplete.')
+        note = (request.data.get('note') or '').strip()
+        slot_id = request.data.get('slot_id')
+        old = booking.status
+
+        if slot_id:
+            slot = AvailabilitySlot.objects.filter(pk=slot_id).first()
+            if not slot:
+                raise ValidationError({'slot_id': 'Slot not found.'})
+            return_booking = schedule_return_visit(
+                booking, new_slot=slot, staff_user=request.user, note=note,
+            )
+            booking.refresh_from_db()
+            log_booking_status_change(
+                booking,
+                actor=request.user,
+                action=BookingStatusEvent.Action.INCOMPLETE,
+                old_status=old,
+                new_status=booking.status,
+                note=note[:500] if note else 'Return visit scheduled',
+            )
+            log_booking_status_change(
+                return_booking,
+                actor=request.user,
+                action=BookingStatusEvent.Action.RETURN_SCHEDULED,
+                old_status='',
+                new_status=return_booking.status,
+                note=f'Return visit for booking #{booking.id}',
+            )
+            log_booking_event(
+                return_booking,
+                actor=request.user,
+                action=BookingStatusEvent.Action.CREATED,
+                new_status=return_booking.status,
+                note='Return visit created',
+            )
+            try:
+                post_booking_incomplete_message(
+                    booking=booking,
+                    sender=request.user,
+                    note=note,
+                    return_booking=return_booking,
+                )
+            except Exception:
+                pass
+            return Response({
+                'booking': BookingSerializer(booking, context={'request': request}).data,
+                'return_booking': BookingSerializer(
+                    return_booking, context={'request': request},
+                ).data,
+            })
+
+        mark_booking_incomplete(booking, staff_user=request.user, note=note)
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.INCOMPLETE,
+            old_status=old,
+            new_status=booking.status,
+            note=note[:500] if note else 'Return visit to be scheduled',
+        )
+        try:
+            post_booking_incomplete_message(
+                booking=booking, sender=request.user, note=note,
+            )
+        except Exception:
+            pass
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='return-visit')
+    def return_visit(self, request, pk=None):
+        """Schedule a linked return visit for a needs_return (or in-progress) booking."""
+        booking = self.get_object()
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can schedule return visits.')
+        slot_id = request.data.get('slot_id')
+        if not slot_id:
+            raise ValidationError({'slot_id': 'Required.'})
+        slot = AvailabilitySlot.objects.filter(pk=slot_id).first()
+        if not slot:
+            raise ValidationError({'slot_id': 'Slot not found.'})
+        note = (request.data.get('note') or '').strip()
+        old = booking.status
+        return_booking = schedule_return_visit(
+            booking, new_slot=slot, staff_user=request.user, note=note,
+        )
+        booking.refresh_from_db()
+        if old == Booking.Status.IN_PROGRESS:
+            log_booking_status_change(
+                booking,
+                actor=request.user,
+                action=BookingStatusEvent.Action.INCOMPLETE,
+                old_status=old,
+                new_status=booking.status,
+                note=note[:500] if note else 'Return visit scheduled',
+            )
+        log_booking_status_change(
+            return_booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.RETURN_SCHEDULED,
+            old_status='',
+            new_status=return_booking.status,
+            note=f'Return visit for booking #{booking.id}',
+        )
+        log_booking_event(
+            return_booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.CREATED,
+            new_status=return_booking.status,
+            note='Return visit created',
+        )
+        try:
+            post_booking_incomplete_message(
+                booking=booking,
+                sender=request.user,
+                note=note,
+                return_booking=return_booking,
+            )
+        except Exception:
+            pass
+        return Response({
+            'booking': BookingSerializer(booking, context={'request': request}).data,
+            'return_booking': BookingSerializer(
+                return_booking, context={'request': request},
+            ).data,
+        })
 
     @action(detail=True, methods=['get', 'post'], url_path='messages')
     def messages(self, request, pk=None):

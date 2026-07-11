@@ -154,6 +154,9 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()
 
 PUBLIC_APP_URL = config('PUBLIC_APP_URL', default='http://localhost:3000')
 
+# Customers cannot book / reschedule into slots starting sooner than this.
+CUSTOMER_BOOKING_LEAD_HOURS = config('CUSTOMER_BOOKING_LEAD_HOURS', default=2, cast=int)
+
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@luminexa.local')
 EMAIL_BACKEND = config(
     'EMAIL_BACKEND',

@@ -9,7 +9,8 @@ export default function parseApiError(err, fallback = 'Request failed.') {
     if (err?.code === 'ECONNABORTED') {
       return 'Request timed out. The server may be restarting — wait a moment and try again.';
     }
-    return 'Cannot reach the server. Make sure Docker is running and open http://localhost:3000';
+    const host = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3000';
+    return `Cannot reach the server at ${host}. Try http://127.0.0.1:3000 or https://app.luminex-a.com, then hard-refresh (Ctrl+Shift+R).`;
   }
 
   const status = err.response.status;

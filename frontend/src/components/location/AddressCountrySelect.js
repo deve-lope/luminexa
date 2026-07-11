@@ -15,7 +15,7 @@ export default function AddressCountrySelect({
   className = '',
   selectClassName,
   dark = false,
-        hint = 'Americas only — address suggestions are limited to this country.',
+  hint = 'Auto-detected from your network when possible. Change if it looks wrong.',
   grouped = true,
 }) {
   const selectCls =

@@ -530,9 +530,11 @@ def _photon_search(q: str, *, limit: int, country: str) -> list[dict]:
 
 
 def _photon_search_request(q: str, *, limit: int, country: str) -> list[dict]:
+    # Over-fetch then filter — Photon has no reliable countrycodes param.
+    fetch_limit = max(1, min(limit * 4 if country else limit, 16))
     params = [
         ('q', q),
-        ('limit', str(max(1, min(limit, 8)))),
+        ('limit', str(fetch_limit)),
         ('lang', 'en'),
         ('layer', 'house'),
         ('layer', 'street'),
@@ -684,6 +686,32 @@ def search_locations(query: str, *, limit: int = 5, country: str = '') -> list[d
     q = (query or '').strip()
     if len(q) < _min_search_length(q):
         return []
+
+    # Canadian postal / FSA → prefer geocoder.ca before Photon (avoids random worldwide hits).
+    if country and countries_match('Canada', country) and is_canadian_postal(normalize_postal_code(q)):
+        results = _geocoder_ca_address_search(q, limit=limit)
+        if results:
+            return results
+        postal_hit = lookup_postal_location(q, country='Canada')
+        if postal_hit and postal_hit.get('latitude') is not None:
+            return [{
+                'display_name': ', '.join(
+                    p for p in (
+                        postal_hit.get('city'),
+                        postal_hit.get('state'),
+                        postal_hit.get('postal_code'),
+                        'Canada',
+                    ) if p
+                ),
+                'latitude': postal_hit['latitude'],
+                'longitude': postal_hit['longitude'],
+                'city': postal_hit.get('city') or '',
+                'state': postal_hit.get('state') or '',
+                'postal_code': postal_hit.get('postal_code') or '',
+                'country': 'Canada',
+                'street': '',
+                'source': 'postal',
+            }]
 
     # Photon first — Nominatim public API is heavily rate-limited (HTTP 429).
     results = _photon_search(q, limit=limit, country=country)

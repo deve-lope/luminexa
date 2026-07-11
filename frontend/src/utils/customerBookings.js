@@ -6,6 +6,7 @@ export function bookingStatusLabel(status, { isPast = false } = {}) {
   }
   if (status === 'confirmed') return isPast ? 'Confirmed (past)' : 'Confirmed';
   if (status === 'in_progress') return 'In progress';
+  if (status === 'needs_return') return 'Needs return visit';
   if (status === 'cancelled') return 'Cancelled';
   if (status === 'completed') return 'Completed';
   return status?.replace(/_/g, ' ') || status;
@@ -15,6 +16,7 @@ export function bookingStatusClass(status) {
   if (status === 'requested') return 'bg-amber-100 text-amber-800';
   if (status === 'confirmed') return 'bg-emerald-100 text-emerald-800';
   if (status === 'in_progress') return 'bg-sky-100 text-sky-800';
+  if (status === 'needs_return') return 'bg-orange-100 text-orange-900';
   if (status === 'cancelled') return 'bg-slate-100 text-slate-600';
   if (status === 'completed') return 'bg-violet-100 text-violet-800';
   return 'bg-slate-100 text-slate-700';
@@ -25,7 +27,13 @@ export function isPastBooking(booking, now = new Date()) {
 }
 
 export function isUpcomingBooking(booking, now = new Date()) {
-  if (booking.status === 'completed' || booking.status === 'cancelled') return false;
+  if (
+    booking.status === 'completed' ||
+    booking.status === 'cancelled' ||
+    booking.status === 'needs_return'
+  ) {
+    return false;
+  }
   return !isPastBooking(booking, now);
 }
 

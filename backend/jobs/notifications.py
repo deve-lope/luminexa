@@ -184,10 +184,14 @@ def send_booking_email(event, booking):
             f'Service: {service_name}',
             f'Date: {when}',
         ]
-        if booking.service_id and hasattr(booking, 'service') and booking.service.base_price:
-            from decimal import Decimal
-            price = booking.service.base_price
-            customer_lines.append(f'Price: ${price:,.2f}')
+        try:
+            inv = booking.invoice
+            customer_lines.append(f'Invoice: {inv.number}')
+            customer_lines.append(f'Amount: ${inv.amount:,.2f}')
+        except Exception:
+            if booking.service_id and hasattr(booking, 'service') and booking.service.base_price:
+                price = booking.service.base_price
+                customer_lines.append(f'Price: ${price:,.2f}')
         customer_lines += [
             '',
             f'Thank you for choosing {org.name}!',

@@ -1,6 +1,22 @@
 /** Build calendar day map from open availability slots only. */
 import { formatLocalDateKey } from './dateRange';
 
+/** Matches backend CUSTOMER_BOOKING_LEAD_HOURS (default 2). */
+export const CUSTOMER_BOOKING_LEAD_HOURS = 2;
+export const CUSTOMER_BOOKING_LEAD_MS = CUSTOMER_BOOKING_LEAD_HOURS * 60 * 60 * 1000;
+
+export function earliestBookableTimestamp(nowMs = Date.now()) {
+  return nowMs + CUSTOMER_BOOKING_LEAD_MS;
+}
+
+export function isSlotBookableForCustomer(slot, nowMs = Date.now()) {
+  if (!slot?.start_at) return false;
+  if (slot.available === false) return false;
+  const start = new Date(slot.start_at).getTime();
+  if (Number.isNaN(start)) return false;
+  return start >= earliestBookableTimestamp(nowMs);
+}
+
 export function slotLocalDayKey(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
@@ -26,7 +42,7 @@ export function normalizeBookingCalendar(calendar) {
   const rawSlotsByDay = calendar.slots_by_day || {};
   const slotsByDay = {};
   const days = { ...(calendar.days || {}) };
-  const now = Date.now();
+  const earliest = earliestBookableTimestamp();
 
   for (const slots of Object.values(rawSlotsByDay)) {
     for (const slot of slots) {
@@ -34,7 +50,15 @@ export function normalizeBookingCalendar(calendar) {
       if (!key) continue;
       if (!slotsByDay[key]) slotsByDay[key] = [];
       if (!slotsByDay[key].some((s) => s.id === slot.id)) {
-        slotsByDay[key].push(slot);
+        const start = new Date(slot.start_at).getTime();
+        const bookable =
+          Boolean(slot.available) &&
+          !Number.isNaN(start) &&
+          start >= earliest;
+        slotsByDay[key].push({
+          ...slot,
+          available: bookable,
+        });
       }
     }
   }
@@ -46,9 +70,7 @@ export function normalizeBookingCalendar(calendar) {
 
   for (const [key, slots] of Object.entries(slotsByDay)) {
     if (monthPrefix && !key.startsWith(monthPrefix)) continue;
-    const open = slots.filter(
-      (s) => s.available && new Date(s.start_at).getTime() > now
-    );
+    const open = slots.filter((s) => s.available);
     if (open.length > 0) {
       days[key] = {
         ...(days[key] || {}),
@@ -70,12 +92,12 @@ export function firstBookableDayKey(days) {
 }
 
 export function buildOpenSlotDays(openSlots) {
-  const now = Date.now();
+  const earliest = earliestBookableTimestamp();
   const days = {};
   for (const slot of openSlots || []) {
     if (slot.status !== 'open') continue;
-    const start = new Date(slot.start_at);
-    if (start.getTime() <= now) continue;
+    const start = new Date(slot.start_at).getTime();
+    if (Number.isNaN(start) || start < earliest) continue;
     const key = slotLocalDayKey(slot.start_at);
     if (!key) continue;
     if (!days[key]) {
@@ -87,20 +109,19 @@ export function buildOpenSlotDays(openSlots) {
 }
 
 export function openSlotsOnDay(openSlots, dayKey) {
-  const now = Date.now();
+  const earliest = earliestBookableTimestamp();
   return (openSlots || [])
     .filter(
       (s) =>
         s.status === 'open' &&
         slotLocalDayKey(s.start_at) === dayKey &&
-        new Date(s.start_at).getTime() > now
+        new Date(s.start_at).getTime() >= earliest
     )
     .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
 }
 
 export function openSlotsInMonth(openSlots, year, month) {
-  const prefix = `${year}-${String(month).padStart(2, '0')}`;
   return (openSlots || []).filter(
-    (s) => s.status === 'open' && slotLocalDayKey(s.start_at).startsWith(prefix)
+    (s) => s.status === 'open' && slotLocalDayKey(s.start_at).startsWith(`${year}-${String(month).padStart(2, '0')}`)
   );
 }

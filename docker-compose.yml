@@ -22,6 +22,7 @@ services:
     container_name: luminexa-web
     ports:
       - "0.0.0.0:9001:9001"
+      - "[::]:9001:9001"
     env_file:
       - .env.docker.prod
     environment:
@@ -88,6 +89,7 @@ services:
     container_name: luminexa-frontend
     ports:
       - "0.0.0.0:3000:80"
+      - "[::]:3000:80"
     depends_on:
       - web
     restart: unless-stopped

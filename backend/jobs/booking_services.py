@@ -4,6 +4,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from businesses.models import Organization, OrganizationMembership
 
+from .booking_lead import assert_slot_bookable_for_customer
 from .models import AvailabilitySlot, Booking, Service
 
 
@@ -132,8 +133,7 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
 
     if slot.status != AvailabilitySlot.Status.OPEN:
         raise ValidationError({'slot_id': 'This slot is no longer available.'})
-    if slot.start_at <= timezone.now():
-        raise ValidationError({'slot_id': 'This slot is in the past.'})
+    assert_slot_bookable_for_customer(slot)
 
     if not customer_can_book(org, customer):
         if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
@@ -288,8 +288,6 @@ def reschedule_booking(booking, *, new_slot, by_user):
         raise ValidationError({'slot_id': 'Slot must belong to the same business.'})
     if new_slot.service_id != booking.service_id:
         raise ValidationError({'slot_id': 'Slot must be for the same service.'})
-    if new_slot.start_at <= timezone.now():
-        raise ValidationError({'slot_id': 'Cannot reschedule to a past slot.'})
     is_customer = booking.customer_id == by_user.id
     is_staff = OrganizationMembership.objects.filter(
         organization=booking.organization,
@@ -301,6 +299,10 @@ def reschedule_booking(booking, *, new_slot, by_user):
     ).exists()
     if not is_customer and not is_staff:
         raise PermissionDenied('You cannot reschedule this booking.')
+    if is_customer:
+        assert_slot_bookable_for_customer(new_slot)
+    elif new_slot.start_at <= timezone.now():
+        raise ValidationError({'slot_id': 'Cannot reschedule to a past slot.'})
     old_slot = booking.availability_slot
     if old_slot:
         release_slot(old_slot)
@@ -346,3 +348,92 @@ def mark_booking_no_show(booking, *, staff_user):
     if booking.availability_slot_id:
         release_slot(booking.availability_slot)
     return booking
+
+
+def _require_staff(booking, staff_user, action_label='do this'):
+    if not OrganizationMembership.objects.filter(
+        organization=booking.organization,
+        user=staff_user,
+        role__in=(
+            OrganizationMembership.Role.OWNER,
+            OrganizationMembership.Role.STAFF,
+        ),
+    ).exists():
+        raise PermissionDenied(f'Only staff can {action_label}.')
+
+
+@transaction.atomic
+def mark_booking_incomplete(booking, *, staff_user, note=''):
+    """Mark an in-progress job as incomplete; a return visit can be scheduled separately."""
+    if booking.status != Booking.Status.IN_PROGRESS:
+        raise ValidationError({'status': 'Only in-progress jobs can be marked incomplete.'})
+    _require_staff(booking, staff_user, 'mark bookings incomplete')
+    booking.status = Booking.Status.NEEDS_RETURN
+    booking.save(update_fields=['status', 'updated_at'])
+    return booking
+
+
+@transaction.atomic
+def schedule_return_visit(booking, *, new_slot, staff_user, note=''):
+    """
+    Create a linked return-visit booking for incomplete work.
+    Accepts in_progress (marks incomplete first) or needs_return.
+    """
+    if booking.status not in (Booking.Status.IN_PROGRESS, Booking.Status.NEEDS_RETURN):
+        raise ValidationError({
+            'status': 'Only in-progress or needs-return bookings can schedule a return visit.',
+        })
+    _require_staff(booking, staff_user, 'schedule return visits')
+    if booking.parent_booking_id:
+        raise ValidationError({
+            'booking': 'Schedule the return visit from the original booking, not from a return visit.',
+        })
+    if new_slot.status != AvailabilitySlot.Status.OPEN:
+        raise ValidationError({'slot_id': 'The selected slot is not available.'})
+    if new_slot.organization_id != booking.organization_id:
+        raise ValidationError({'slot_id': 'Slot must belong to the same business.'})
+    if new_slot.service_id and new_slot.service_id != booking.service_id:
+        raise ValidationError({'slot_id': 'Slot must be for the same service.'})
+    if new_slot.start_at <= timezone.now():
+        raise ValidationError({'slot_id': 'Cannot schedule a return visit in the past.'})
+
+    open_return = booking.return_visits.filter(
+        status__in=(
+            Booking.Status.REQUESTED,
+            Booking.Status.CONFIRMED,
+            Booking.Status.IN_PROGRESS,
+        ),
+    ).exists()
+    if open_return:
+        raise ValidationError({
+            'booking': 'A return visit is already scheduled for this job.',
+        })
+
+    if booking.status == Booking.Status.IN_PROGRESS:
+        booking.status = Booking.Status.NEEDS_RETURN
+        booking.save(update_fields=['status', 'updated_at'])
+
+    note_text = (note or '').strip()
+    child_notes_parts = ['[Return visit for incomplete work]']
+    if note_text:
+        child_notes_parts.append(note_text)
+    if booking.customer_notes:
+        child_notes_parts.append(booking.customer_notes)
+
+    return_booking = Booking.objects.create(
+        organization=booking.organization,
+        service=booking.service,
+        customer=booking.customer,
+        availability_slot=new_slot,
+        parent_booking=booking,
+        start_at=new_slot.start_at,
+        end_at=new_slot.end_at,
+        status=Booking.Status.CONFIRMED,
+        source=Booking.Source.PROVIDER_DIRECT,
+        booked_by=staff_user,
+        customer_notes='\n\n'.join(child_notes_parts),
+        service_address=booking.service_address or '',
+    )
+    new_slot.status = AvailabilitySlot.Status.BOOKED
+    new_slot.save(update_fields=['status', 'updated_at'])
+    return return_booking

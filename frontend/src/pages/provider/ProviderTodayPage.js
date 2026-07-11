@@ -19,6 +19,7 @@ import { parseApiError } from '../../utils/taskDisplay';
 
 function jobAccent(status) {
   if (status === 'in_progress') return 'from-violet-500 to-violet-700';
+  if (status === 'needs_return') return 'from-amber-500 to-orange-600';
   return 'from-luminexa-accent to-violet-600';
 }
 
@@ -147,6 +148,7 @@ export default function ProviderTodayPage() {
 
   const stats = dashboard.stats || {};
   const jobs = dashboard.upcoming_jobs || [];
+  const needsReturnJobs = dashboard.needs_return_jobs || [];
   const moreJobs = Math.max(0, (stats.upcoming_count ?? jobs.length) - jobs.length);
   const moreOpenTasks = Math.max(0, (stats.tasks_open_total ?? 0) - (stats.tasks_open_shown ?? 0));
   const moreDoneTasks = Math.max(0, (stats.tasks_done_total ?? 0) - (stats.tasks_done_shown ?? 0));
@@ -356,6 +358,41 @@ export default function ProviderTodayPage() {
           </p>
         )}
       </section>
+
+      {needsReturnJobs.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">Needs return visit</h2>
+            <span className="text-xs font-medium text-amber-800">
+              {stats.needs_return_count ?? needsReturnJobs.length}
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {needsReturnJobs.map((job) => (
+              <li key={job.id}>
+                <Link
+                  to={providerScheduleDetail(orgSlug, 'booking', job.id)}
+                  className="lx-card-interactive block overflow-hidden p-0 ring-1 ring-amber-100 hover:ring-amber-200"
+                >
+                  <div className={`h-1 bg-gradient-to-r ${jobAccent(job.status)}`} />
+                  <div className="flex gap-3 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900">{job.service_name}</p>
+                      <p className="text-sm text-slate-600">{job.customer_name}</p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        Incomplete · schedule follow-up
+                      </p>
+                    </div>
+                    <div className="flex items-center text-slate-300">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 font-semibold text-slate-900">Manage your business</h2>

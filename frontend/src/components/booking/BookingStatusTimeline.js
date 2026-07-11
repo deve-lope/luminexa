@@ -6,9 +6,12 @@ const ACTION_LABELS = {
   accepted: 'Accepted by provider',
   declined: 'Declined',
   cancelled: 'Cancelled',
+  started: 'Job started',
   completed: 'Marked complete',
   rescheduled: 'Rescheduled',
   no_show: 'Marked no-show',
+  incomplete: 'Marked incomplete — return visit needed',
+  return_scheduled: 'Return visit scheduled',
 };
 
 export default function BookingStatusTimeline({ events }) {

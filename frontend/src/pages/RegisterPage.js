@@ -100,7 +100,7 @@ export default function RegisterPage() {
               value={addressCountry}
               onChange={setAddressCountry}
               dark
-              hint="Americas only — pick the country where you receive services."
+              hint="Auto-detected from your network when possible — pick where you receive services."
             />
           </div>
           <div>

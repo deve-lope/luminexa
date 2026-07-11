@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Link } from 'react-router-dom';
 import { businessesAPI } from '../../utils/api';
 import {
   DEFAULT_RADIUS_MILES,
@@ -17,7 +16,8 @@ import {
   normalizePostalInput,
 } from '../../utils/postalInput';
 
-const DEFAULT_CENTER = [43.6532, -79.3832];
+const DEFAULT_CENTER = [45.4215, -75.6972]; // Ottawa — matches current demo providers / Canada default
+const MOVE_SEARCH_DEBOUNCE_MS = 450;
 
 const userPin = L.divIcon({
   className: '',
@@ -60,50 +60,57 @@ function groupByOrg(services) {
   return Object.values(map).filter((o) => o.lat != null && o.lng != null);
 }
 
-export default function CustomerSearchMapView({ services, onLocationSearch }) {
+/**
+ * Map browse for nearby providers.
+ * Search is driven by lat/lng (map center / GPS / postal) — postal is optional.
+ */
+export default function CustomerSearchMapView({
+  services,
+  onLocationSearch,
+  initialLat = null,
+  initialLng = null,
+  initialRadius = DEFAULT_RADIUS_MILES,
+}) {
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const circleRef = useRef(null);
   const centerMarkerRef = useRef(null);
   const providerMarkersRef = useRef([]);
-  const radiusRef = useRef(DEFAULT_RADIUS_MILES);
+  const radiusRef = useRef(initialRadius || DEFAULT_RADIUS_MILES);
+  const ignoreMoveEndRef = useRef(false);
+  const moveTimerRef = useRef(null);
+  const bootstrappedRef = useRef(false);
 
   const [postal, setPostal] = useState('');
-  const [centerLat, setCenterLat] = useState(null);
-  const [centerLng, setCenterLng] = useState(null);
-  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
+  const [centerLat, setCenterLat] = useState(initialLat);
+  const [centerLng, setCenterLng] = useState(initialLng);
+  const [radiusMiles, setRadiusMiles] = useState(initialRadius || DEFAULT_RADIUS_MILES);
   const [lookupStatus, setLookupStatus] = useState('idle');
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState(null);
   const lookupSeq = useRef(0);
   const gpsAvailable = canUseBrowserGeolocation();
 
-  // Keep radius ref in sync
-  useEffect(() => { radiusRef.current = radiusMiles; }, [radiusMiles]);
-
-  // Init map
   useEffect(() => {
-    if (!mapEl.current || mapRef.current) return undefined;
-    const map = L.map(mapEl.current, { center: DEFAULT_CENTER, zoom: 9, zoomControl: true });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap',
-      maxZoom: 19,
-    }).addTo(map);
-    L.control.scale({ imperial: true, metric: false }).addTo(map);
-    mapRef.current = map;
-    window.setTimeout(() => map.invalidateSize(), 120);
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      circleRef.current = null;
-      centerMarkerRef.current = null;
-      providerMarkersRef.current = [];
-    };
-  }, []);
+    radiusRef.current = radiusMiles;
+  }, [radiusMiles]);
 
-  const applyCenter = useCallback((lat, lng, radius) => {
+  const emitSearch = useCallback(
+    (lat, lng, nextPostal) => {
+      if (lat == null || lng == null) return;
+      onLocationSearch?.({
+        postal: nextPostal != null ? normalizePostalInput(nextPostal) : normalizePostalInput(postal),
+        lat,
+        lng,
+        radiusMiles: radiusRef.current,
+      });
+    },
+    [onLocationSearch, postal]
+  );
+
+  const applyCenter = useCallback((lat, lng, radius, { fit = true, emit = false } = {}) => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || lat == null || lng == null) return;
     const meters = (radius || radiusRef.current) * MILES_TO_METERS;
 
     if (!circleRef.current) {
@@ -124,26 +131,84 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
       centerMarkerRef.current.setLatLng([lat, lng]);
     }
 
-    map.fitBounds(circleRef.current.getBounds(), { padding: [32, 32], maxZoom: 13, animate: true });
     setCenterLat(lat);
     setCenterLng(lng);
+
+    if (fit) {
+      ignoreMoveEndRef.current = true;
+      map.fitBounds(circleRef.current.getBounds(), { padding: [32, 32], maxZoom: 13, animate: true });
+      window.setTimeout(() => {
+        ignoreMoveEndRef.current = false;
+      }, 400);
+    }
+
+    if (emit) {
+      emitSearch(lat, lng);
+    }
+  }, [emitSearch]);
+
+  // Init map + search around center (no PIN required)
+  useEffect(() => {
+    if (!mapEl.current || mapRef.current) return undefined;
+
+    const startLat = initialLat != null ? Number(initialLat) : DEFAULT_CENTER[0];
+    const startLng = initialLng != null ? Number(initialLng) : DEFAULT_CENTER[1];
+
+    const map = L.map(mapEl.current, {
+      center: [startLat, startLng],
+      zoom: 11,
+      zoomControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(map);
+    L.control.scale({ imperial: true, metric: false }).addTo(map);
+    mapRef.current = map;
+    window.setTimeout(() => map.invalidateSize(), 120);
+
+    const onMoveEnd = () => {
+      if (ignoreMoveEndRef.current) return;
+      if (moveTimerRef.current) window.clearTimeout(moveTimerRef.current);
+      moveTimerRef.current = window.setTimeout(() => {
+        const c = map.getCenter();
+        applyCenter(c.lat, c.lng, radiusRef.current, { fit: false, emit: true });
+      }, MOVE_SEARCH_DEBOUNCE_MS);
+    };
+    map.on('moveend', onMoveEnd);
+
+    // First paint: show radius + load providers for this area
+    window.setTimeout(() => {
+      if (bootstrappedRef.current) return;
+      bootstrappedRef.current = true;
+      applyCenter(startLat, startLng, radiusRef.current, { fit: true, emit: true });
+    }, 80);
+
+    return () => {
+      if (moveTimerRef.current) window.clearTimeout(moveTimerRef.current);
+      map.off('moveend', onMoveEnd);
+      map.remove();
+      mapRef.current = null;
+      circleRef.current = null;
+      centerMarkerRef.current = null;
+      providerMarkersRef.current = [];
+      bootstrappedRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- init once
   }, []);
 
-  // Update circle radius when slider changes
   const handleRadiusChange = (e) => {
     const next = Number(e.target.value);
     setRadiusMiles(next);
-    if (circleRef.current && centerLat != null) {
+    radiusRef.current = next;
+    if (circleRef.current && centerLat != null && centerLng != null) {
       circleRef.current.setRadius(next * MILES_TO_METERS);
+      ignoreMoveEndRef.current = true;
       mapRef.current?.fitBounds(circleRef.current.getBounds(), { padding: [32, 32], maxZoom: 13 });
-    }
-    if (centerLat != null && postal) {
-      onLocationSearch?.({
-        postal: normalizePostalInput(postal),
-        lat: centerLat,
-        lng: centerLng,
-        radiusMiles: next,
-      });
+      window.setTimeout(() => {
+        ignoreMoveEndRef.current = false;
+      }, 400);
+      emitSearch(centerLat, centerLng);
     }
   };
 
@@ -171,14 +236,16 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
       setPostal(normalized);
       setLookupStatus('success');
       if (lat != null && lng != null) {
-        applyCenter(lat, lng, radiusRef.current);
+        applyCenter(lat, lng, radiusRef.current, { fit: true, emit: false });
+        onLocationSearch?.({
+          postal: normalized,
+          lat,
+          lng,
+          radiusMiles: radiusRef.current,
+        });
+      } else {
+        setError('Could not find that postal code. Pan the map or try another code.');
       }
-      onLocationSearch?.({
-        postal: normalized,
-        lat,
-        lng,
-        radiusMiles: radiusRef.current,
-      });
     },
     [applyCenter, onLocationSearch]
   );
@@ -200,7 +267,6 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
     const map = mapRef.current;
     if (!map) return;
 
-    // Clear old markers
     providerMarkersRef.current.forEach((m) => m.remove());
     providerMarkersRef.current = [];
 
@@ -236,65 +302,54 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
     });
   }, [services]);
 
-  const doLocationSearch = useCallback(
-    (lat, lng, nextPostal) => {
-      applyCenter(lat, lng, radiusRef.current);
-      onLocationSearch?.({
-        postal: nextPostal ? normalizePostalInput(nextPostal) : normalizePostalInput(postal),
-        lat,
-        lng,
-        radiusMiles: radiusRef.current,
-      });
-    },
-    [applyCenter, onLocationSearch, postal]
-  );
-
   const handleUseLocation = () => {
     if (!gpsAvailable) return;
     setLocating(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
         try {
-          const res = await businessesAPI.reverseGeocode({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
+          const res = await businessesAPI.reverseGeocode({ lat, lng });
           const code = normalizePostalInput(res.data?.postal_code);
-          if (code) {
-            setPostal(code);
-          } else {
-            doLocationSearch(pos.coords.latitude, pos.coords.longitude);
-          }
+          if (code) setPostal(code);
+          applyCenter(lat, lng, radiusRef.current, { fit: true, emit: false });
+          onLocationSearch?.({
+            postal: code || '',
+            lat,
+            lng,
+            radiusMiles: radiusRef.current,
+          });
         } catch {
-          doLocationSearch(pos.coords.latitude, pos.coords.longitude);
+          applyCenter(lat, lng, radiusRef.current, { fit: true, emit: true });
         } finally {
           setLocating(false);
         }
       },
       () => {
         setLocating(false);
-        setError('Could not get your location. Enter your ZIP / postal code instead.');
+        setError('Could not get your location. Pan the map or enter a postal code.');
       },
       { enableHighAccuracy: true, timeout: 12000 }
     );
   };
 
   const orgsOnMap = groupByOrg(services || []);
+  const hasCenter = centerLat != null && centerLng != null;
 
   return (
     <div className="space-y-3">
-      {/* ZIP / postal code */}
       <div className="flex gap-2">
         <div className="flex-1">
           <label htmlFor="map-postal-search" className="mb-1 block text-xs font-medium text-slate-600">
-            ZIP / postal code
+            ZIP / postal code <span className="font-normal text-slate-400">(optional)</span>
           </label>
           <input
             id="map-postal-search"
             value={formatPostalLabel(postal)}
             onChange={(e) => setPostal(normalizePostalInput(e.target.value))}
-            placeholder="e.g. 90210 or M5V 2T6"
+            placeholder="Or pan the map to browse…"
             autoComplete="postal-code"
             className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
           />
@@ -307,7 +362,7 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
             id="map-radius-search"
             value={radiusMiles}
             onChange={handleRadiusChange}
-            disabled={!isPostalSearchReady(postal)}
+            disabled={!hasCenter}
             className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-2 text-sm outline-none focus:border-luminexa-accent disabled:bg-slate-50"
           >
             {RADIUS_MILE_OPTIONS.map((o) => (
@@ -341,13 +396,14 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
 
       {error && <p className="text-xs text-amber-700">{error}</p>}
 
-      {/* Map */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
         <div ref={mapEl} className="h-[380px] w-full bg-slate-100 md:h-[460px]" />
       </div>
+      <p className="text-xs text-slate-500">
+        Drag the map to explore — providers update for the area you&apos;re viewing.
+      </p>
 
-      {/* Radius slider — only shown when a center is set */}
-      {centerLat != null && (
+      {hasCenter && (
         <div className="rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-medium text-slate-700">Search radius</span>
@@ -368,14 +424,13 @@ export default function CustomerSearchMapView({ services, onLocationSearch }) {
         </div>
       )}
 
-      {/* Provider count summary */}
-      {centerLat == null ? (
+      {!hasCenter ? (
         <p className="text-center text-sm text-slate-500">
-          Enter your ZIP / postal code or use your location to find nearby providers.
+          Pan the map, use your location, or enter a postal code to find providers.
         </p>
       ) : orgsOnMap.length === 0 ? (
         <p className="rounded-xl bg-white px-4 py-4 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-100">
-          No providers with a set location found in this area. Try widening the radius.
+          No providers with a set location in this area. Try widening the radius or panning elsewhere.
         </p>
       ) : (
         <p className="text-sm text-slate-600">

@@ -19,7 +19,7 @@ export default function AddressSearchField({
   dark = false,
 }) {
   const { user } = useAuth();
-  const { country: detectedCountry } = useAddressCountry({
+  const { country: detectedCountry, setCountry } = useAddressCountry({
     initialCountry: countryProp || user?.address_country,
   });
   const country = countryProp || detectedCountry;
@@ -88,12 +88,17 @@ export default function AddressSearchField({
     }
     pickingRef.current = false;
     const displayName = item.display_name || '';
+    const pickedCountry = item.country || country || '';
+    // Lock country to the selected result so later searches stay in the right area.
+    if (pickedCountry && !countryProp) {
+      setCountry(pickedCountry);
+    }
     onSelect?.({
       address: displayName,
       city: item.city || '',
       state: item.state || item.province || '',
       postal_code: item.postal_code || '',
-      country: item.country || country || '',
+      country: pickedCountry,
       lat: item.latitude,
       lng: item.longitude,
     });

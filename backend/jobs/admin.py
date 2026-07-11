@@ -4,6 +4,7 @@ from .models import (
     CustomerServiceInquiry,
     AvailabilitySlot,
     Booking,
+    Invoice,
     Service,
     ServiceCategory,
     ServiceRequestMessage,
@@ -40,8 +41,18 @@ class AvailabilitySlotAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('service', 'customer', 'start_at', 'status', 'source', 'organization')
+    list_display = (
+        'service', 'customer', 'start_at', 'status', 'source', 'parent_booking', 'organization',
+    )
     list_filter = ('status', 'source', 'organization')
+    raw_id_fields = ('parent_booking', 'customer', 'availability_slot')
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = ('number', 'booking', 'amount', 'status', 'issued_at', 'paid_at')
+    list_filter = ('status', 'currency')
+    search_fields = ('number',)
 
 
 @admin.register(Task)

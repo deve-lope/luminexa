@@ -4,6 +4,7 @@ import {
   addressSearchDebounceMs,
   addressSearchTerm,
   ADDRESS_SEARCH_MIN_CHARS,
+  guessCountryFromAddressQuery,
   shouldSearchAddressQuery,
 } from '../constants/addressSearch';
 
@@ -17,6 +18,7 @@ function isAbortError(err) {
 
 /**
  * Live address search while typing — fires every 2+ chars or immediately on space.
+ * Country from the typed query (postal / province) overrides the browser default.
  */
 export default function useAddressSearch(query, country) {
   const [results, setResults] = useState([]);
@@ -33,6 +35,7 @@ export default function useAddressSearch(query, country) {
     }
 
     const q = addressSearchTerm(query);
+    const searchCountry = guessCountryFromAddressQuery(q) || country || '';
     setSearching(true);
     setError(null);
     let cancelled = false;
@@ -42,7 +45,7 @@ export default function useAddressSearch(query, country) {
 
     const run = () => {
       businessesAPI
-        .searchMapLocations(q, country, { signal: controller.signal })
+        .searchMapLocations(q, searchCountry, { signal: controller.signal })
         .then((res) => {
           if (cancelled || requestId !== requestIdRef.current) return;
           const list = Array.isArray(res.data?.results) ? res.data.results : [];

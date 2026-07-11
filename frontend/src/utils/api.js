@@ -1,10 +1,21 @@
 import axios from 'axios';
 import { storage } from './helpers';
 
-// Empty string = same-origin (Docker nginx → Django). Unset = local dev default.
-// When the app is opened from a phone via LAN IP but .env still says localhost,
-// rewrite the API host to match the page host so calendar/booking calls succeed.
+// Empty string = same-origin (Docker nginx → Django). Unset = local npm default.
+// Prefer same-origin whenever the SPA is served from the frontend port or public domain,
+// so stale builds that baked localhost:9001 still work in the browser.
 function resolveApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    const { hostname, port } = window.location;
+    const onFrontendPort = port === '3000' || port === '80' || port === '443' || port === '';
+    const onKnownHost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.endsWith('luminex-a.com');
+    if (onFrontendPort && onKnownHost) {
+      return '';
+    }
+  }
   if (process.env.REACT_APP_API_URL === '') return '';
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     const pageHost = window.location.hostname;
@@ -12,7 +23,7 @@ function resolveApiBaseUrl() {
     // Phone/tablet on LAN: route API via setupProxy.js (same origin :3000).
     if (!onLocalMachine) return '';
   }
-  const fallback = process.env.REACT_APP_API_URL || 'http://localhost:9001';
+  const fallback = process.env.REACT_APP_API_URL || 'http://127.0.0.1:9001';
   if (typeof window === 'undefined') return fallback;
   try {
     const api = new URL(fallback);
@@ -176,7 +187,15 @@ export const jobsAPI = {
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
   cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
-  completeBooking: (id) => api.post(`/api/v1/bookings/${id}/complete/`),
+  completeBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/complete/`, data),
+  getBookingInvoice: (id) => api.get(`/api/v1/bookings/${id}/invoice/`),
+  issueBookingInvoice: (id, data) => api.post(`/api/v1/bookings/${id}/invoice/`, data),
+  markBookingInvoicePaid: (id) => api.post(`/api/v1/bookings/${id}/invoice/mark-paid/`),
+  bookingInvoiceDownloadUrl: (id) => `/api/v1/bookings/${id}/invoice/download/`,
+  markBookingIncomplete: (id, data = {}) =>
+    api.post(`/api/v1/bookings/${id}/incomplete/`, data),
+  scheduleReturnVisit: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/return-visit/`, data),
   rescheduleBooking: (id, slotId) =>
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),

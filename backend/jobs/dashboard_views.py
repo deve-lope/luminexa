@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Case, DateTimeField, IntegerField, Q, Value, When
+from django.db.models import Case, DateTimeField, Exists, IntegerField, OuterRef, Q, Value, When
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -57,6 +57,27 @@ class ProviderDashboardAPIView(APIView):
         )
         upcoming_total = upcoming_qs.count()
         upcoming = upcoming_qs[:HOME_JOB_LIMIT]
+
+        open_return = Booking.objects.filter(
+            parent_booking_id=OuterRef('pk'),
+            status__in=(
+                Booking.Status.REQUESTED,
+                Booking.Status.CONFIRMED,
+                Booking.Status.IN_PROGRESS,
+            ),
+        )
+        needs_return_qs = (
+            Booking.objects.filter(
+                organization=org,
+                status=Booking.Status.NEEDS_RETURN,
+            )
+            .annotate(has_open_return=Exists(open_return))
+            .filter(has_open_return=False)
+            .select_related('service', 'customer')
+            .order_by('-start_at')
+        )
+        needs_return_total = needs_return_qs.count()
+        needs_return = needs_return_qs[:HOME_JOB_LIMIT]
 
         pending_requests = (
             Booking.objects.filter(
@@ -125,6 +146,8 @@ class ProviderDashboardAPIView(APIView):
                 'upcoming_count': upcoming_total,
                 'upcoming_shown': len(upcoming),
                 'upcoming_window_days': HOME_JOB_WINDOW_DAYS,
+                'needs_return_count': needs_return_total,
+                'needs_return_shown': len(needs_return),
                 'tasks_open_total': open_tasks_total,
                 'tasks_open_shown': len(open_tasks_shown),
                 'tasks_done_total': done_tasks_total,
@@ -133,6 +156,7 @@ class ProviderDashboardAPIView(APIView):
                 'customer_inquiries_count': customer_inquiries.count(),
             },
             'upcoming_jobs': BookingDashboardSerializer(upcoming, many=True).data,
+            'needs_return_jobs': BookingDashboardSerializer(needs_return, many=True).data,
             'pending_requests': BookingDashboardSerializer(pending_requests, many=True).data,
             'tasks': TaskSerializer(dashboard_tasks, many=True, context=ctx).data,
             'notifications': ProviderNotificationSerializer(notifications, many=True).data,

@@ -165,7 +165,14 @@ export default function LocationSearchBar({
     setLat(nextLat);
     setLng(nextLng);
     setHasLocation(true);
-    onLocationChange?.({ lat: nextLat, lng: nextLng, label: displayLabel, radiusMiles: pendingRadius });
+    onLocationChange?.({
+      lat: nextLat,
+      lng: nextLng,
+      label: displayLabel,
+      postal: payload.postal_code || payload.postal || '',
+      country: payload.country || '',
+      radiusMiles: pendingRadius,
+    });
   };
 
   const handleAddressSelect = (payload) => {

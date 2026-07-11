@@ -207,11 +207,6 @@ export default function CustomerBookServicePage() {
   }, []);
 
   const validateBookingDetails = useCallback(() => {
-    const detail = notes.trim();
-    if (detail.length < 10) {
-      showAlertPopup('Please describe what you need in at least 10 characters.');
-      return false;
-    }
     if (!serviceAddress.trim()) {
       showAlertPopup('Please enter the service location.');
       return false;
@@ -226,7 +221,7 @@ export default function CustomerBookServicePage() {
       return false;
     }
     return true;
-  }, [notes, serviceAddress, canSubmitBooking, showAlertPopup]);
+  }, [serviceAddress, canSubmitBooking, showAlertPopup]);
 
   const handleSlotTap = useCallback(
     (slot) => {
@@ -497,6 +492,9 @@ export default function CustomerBookServicePage() {
                   day: 'numeric',
                 })}
               </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Times already started, or starting within the next 2 hours, are not available to book.
+              </p>
               {slotsForDay.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">No open slots this day.</p>
               ) : (
@@ -557,6 +555,7 @@ export default function CustomerBookServicePage() {
                 showLocation={false}
                 showAddressPreview={Boolean((serviceAddress || '').trim())}
                 compact
+                requireMessage={false}
               />
 
               {!canSubmitBooking && connection === 'pending' && (

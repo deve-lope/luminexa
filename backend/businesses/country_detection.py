@@ -112,20 +112,44 @@ def normalize_country_name(country: str) -> str:
 
 
 def countries_match(actual: str, expected: str) -> bool:
+    """True if result country matches the requested filter country.
+
+    Unknown / non-Americas countries (e.g. France) must NOT match when a
+    filter is set — previously empty normalize() incorrectly treated them as OK.
+    """
     if not expected:
         return True
-    a = normalize_country_name(actual).lower()
-    e = normalize_country_name(expected).lower()
-    if not a or not e:
+    e = normalize_country_name(expected).lower() or (expected or '').strip().lower()
+    if not e:
         return True
-    return a == e
+    a_raw = (actual or '').strip()
+    if not a_raw:
+        return False
+    a = normalize_country_name(a_raw).lower()
+    if a:
+        return a == e
+    return a_raw.lower() == e
 
 
 def _client_ip(request) -> str:
+    """Best-effort public client IP (Cloudflare / proxies first)."""
+    candidates: list[str] = [
+        (request.META.get('HTTP_CF_CONNECTING_IP') or '').strip(),
+        (request.META.get('HTTP_TRUE_CLIENT_IP') or '').strip(),
+        (request.META.get('HTTP_X_REAL_IP') or '').strip(),
+    ]
     forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').strip()
     if forwarded:
-        return forwarded.split(',')[0].strip()
-    return (request.META.get('REMOTE_ADDR') or '').strip()
+        candidates.extend(part.strip() for part in forwarded.split(',') if part.strip())
+    candidates.append((request.META.get('REMOTE_ADDR') or '').strip())
+
+    for ip in candidates:
+        if ip and not _is_private_ip(ip):
+            return ip
+    for ip in candidates:
+        if ip:
+            return ip
+    return ''
 
 
 def _is_private_ip(ip: str) -> bool:
@@ -146,52 +170,59 @@ def _is_private_ip(ip: str) -> bool:
     return False
 
 
+def _country_from_iso_code(code: str) -> str:
+    """Map ISO code to a supported Americas country name, or '' if out of market."""
+    return country_name_from_iso((code or '').strip().upper())
+
+
 def _lookup_ip_country(ip: str) -> str:
+    """Resolve public IP → Americas country name (cached). Empty if outside market / fail."""
     cache_key = f'lx:geoip:{ip}'
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    url = f'https://get.geojs.io/v1/ip/country/{quote(ip)}.json'
-    req = Request(url, headers={'User-Agent': _USER_AGENT})
+    name = ''
+    # Primary: GeoJS
     try:
+        url = f'https://get.geojs.io/v1/ip/country/{quote(ip)}.json'
+        req = Request(url, headers={'User-Agent': _USER_AGENT})
         with urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode())
-        code = (data.get('country') or '').strip().upper()
-        name = country_name_from_iso(code)
+        name = _country_from_iso_code(data.get('country') or '')
     except (URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
         name = ''
+
+    # Fallback: ipwho.is when GeoJS fails or returns a non-Americas country
+    if not name:
+        try:
+            url = f'https://ipwho.is/{quote(ip)}'
+            req = Request(url, headers={'User-Agent': _USER_AGENT})
+            with urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode())
+            if data.get('success') is False:
+                raise ValueError('ipwho failed')
+            name = _country_from_iso_code(data.get('country_code') or '')
+        except (URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+            name = ''
 
     cache.set(cache_key, name, timeout=3600 if name else 300)
     return name
 
 
-def _country_from_accept_language(header: str) -> str:
-    for part in (header or '').split(','):
-        token = part.split(';')[0].strip()
-        match = re.search(r'[-_]([A-Za-z]{2})\s*$', token)
-        if not match:
-            continue
-        name = country_name_from_iso(match.group(1).upper())
-        if name:
-            return name
-    return ''
-
-
 def detect_country_from_request(request) -> tuple[str, str]:
     """
-    Return (country_name, source).
-    source is one of: ip_cf, language, ip_geo, default
+    Return (country_name, source) for Americas markets.
+
+    Prefer physical location (Cloudflare country header, then IP geo).
+    On local/private IPs, fall back to DEFAULT_ADDRESS_COUNTRY (Canada).
+    source: ip_cf | ip_geo | default
     """
     cf = (request.META.get('HTTP_CF_IPCOUNTRY') or '').strip().upper()
     if cf and cf not in ('XX', 'T1'):
-        name = country_name_from_iso(cf)
+        name = _country_from_iso_code(cf)
         if name:
             return name, 'ip_cf'
-
-    lang_country = _country_from_accept_language(request.META.get('HTTP_ACCEPT_LANGUAGE', ''))
-    if lang_country:
-        return lang_country, 'language'
 
     ip = _client_ip(request)
     if ip and not _is_private_ip(ip):
@@ -202,3 +233,84 @@ def detect_country_from_request(request) -> tuple[str, str]:
     default = getattr(settings, 'DEFAULT_ADDRESS_COUNTRY', 'Canada')
     normalized = normalize_country_name(default)
     return normalized or 'Canada', 'default'
+
+
+def guess_country_from_query(query: str) -> str:
+    """Infer country from free-text address / postal input when possible."""
+    import re
+
+    q = (query or '').strip()
+    if not q:
+        return ''
+
+    # Explicit country names in the query win.
+    lowered = q.lower()
+    for needle, name in (
+        ('canada', 'Canada'),
+        ('united states', 'United States'),
+        ('usa', 'United States'),
+        ('u.s.a', 'United States'),
+        ('mexico', 'Mexico'),
+        ('méxico', 'Mexico'),
+        ('brazil', 'Brazil'),
+        ('brasil', 'Brazil'),
+    ):
+        if re.search(rf'\b{re.escape(needle)}\b', lowered):
+            return name
+
+    # Canadian postal: A1A 1A1 or A1A1A1 (also FSA A1A)
+    if re.search(r'\b[A-Za-z]\d[A-Za-z](?:\s?\d[A-Za-z]\d)?\b', q):
+        return 'Canada'
+
+    # US ZIP
+    if re.search(r'\b\d{5}(?:-\d{4})?\b', q):
+        return 'United States'
+
+    # Brazilian CEP
+    if re.search(r'\b\d{5}-?\d{3}\b', q) or re.search(r'\b\d{8}\b', q):
+        return 'Brazil'
+
+    ca_provinces = {
+        'ontario', 'quebec', 'québec', 'british columbia', 'alberta', 'manitoba',
+        'saskatchewan', 'nova scotia', 'new brunswick', 'newfoundland',
+        'prince edward island', 'yukon', 'nunavut', 'northwest territories',
+        ' on ', ' bc ', ' ab ', ' mb ', ' sk ', ' ns ', ' nb ', ' nl ', ' pe ', ' qc ',
+    }
+    padded = f' {lowered} '
+    if any(p in padded or lowered.startswith(p.strip()) or lowered.endswith(p.strip()) for p in ca_provinces):
+        # Avoid matching tiny tokens like "on" inside words — use word boundaries for short codes
+        if re.search(
+            r'\b(ON|BC|AB|MB|SK|NS|NB|NL|PE|QC|YT|NU|NT|Ontario|Quebec|Québec|'
+            r'British Columbia|Alberta|Manitoba|Saskatchewan|Nova Scotia|'
+            r'New Brunswick|Newfoundland|Yukon|Nunavut)\b',
+            q,
+            re.I,
+        ):
+            return 'Canada'
+
+    us_states = {
+        'california', 'texas', 'florida', 'new york', 'illinois', 'washington',
+        'arizona', 'colorado', 'georgia', 'ohio', 'pennsylvania', 'michigan',
+        'massachusetts', 'virginia', 'north carolina', 'new jersey', 'oregon',
+        'nevada', 'minnesota', 'wisconsin', 'tennessee', 'missouri', 'maryland',
+        'indiana', 'alabama', 'louisiana', 'kentucky', 'oklahoma', 'connecticut',
+        'utah', 'iowa', 'arkansas', 'mississippi', 'kansas', 'new mexico',
+        'nebraska', 'idaho', 'hawaii', 'alaska', 'montana', 'delaware',
+        'south carolina', 'south dakota', 'north dakota', 'rhode island',
+        'new hampshire', 'maine', 'vermont', 'west virginia', 'wyoming',
+        'district of columbia',
+    }
+    if any(s in lowered for s in us_states):
+        return 'United States'
+
+    # Common US state codes (avoid 2-letter CA — that's Canada)
+    if re.search(
+        r'\b(AL|AK|AZ|AR|CO|CT|DC|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|'
+        r'MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|'
+        r'UT|VA|VT|WA|WI|WV|WY)\b',
+        q,
+        re.I,
+    ):
+        return 'United States'
+
+    return ''

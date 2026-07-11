@@ -25,7 +25,11 @@ from .message_services import (
 def _booking_bucket(status):
     if status == Booking.Status.REQUESTED:
         return 'pending'
-    if status in (Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS):
+    if status in (
+        Booking.Status.CONFIRMED,
+        Booking.Status.IN_PROGRESS,
+        Booking.Status.NEEDS_RETURN,
+    ):
         return 'active'
     return 'done'
 

@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from businesses.models import Organization, OrganizationMembership
-from jobs.models import AvailabilitySlot, Booking, Service, ServiceRequestMessage
+from jobs.models import AvailabilitySlot, Booking, Invoice, Service, ServiceRequestMessage
 
 
 class BookingLifecycleTests(TestCase):
@@ -120,6 +120,7 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(res.status_code, 200)
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.COMPLETED)
+        self.assertTrue(hasattr(booking, 'invoice') or Invoice.objects.filter(booking=booking).exists())
 
     def test_customer_reschedule_confirmed_booking(self):
         new_start = timezone.now() + timedelta(days=3)
@@ -313,3 +314,108 @@ class BookingLifecycleTests(TestCase):
         new_slot.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.CONFIRMED)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.BOOKED)
+
+    def test_provider_incomplete_schedule_later(self):
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.IN_PROGRESS,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save()
+
+        self._auth(self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/incomplete/',
+            {'note': 'Waiting on a part'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.NEEDS_RETURN)
+        msg = ServiceRequestMessage.objects.filter(booking=booking).order_by('-id').first()
+        self.assertIsNotNone(msg)
+        self.assertIn('could not be finished', msg.body.lower())
+        self.assertIn('Waiting on a part', msg.body)
+
+    def test_provider_incomplete_with_return_visit_slot(self):
+        return_start = timezone.now() + timedelta(days=5)
+        return_end = return_start + timedelta(hours=1)
+        return_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=return_start,
+            end_at=return_end,
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.IN_PROGRESS,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            service_address='123 Main St',
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save()
+
+        self._auth(self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/incomplete/',
+            {'slot_id': return_slot.id, 'note': 'Finish install'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('return_booking', res.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.NEEDS_RETURN)
+        child = Booking.objects.get(pk=res.data['return_booking']['id'])
+        self.assertEqual(child.parent_booking_id, booking.id)
+        self.assertEqual(child.status, Booking.Status.CONFIRMED)
+        self.assertEqual(child.service_address, '123 Main St')
+        return_slot.refresh_from_db()
+        self.assertEqual(return_slot.status, AvailabilitySlot.Status.BOOKED)
+        msg = ServiceRequestMessage.objects.filter(booking=booking).order_by('-id').first()
+        self.assertIsNotNone(msg)
+        self.assertIn('return visit is scheduled', msg.body.lower())
+
+    def test_schedule_return_visit_from_needs_return(self):
+        return_start = timezone.now() + timedelta(days=6)
+        return_end = return_start + timedelta(hours=1)
+        return_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=return_start,
+            end_at=return_end,
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.NEEDS_RETURN,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self._auth(self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/return-visit/',
+            {'slot_id': return_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200)
+        child = Booking.objects.get(pk=res.data['return_booking']['id'])
+        self.assertEqual(child.parent_booking_id, booking.id)
+        self.assertEqual(child.status, Booking.Status.CONFIRMED)

@@ -13,6 +13,7 @@ from .models import (
     Booking,
     BookingStatusEvent,
     CustomerServiceInquiry,
+    Invoice,
     ProviderNotification,
     Service,
     ServiceCategory,
@@ -24,6 +25,22 @@ from .models import (
     WeeklyScheduleBlock,
 )
 from .ratings import aggregate_service_ratings
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Invoice
+        fields = (
+            'id', 'number', 'status', 'currency', 'pricing_type',
+            'estimated_amount', 'estimated_max', 'amount',
+            'description', 'notes', 'issued_at', 'paid_at', 'download_url',
+        )
+        read_only_fields = fields
+
+    def get_download_url(self, obj):
+        return f'/api/v1/bookings/{obj.booking_id}/invoice/download/'
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -408,6 +425,10 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     service_base_price = serializers.DecimalField(
         source='service.base_price', max_digits=10, decimal_places=2, read_only=True,
     )
+    service_pricing_type = serializers.CharField(source='service.pricing_type', read_only=True)
+    service_price_max = serializers.DecimalField(
+        source='service.price_max', max_digits=10, decimal_places=2, read_only=True, allow_null=True,
+    )
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -415,17 +436,58 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
     slot_id = serializers.IntegerField(source='availability_slot_id', read_only=True, allow_null=True)
+    parent_booking_id = serializers.IntegerField(read_only=True, allow_null=True)
+    return_visit_id = serializers.SerializerMethodField()
+    return_visit_start_at = serializers.SerializerMethodField()
+    return_visit_status = serializers.SerializerMethodField()
+    invoice = InvoiceSerializer(read_only=True)
 
     class Meta:
         model = Booking
         fields = (
             'id', 'organization', 'organization_slug', 'organization_public_ref', 'organization_name',
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
+            'service_pricing_type', 'service_price_max',
             'customer', 'customer_name', 'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
-            'customer_notes', 'service_address', 'status_events', 'created_at', 'updated_at',
+            'customer_notes', 'service_address', 'status_events',
+            'parent_booking_id', 'return_visit_id', 'return_visit_start_at', 'return_visit_status',
+            'invoice',
+            'created_at', 'updated_at',
         )
         read_only_fields = fields
+
+    def _latest_return_visit(self, obj):
+        visits = getattr(obj, '_prefetched_objects_cache', {}).get('return_visits')
+        if visits is not None:
+            active = [
+                v for v in visits
+                if v.status in (
+                    Booking.Status.REQUESTED,
+                    Booking.Status.CONFIRMED,
+                    Booking.Status.IN_PROGRESS,
+                    Booking.Status.NEEDS_RETURN,
+                    Booking.Status.COMPLETED,
+                )
+            ]
+            return active[-1] if active else (visits[-1] if visits else None)
+        return (
+            obj.return_visits.exclude(status=Booking.Status.CANCELLED)
+            .order_by('-start_at')
+            .first()
+        )
+
+    def get_return_visit_id(self, obj):
+        visit = self._latest_return_visit(obj)
+        return visit.id if visit else None
+
+    def get_return_visit_start_at(self, obj):
+        visit = self._latest_return_visit(obj)
+        return visit.start_at if visit else None
+
+    def get_return_visit_status(self, obj):
+        visit = self._latest_return_visit(obj)
+        return visit.status if visit else None
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -437,6 +499,10 @@ class BookingSerializer(serializers.ModelSerializer):
     service_base_price = serializers.DecimalField(
         source='service.base_price', max_digits=10, decimal_places=2, read_only=True,
     )
+    service_pricing_type = serializers.CharField(source='service.pricing_type', read_only=True)
+    service_price_max = serializers.DecimalField(
+        source='service.price_max', max_digits=10, decimal_places=2, read_only=True, allow_null=True,
+    )
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -444,6 +510,8 @@ class BookingSerializer(serializers.ModelSerializer):
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
     reference = serializers.SerializerMethodField()
+    parent_booking_id = serializers.IntegerField(read_only=True, allow_null=True)
+    invoice = InvoiceSerializer(read_only=True)
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         source='availability_slot',
@@ -456,17 +524,21 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'reference', 'organization', 'organization_slug', 'organization_public_ref',
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
+            'service_pricing_type', 'service_price_max',
             'organization_name', 'customer', 'customer_name',
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
+            'parent_booking_id', 'invoice',
             'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'reference', 'customer_name', 'customer_email', 'customer_phone',
             'service_name', 'service_duration_minutes', 'service_base_price',
+            'service_pricing_type', 'service_price_max',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
+            'parent_booking_id', 'invoice',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {

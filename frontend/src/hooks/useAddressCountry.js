@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ADDRESS_COUNTRY_STORAGE_KEY,
   SUPPORTED_ADDRESS_COUNTRIES,
-  countryFromNavigator,
   defaultAddressCountry,
   isSupportedAddressCountry,
   normalizeAddressCountry,
@@ -33,6 +32,8 @@ function writeStoredCountry(country, { manual = false } = {}) {
       sessionStorage.setItem(ADDRESS_COUNTRY_STORAGE_KEY, country);
       if (manual) {
         sessionStorage.setItem(ADDRESS_COUNTRY_MANUAL_KEY, '1');
+      } else {
+        sessionStorage.removeItem(ADDRESS_COUNTRY_MANUAL_KEY);
       }
     } else {
       sessionStorage.removeItem(ADDRESS_COUNTRY_STORAGE_KEY);
@@ -61,30 +62,20 @@ function fetchDetectedCountry() {
   return detectPromise;
 }
 
-function resolveInitialCountry(initialCountry) {
-  const profile = normalizeAddressCountry(initialCountry);
-  if (profile) return profile;
-  const locale = countryFromNavigator();
-  const stored = readStoredCountry();
-  if (isManualSelection() && stored) return stored;
-  if (locale && stored && locale !== stored) return locale;
-  if (stored) return stored;
-  if (locale) return locale;
-  return defaultAddressCountry();
-}
-
 /**
- * Address country for geocoding filters.
- * Priority: profile / initialCountry → manual session choice → browser locale → server guess.
- * Server detection never overrides a profile or manual selection.
+ * Address country for geocoding filters (Americas).
+ * Priority: profile → manual choice → IP/Cloudflare detection → Canada.
+ * Re-fetches network country every session load unless the user picked manually.
  */
 export default function useAddressCountry({ initialCountry } = {}) {
-  const [country, setCountryState] = useState(() => resolveInitialCountry(initialCountry));
+  const [country, setCountryState] = useState(
+    () => normalizeAddressCountry(initialCountry) || readStoredCountry() || defaultAddressCountry()
+  );
   const [source, setSource] = useState(() => {
     if (normalizeAddressCountry(initialCountry)) return 'profile';
     if (isManualSelection()) return 'manual';
     if (readStoredCountry()) return 'stored';
-    return 'locale';
+    return 'default';
   });
   const [loading, setLoading] = useState(false);
 
@@ -98,34 +89,10 @@ export default function useAddressCountry({ initialCountry } = {}) {
       return undefined;
     }
 
+    // Manual override wins until the user clears it (new session / setCountry elsewhere).
     if (isManualSelection() && readStoredCountry()) {
       setCountryState(readStoredCountry());
       setSource('manual');
-      setLoading(false);
-      return undefined;
-    }
-
-    const stored = readStoredCountry();
-    const locale = countryFromNavigator();
-    if (stored && locale && locale !== stored && !isManualSelection()) {
-      setCountryState(locale);
-      setSource('locale');
-      writeStoredCountry(locale);
-      setLoading(false);
-      return undefined;
-    }
-
-    if (stored) {
-      setCountryState(stored);
-      setSource('stored');
-      setLoading(false);
-      return undefined;
-    }
-
-    if (locale) {
-      setCountryState(locale);
-      setSource('locale');
-      writeStoredCountry(locale);
       setLoading(false);
       return undefined;
     }
@@ -134,10 +101,17 @@ export default function useAddressCountry({ initialCountry } = {}) {
     setLoading(true);
     fetchDetectedCountry()
       .then(({ country: detected, source: detectedSource }) => {
-        if (cancelled || !detected || !isSupportedAddressCountry(detected)) return;
-        setCountryState(detected);
-        setSource(detectedSource || 'server');
-        writeStoredCountry(detected);
+        if (cancelled) return;
+        if (detected && isSupportedAddressCountry(detected)) {
+          setCountryState(detected);
+          setSource(detectedSource || 'server');
+          writeStoredCountry(detected);
+          return;
+        }
+        const fallback = defaultAddressCountry();
+        setCountryState(fallback);
+        setSource('default');
+        writeStoredCountry(fallback);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

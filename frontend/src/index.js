@@ -10,17 +10,16 @@ root.render(
   </React.StrictMode>
 );
 
-// Service worker helps installed PWAs offline; in dev it can cache stale bundles
-// and break reloads (worse when VPN interferes with localhost requests).
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+// Localhost/IP debugging: never register a service worker — it caches hashed
+ // bundles across rebuilds and breaks the home page (HTML served as JS).
+ // On the public domain we still clear old workers once, then stay SW-free for now.
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.unregister());
+    });
+    if (window.caches) {
+      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+    }
   });
-} else if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((reg) => reg.unregister());
-  });
-  if (window.caches) {
-    caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
-  }
 }

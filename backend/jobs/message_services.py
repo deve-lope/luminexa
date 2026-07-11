@@ -20,6 +20,25 @@ def booking_approval_message_body(booking):
     return f'Your request for {service_name} has been approved.'
 
 
+def booking_incomplete_message_body(booking, *, note='', return_booking=None):
+    service_name = booking.service.name if booking.service_id else 'your service'
+    note_text = (note or '').strip()
+    if return_booking is not None:
+        when = _format_when(return_booking.start_at)
+        body = (
+            f'Work on {service_name} could not be finished today. '
+            f'A return visit is scheduled for {when}.'
+        )
+    else:
+        body = (
+            f'Work on {service_name} could not be finished today. '
+            'We will schedule a return visit and confirm the time with you.'
+        )
+    if note_text:
+        body = f'{body}\n\nNote: {note_text}'
+    return body
+
+
 def inquiry_approval_message_body(inquiry):
     label = (
         inquiry.service.name
@@ -170,6 +189,17 @@ def post_booking_approval_message(*, booking, sender):
         booking=booking,
         sender=sender,
         body=booking_approval_message_body(booking),
+    )
+
+
+def post_booking_incomplete_message(*, booking, sender, note='', return_booking=None):
+    """Notify the customer that work was incomplete and a return visit may be scheduled."""
+    return post_booking_message(
+        booking=booking,
+        sender=sender,
+        body=booking_incomplete_message_body(
+            booking, note=note, return_booking=return_booking,
+        ),
     )
 
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import BookingStatusTimeline from '../booking/BookingStatusTimeline';
+import InvoiceDownloadButton from '../booking/InvoiceDownloadButton';
 import { formatWhen } from '../../utils/datetime';
 import {
   bookingStatusClass,
@@ -54,6 +55,11 @@ export default function CustomerBookingCard({
         {bookingStatusLabel(booking.status, { isPast: past })}
       </span>
       {statusHint && <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
+      {booking.status === 'completed' && booking.invoice && (
+        <div className="mt-3">
+          <InvoiceDownloadButton invoice={booking.invoice} bookingId={booking.id} />
+        </div>
+      )}
       {booking.status_events?.length > 0 && (
         <div className="mt-4 border-t border-slate-100/80 pt-4">
           <button

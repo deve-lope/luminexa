@@ -152,23 +152,45 @@ def reverse_geocode_api(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def detect_country_api(request):
-    from .country_detection import detect_country_from_request, country_to_nominatim_code
+    from .country_detection import (
+        _client_ip,
+        _is_private_ip,
+        country_to_nominatim_code,
+        detect_country_from_request,
+    )
 
     country, source = detect_country_from_request(request)
+    ip = _client_ip(request)
+    cf = (request.META.get('HTTP_CF_IPCOUNTRY') or '').strip().upper()
     return Response({
         'country': country,
         'country_code': country_to_nominatim_code(country).upper(),
         'source': source,
+        # Safe network diagnostics (no raw IP) — useful to verify live CF / geo wiring.
+        'network': {
+            'has_public_ip': bool(ip and not _is_private_ip(ip)),
+            'cf_country': cf if cf and cf not in ('XX', 'T1') else '',
+        },
     })
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def map_search_api(request):
+    from .country_detection import detect_country_from_request, guess_country_from_query, normalize_country_name
+
     query = (request.query_params.get('q') or '').strip()
     if len(query) < 1 or (len(query) < 2 and not query.isdigit()):
         return Response({'results': []})
-    country = (request.query_params.get('country') or '').strip()
+    requested = normalize_country_name((request.query_params.get('country') or '').strip())
+    inferred = guess_country_from_query(query)
+    # Typed address/postal beats a wrong browser-locale country (e.g. en-US while in Canada).
+    if inferred:
+        country = inferred
+    elif requested:
+        country = requested
+    else:
+        country, _ = detect_country_from_request(request)
     results = search_locations(query, country=country)
     return Response({
         'results': [
@@ -177,7 +199,9 @@ def map_search_api(request):
                 'province': item.get('state') or '',
             }
             for item in results
-        ]
+        ],
+        'country': country,
+        'country_inferred': bool(inferred),
     })
 
 
@@ -317,10 +341,15 @@ def _availability_window_from_params(params):
 
 
 def _available_slot_queryset(window):
+    from jobs.booking_lead import earliest_customer_bookable_at
+
+    earliest = earliest_customer_bookable_at()
+    range_start = window['start']
+    if range_start < earliest:
+        range_start = earliest
     return AvailabilitySlot.objects.filter(
         status=AvailabilitySlot.Status.OPEN,
-        start_at__gt=timezone.now(),
-        start_at__gte=window['start'],
+        start_at__gte=range_start,
         start_at__lte=window['end'],
         organization__is_active=True,
         organization__profile_public=True,
@@ -605,11 +634,12 @@ def public_services_browse_api(request):
             Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=q.lower()),
         )
 
-    # Allow direct lat/lng from map view (bypasses postal lookup)
+    # Prefer explicit lat/lng from address selection over postal re-geocode
+    # (postal alone can resolve in the wrong country when browser locale is en-US).
     raw_lat = request.query_params.get('lat')
     raw_lng = request.query_params.get('lng')
 
-    if raw_lat and raw_lng and not postal:
+    if raw_lat and raw_lng:
         try:
             center_lat = float(raw_lat)
             center_lng = float(raw_lng)
@@ -637,7 +667,9 @@ def public_services_browse_api(request):
                 ),
             }
             services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
+            types_payload = BusinessTypeSerializer(types_qs, many=True).data
             return Response({
+                'business_types': types_payload,
                 'services': services,
                 'count': len(services),
                 'availability_search': (
