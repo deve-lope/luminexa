@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthFormShell from '../components/auth/AuthFormShell';
 import { userAPI } from '../utils/api';
-import BackButton from '../components/navigation/BackButton';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -25,16 +25,19 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="lx-auth-page items-center py-12">
-      <div className="lx-auth-card w-full max-w-md">
-      <BackButton fallback="/login" className="mb-6 text-sm text-luminexa-mist" />
-      <h1 className="text-2xl font-bold text-white">Reset password</h1>
-      <p className="mt-2 text-luminexa-mist">
-        Enter your email and we&apos;ll send a link to reset your password.
-      </p>
-      <form onSubmit={submit} className="mt-8 space-y-4">
+    <AuthFormShell
+      title="Reset password"
+      subtitle="Enter the email on your account and we’ll send a link to choose a new password."
+      backTo="/login"
+      footer={
+        <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">
+          Back to sign in
+        </Link>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium text-luminexa-mist">
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
             Email
           </label>
           <input
@@ -44,12 +47,30 @@ export default function ForgotPasswordPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full min-h-[48px] rounded-xl border border-slate-600 bg-slate-800 px-3 text-white"
+            className="lx-input"
           />
         </div>
-        {error && <p className="rounded-lg bg-red-900/40 px-4 py-3 text-sm text-red-200">{error}</p>}
+        {error && (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         {message && (
-          <p className="rounded-lg bg-emerald-900/40 px-4 py-3 text-sm text-emerald-200">{message}</p>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <p>{message}</p>
+            <p className="mt-2 text-xs text-emerald-700/80">
+              Locally check Mailpit at{' '}
+              <a
+                href="http://localhost:8025"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium underline-offset-2 hover:underline"
+              >
+                localhost:8025
+              </a>
+              .
+            </p>
+          </div>
         )}
         <button
           type="submit"
@@ -59,12 +80,6 @@ export default function ForgotPasswordPage() {
           {submitting ? 'Sending…' : 'Send reset link'}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-luminexa-mist">
-        <Link to="/login" className="font-medium text-luminexa-accent">
-          Back to sign in
-        </Link>
-      </p>
-      </div>
-    </div>
+    </AuthFormShell>
   );
 }

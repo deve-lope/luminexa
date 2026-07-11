@@ -10,6 +10,8 @@ import RegisterPage from './pages/RegisterPage';
 import RegisterBusinessPage from './pages/RegisterBusinessPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import CheckEmailPage from './pages/CheckEmailPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import CustomerBookingsPage from './pages/customer/CustomerBookingsPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
@@ -66,10 +68,12 @@ function AppRoutes() {
     location.pathname === '/register' ||
     location.pathname === '/register/business' ||
     location.pathname === '/forgot-password' ||
-    location.pathname === '/reset-password';
+    location.pathname === '/reset-password' ||
+    location.pathname === '/check-email' ||
+    location.pathname === '/verify-email';
 
   return (
-    <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-navy' : 'min-h-[100dvh] bg-slate-50'}>
+    <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-canvas' : 'min-h-[100dvh] bg-slate-50'}>
       <PwaInstallPrompt />
       <Routes>
         <Route path="/" element={<LandingRoute />} />
@@ -78,6 +82,8 @@ function AppRoutes() {
         <Route path="/register/business" element={<RegisterBusinessPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/check-email" element={<CheckEmailPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/accept-staff-invite" element={<AcceptStaffInvitePage />} />
         <Route
           path="/provider/schedule/*"

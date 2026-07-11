@@ -93,6 +93,8 @@ export function resolvePublicBack(pathname) {
   if (path === '/register/business') return { to: '/' };
   if (path === '/forgot-password') return { to: '/login' };
   if (path === '/reset-password') return { to: '/login' };
+  if (path === '/check-email') return { to: '/login' };
+  if (path === '/verify-email') return { to: '/login' };
   if (path === '/accept-staff-invite') return { to: '/login' };
   return { to: '/' };
 }

@@ -10,7 +10,7 @@ export default function LandingRoute() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-luminexa-navy text-luminexa-mist">
+      <div className="flex min-h-screen items-center justify-center bg-luminexa-canvas text-slate-600">
         Loading…
       </div>
     );

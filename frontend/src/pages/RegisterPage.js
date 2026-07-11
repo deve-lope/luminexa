@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { storage } from '../utils/helpers';
+import { Link, useNavigate } from 'react-router-dom';
 import { userAPI } from '../utils/api';
-import { useAuth } from '../contexts/AuthContext';
-import { applyPostLoginNavigation } from '../utils/postLoginRoute';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import AddressCountrySelect from '../components/location/AddressCountrySelect';
 import BackButton from '../components/navigation/BackButton';
@@ -11,9 +8,6 @@ import PasswordInput from '../components/ui/PasswordInput';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const nextPath = searchParams.get('next');
-  const { refreshSession } = useAuth();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -32,9 +26,10 @@ export default function RegisterPage() {
       const payload = { email, full_name: fullName, password, address_country: addressCountry };
       if (phone.trim()) payload.phone = phone.trim();
       const { data } = await userAPI.register(payload);
-      storage.set('token', data.token);
-      await refreshSession();
-      applyPostLoginNavigation(navigate, data.user, [], nextPath);
+      navigate('/check-email', {
+        replace: true,
+        state: { email: data.email || email, kind: 'customer' },
+      });
     } catch (err) {
       const d = err.response?.data;
       setError(

@@ -30,6 +30,7 @@ services:
       SQLITE_DB_PATH: /app/data/db.sqlite3
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PUBLIC_APP_URL: http://localhost:3000
     depends_on:
       - redis
       - mailpit

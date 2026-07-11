@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import BusinessTypeSelector from '../components/business/BusinessTypeSelector';
 import { businessesAPI, userAPI } from '../utils/api';
-import { storage } from '../utils/helpers';
-import { providerHome } from '../utils/providerPaths';
 import AddressFields from '../components/location/AddressFields';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import { BOOKING_POLICIES } from '../constants/bookingPolicies';
 import BackButton from '../components/navigation/BackButton';
 import PasswordInput from '../components/ui/PasswordInput';
 
+const BENEFITS = [
+  'Publish services and prices customers can see before they book',
+  'Open your calendar and take real requests — not endless phone tag',
+  'Message customers, complete jobs, and issue invoices in one place',
+];
+
 export default function RegisterBusinessPage() {
   const navigate = useNavigate();
-  const { refreshSession } = useAuth();
   const [types, setTypes] = useState([]);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -71,14 +73,10 @@ export default function RegisterBusinessPage() {
       if (phone.trim()) payload.phone = phone.trim();
       if (addressCountry) payload.address_country = addressCountry;
       const { data } = await userAPI.registerBusiness(payload);
-      storage.set('token', data.token);
-      await refreshSession();
-      const slug = data.organization?.slug;
-      if (slug) {
-        navigate(providerHome(slug), { replace: true });
-      } else {
-        navigate('/provider', { replace: true });
-      }
+      navigate('/check-email', {
+        replace: true,
+        state: { email: data.email || email, kind: 'business' },
+      });
     } catch (err) {
       const d = err.response?.data;
       const msg =
@@ -97,149 +95,257 @@ export default function RegisterBusinessPage() {
   };
 
   return (
-    <div className="lx-auth-page items-center py-10">
-      <div className="lx-auth-card w-full">
-        <BackButton fallback="/" className="mb-6 inline-block text-sm text-luminexa-mist/60 hover:text-luminexa-mist">
-          ← Back
-        </BackButton>
-        <h1 className="mb-2 text-2xl font-bold">Register your business</h1>
-        <p className="mb-6 text-sm text-luminexa-mist/65">
-          Choose what kind of services you offer. Customers will find you by category.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <p className="rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-200">{error}</p>
-          )}
-          <div>
-            <label htmlFor="business_name" className="mb-1 block text-sm font-medium">
-              Business name
-            </label>
-            <input
-              id="business_name"
-              required
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
-            />
-          </div>
+    <div className="min-h-[100dvh] bg-luminexa-canvas bg-lx-mesh text-slate-900">
+      <div className="mx-auto grid min-h-[100dvh] max-w-6xl lg:grid-cols-12">
+        {/* Brand / pitch column */}
+        <aside className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 px-6 py-8 text-white lg:col-span-5 lg:px-10 lg:py-12">
+          <div className="pointer-events-none absolute -right-16 top-20 h-56 w-56 rounded-full bg-teal-400/25 blur-3xl" />
+          <div className="pointer-events-none absolute -left-10 bottom-10 h-48 w-48 rounded-full bg-cyan-300/20 blur-3xl" />
 
-          <fieldset className="space-y-3 rounded-lg border border-white/10 p-4">
-            <legend className="px-1 text-sm font-medium">How customers book</legend>
-            <p className="text-xs text-luminexa-mist/60">
-              Choose the booking flow you want for this business. You can change this later from
-              Share settings.
+          <div className="relative flex h-full flex-col">
+            <Link to="/" className="text-lg font-extrabold tracking-tight">
+              Luminexa
+            </Link>
+
+            <div className="mt-10 lg:mt-16">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-100/90">
+                For providers
+              </p>
+              <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                Put your business where customers can book you.
+              </h1>
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-teal-50/85 sm:text-base">
+                Join Luminexa to publish what you offer, open your schedule, and take bookings with
+                clear prices — built for lawn crews, cleaners, mobile techs, and local trades.
+              </p>
+            </div>
+
+            <ul className="mt-8 hidden space-y-4 lg:block">
+              {BENEFITS.map((item) => (
+                <li key={item} className="flex gap-3 text-sm leading-relaxed text-teal-50/90">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+            <p className="mt-auto hidden pt-10 text-sm text-teal-100/70 lg:block">
+              Already have an account?{' '}
+              <Link to="/login" className="font-semibold text-white underline-offset-2 hover:underline">
+                Sign in
+              </Link>
             </p>
-            {BOOKING_POLICIES.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex cursor-pointer gap-3 rounded-lg border border-white/10 bg-luminexa-navy/50 p-3 has-[:checked]:border-luminexa-accent"
-              >
-                <input
-                  type="radio"
-                  name="booking_policy"
-                  value={opt.value}
-                  checked={bookingPolicy === opt.value}
-                  onChange={(e) => setBookingPolicy(e.target.value)}
-                  className="mt-1"
+          </div>
+        </aside>
+
+        {/* Form column */}
+        <main className="lg:col-span-7">
+          <div className="px-4 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+            <BackButton
+              fallback="/"
+              className="mb-6 inline-flex items-center text-sm font-medium text-slate-500 hover:text-teal-700"
+            >
+              ← Back
+            </BackButton>
+
+            <div className="mb-8">
+              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                Register your business
+              </h2>
+              <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-600 sm:text-base">
+                Tell us what you offer and where you work. Customers will find you by category and
+                location.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <p
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
+
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  Business
+                </h3>
+                <div className="mt-4">
+                  <label htmlFor="business_name" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Business name
+                  </label>
+                  <input
+                    id="business_name"
+                    required
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="e.g. GreenLine Lawn Co."
+                    className="lx-input"
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  How customers book
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                  Choose the booking flow for this business. You can change this later in settings.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {BOOKING_POLICIES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex cursor-pointer gap-3 rounded-xl border p-3.5 transition ${
+                        bookingPolicy === opt.value
+                          ? 'border-teal-500 bg-teal-50/80 ring-1 ring-teal-500/30'
+                          : 'border-slate-200 bg-slate-50/50 hover:border-teal-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="booking_policy"
+                        value={opt.value}
+                        checked={bookingPolicy === opt.value}
+                        onChange={(e) => setBookingPolicy(e.target.value)}
+                        className="mt-1 accent-teal-600"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-900">{opt.label}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-600 sm:text-sm">
+                          {opt.description}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  Service location
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                  Customers find you by PIN / postal code and city. Pin your service area so they
+                  know you cover theirs.
+                </p>
+                <div className="mt-4">
+                  <AddressFields
+                    initialCountry={addressCountry}
+                    onCountryChange={setAddressCountry}
+                    postalCode={servicePostalCode}
+                    onPostalCodeChange={setServicePostalCode}
+                    city={serviceCity}
+                    onCityChange={setServiceCity}
+                    state={serviceState}
+                    onStateChange={setServiceState}
+                    address={serviceAddress}
+                    onAddressChange={setServiceAddress}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  What you offer
+                </h3>
+                <p className="mt-2 mb-4 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                  Select the categories customers should use to find you.
+                </p>
+                <BusinessTypeSelector
+                  types={types}
+                  onTypesChange={setTypes}
+                  selectedSlugs={selectedSlugs}
+                  onSelectionChange={setSelectedSlugs}
+                  variant="light"
                 />
-                <span>
-                  <span className="block text-sm font-semibold text-luminexa-mist">
-                    {opt.label}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-luminexa-mist/65">
-                    {opt.description}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
+              </section>
 
-          <fieldset className="space-y-3 rounded-lg border border-white/10 p-4">
-            <legend className="px-1 text-sm font-medium">Service location</legend>
-            <p className="text-xs text-luminexa-mist/60">
-              Customers find you by PIN / postal code and city. Pin your service area on the map.
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  Your account
+                </h3>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label htmlFor="full_name" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Your name
+                    </label>
+                    <input
+                      id="full_name"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="lx-input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="lx-input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="phone" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Mobile <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="lx-input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Password
+                    </label>
+                    <PasswordInput
+                      id="password"
+                      variant="light"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="lx-btn-primary w-full min-h-[52px] rounded-xl text-base disabled:opacity-60"
+              >
+                {submitting ? 'Creating…' : 'Create business account'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-slate-500">
+              Booking as a customer?{' '}
+              <Link to="/register" className="font-semibold text-teal-700 hover:text-teal-800">
+                Create customer account
+              </Link>
             </p>
-            <AddressFields
-              dark
-              initialCountry={addressCountry}
-              onCountryChange={setAddressCountry}
-              postalCode={servicePostalCode}
-              onPostalCodeChange={setServicePostalCode}
-              city={serviceCity}
-              onCityChange={setServiceCity}
-              state={serviceState}
-              onStateChange={setServiceState}
-              address={serviceAddress}
-              onAddressChange={setServiceAddress}
-            />
-          </fieldset>
-          <BusinessTypeSelector
-            types={types}
-            onTypesChange={setTypes}
-            selectedSlugs={selectedSlugs}
-            onSelectionChange={setSelectedSlugs}
-            variant="dark"
-          />
-          <div>
-            <label htmlFor="full_name" className="mb-1 block text-sm font-medium">Your name</label>
-            <input
-              id="full_name"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
-            />
+            <p className="mt-2 text-center text-sm text-slate-500 lg:hidden">
+              Already have an account?{' '}
+              <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">
+                Sign in
+              </Link>
+            </p>
           </div>
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium">Email</label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
-            />
-          </div>
-          <div>
-            <label htmlFor="phone" className="mb-1 block text-sm font-medium">
-              Mobile <span className="text-luminexa-mist/50">(optional)</span>
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-luminexa-navy/80 px-4 py-3 outline-none focus:border-luminexa-accent"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium">Password</label>
-            <PasswordInput
-              id="password"
-              variant="dark"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full min-h-[48px] rounded-lg bg-luminexa-accent font-semibold text-white disabled:opacity-60"
-          >
-            {submitting ? 'Creating…' : 'Create business account'}
-          </button>
-        </form>
-        <p className="mt-6 text-center text-sm text-luminexa-mist/60">
-          Booking as a customer?{' '}
-          <Link to="/register" className="font-medium text-luminexa-accent">
-            Create customer account
-          </Link>
-        </p>
+        </main>
       </div>
     </div>
   );

@@ -69,8 +69,11 @@ const PUBLIC_PATH_PREFIXES = [
   '/',
   '/login',
   '/register',
+  '/register/business',
   '/forgot-password',
   '/reset-password',
+  '/check-email',
+  '/verify-email',
   '/accept-staff-invite',
   '/services',
 ];
@@ -105,6 +108,8 @@ export const userAPI = {
   logout: () => api.post('/accounts/api/logout/'),
   requestPasswordReset: (email) => api.post('/accounts/api/password-reset/', { email }),
   confirmPasswordReset: (data) => api.post('/accounts/api/password-reset/confirm/', data),
+  verifyEmail: (data) => api.post('/accounts/api/verify-email/', data),
+  resendVerification: (email) => api.post('/accounts/api/resend-verification/', { email }),
   changePassword: (data) => api.post('/accounts/api/change-password/', data),
 };
 

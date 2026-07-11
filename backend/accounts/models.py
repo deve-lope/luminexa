@@ -19,6 +19,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('email_verified', True)
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
@@ -51,6 +52,10 @@ class User(AbstractUser):
         blank=True,
         default='',
         help_text='Preferred Americas country for address search (e.g. Canada)',
+    )
+    email_verified = models.BooleanField(
+        default=False,
+        help_text='True after the user confirms their email address.',
     )
 
     USERNAME_FIELD = 'email'

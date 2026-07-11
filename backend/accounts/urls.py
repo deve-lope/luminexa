@@ -29,4 +29,14 @@ urlpatterns = [
         api_views.PasswordResetConfirmAPIView.as_view(),
         name='password_reset_confirm_api',
     ),
+    path(
+        'api/verify-email/',
+        api_views.VerifyEmailAPIView.as_view(),
+        name='verify_email_api',
+    ),
+    path(
+        'api/resend-verification/',
+        api_views.ResendVerificationAPIView.as_view(),
+        name='resend_verification_api',
+    ),
 ]

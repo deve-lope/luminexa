@@ -28,7 +28,12 @@ class Command(BaseCommand):
     def _ensure_user(self, email, full_name, password, *, is_staff=False, is_superuser=False):
         user, created = User.objects.get_or_create(
             email=email,
-            defaults={'full_name': full_name, 'is_staff': is_staff, 'is_superuser': is_superuser},
+            defaults={
+                'full_name': full_name,
+                'is_staff': is_staff,
+                'is_superuser': is_superuser,
+                'email_verified': True,
+            },
         )
         if created or not user.has_usable_password():
             user.set_password(password)
@@ -36,7 +41,11 @@ class Command(BaseCommand):
             user.is_staff = is_staff
             user.is_superuser = is_superuser
             user.is_active = True
+            user.email_verified = True
             user.save()
+        elif not user.email_verified:
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
         return user
 
     def _ensure_business_types(self):

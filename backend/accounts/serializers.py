@@ -17,9 +17,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'public_ref', 'email', 'full_name', 'phone', 'default_service_address',
-            'address_country', 'is_staff', 'has_booking_contact',
+            'address_country', 'email_verified', 'is_staff', 'has_booking_contact',
         )
-        read_only_fields = ('id', 'public_ref', 'email', 'is_staff', 'has_booking_contact')
+        read_only_fields = (
+            'id', 'public_ref', 'email', 'email_verified', 'is_staff', 'has_booking_contact',
+        )
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -31,10 +33,20 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ('email', 'full_name', 'password', 'phone', 'address_country')
 
+    def validate_email(self, value):
+        email = (value or '').strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return email
+
     def create(self, validated_data):
         phone = validated_data.pop('phone', '') or ''
         address_country = (validated_data.pop('address_country', '') or '').strip()
-        user = User.objects.create_user(phone=phone, **validated_data)
+        user = User.objects.create_user(
+            phone=phone,
+            email_verified=False,
+            **validated_data,
+        )
         if address_country:
             user.address_country = address_country
             user.save(update_fields=['address_country'])
@@ -106,6 +118,7 @@ class RegisterBusinessSerializer(serializers.Serializer):
             full_name=validated_data['full_name'],
             phone=phone,
             password=password,
+            email_verified=False,
         )
         if address_country:
             user.address_country = address_country
@@ -140,6 +153,15 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     uid = serializers.CharField()
     token = serializers.CharField()
     password = serializers.CharField(write_only=True, min_length=8)
+
+
+class EmailVerifySerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class LoginSerializer(serializers.Serializer):
