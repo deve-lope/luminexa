@@ -10,8 +10,32 @@ from businesses.models import Organization, OrganizationMembership
 from jobs.invoice_pdf import build_invoice_pdf
 from jobs.invoice_services import issue_or_update_invoice
 from jobs.models import AvailabilitySlot, Booking, Service
+from jobs.tax_rates import calculate_tax, calculate_tax_for_organization
 
 User = get_user_model()
+
+
+class TaxRateTests(TestCase):
+    def test_ontario_hst_federal_and_provincial_combined(self):
+        result = calculate_tax(subtotal=Decimal('100.00'), country='CA', region='ON')
+        self.assertEqual(result['tax_total'], Decimal('13.00'))
+        self.assertEqual(result['total'], Decimal('113.00'))
+        self.assertEqual(len(result['tax_lines']), 1)
+        self.assertEqual(result['tax_lines'][0]['code'], 'HST')
+
+    def test_bc_gst_and_pst(self):
+        result = calculate_tax(subtotal=Decimal('100.00'), country='CA', region='BC')
+        codes = [line['code'] for line in result['tax_lines']]
+        self.assertEqual(codes, ['GST', 'PST'])
+        self.assertEqual(result['tax_total'], Decimal('12.00'))
+        self.assertEqual(result['total'], Decimal('112.00'))
+
+    def test_us_state_sales_tax_no_federal(self):
+        result = calculate_tax(subtotal=Decimal('100.00'), country='US', region='NY')
+        self.assertEqual(len(result['tax_lines']), 1)
+        self.assertEqual(result['tax_lines'][0]['code'], 'STATE')
+        self.assertEqual(result['tax_total'], Decimal('4.00'))
+        self.assertEqual(result['currency'], 'USD')
 
 
 class InvoiceTests(TestCase):
@@ -23,7 +47,12 @@ class InvoiceTests(TestCase):
         self.customer = User.objects.create_user(
             email='cust-inv@luminexa.local', password='password123', full_name='Customer',
         )
-        self.org = Organization.objects.create(name='Invoice Org', slug='invoice-org')
+        self.org = Organization.objects.create(
+            name='Invoice Org',
+            slug='invoice-org',
+            service_city='Toronto',
+            service_state='ON',
+        )
         OrganizationMembership.objects.create(
             organization=self.org,
             user=self.owner,
@@ -58,11 +87,11 @@ class InvoiceTests(TestCase):
             source=Booking.Source.CUSTOMER_REQUEST,
         )
 
-    def test_complete_creates_invoice_with_final_amount(self):
+    def test_complete_creates_invoice_with_tax_from_business_address(self):
         self.client.force_authenticate(self.owner)
         res = self.client.post(
             f'/api/v1/bookings/{self.booking.id}/complete/',
-            {'amount': '75.50', 'notes': 'Extra bagging', 'mark_paid': True},
+            {'subtotal': '75.50', 'notes': 'Extra bagging', 'mark_paid': True},
             format='json',
             HTTP_HOST='localhost',
         )
@@ -71,16 +100,22 @@ class InvoiceTests(TestCase):
         inv = res.data.get('invoice')
         self.assertIsNotNone(inv)
         self.assertEqual(inv['number'], f'INV-{self.booking.id:05d}')
-        self.assertEqual(Decimal(inv['amount']), Decimal('75.50'))
+        self.assertEqual(Decimal(inv['subtotal']), Decimal('75.50'))
+        # ON HST 13%
+        self.assertEqual(Decimal(inv['tax_total']), Decimal('9.82'))
+        self.assertEqual(Decimal(inv['amount']), Decimal('85.32'))
+        self.assertEqual(inv['tax_country'], 'CA')
+        self.assertEqual(inv['tax_region'], 'ON')
         self.assertEqual(inv['status'], 'paid')
         self.assertEqual(inv['notes'], 'Extra bagging')
         self.assertEqual(inv['pricing_type'], 'range')
+        self.assertTrue(any(line['code'] == 'HST' for line in inv['tax_lines']))
 
     def test_customer_can_download_invoice_pdf(self):
         issue_or_update_invoice(
             self.booking,
             staff_user=self.owner,
-            amount='80.00',
+            subtotal='80.00',
             notes='Done',
         )
         self.booking.status = Booking.Status.COMPLETED
@@ -95,12 +130,14 @@ class InvoiceTests(TestCase):
         self.assertEqual(res['Content-Type'], 'application/pdf')
         self.assertTrue(res.content.startswith(b'%PDF'))
         self.assertIn(b'INVOICE', res.content)
+        self.assertIn(b'Subtotal', res.content)
+        self.assertIn(b'HST', res.content)
 
     def test_booking_list_includes_invoice_for_customer(self):
         issue_or_update_invoice(
             self.booking,
             staff_user=self.owner,
-            amount='70.00',
+            subtotal='70.00',
         )
         self.booking.status = Booking.Status.COMPLETED
         self.booking.save(update_fields=['status', 'updated_at'])
@@ -115,8 +152,23 @@ class InvoiceTests(TestCase):
 
     def test_pdf_builder_bytes(self):
         inv = issue_or_update_invoice(
-            self.booking, staff_user=self.owner, amount='65.00',
+            self.booking, staff_user=self.owner, subtotal='65.00',
         )
         pdf = build_invoice_pdf(inv)
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertIn(inv.number.encode(), pdf)
+
+    def test_us_business_address_uses_state_tax(self):
+        self.org.service_state = 'NY'
+        self.org.service_city = 'New York'
+        self.org.save(update_fields=['service_state', 'service_city'])
+        tax = calculate_tax_for_organization(self.org, Decimal('100.00'))
+        self.assertEqual(tax['tax_country'], 'US')
+        self.assertEqual(tax['currency'], 'USD')
+        self.assertEqual(tax['tax_total'], Decimal('4.00'))
+        inv = issue_or_update_invoice(
+            self.booking, staff_user=self.owner, subtotal='100.00',
+        )
+        self.assertEqual(inv.currency, 'USD')
+        self.assertEqual(inv.tax_region, 'NY')
+        self.assertEqual(inv.amount, Decimal('104.00'))

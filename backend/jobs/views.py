@@ -921,7 +921,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
 
         amount = request.data.get('amount', None)
-        if amount is None or amount == '':
+        subtotal = request.data.get('subtotal', None)
+        if (subtotal is None or subtotal == '') and (amount is None or amount == ''):
             amount = default_invoice_amount(booking)
         notes = request.data.get('notes', '') or ''
         mark_paid = bool(request.data.get('mark_paid'))
@@ -929,6 +930,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             booking,
             staff_user=request.user,
             amount=amount,
+            subtotal=subtotal,
             notes=notes,
             mark_paid=mark_paid,
         )
@@ -957,14 +959,18 @@ class BookingViewSet(viewsets.ModelViewSet):
                 inv = booking.invoice
             except Invoice.DoesNotExist:
                 if is_org_staff(request.user, booking.organization):
+                    suggestion = suggested_invoice_payload(booking)
+                    serializable = {}
+                    for k, v in suggestion.items():
+                        if v is None:
+                            serializable[k] = None
+                        elif isinstance(v, (list, dict, bool)):
+                            serializable[k] = v
+                        else:
+                            serializable[k] = str(v)
                     return Response({
                         'invoice': None,
-                        'suggestion': {
-                            **{
-                                k: (str(v) if v is not None else None)
-                                for k, v in suggested_invoice_payload(booking).items()
-                            },
-                        },
+                        'suggestion': serializable,
                     })
                 return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
             return Response(InvoiceSerializer(inv, context={'request': request}).data)
@@ -972,6 +978,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         if not is_org_staff(request.user, booking.organization):
             raise PermissionDenied('Only staff can issue invoices.')
         amount = request.data.get('amount')
+        subtotal = request.data.get('subtotal')
         notes = request.data.get('notes', '') or ''
         mark_paid = bool(request.data.get('mark_paid'))
         description = request.data.get('description', '') or ''
@@ -979,6 +986,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             booking,
             staff_user=request.user,
             amount=amount,
+            subtotal=subtotal,
             notes=notes,
             mark_paid=mark_paid,
             description=description,

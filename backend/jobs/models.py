@@ -420,11 +420,28 @@ class Invoice(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(Decimal('0.00'))],
     )
-    # Final amount charged
+    # Pre-tax subtotal (POS line total before tax)
+    subtotal = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Amount before tax. Null on legacy invoices.',
+    )
+    # Final amount charged (subtotal + tax)
     amount = models.DecimalField(
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.00'))],
     )
+    tax_country = models.CharField(max_length=2, blank=True, default='')
+    tax_region = models.CharField(
+        max_length=8, blank=True, default='',
+        help_text='Province/state code used for tax (from business address).',
+    )
+    tax_total = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    # [{code, name, rate, amount}, ...] — GST/PST/HST or US state tax
+    tax_lines = models.JSONField(default=list, blank=True)
     description = models.CharField(max_length=255, blank=True, default='')
     notes = models.TextField(blank=True, default='')
     issued_by = models.ForeignKey(

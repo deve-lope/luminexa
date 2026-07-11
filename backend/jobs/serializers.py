@@ -34,7 +34,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = (
             'id', 'number', 'status', 'currency', 'pricing_type',
-            'estimated_amount', 'estimated_max', 'amount',
+            'estimated_amount', 'estimated_max',
+            'subtotal', 'amount', 'tax_total', 'tax_lines',
+            'tax_country', 'tax_region',
             'description', 'notes', 'issued_at', 'paid_at', 'download_url',
         )
         read_only_fields = fields
