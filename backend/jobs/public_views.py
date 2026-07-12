@@ -229,22 +229,35 @@ class PublicServiceReviewAPIView(APIView):
 
         ser = ServiceReviewWriteSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        data = dict(ser.validated_data)
+        booking_id = data.pop('booking_id', None)
 
-        completed_booking = (
-            Booking.objects.filter(
+        completed_booking = None
+        if booking_id:
+            completed_booking = Booking.objects.filter(
+                id=booking_id,
                 service=service,
                 customer=request.user,
                 status=Booking.Status.COMPLETED,
+            ).first()
+            if not completed_booking:
+                raise ValidationError({'booking_id': 'Completed booking not found for this service.'})
+        else:
+            completed_booking = (
+                Booking.objects.filter(
+                    service=service,
+                    customer=request.user,
+                    status=Booking.Status.COMPLETED,
+                )
+                .order_by('-end_at')
+                .first()
             )
-            .order_by('-end_at')
-            .first()
-        )
 
         review = ServiceReview.objects.create(
             service=service,
             customer=request.user,
             booking=completed_booking,
-            **ser.validated_data,
+            **data,
         )
         from .serializers import PublicServiceReviewSerializer
         return Response(

@@ -551,6 +551,8 @@ class BookingSerializer(serializers.ModelSerializer):
     reference = serializers.SerializerMethodField()
     parent_booking_id = serializers.IntegerField(read_only=True, allow_null=True)
     invoice = InvoiceSerializer(read_only=True)
+    can_rate = serializers.SerializerMethodField()
+    my_review = serializers.SerializerMethodField()
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         source='availability_slot',
@@ -568,7 +570,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
-            'parent_booking_id', 'invoice',
+            'parent_booking_id', 'invoice', 'can_rate', 'my_review',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -577,7 +579,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'service_pricing_type', 'service_price_max',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
-            'parent_booking_id', 'invoice',
+            'parent_booking_id', 'invoice', 'can_rate', 'my_review',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -590,6 +592,47 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return f'BK-{obj.pk:05d}'
+
+    def _review_for_booking(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated:
+            return None
+        # Prefer review tied to this booking; else any review of this service by customer.
+        linked = (
+            ServiceReview.objects.filter(booking_id=obj.pk, customer=user)
+            .order_by('-created_at')
+            .first()
+        )
+        if linked:
+            return linked
+        return (
+            ServiceReview.objects.filter(service_id=obj.service_id, customer=user)
+            .order_by('-created_at')
+            .first()
+        )
+
+    def get_can_rate(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        if obj.customer_id != user.id:
+            return False
+        if obj.status != Booking.Status.COMPLETED:
+            return False
+        from .ratings import customer_can_rate_service
+        return customer_can_rate_service(obj.service, user)
+
+    def get_my_review(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated or obj.customer_id != user.id:
+            return None
+        review = self._review_for_booking(obj)
+        if not review:
+            return None
+        return PublicServiceReviewSerializer(review, context=self.context).data
 
     def validate(self, attrs):
         slot = attrs.get('availability_slot')
@@ -815,9 +858,11 @@ class PublicServiceReviewSerializer(serializers.ModelSerializer):
 
 
 class ServiceReviewWriteSerializer(serializers.ModelSerializer):
+    booking_id = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = ServiceReview
-        fields = ('communication', 'price', 'punctual', 'quality', 'comment')
+        fields = ('communication', 'price', 'punctual', 'quality', 'comment', 'booking_id')
 
     def validate_communication(self, value):
         return self._validate_rating(value, 'communication')

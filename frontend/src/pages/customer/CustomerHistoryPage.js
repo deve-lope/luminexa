@@ -79,6 +79,7 @@ export default function CustomerHistoryPage() {
                 expanded={expandedId === b.id}
                 onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
                 showActions
+                onReviewSubmitted={load}
               />
             ))}
           </ul>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingStatusTimeline from '../booking/BookingStatusTimeline';
+import BookingRateModal from '../booking/BookingRateModal';
 import InvoiceDownloadButton from '../booking/InvoiceDownloadButton';
 import { formatWhen } from '../../utils/datetime';
 import {
@@ -11,9 +12,27 @@ import {
   wasApprovedByProvider,
   wasDeclinedByProvider,
 } from '../../utils/customerBookings';
-import { customerProviderPage } from '../../utils/customerPaths';
+import {
+  customerProviderPage,
+  customerProviderServiceDetail,
+} from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 import { jobsAPI } from '../../utils/api';
+
+function ReviewSnippet({ review }) {
+  if (!review) return null;
+  return (
+    <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800/70">Your rating</p>
+      <p className="mt-1 text-sm font-semibold text-amber-600">★ {review.average}</p>
+      {review.comment ? (
+        <p className="mt-1 text-sm text-slate-700 line-clamp-3">{review.comment}</p>
+      ) : (
+        <p className="mt-1 text-xs italic text-slate-500">No written comment.</p>
+      )}
+    </div>
+  );
+}
 
 export default function CustomerBookingCard({
   booking,
@@ -23,10 +42,15 @@ export default function CustomerBookingCard({
   onReschedule,
   onCancel,
   cancelling = false,
+  onReviewSubmitted,
 }) {
+  const [rateOpen, setRateOpen] = useState(false);
   const past = isPastBooking(booking);
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
+  const providerKey = providerCustomerKey(booking);
+  const canRate = Boolean(booking.can_rate);
+  const myReview = booking.my_review;
 
   let statusHint = null;
   if (isUntouchedBookingRequest(booking) && !past) {
@@ -41,7 +65,9 @@ export default function CustomerBookingCard({
   } else if (declined) {
     statusHint = 'Declined by the business.';
   } else if (booking.status === 'completed') {
-    statusHint = 'Service completed.';
+    statusHint = canRate
+      ? 'Service completed — leave a rating when you are ready.'
+      : 'Service completed.';
   }
 
   return (
@@ -55,6 +81,27 @@ export default function CustomerBookingCard({
         {bookingStatusLabel(booking.status, { isPast: past })}
       </span>
       {statusHint && <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
+
+      {booking.status === 'completed' && canRate && (
+        <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-3">
+          <p className="text-sm font-semibold text-violet-900">How was this service?</p>
+          <p className="mt-0.5 text-xs text-violet-800/80">
+            Rate communication, price, punctuality, and quality — and leave a short review.
+          </p>
+          <button
+            type="button"
+            onClick={() => setRateOpen(true)}
+            className="mt-3 min-h-[44px] w-full rounded-xl bg-violet-700 text-sm font-semibold text-white"
+          >
+            Rate & review
+          </button>
+        </div>
+      )}
+
+      {booking.status === 'completed' && myReview && !canRate && (
+        <ReviewSnippet review={myReview} />
+      )}
+
       {booking.status === 'completed' && booking.invoice && (
         <div className="mt-3">
           <InvoiceDownloadButton invoice={booking.invoice} bookingId={booking.id} />
@@ -78,12 +125,20 @@ export default function CustomerBookingCard({
       )}
       {showActions && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {providerCustomerKey(booking) && (
+          {providerKey && (
             <Link
-              to={customerProviderPage(providerCustomerKey(booking))}
+              to={customerProviderPage(providerKey)}
               className="lx-btn-ghost"
             >
               View provider
+            </Link>
+          )}
+          {providerKey && booking.service && (
+            <Link
+              to={customerProviderServiceDetail(providerKey, booking.service)}
+              className="lx-btn-ghost"
+            >
+              Service details
             </Link>
           )}
           {booking.status === 'confirmed' && (
@@ -122,6 +177,13 @@ export default function CustomerBookingCard({
           )}
         </div>
       )}
+
+      <BookingRateModal
+        open={rateOpen}
+        booking={booking}
+        onClose={() => setRateOpen(false)}
+        onSubmitted={() => onReviewSubmitted?.()}
+      />
     </li>
   );
 }
