@@ -442,6 +442,12 @@ class Invoice(models.Model):
     )
     # [{code, name, rate, amount}, ...] — GST/PST/HST or US state tax
     tax_lines = models.JSONField(default=list, blank=True)
+    # Extra POS items: [{name, type, brand, quantity, amount}, ...]
+    line_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Additional bill lines (parts, materials, etc.).',
+    )
     description = models.CharField(max_length=255, blank=True, default='')
     notes = models.TextField(blank=True, default='')
     issued_by = models.ForeignKey(

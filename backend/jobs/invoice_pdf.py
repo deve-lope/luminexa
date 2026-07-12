@@ -307,19 +307,36 @@ def build_invoice_pdf(invoice) -> bytes:
     c.text_right(right - 8, header_y, 'AMOUNT', size=8, bold=True, color=(0.35, 0.38, 0.42))
     c.gap(row_h + 4)
 
-    # Line item
-    rate = subtotal
-    qty = 1
-    desc_lines = _wrap(service_name, 42)
-    item_top = c.y
-    for i, line in enumerate(desc_lines):
-        c.text(MARGIN_L + 8, c.y, line, size=10, bold=(i == 0))
-        c.gap(13)
-    # qty / rate / amount on first description row
-    first_row_y = item_top
-    c.text(MARGIN_L + 305, first_row_y, str(qty), size=10)
-    c.text(MARGIN_L + 350, first_row_y, _fmt_money(rate, currency), size=10)
-    c.text_right(right - 8, first_row_y, _fmt_money(rate, currency), size=10, bold=True)
+    # Service fee + optional extras (parts / materials)
+    extras = list(invoice.line_items or [])
+    extras_total = Decimal('0.00')
+    for extra in extras:
+        try:
+            extras_total += Decimal(str(extra.get('amount') or 0))
+        except Exception:
+            pass
+    extras_total = extras_total.quantize(Decimal('0.01'))
+    service_fee = (Decimal(subtotal) - extras_total).quantize(Decimal('0.01'))
+    if service_fee < 0:
+        service_fee = Decimal(subtotal)
+
+    def _draw_line_row(title: str, detail: str, qty, amount):
+        desc_lines = _wrap(title, 42)
+        item_top = c.y
+        for i, line in enumerate(desc_lines):
+            c.text(MARGIN_L + 8, c.y, line, size=10, bold=(i == 0))
+            c.gap(13)
+        if detail:
+            for wrapped in _wrap(detail, 48):
+                c.text(MARGIN_L + 8, c.y, wrapped, size=8, color=(0.45, 0.48, 0.52))
+                c.gap(11)
+        first_row_y = item_top
+        c.text(MARGIN_L + 305, first_row_y, str(qty), size=10)
+        c.text(MARGIN_L + 350, first_row_y, _fmt_money(amount, currency), size=10)
+        c.text_right(right - 8, first_row_y, _fmt_money(amount, currency), size=10, bold=True)
+        c.gap(4)
+
+    _draw_line_row(service_name, 'Service fee', 1, service_fee)
 
     if invoice.pricing_type == 'range' and invoice.estimated_amount is not None:
         est = _fmt_money(invoice.estimated_amount, currency)
@@ -327,6 +344,20 @@ def build_invoice_pdf(invoice) -> bytes:
             est = f'{est} – {_fmt_money(invoice.estimated_max, currency)}'
         c.text(MARGIN_L + 8, c.y, f'Estimated range: {est}', size=8, color=(0.45, 0.48, 0.52))
         c.gap(12)
+
+    for extra in extras:
+        name = str(extra.get('name') or 'Item').strip() or 'Item'
+        bits = []
+        if extra.get('type'):
+            bits.append(str(extra['type']))
+        if extra.get('brand'):
+            bits.append(str(extra['brand']))
+        qty = extra.get('quantity', 1)
+        try:
+            amount = Decimal(str(extra.get('amount') or 0))
+        except Exception:
+            amount = Decimal('0.00')
+        _draw_line_row(name, ' · '.join(bits), qty, amount)
 
     c.gap(6)
     c.set_stroke_rgb(0.85, 0.88, 0.90)

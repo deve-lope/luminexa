@@ -39,11 +39,27 @@ async function downloadInvoicePdf(invoice, bookingId) {
   URL.revokeObjectURL(objectUrl);
 }
 
+function lineItemDetail(item) {
+  const bits = [];
+  if (item.type) bits.push(item.type);
+  if (item.brand) bits.push(item.brand);
+  if (item.quantity != null && Number(item.quantity) !== 1) {
+    bits.push(`${item.quantity} units`);
+  }
+  return bits.join(' · ');
+}
+
 function InvoiceBreakdown({ invoice, providerName }) {
   const currency = invoice.currency || 'CAD';
   const taxLines = Array.isArray(invoice.tax_lines) ? invoice.tax_lines : [];
+  const lineItems = Array.isArray(invoice.line_items) ? invoice.line_items : [];
   const subtotal =
     invoice.subtotal != null ? invoice.subtotal : invoice.amount;
+  const extrasTotal = lineItems.reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0
+  );
+  const serviceFee = Math.max(0, (Number(subtotal) || 0) - extrasTotal);
   const discount = invoice.discount != null ? invoice.discount : 0;
   const provider =
     providerName || invoice.provider_name || invoice.organization_name || 'Provider';
@@ -79,20 +95,37 @@ function InvoiceBreakdown({ invoice, providerName }) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Service</p>
-        <p className="mt-1 font-medium text-slate-900">
-          {invoice.service_name || invoice.description || 'Service'}
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Bill</p>
         <dl className="mt-3 space-y-2">
           <div className="flex justify-between gap-3">
-            <dt className="text-slate-500">Fee</dt>
+            <dt className="text-slate-700">
+              <span className="font-medium text-slate-900">
+                {invoice.service_name || invoice.description || 'Service'}
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">Service fee</span>
+            </dt>
+            <dd className="shrink-0 font-medium">{formatMoney(serviceFee, currency)}</dd>
+          </div>
+          {lineItems.map((item, idx) => (
+            <div key={`${item.name}-${idx}`} className="flex justify-between gap-3">
+              <dt className="min-w-0 text-slate-700">
+                <span className="font-medium text-slate-900">{item.name || 'Item'}</span>
+                {lineItemDetail(item) ? (
+                  <span className="mt-0.5 block text-xs text-slate-500">{lineItemDetail(item)}</span>
+                ) : null}
+              </dt>
+              <dd className="shrink-0 font-medium">{formatMoney(item.amount, currency)}</dd>
+            </div>
+          ))}
+          <div className="flex justify-between gap-3 border-t border-slate-200 pt-2">
+            <dt className="text-slate-500">Subtotal</dt>
             <dd className="font-medium">{formatMoney(subtotal, currency)}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-slate-500">Discount</dt>
             <dd className="font-medium">{formatMoney(discount, currency)}</dd>
           </div>
-              {taxLines.length > 0
+          {taxLines.length > 0
             ? taxLines.map((line, idx) => {
                 const code = (line.code || '').trim() || (line.name || 'Tax').split('(')[0].trim();
                 const ratePct =

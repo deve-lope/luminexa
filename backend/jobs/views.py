@@ -922,7 +922,13 @@ class BookingViewSet(viewsets.ModelViewSet):
 
         amount = request.data.get('amount', None)
         subtotal = request.data.get('subtotal', None)
-        if (subtotal is None or subtotal == '') and (amount is None or amount == ''):
+        service_fee = request.data.get('service_fee', None)
+        line_items = request.data.get('line_items', None)
+        if (
+            (service_fee is None or service_fee == '')
+            and (subtotal is None or subtotal == '')
+            and (amount is None or amount == '')
+        ):
             amount = default_invoice_amount(booking)
         notes = request.data.get('notes', '') or ''
         mark_paid = bool(request.data.get('mark_paid'))
@@ -931,6 +937,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             staff_user=request.user,
             amount=amount,
             subtotal=subtotal,
+            service_fee=service_fee,
+            line_items=line_items,
             notes=notes,
             mark_paid=mark_paid,
         )
@@ -979,6 +987,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Only staff can issue invoices.')
         amount = request.data.get('amount')
         subtotal = request.data.get('subtotal')
+        service_fee = request.data.get('service_fee')
+        line_items = request.data.get('line_items')
         notes = request.data.get('notes', '') or ''
         mark_paid = bool(request.data.get('mark_paid'))
         description = request.data.get('description', '') or ''
@@ -987,6 +997,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             staff_user=request.user,
             amount=amount,
             subtotal=subtotal,
+            service_fee=service_fee,
+            line_items=line_items,
             notes=notes,
             mark_paid=mark_paid,
             description=description,

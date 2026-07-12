@@ -42,7 +42,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'id', 'number', 'status', 'currency', 'pricing_type',
             'estimated_amount', 'estimated_max',
             'subtotal', 'amount', 'tax_total', 'tax_lines',
-            'tax_country', 'tax_region',
+            'tax_country', 'tax_region', 'line_items',
             'description', 'notes', 'issued_at', 'paid_at', 'download_url',
             'provider_name', 'customer_name', 'customer_email',
             'service_name', 'booking_reference', 'discount',

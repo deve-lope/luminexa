@@ -158,6 +158,48 @@ class InvoiceTests(TestCase):
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertIn(inv.number.encode(), pdf)
 
+    def test_complete_with_line_items_adds_to_subtotal(self):
+        self.client.force_authenticate(self.owner)
+        res = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/complete/',
+            {
+                'service_fee': '50.00',
+                'line_items': [
+                    {
+                        'name': 'Oil change',
+                        'type': 'oil',
+                        'brand': 'Castrol',
+                        'quantity': 3,
+                        'amount': '100.00',
+                    },
+                    {
+                        'name': 'Oil filter',
+                        'type': '',
+                        'brand': 'Castrol',
+                        'quantity': 1,
+                        'amount': '25.00',
+                    },
+                ],
+                'mark_paid': True,
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        inv = res.data.get('invoice')
+        self.assertIsNotNone(inv)
+        # 50 + 100 + 25 = 175 pre-tax; ON HST 13% → 22.75; total 197.75
+        self.assertEqual(Decimal(inv['subtotal']), Decimal('175.00'))
+        self.assertEqual(Decimal(inv['tax_total']), Decimal('22.75'))
+        self.assertEqual(Decimal(inv['amount']), Decimal('197.75'))
+        self.assertEqual(len(inv['line_items']), 2)
+        self.assertEqual(inv['line_items'][0]['name'], 'Oil change')
+        self.assertEqual(inv['line_items'][0]['brand'], 'Castrol')
+        self.assertEqual(inv['line_items'][0]['amount'], '100.00')
+        pdf = build_invoice_pdf(self.booking.invoice)
+        self.assertIn(b'Oil change', pdf)
+        self.assertIn(b'Castrol', pdf)
+
     def test_us_business_address_uses_state_tax(self):
         self.org.service_state = 'NY'
         self.org.service_city = 'New York'

@@ -47,6 +47,7 @@ import {
 } from './components/booking/BookRedirect';
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import ScrollToTop from './components/ScrollToTop';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -182,6 +183,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <ScrollToTop />
         <ToastProvider>
           <AuthProvider>
             <AppRoutes />

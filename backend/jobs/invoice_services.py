@@ -26,8 +26,60 @@ def _parse_amount(value) -> Decimal:
     return amount.quantize(Decimal('0.01'))
 
 
+def _parse_quantity(value) -> Decimal:
+    if value in (None, ''):
+        return Decimal('1')
+    try:
+        qty = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValidationError({'line_items': 'Quantity must be a number.'}) from exc
+    if qty <= 0:
+        raise ValidationError({'line_items': 'Quantity must be greater than zero.'})
+    if qty == qty.to_integral_value():
+        return qty.to_integral_value()
+    return qty.quantize(Decimal('0.01'))
+
+
+def normalize_line_items(raw_items) -> list[dict]:
+    """Validate and normalize extra bill lines from the POS form."""
+    if raw_items in (None, ''):
+        return []
+    if not isinstance(raw_items, list):
+        raise ValidationError({'line_items': 'Expected a list of bill items.'})
+    if len(raw_items) > 40:
+        raise ValidationError({'line_items': 'Too many bill items (max 40).'})
+
+    normalized = []
+    for idx, item in enumerate(raw_items):
+        if not isinstance(item, dict):
+            raise ValidationError({'line_items': f'Item {idx + 1} must be an object.'})
+        name = str(item.get('name') or '').strip()
+        if not name:
+            raise ValidationError({'line_items': f'Item {idx + 1} needs a name.'})
+        item_type = str(item.get('type') or '').strip()[:80]
+        brand = str(item.get('brand') or '').strip()[:80]
+        quantity = _parse_quantity(item.get('quantity', 1))
+        amount = _parse_amount(item.get('amount'))
+        qty_out = int(quantity) if quantity == quantity.to_integral_value() else float(quantity)
+        normalized.append({
+            'name': name[:120],
+            'type': item_type,
+            'brand': brand,
+            'quantity': qty_out,
+            'amount': str(amount),
+        })
+    return normalized
+
+
+def line_items_total(line_items: list[dict]) -> Decimal:
+    total = Decimal('0.00')
+    for item in line_items or []:
+        total += _parse_amount(item.get('amount'))
+    return total.quantize(Decimal('0.01'))
+
+
 def default_invoice_amount(booking: Booking) -> Decimal:
-    """Best default pre-tax subtotal from the service catalog."""
+    """Best default pre-tax service fee from the service catalog."""
     service = booking.service
     if not service:
         return Decimal('0.00')
@@ -43,14 +95,15 @@ def suggested_invoice_payload(booking: Booking) -> dict:
     estimated_max = None
     if service and pricing_type == Service.PricingType.RANGE and service.price_max is not None:
         estimated_max = Decimal(service.price_max)
-    subtotal = default_invoice_amount(booking)
-    tax = calculate_tax_for_organization(booking.organization, subtotal)
+    service_fee = default_invoice_amount(booking)
+    tax = calculate_tax_for_organization(booking.organization, service_fee)
     return {
         'pricing_type': pricing_type,
         'estimated_amount': estimated.quantize(Decimal('0.01')),
         'estimated_max': estimated_max.quantize(Decimal('0.01')) if estimated_max is not None else None,
+        'service_fee': tax['subtotal'],
         'subtotal': tax['subtotal'],
-        'amount': tax['total'],  # total due (backward-compatible key)
+        'amount': tax['total'],
         'tax_total': tax['tax_total'],
         'tax_lines': tax['tax_lines'],
         'tax_country': tax['tax_country'],
@@ -59,6 +112,7 @@ def suggested_invoice_payload(booking: Booking) -> dict:
         'business_state': tax.get('business_state') or '',
         'business_city': tax.get('business_city') or '',
         'description': (service.name if service else 'Service')[:255],
+        'line_items': [],
     }
 
 
@@ -74,12 +128,6 @@ def _assert_staff(user, organization):
         raise PermissionDenied('Only staff can manage invoices.')
 
 
-def _serialize_money(value) -> str | None:
-    if value is None:
-        return None
-    return str(Decimal(value).quantize(Decimal('0.01')))
-
-
 @transaction.atomic
 def issue_or_update_invoice(
     booking: Booking,
@@ -87,6 +135,8 @@ def issue_or_update_invoice(
     staff_user,
     amount=None,
     subtotal=None,
+    service_fee=None,
+    line_items=None,
     notes: str = '',
     mark_paid: bool = False,
     description: str = '',
@@ -94,9 +144,8 @@ def issue_or_update_invoice(
     """
     Create or update the invoice for a booking. Staff only.
 
-    `subtotal` is the pre-tax POS amount. If only `amount` is provided (legacy),
-    it is treated as the pre-tax subtotal and tax is calculated from the
-    business address.
+    New POS flow: `service_fee` + `line_items` (extras) → pre-tax subtotal.
+    Legacy: `subtotal` / `amount` as full pre-tax total.
     """
     _assert_staff(staff_user, booking.organization)
     if booking.status not in (
@@ -108,8 +157,21 @@ def issue_or_update_invoice(
             'status': 'Invoices can only be issued for confirmed, in-progress, or completed bookings.',
         })
 
-    raw_subtotal = subtotal if subtotal not in (None, '') else amount
-    pre_tax = _parse_amount(raw_subtotal)
+    extras = normalize_line_items(line_items)
+    extras_total = line_items_total(extras)
+
+    if service_fee not in (None, ''):
+        fee = _parse_amount(service_fee)
+        pre_tax = (fee + extras_total).quantize(Decimal('0.01'))
+    else:
+        raw_subtotal = subtotal if subtotal not in (None, '') else amount
+        if raw_subtotal in (None, ''):
+            fee = default_invoice_amount(booking)
+            pre_tax = (fee + extras_total).quantize(Decimal('0.01'))
+        else:
+            # Legacy full pre-tax total; still persist any extras for display.
+            pre_tax = _parse_amount(raw_subtotal)
+
     tax = calculate_tax_for_organization(booking.organization, pre_tax)
     snapshot = suggested_invoice_payload(booking)
     desc = (description or snapshot['description'] or 'Service')[:255]
@@ -131,6 +193,7 @@ def issue_or_update_invoice(
         'tax_country': tax['tax_country'],
         'tax_region': tax['tax_region'],
         'currency': tax['currency'],
+        'line_items': extras,
         'description': desc,
         'notes': note_text,
     }
