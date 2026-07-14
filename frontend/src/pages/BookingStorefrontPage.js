@@ -6,11 +6,12 @@ import ProviderServicesEditor from '../components/provider/ProviderServicesEdito
 import CustomerServiceRequestForm from '../components/customer/CustomerServiceRequestForm';
 import { useAuth } from '../contexts/AuthContext';
 import { businessesAPI } from '../utils/api';
-import { bookService, businessPage, customerProviderService } from '../utils/customerPaths';
+import { bookService, bookMultipleServices, businessPage, customerProviderService, customerProviderCheckout } from '../utils/customerPaths';
 import { providerRouteKey } from '../utils/providerRouteKey';
 import { providerServices } from '../utils/providerPaths';
 import ExpandableText from '../components/ui/ExpandableText';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
+import ServiceRatingSummary from '../components/services/ServiceRatingSummary';
 import { buildCatalogFromFlat } from '../components/services/ServiceCatalogView';
 import {
   customerConnectionState,
@@ -20,6 +21,7 @@ import {
 } from '../utils/bookingAccess';
 import { providerHome, providerSchedule } from '../utils/providerPaths';
 import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
+import { isShopService } from '../utils/serviceDisplay';
 
 /**
  * Public booking profile at /book/:slug
@@ -42,6 +44,8 @@ export default function BookingStorefrontPage() {
   const [connecting, setConnecting] = useState(false);
   const [message, setMessage] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [selectionHint, setSelectionHint] = useState(null);
   const membership = getCustomerMembership(memberships, businessSlug);
   const bookingPolicy = data?.booking_policy;
   const connection = customerConnectionState(bookingPolicy, membership);
@@ -105,6 +109,10 @@ export default function BookingStorefrontPage() {
     isCustomerProviderRoute
       ? customerProviderService(customerKey, serviceId)
       : bookService(customerKey, serviceId);
+  const multiCheckoutPath = (ids) =>
+    isCustomerProviderRoute
+      ? customerProviderCheckout(customerKey, ids)
+      : bookMultipleServices(customerKey, ids);
   const providerPagePath = isCustomerProviderRoute
     ? `/customer/provider/${customerKey}`
     : businessPage(customerKey);
@@ -114,6 +122,36 @@ export default function BookingStorefrontPage() {
   const gallery = organization.gallery || [];
   const businessTypes = data.business_types || [];
   const forceShowPrice = isOwnerView;
+
+  const toggleServiceSelect = (id) => {
+    const key = Number(id);
+    setSelectedServiceIds((prev) => {
+      if (prev.includes(key)) {
+        setSelectionHint(null);
+        return prev.filter((x) => x !== key);
+      }
+      const next = [...prev, key];
+      if (next.length < 2) {
+        setSelectionHint(null);
+        return next;
+      }
+      const list = services || [];
+      const kinds = new Set(
+        next.map((sid) => {
+          const svc = list.find((s) => Number(s.id) === sid);
+          return isShopService(svc) ? 'shop' : 'mobile';
+        })
+      );
+      if (kinds.size > 1) {
+        setSelectionHint(
+          'Book mobile and in-shop services separately — they happen at different locations.'
+        );
+        return prev;
+      }
+      setSelectionHint(null);
+      return next;
+    });
+  };
 
   const renderCatalogActions = (svc) => {
     if (isOwnerView) return null;
@@ -143,9 +181,9 @@ export default function BookingStorefrontPage() {
       return (
         <Link
           to={serviceBookPath(svc.id)}
-          className="rounded-lg bg-luminexa-accent px-3 py-2 text-xs font-medium text-white"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:border-luminexa-accent hover:text-luminexa-accent"
         >
-          Book
+          Book only this
         </Link>
       );
     }
@@ -252,6 +290,9 @@ export default function BookingStorefrontPage() {
               {organization.tagline && (
                 <p className="mt-1 text-slate-600">{organization.tagline}</p>
               )}
+              <div className="mt-2">
+                <ServiceRatingSummary summary={organization.rating_summary} compact />
+              </div>
               {providerHasServiceArea(organization) && (
                 <p className="mt-2 flex items-start gap-1.5 text-sm text-slate-600">
                   <span aria-hidden>📍</span>
@@ -307,6 +348,9 @@ export default function BookingStorefrontPage() {
             {error && (
               <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
             )}
+            {selectionHint && (
+              <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">{selectionHint}</p>
+            )}
 
             {(isOwnerView || hasListedServices) && (
             <section>
@@ -332,9 +376,42 @@ export default function BookingStorefrontPage() {
                   orgSlug={businessSlug}
                   forceShowPrice={forceShowPrice}
                   renderServiceActions={renderCatalogActions}
+                  selectable={canPickService}
+                  selectedIds={selectedServiceIds}
+                  onToggleSelect={toggleServiceSelect}
                 />
               )}
             </section>
+            )}
+
+            {canPickService && selectedServiceIds.length > 0 && (
+              <div className="sticky bottom-3 z-20 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg">
+                <p className="text-sm font-medium text-slate-900">
+                  {selectedServiceIds.length} service
+                  {selectedServiceIds.length === 1 ? '' : 's'} selected
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Book them together — all must be the same type (mobile or in-shop).
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedServiceIds([]);
+                      setSelectionHint(null);
+                    }}
+                    className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-medium text-slate-700"
+                  >
+                    Clear
+                  </button>
+                  <Link
+                    to={multiCheckoutPath(selectedServiceIds)}
+                    className="flex min-h-[44px] flex-[2] items-center justify-center rounded-xl bg-luminexa-accent text-sm font-medium text-white"
+                  >
+                    Book selected
+                  </Link>
+                </div>
+              </div>
             )}
 
             <section className="lx-card">

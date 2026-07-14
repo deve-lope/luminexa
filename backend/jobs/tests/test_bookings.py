@@ -419,3 +419,56 @@ class BookingLifecycleTests(TestCase):
         child = Booking.objects.get(pk=res.data['return_booking']['id'])
         self.assertEqual(child.parent_booking_id, booking.id)
         self.assertEqual(child.status, Booking.Status.CONFIRMED)
+
+    def test_customer_batch_book_two_services(self):
+        oil = Service.objects.create(
+            organization=self.org,
+            name='Oil change',
+            duration_minutes=30,
+            base_price='40.00',
+            is_active=True,
+        )
+        tyre = Service.objects.create(
+            organization=self.org,
+            name='Tyre change',
+            duration_minutes=45,
+            base_price='60.00',
+            is_active=True,
+        )
+        start = timezone.now() + timedelta(days=3)
+        slot_a = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=oil,
+            start_at=start,
+            end_at=start + timedelta(minutes=30),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        slot_b = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=tyre,
+            start_at=start + timedelta(hours=1),
+            end_at=start + timedelta(hours=1, minutes=45),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        self._auth(self.customer)
+        res = self.client.post(
+            '/api/v1/bookings/batch/',
+            {
+                'service_address': 'K1A0B1 Ottawa ON',
+                'customer_notes': 'Please call on arrival',
+                'bookings': [
+                    {'slot_id': slot_a.id, 'service': oil.id},
+                    {'slot_id': slot_b.id, 'service': tyre.id},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(len(res.data), 2)
+        names = sorted(b['service_name'] for b in res.data)
+        self.assertEqual(names, ['Oil change', 'Tyre change'])
+        slot_a.refresh_from_db()
+        slot_b.refresh_from_db()
+        self.assertEqual(slot_a.status, AvailabilitySlot.Status.PENDING)
+        self.assertEqual(slot_b.status, AvailabilitySlot.Status.PENDING)

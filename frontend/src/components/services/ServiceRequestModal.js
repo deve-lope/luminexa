@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import CustomerServiceDetailsForm from '../customer/CustomerServiceDetailsForm';
 import { businessesAPI } from '../../utils/api';
+import {
+  formatFulfillmentDescription,
+  isShopService,
+} from '../../utils/serviceDisplay';
 
 function parseError(err) {
   const d = err.response?.data;
@@ -16,12 +20,15 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  const shop = isShopService(service);
+  const shopLocation = (service?.shop_location || '').trim();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     const trimmed = message.trim();
-    if (trimmed.length < 10) {
-      setError('Please describe what you need in at least 10 characters.');
+    if (!shop && !serviceAddress.trim()) {
+      setError('Please enter the job location.');
       return;
     }
     setSubmitting(true);
@@ -29,8 +36,8 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
       await businessesAPI.submitServiceInquiry(orgSlug, {
         service_id: service?.id,
         service_label: service?.name || '',
-        message: trimmed,
-        service_address: serviceAddress.trim(),
+        message: trimmed || 'Service request',
+        service_address: shop ? shopLocation : serviceAddress.trim(),
       });
       onSuccess?.();
       onClose?.();
@@ -54,6 +61,9 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
             {service?.name && (
               <p className="mt-1 text-sm text-slate-600">{service.name}</p>
             )}
+            {service && (
+              <p className="mt-1 text-xs text-slate-500">{formatFulfillmentDescription(service)}</p>
+            )}
           </div>
           <button
             type="button"
@@ -64,16 +74,40 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <CustomerServiceDetailsForm
-            serviceLabel={service?.name || ''}
-            onServiceLabelChange={() => {}}
-            message={message}
-            onMessageChange={setMessage}
-            serviceAddress={serviceAddress}
-            onServiceAddressChange={setServiceAddress}
-            showServiceLabel={false}
-            compact
-          />
+          {shop ? (
+            <>
+              <CustomerServiceDetailsForm
+                serviceLabel={service?.name || ''}
+                onServiceLabelChange={() => {}}
+                message={message}
+                onMessageChange={setMessage}
+                serviceAddress=""
+                onServiceAddressChange={() => {}}
+                showServiceLabel={false}
+                showLocation={false}
+                compact
+              />
+              <div className="rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-slate-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Job location — come to the shop
+                </p>
+                <p className="mt-1 whitespace-pre-wrap font-medium">
+                  {shopLocation || 'Shop address will be confirmed by the business.'}
+                </p>
+              </div>
+            </>
+          ) : (
+            <CustomerServiceDetailsForm
+              serviceLabel={service?.name || ''}
+              onServiceLabelChange={() => {}}
+              message={message}
+              onMessageChange={setMessage}
+              serviceAddress={serviceAddress}
+              onServiceAddressChange={setServiceAddress}
+              showServiceLabel={false}
+              compact
+            />
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"

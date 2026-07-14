@@ -39,8 +39,7 @@ export function AuthProvider({ children }) {
     loadSession();
   }, [loadSession]);
 
-  const login = useCallback(async (email, password) => {
-    const { data } = await userAPI.login({ email, password });
+  const applyAuthPayload = useCallback(async (data) => {
     storage.set('token', data.token);
     setUser(data.user);
     let list = [];
@@ -53,6 +52,22 @@ export function AuthProvider({ children }) {
     setMemberships(list);
     return { user: data.user, memberships: list };
   }, []);
+
+  const login = useCallback(
+    async (email, password) => {
+      const { data } = await userAPI.login({ email, password });
+      return applyAuthPayload(data);
+    },
+    [applyAuthPayload]
+  );
+
+  const loginWithOtp = useCallback(
+    async (email, code) => {
+      const { data } = await userAPI.verifyLoginOtp({ email, code });
+      return applyAuthPayload(data);
+    },
+    [applyAuthPayload]
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -76,11 +91,12 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(user),
       login,
+      loginWithOtp,
       logout,
       refreshSession: loadSession,
       setUserFromProfile,
     }),
-    [user, memberships, loading, login, logout, loadSession, setUserFromProfile]
+    [user, memberships, loading, login, loginWithOtp, logout, loadSession, setUserFromProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

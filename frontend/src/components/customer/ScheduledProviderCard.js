@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatWhen } from '../../utils/datetime';
 import { bookService, businessPage } from '../../utils/customerPaths';
 import { lxPillTone } from '../../utils/pillGradients';
+import ServiceRatingSummary from '../services/ServiceRatingSummary';
 
 const MAX_VISIBLE_SERVICES = 2;
 
@@ -24,6 +25,7 @@ export default function ScheduledProviderCard({
     next_booking: nextBooking,
     services = [],
     booking_count: bookingCount,
+    rating_summary: ratingSummary,
   } = provider;
 
   const status = statusLabel[customerStatus] || customerStatus;
@@ -52,6 +54,11 @@ export default function ScheduledProviderCard({
             </span>
           )}
         </div>
+        {ratingSummary?.count > 0 && (
+          <div className="mt-1.5">
+            <ServiceRatingSummary summary={ratingSummary} compact />
+          </div>
+        )}
         {!compact && nextBooking && (
           <p className={`mt-1.5 text-sm ${tone.body}`}>
             Next: {nextBooking.service_name} · {formatWhen(nextBooking.start_at)}

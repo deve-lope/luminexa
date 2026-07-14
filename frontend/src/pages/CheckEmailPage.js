@@ -59,18 +59,6 @@ export default function CheckEmailPage() {
         ) : (
           <p>Open the verification link in the email we sent you.</p>
         )}
-        <p className="mt-2 text-xs text-slate-500">
-          Locally, open Mailpit at{' '}
-          <a
-            href="http://localhost:8025"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-teal-700 underline-offset-2 hover:underline"
-          >
-            localhost:8025
-          </a>
-          .
-        </p>
       </div>
 
       {error && (

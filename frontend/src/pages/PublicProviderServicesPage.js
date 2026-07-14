@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import CustomerServiceRequestForm from '../components/customer/CustomerServiceRequestForm';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
+import ServiceRatingSummary from '../components/services/ServiceRatingSummary';
 import { buildCatalogFromFlat } from '../components/services/ServiceCatalogView';
 import { useAuth } from '../contexts/AuthContext';
 import { businessesAPI } from '../utils/api';
@@ -110,6 +111,9 @@ export default function PublicProviderServicesPage() {
         <h1 className="text-2xl font-bold text-slate-900">{org.name}</h1>
         <p className="mt-1 text-sm text-slate-600">Choose a category</p>
         {org.tagline && <p className="mt-1 text-slate-600">{org.tagline}</p>}
+        <div className="mt-2">
+          <ServiceRatingSummary summary={org.rating_summary} compact />
+        </div>
       </header>
 
       <ServiceCategoryBrowse

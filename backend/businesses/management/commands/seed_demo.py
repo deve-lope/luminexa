@@ -10,15 +10,17 @@ from jobs.models import AvailabilitySlot, Booking, Service, WeeklyScheduleBlock
 from jobs.scheduling_services import sync_recurring_slots
 
 DEFAULT_BUSINESS_TYPES = (
-    ('plumbing', 'Plumbing', 'Pipes, leaks, and fixtures', '🔧', 10),
-    ('electrical', 'Electrical', 'Wiring and electrical work', '⚡', 20),
-    ('hvac', 'HVAC', 'Heating and cooling', '❄️', 30),
-    ('cleaning', 'Cleaning', 'Home and office cleaning', '🧹', 40),
-    ('car-wash', 'Car wash', 'Wash, detail, and mobile car care', '🚗', 50),
-    ('pet-grooming', 'Pet grooming', 'Grooming and pet care at home or salon', '🐾', 60),
-    ('landscaping', 'Landscaping', 'Lawns and outdoor care', '🌿', 70),
-    ('handyman', 'Handyman', 'General repairs and small jobs', '🛠️', 80),
-    ('painting', 'Painting', 'Interior and exterior painting', '🎨', 90),
+    # slug, name, description, icon, sort_order, location_kind
+    ('plumbing', 'Plumbing', 'Pipes, leaks, and fixtures', '🔧', 10, 'mobile'),
+    ('electrical', 'Electrical', 'Wiring and electrical work', '⚡', 20, 'mobile'),
+    ('hvac', 'HVAC', 'Heating and cooling', '❄️', 30, 'mobile'),
+    ('cleaning', 'Cleaning', 'Home and office cleaning', '🧹', 40, 'mobile'),
+    ('car-wash', 'Car wash', 'Wash, detail, and mobile car care', '🚗', 50, 'mobile'),
+    ('salon-studio', 'Salon / studio', 'Fixed-location beauty or wellness studio', '💇', 55, 'office'),
+    ('pet-grooming', 'Pet grooming', 'Grooming and pet care at home or salon', '🐾', 60, 'mobile'),
+    ('landscaping', 'Landscaping', 'Lawns and outdoor care', '🌿', 70, 'mobile'),
+    ('handyman', 'Handyman', 'General repairs and small jobs', '🛠️', 80, 'mobile'),
+    ('painting', 'Painting', 'Interior and exterior painting', '🎨', 90, 'mobile'),
 )
 
 
@@ -50,17 +52,21 @@ class Command(BaseCommand):
 
     def _ensure_business_types(self):
         types = {}
-        for slug, name, description, icon, sort_order in DEFAULT_BUSINESS_TYPES:
-            bt, _ = BusinessType.objects.get_or_create(
+        for slug, name, description, icon, sort_order, location_kind in DEFAULT_BUSINESS_TYPES:
+            bt, created = BusinessType.objects.get_or_create(
                 slug=slug,
                 defaults={
                     'name': name,
                     'description': description,
                     'icon': icon,
                     'sort_order': sort_order,
+                    'location_kind': location_kind,
                     'is_active': True,
                 },
             )
+            if not created and bt.location_kind != location_kind:
+                bt.location_kind = location_kind
+                bt.save(update_fields=['location_kind'])
             types[slug] = bt
         return types
 

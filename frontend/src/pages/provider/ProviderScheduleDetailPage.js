@@ -13,6 +13,7 @@ import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail } from '../../utils/providerPaths';
+import { formatDurationLabel, formatJobLocationLabel, isShopService } from '../../utils/serviceDisplay';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
@@ -191,7 +192,7 @@ export default function ProviderScheduleDetailPage() {
           <h2 className="text-sm font-semibold uppercase text-slate-500">Service</h2>
           <dl className="mt-4 space-y-4">
             <DetailRow label="Service">{data.service_name}</DetailRow>
-            <DetailRow label="Duration">{data.service_duration_minutes} minutes</DetailRow>
+            <DetailRow label="Duration">{formatDurationLabel(data.service_duration_minutes) || '—'}</DetailRow>
             <DetailRow label="Price">{currency.format(Number(data.service_base_price))}</DetailRow>
             <DetailRow label="Time">
               {formatTime(data.start_at)} – {formatTime(data.end_at)}
@@ -219,7 +220,13 @@ export default function ProviderScheduleDetailPage() {
         </section>
 
         <ServiceAddressBlock
-          address={data.service_address}
+          address={data.job_location || data.service_address}
+          title={formatJobLocationLabel(data)}
+          subtitle={
+            isShopService(data)
+              ? 'Customer comes to your shop for this service.'
+              : 'You go to the customer for this service.'
+          }
           emptyLabel="No address on file for this booking."
         />
 
@@ -520,7 +527,10 @@ export default function ProviderScheduleDetailPage() {
                 <h2 className="text-sm font-semibold uppercase text-slate-500">Quick info</h2>
                 <p className="mt-2 font-medium text-slate-900">{data.customer_name}</p>
                 {data.service_address && (
-                  <p className="mt-2 text-sm text-slate-600 whitespace-pre-wrap">{data.service_address}</p>
+                  <div className="mt-2">
+                    <p className="text-xs font-medium uppercase text-slate-500">Job location</p>
+                    <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{data.service_address}</p>
+                  </div>
                 )}
               </section>
             )}

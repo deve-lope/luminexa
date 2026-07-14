@@ -10,6 +10,30 @@ function formatAmount(value, currency = defaultCurrency) {
   return currency.format(n);
 }
 
+/** Convert stored minutes → hours string for form inputs. */
+export function hoursFromMinutes(mins) {
+  const n = Number(mins);
+  if (!Number.isFinite(n) || n <= 0) return '1';
+  const h = n / 60;
+  return Number.isInteger(h) ? String(h) : String(Math.round(h * 100) / 100);
+}
+
+/** Convert hours input → minutes for the API (min 15). */
+export function minutesFromHours(hours) {
+  const n = Number(hours);
+  if (!Number.isFinite(n) || n <= 0) return 60;
+  return Math.max(15, Math.round(n * 60));
+}
+
+/** Human-readable duration from minutes (shown as hours). */
+export function formatDurationLabel(mins) {
+  const n = Number(mins);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const h = Math.round((n / 60) * 100) / 100;
+  if (h === 1) return '1 hour';
+  return `${h} hours`;
+}
+
 /** Human-readable price for catalog cards (fixed, range, or quote). */
 export function formatServicePrice(service, currency = defaultCurrency, options = {}) {
   const { forceShowPrice = false } = options;
@@ -30,10 +54,40 @@ export function formatServicePrice(service, currency = defaultCurrency, options 
 /** Duration + optional price for public service cards. */
 export function formatServiceMeta(service, currency = defaultCurrency, options = {}) {
   const { forceShowPrice = false } = options;
-  const mins = service?.duration_minutes;
   const parts = [];
-  if (mins != null) parts.push(`${mins} min`);
+  const duration = formatDurationLabel(service?.duration_minutes);
+  if (duration) parts.push(duration);
   const price = formatServicePrice(service, currency, { forceShowPrice });
   if (price) parts.push(price);
+  const fulfillment = formatFulfillmentLabel(service);
+  if (fulfillment) parts.push(fulfillment);
   return parts.join(' · ');
+}
+
+export function isShopService(service) {
+  return (service?.fulfillment_kind || 'mobile') === 'shop';
+}
+
+export function isMobileService(service) {
+  return !isShopService(service);
+}
+
+/** Short label for catalogs and badges. */
+export function formatFulfillmentLabel(service) {
+  if (!service) return null;
+  return isShopService(service) ? 'In-shop' : 'Mobile';
+}
+
+/** Clear customer-facing explanation of where the job happens. */
+export function formatFulfillmentDescription(service) {
+  if (isShopService(service)) {
+    return 'In-shop — you come to the business';
+  }
+  return 'Mobile — we come to you';
+}
+
+export function formatJobLocationLabel(bookingOrService) {
+  if (bookingOrService?.job_location_label) return bookingOrService.job_location_label;
+  if (isShopService(bookingOrService)) return 'Job location — come to the shop';
+  return 'Job location — we come to you';
 }

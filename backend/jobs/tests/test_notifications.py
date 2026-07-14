@@ -103,3 +103,40 @@ class BookingNotificationTests(TestCase):
             kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
         )
         self.assertIn('Customer requested Oil change', note.message)
+
+    def test_provider_cancel_emails_customer(self):
+        from django.core import mail
+
+        from jobs.models import ServiceRequestMessage
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save(update_fields=['status'])
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/cancel/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CANCELLED)
+
+        customer_mails = [m for m in mail.outbox if m.to == ['customer@test.local']]
+        self.assertTrue(customer_mails)
+        self.assertTrue(
+            any('Booking cancelled' in m.subject for m in customer_mails),
+            [m.subject for m in mail.outbox],
+        )
+        msg = ServiceRequestMessage.objects.filter(booking=booking).first()
+        self.assertIsNotNone(msg)
+        self.assertIn('cancelled', msg.body.lower())

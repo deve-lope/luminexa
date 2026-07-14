@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthFormShell
       title="Reset password"
-      subtitle="Enter the email on your account and we’ll send a link to choose a new password."
+      subtitle="Enter the email on your business account and we’ll send a link to choose a new password. Customer accounts use email codes instead — use Sign in."
       backTo="/login"
       footer={
         <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">
@@ -58,18 +58,6 @@ export default function ForgotPasswordPage() {
         {message && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             <p>{message}</p>
-            <p className="mt-2 text-xs text-emerald-700/80">
-              Locally check Mailpit at{' '}
-              <a
-                href="http://localhost:8025"
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium underline-offset-2 hover:underline"
-              >
-                localhost:8025
-              </a>
-              .
-            </p>
           </div>
         )}
         <button

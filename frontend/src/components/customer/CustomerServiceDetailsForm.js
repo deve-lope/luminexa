@@ -15,7 +15,7 @@ export default function CustomerServiceDetailsForm({
   showLocation = true,
   showAddressPreview = false,
   compact = false,
-  requireMessage = true,
+  requireMessage = false,
 }) {
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
@@ -37,9 +37,7 @@ export default function CustomerServiceDetailsForm({
       <div>
         <label htmlFor="service-message" className="mb-1 block text-sm font-medium text-slate-700">
           Describe what you need
-          {!requireMessage && (
-            <span className="ml-1 font-normal text-slate-400">(optional)</span>
-          )}
+          <span className="ml-1 font-normal text-slate-400">(optional)</span>
         </label>
         <textarea
           id="service-message"
@@ -47,18 +45,15 @@ export default function CustomerServiceDetailsForm({
           onChange={(e) => onMessageChange(e.target.value)}
           placeholder="Be specific: e.g. fix kitchen sink leak, full interior detail, install new light fixture…"
           rows={compact ? 3 : 4}
-          required={requireMessage}
           className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
         />
         <p className="mt-1 text-xs text-slate-500">
-          {requireMessage
-            ? 'At least 10 characters so the business knows how to help.'
-            : 'Optional — add details if you want the provider to know more.'}
+          Optional — add details if you want the provider to know more.
         </p>
       </div>
       {showAddressPreview && (serviceAddress || '').trim() && !showLocation && (
         <div>
-          <p className="mb-1 text-sm font-medium text-slate-700">Service location</p>
+          <p className="mb-1 text-sm font-medium text-slate-700">Job location</p>
           <p className="whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
             {formatServiceAddressDisplay(serviceAddress)}
           </p>
@@ -68,7 +63,7 @@ export default function CustomerServiceDetailsForm({
         <ServiceLocationInput
           value={serviceAddress}
           onChange={onServiceAddressChange}
-          label="Service location"
+          label="Job location"
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
+import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { businessesAPI } from '../../utils/api';
 import { businessPage } from '../../utils/customerPaths';
 
@@ -60,6 +61,11 @@ export default function CustomerProvidersByTypePage() {
               >
                 <h3 className="font-semibold text-slate-900">{p.name}</h3>
                 {p.tagline && <p className="mt-1 text-sm text-slate-600">{p.tagline}</p>}
+                {p.rating_summary?.count > 0 && (
+                  <div className="mt-2">
+                    <ServiceRatingSummary summary={p.rating_summary} compact />
+                  </div>
+                )}
                 {customerPolicyLabel(p.booking_policy) && (
                   <p className="mt-2 text-xs text-slate-500">
                     {customerPolicyLabel(p.booking_policy)}

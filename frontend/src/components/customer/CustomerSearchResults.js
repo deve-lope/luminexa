@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import BusinessTypeTileGrid from './BusinessTypeTileGrid';
+import ServiceRatingSummary from '../services/ServiceRatingSummary';
 import { bookService, businessPage } from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
@@ -74,6 +75,11 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
                     {p.tagline && (
                       <p className="truncate text-sm text-slate-600">{p.tagline}</p>
                     )}
+                    {p.rating_summary?.count > 0 && (
+                      <div className="mt-1">
+                        <ServiceRatingSummary summary={p.rating_summary} compact />
+                      </div>
+                    )}
                   </div>
                 </Link>
               </li>
@@ -99,6 +105,11 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
                     <p className="mt-0.5 text-xs text-slate-500">
                       📍 {s.location || s.location_short}
                     </p>
+                  )}
+                  {s.rating_summary?.count > 0 && (
+                    <div className="mt-1">
+                      <ServiceRatingSummary summary={s.rating_summary} compact />
+                    </div>
                   )}
                   {formatServiceMeta(s) && (
                     <p className="mt-1 text-xs text-slate-500">{formatServiceMeta(s)}</p>

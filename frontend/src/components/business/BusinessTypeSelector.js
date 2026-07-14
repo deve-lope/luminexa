@@ -14,11 +14,14 @@ function normalizeType(raw) {
   const slug = raw.slug;
   const name = raw.name;
   if (!slug || !name) return null;
+  const locationKind = raw.location_kind === 'office' ? 'office' : 'mobile';
   return {
     slug: String(slug),
     name: String(name),
     icon: raw.icon || '',
     description: raw.description || '',
+    location_kind: locationKind,
+    requires_business_address: locationKind === 'office' || !!raw.requires_business_address,
   };
 }
 
@@ -38,6 +41,7 @@ export default function BusinessTypeSelector({
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('');
+  const [newLocationKind, setNewLocationKind] = useState('mobile');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
   const [justAddedSlug, setJustAddedSlug] = useState(null);
@@ -55,7 +59,6 @@ export default function BusinessTypeSelector({
   const addBtnClass = isDark
     ? 'text-sm font-medium text-luminexa-accent hover:underline'
     : 'text-sm font-medium text-luminexa-accent';
-
   useEffect(() => {
     if (!justAddedSlug) return undefined;
     const t = setTimeout(() => setJustAddedSlug(null), 2500);
@@ -82,6 +85,7 @@ export default function BusinessTypeSelector({
       const res = await businessesAPI.createBusinessType({
         name,
         icon: newIcon.trim(),
+        location_kind: newLocationKind,
       });
       const created = normalizeType(res.data);
       if (!created) {
@@ -103,6 +107,7 @@ export default function BusinessTypeSelector({
       setJustAddedSlug(created.slug);
       setNewName('');
       setNewIcon('');
+      setNewLocationKind('mobile');
       setShowAdd(false);
 
       requestAnimationFrame(() => {
@@ -210,6 +215,41 @@ export default function BusinessTypeSelector({
               maxLength={4}
               className={inputClass}
             />
+            <fieldset className="space-y-2">
+              <legend className={`text-xs font-medium ${isDark ? 'text-luminexa-mist/80' : 'text-slate-600'}`}>
+                Location type
+              </legend>
+              <label className={labelClass}>
+                <input
+                  type="radio"
+                  name="new-location-kind"
+                  checked={newLocationKind === 'office'}
+                  onChange={() => setNewLocationKind('office')}
+                  className="mt-1 h-4 w-4 shrink-0 accent-luminexa-accent"
+                />
+                <span>
+                  <span className="font-medium">Business office</span>
+                  <span className={`mt-0.5 block text-xs ${isDark ? 'text-luminexa-mist/60' : 'text-slate-500'}`}>
+                    Fixed location / home address used for billing
+                  </span>
+                </span>
+              </label>
+              <label className={labelClass}>
+                <input
+                  type="radio"
+                  name="new-location-kind"
+                  checked={newLocationKind === 'mobile'}
+                  onChange={() => setNewLocationKind('mobile')}
+                  className="mt-1 h-4 w-4 shrink-0 accent-luminexa-accent"
+                />
+                <span>
+                  <span className="font-medium">Mobile service</span>
+                  <span className={`mt-0.5 block text-xs ${isDark ? 'text-luminexa-mist/60' : 'text-slate-500'}`}>
+                    You go to the customer — no business address
+                  </span>
+                </span>
+              </label>
+            </fieldset>
             {addError && (
               <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-600'}`}>{addError}</p>
             )}

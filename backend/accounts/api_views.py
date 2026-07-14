@@ -11,11 +11,15 @@ from rest_framework.views import APIView
 
 from luminexa.throttles import LoginThrottle, PasswordResetThrottle
 
-from .emails import send_email_verification, send_password_reset_email
+from .emails import send_email_verification, send_login_otp_email, send_password_reset_email
 from .models import User
+from .otp import issue_login_code, normalize_email, user_uses_password_login, verify_login_code
 from .serializers import (
     EmailVerifySerializer,
+    LoginOtpRequestSerializer,
+    LoginOtpVerifySerializer,
     LoginSerializer,
+    LoginStartSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterBusinessSerializer,
@@ -37,15 +41,33 @@ def _registration_pending_response(user, *, organization=None):
     return Response(payload, status=status.HTTP_201_CREATED)
 
 
+def _issue_auth_token(user):
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({'token': token.key, 'user': UserSerializer(user).data})
+
+
+def _send_customer_otp(email: str, *, full_name: str = '') -> None:
+    code = issue_login_code(email)
+    send_login_otp_email(email, code, full_name=full_name)
+
+
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [LoginThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        send_email_verification(user)
-        return _registration_pending_response(user)
+        _send_customer_otp(user.email, full_name=user.full_name)
+        return Response(
+            {
+                'detail': 'We sent a sign-in code to your email.',
+                'requires_otp': True,
+                'email': user.email,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class RegisterBusinessAPIView(APIView):
@@ -57,6 +79,83 @@ class RegisterBusinessAPIView(APIView):
         user, org = serializer.save()
         send_email_verification(user)
         return _registration_pending_response(user, organization=org)
+
+
+class LoginStartAPIView(APIView):
+    """Branch after email: providers → password, customers → OTP."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginThrottle]
+
+    def post(self, request):
+        serializer = LoginStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = normalize_email(serializer.validated_data['email'])
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user_uses_password_login(user):
+            return Response({'auth_method': 'password', 'email': email})
+        if user and user.is_active:
+            _send_customer_otp(email, full_name=user.full_name)
+        return Response(
+            {
+                'auth_method': 'otp',
+                'email': email,
+                'detail': 'If an account exists for that email, we sent a sign-in code.',
+            }
+        )
+
+
+class LoginOtpRequestAPIView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetThrottle]
+
+    def post(self, request):
+        serializer = LoginOtpRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = normalize_email(serializer.validated_data['email'])
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user_uses_password_login(user):
+            return Response(
+                {
+                    'detail': 'This account uses a password. Enter your password to sign in.',
+                    'auth_method': 'password',
+                    'email': email,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user and user.is_active:
+            _send_customer_otp(email, full_name=user.full_name)
+        return Response(
+            {
+                'detail': 'If an account exists for that email, we sent a sign-in code.',
+                'auth_method': 'otp',
+                'email': email,
+            }
+        )
+
+
+class LoginOtpVerifyAPIView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginThrottle]
+
+    def post(self, request):
+        serializer = LoginOtpVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = normalize_email(serializer.validated_data['email'])
+        code = serializer.validated_data['code']
+        user = User.objects.filter(email__iexact=email).first()
+        if not user or not user.is_active:
+            raise ValidationError({'detail': 'Invalid or expired code.'})
+        if user_uses_password_login(user):
+            raise ValidationError(
+                {'detail': 'This account uses a password. Sign in with your password instead.'}
+            )
+        if not verify_login_code(email, code):
+            raise ValidationError({'detail': 'Invalid or expired code.'})
+        if not user.email_verified:
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
+        return _issue_auth_token(user)
 
 
 class LoginAPIView(APIView):
@@ -76,8 +175,7 @@ class LoginAPIView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user': UserSerializer(user).data})
+        return _issue_auth_token(user)
 
 
 class LogoutAPIView(APIView):
@@ -99,6 +197,8 @@ class ChangePasswordAPIView(APIView):
         if len(new_password) < 8:
             raise ValidationError({'new_password': 'Must be at least 8 characters.'})
         user = request.user
+        if not user_uses_password_login(user):
+            raise ValidationError({'detail': 'Customer accounts do not use a password.'})
         if not user.check_password(old_password):
             raise ValidationError({'old_password': 'Current password is incorrect.'})
         user.set_password(new_password)
@@ -144,7 +244,7 @@ class PasswordResetRequestAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email'].strip().lower()
         user = User.objects.filter(email__iexact=email).first()
-        if user:
+        if user and user_uses_password_login(user):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_url = (
@@ -174,6 +274,8 @@ class PasswordResetConfirmAPIView(APIView):
             raise ValidationError({'detail': 'Invalid reset link.'}) from None
         if not default_token_generator.check_token(user, token):
             raise ValidationError({'detail': 'Invalid or expired reset link.'})
+        if not user_uses_password_login(user):
+            raise ValidationError({'detail': 'Customer accounts do not use a password.'})
         user.set_password(password)
         # Completing reset proves mailbox access — mark verified if not already.
         update_fields = ['password']
@@ -220,7 +322,10 @@ class ResendVerificationAPIView(APIView):
         email = serializer.validated_data['email'].strip().lower()
         user = User.objects.filter(email__iexact=email).first()
         if user and not user.email_verified:
-            send_email_verification(user)
+            if user_uses_password_login(user):
+                send_email_verification(user)
+            else:
+                _send_customer_otp(email, full_name=user.full_name)
         return Response({
-            'detail': 'If that email needs verification, we sent a new link.',
+            'detail': 'If that email needs verification, we sent a new message.',
         })

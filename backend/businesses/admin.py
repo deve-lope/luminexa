@@ -12,7 +12,8 @@ from .models import (
 
 @admin.register(BusinessType)
 class BusinessTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'sort_order', 'is_active')
+    list_display = ('name', 'slug', 'location_kind', 'sort_order', 'is_active')
+    list_filter = ('location_kind', 'is_active')
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'slug')
 

@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from jobs.booking_services import customer_can_book
 from jobs.models import AvailabilitySlot, Booking, Service
+from jobs.ratings import aggregate_organization_ratings
 from jobs.serializers import BookingSerializer, PublicServiceReadSerializer
 
 from .models import BusinessType, Organization, OrganizationMembership
@@ -54,6 +55,7 @@ def business_types_list_api(request):
             name=data['name'],
             description=data.get('description') or '',
             icon=(data.get('icon') or '').strip(),
+            location_kind=data.get('location_kind') or BusinessType.LocationKind.MOBILE,
             sort_order=BusinessType.objects.count(),
             is_active=True,
         )
@@ -530,10 +532,9 @@ def _location_picker_payload(*, state='', city=''):
 
 
 def _absolute_media_url(request, field):
-    if not field:
+    """Same-origin /media/... path (see jobs.serializers._absolute_media_url)."""
+    if not field or not getattr(field, 'url', None):
         return None
-    if request:
-        return request.build_absolute_uri(field.url)
     return field.url
 
 
@@ -597,6 +598,7 @@ def customer_home_api(request):
             'logo_url': _absolute_media_url(request, org.logo),
             'next_booking': upcoming_by_org.get(org.slug),
             'services': services,
+            'rating_summary': aggregate_organization_ratings(org),
         })
 
     types = BusinessTypeSerializer(_business_types_for_discover(), many=True).data

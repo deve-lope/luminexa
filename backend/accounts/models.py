@@ -11,7 +11,10 @@ class UserManager(BaseUserManager):
             from .public_refs import next_user_public_ref
             extra_fields['public_ref'] = next_user_public_ref()
         user = self.model(email=email, full_name=full_name, **extra_fields)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -69,3 +72,22 @@ class User(AbstractUser):
     @property
     def has_booking_contact(self) -> bool:
         return bool(self.email and (self.phone or '').strip())
+
+
+class LoginCode(models.Model):
+    """Short-lived email OTP for customer sign-in / sign-up."""
+
+    email = models.EmailField(db_index=True)
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['email', 'consumed_at']),
+        ]
+
+    def __str__(self):
+        return f'LoginCode<{self.email}>'

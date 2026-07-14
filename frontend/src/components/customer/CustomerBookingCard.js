@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingStatusTimeline from '../booking/BookingStatusTimeline';
 import BookingRateModal from '../booking/BookingRateModal';
-import InvoiceDownloadButton from '../booking/InvoiceDownloadButton';
+import InvoicePanel from '../booking/InvoicePanel';
 import { formatWhen } from '../../utils/datetime';
 import {
   bookingStatusClass,
@@ -18,6 +18,8 @@ import {
 } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 import { jobsAPI } from '../../utils/api';
+import { formatJobLocationLabel } from '../../utils/serviceDisplay';
+import { formatServiceAddressDisplay } from './ServiceLocationInput';
 
 function ReviewSnippet({ review }) {
   if (!review) return null;
@@ -75,6 +77,16 @@ export default function CustomerBookingCard({
       <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
       <p className="text-sm text-slate-600">{booking.organization_name}</p>
       <p className="mt-1 text-sm text-slate-500">{formatWhen(booking.start_at)}</p>
+      {(booking.job_location || booking.service_address) && (
+        <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {formatJobLocationLabel(booking)}
+          </p>
+          <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
+            {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
+          </p>
+        </div>
+      )}
       <span
         className={`mt-2 inline-block capitalize ${bookingStatusClass(booking.status)}`}
       >
@@ -104,7 +116,14 @@ export default function CustomerBookingCard({
 
       {booking.status === 'completed' && booking.invoice && (
         <div className="mt-3">
-          <InvoiceDownloadButton invoice={booking.invoice} bookingId={booking.id} />
+          <InvoicePanel
+            invoice={booking.invoice}
+            bookingId={booking.id}
+            providerName={
+              booking.invoice.provider_name || booking.organization_name
+            }
+            compact
+          />
         </div>
       )}
       {booking.status_events?.length > 0 && (

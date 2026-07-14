@@ -11,8 +11,7 @@ export default function AuthFormShell({
   footer = null,
 }) {
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-[#d8f3ef] text-slate-900">
-      {/* Stronger teal atmosphere */}
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#d8f3ef] text-slate-900">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-gradient-to-br from-teal-200 via-teal-100 to-cyan-200"
@@ -34,7 +33,7 @@ export default function AuthFormShell({
         className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-teal-600/25 to-transparent"
       />
 
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] max-w-lg flex-col justify-center px-4 py-10 sm:px-6">
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-6 flex items-center justify-between">
           <Link to="/" className="text-lg font-extrabold tracking-tight text-teal-900">
             Luminexa

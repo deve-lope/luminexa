@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthFormShell from '../components/auth/AuthFormShell';
 import AddressCountrySelect from '../components/location/AddressCountrySelect';
-import PasswordInput from '../components/ui/PasswordInput';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import { userAPI } from '../utils/api';
 
@@ -11,7 +10,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [addressCountry, setAddressCountry] = useState(
     () => countryFromNavigator() || defaultAddressCountry()
   );
@@ -23,17 +21,24 @@ export default function RegisterPage() {
     setError('');
     setSubmitting(true);
     try {
-      const payload = { email, full_name: fullName, password, address_country: addressCountry };
+      const payload = { email, full_name: fullName, address_country: addressCountry };
       if (phone.trim()) payload.phone = phone.trim();
       const { data } = await userAPI.register(payload);
-      navigate('/check-email', {
+      navigate('/login', {
         replace: true,
-        state: { email: data.email || email, kind: 'customer' },
+        state: {
+          email: data.email || email,
+          step: 'otp',
+          requires_otp: true,
+          message: data.detail || 'We sent a sign-in code to your email.',
+        },
       });
     } catch (err) {
       const d = err.response?.data;
       setError(
-        d?.email?.[0] || d?.detail || (typeof d === 'string' ? d : 'Registration failed.')
+        d?.email?.[0] ||
+          d?.detail ||
+          (typeof d === 'string' ? d : 'Registration failed.')
       );
     } finally {
       setSubmitting(false);
@@ -43,7 +48,7 @@ export default function RegisterPage() {
   return (
     <AuthFormShell
       title="Create account"
-      subtitle="Email is required. We’ll send a verification link — then you can sign in."
+      subtitle="Email is required. We’ll send a one-time code so you can sign in — no password needed."
       backTo="/"
       footer={
         <>
@@ -115,26 +120,12 @@ export default function RegisterPage() {
             hint="Pick where you receive services — used for address search."
           />
         </div>
-        <div>
-          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Password
-          </label>
-          <PasswordInput
-            id="password"
-            variant="light"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
         <button
           type="submit"
           disabled={submitting}
           className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
         >
-          {submitting ? 'Creating…' : 'Create account'}
+          {submitting ? 'Sending code…' : 'Continue with email'}
         </button>
       </form>
     </AuthFormShell>

@@ -13,6 +13,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
+import { formatDurationLabel, formatJobLocationLabel, isShopService } from '../../utils/serviceDisplay';
 
 const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
 
@@ -255,7 +256,7 @@ export default function ProviderRequestDetailPage() {
         <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Service</h2>
           <dl className="mt-4 space-y-4">
-            <DetailRow label="Duration">{data.service_duration_minutes} minutes</DetailRow>
+            <DetailRow label="Duration">{formatDurationLabel(data.service_duration_minutes) || '—'}</DetailRow>
             <DetailRow label="Price">{currency.format(Number(data.service_base_price))}</DetailRow>
             <DetailRow label="Time">
               {formatTime(data.start_at)} – {formatTime(data.end_at)}
@@ -264,10 +265,21 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
-      {(data.service_address || kind === 'inquiry') && (
+      {(kind === 'booking' || data.service_address || kind === 'inquiry') && (
         <ServiceAddressBlock
-          address={data.service_address}
-          title={kind === 'booking' ? 'Service address' : 'Location'}
+          address={data.job_location || data.service_address}
+          title={
+            kind === 'booking'
+              ? formatJobLocationLabel(data)
+              : 'Job location'
+          }
+          subtitle={
+            kind === 'booking'
+              ? isShopService(data)
+                ? 'Customer comes to your shop for this service.'
+                : 'You go to the customer for this service.'
+              : ''
+          }
           emptyLabel="No address provided."
         />
       )}

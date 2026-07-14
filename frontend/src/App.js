@@ -41,6 +41,8 @@ import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
 import CustomerProvidersByTypePage from './pages/customer/CustomerProvidersByTypePage';
 import BookServiceGateway from './pages/BookServiceGateway';
+import BookMultipleGateway from './pages/BookMultipleGateway';
+import CustomerBookMultipleServicesPage from './pages/customer/CustomerBookMultipleServicesPage';
 import {
   RedirectToBookProvider,
   RedirectToBookService,
@@ -161,12 +163,14 @@ function AppRoutes() {
           <Route path="provider/:providerKey" element={<CustomerProviderRoutes />}>
             <Route index element={<BookingStorefrontPage />} />
             <Route path="services/:serviceId" element={<CustomerServiceDetailPage />} />
+            <Route path="checkout" element={<CustomerBookMultipleServicesPage />} />
             <Route path=":serviceId" element={<CustomerBookServicePage />} />
           </Route>
         </Route>
         <Route path="/customer/provider/:orgSlug" element={<RedirectToBookProvider />} />
         <Route path="/customer/book/:orgSlug/:serviceId" element={<RedirectToBookService />} />
         <Route path="/services" element={<ServicesBrowseWrapper />} />
+        <Route path="/book/:slug/checkout" element={<BookMultipleGateway />} />
         <Route path="/book/:orgSlug/:serviceId" element={<BookServiceGateway />} />
         <Route path="/book/:slug" element={<BookRouteLayout />}>
           <Route path="services/:serviceId" element={<CustomerServiceDetailPage />} />

@@ -10,6 +10,9 @@ export default function ServiceCategoryBrowse({
   forceShowPrice = false,
   renderServiceActions,
   emptyMessage = 'No services listed yet.',
+  selectable = false,
+  selectedIds = [],
+  onToggleSelect,
 }) {
   const [selectedId, setSelectedId] = useState(null);
 
@@ -91,6 +94,12 @@ export default function ServiceCategoryBrowse({
         ← All categories
       </button>
       <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
+      {selectable && (
+        <p className="text-sm text-slate-500">
+          Select one or more services of the same type (all mobile, or all in-shop), then book them
+          together.
+        </p>
+      )}
       <ul className="space-y-3">
         {selected.services.map((svc) => (
           <ServiceRow
@@ -99,6 +108,9 @@ export default function ServiceCategoryBrowse({
             orgSlug={orgSlug}
             forceShowPrice={forceShowPrice}
             actions={renderServiceActions?.(svc)}
+            selectable={selectable}
+            selected={selectedIds.includes(svc.id) || selectedIds.includes(String(svc.id))}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </ul>

@@ -11,7 +11,7 @@ export default function BookingServiceLocationSection({
   user,
   value,
   onChange,
-  label = 'Service location',
+  label = 'Job location',
   hint,
 }) {
   const profileAddress = (user?.default_service_address || '').trim();
@@ -38,7 +38,7 @@ export default function BookingServiceLocationSection({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-slate-700">{label}</p>
-            <p className="mt-0.5 text-xs text-slate-500">From your profile</p>
+            <p className="mt-0.5 text-xs text-slate-500">From your profile — we come to you</p>
           </div>
           <button
             type="button"

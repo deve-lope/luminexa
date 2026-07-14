@@ -25,13 +25,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
     address_country = serializers.CharField(required=False, allow_blank=True, max_length=80)
 
     class Meta:
         model = User
-        fields = ('email', 'full_name', 'password', 'phone', 'address_country')
+        fields = ('email', 'full_name', 'phone', 'address_country')
 
     def validate_email(self, value):
         email = (value or '').strip().lower()
@@ -44,6 +43,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         address_country = (validated_data.pop('address_country', '') or '').strip()
         user = User.objects.create_user(
             phone=phone,
+            password=None,
             email_verified=False,
             **validated_data,
         )
@@ -64,8 +64,12 @@ class RegisterBusinessSerializer(serializers.Serializer):
         default=Organization.BookingPolicy.APPROVAL,
         required=False,
     )
-    service_city = serializers.CharField(max_length=120)
-    service_postal_code = serializers.CharField(max_length=12)
+    service_city = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default='',
+    )
+    service_postal_code = serializers.CharField(
+        max_length=12, required=False, allow_blank=True, default='',
+    )
     service_state = serializers.CharField(max_length=80, required=False, allow_blank=True, default='')
     service_address = serializers.CharField(max_length=300, required=False, allow_blank=True, default='')
     address_country = serializers.CharField(required=False, allow_blank=True, max_length=80)
@@ -81,13 +85,13 @@ class RegisterBusinessSerializer(serializers.Serializer):
         return value.lower()
 
     def validate_service_city(self, value):
-        city = (value or '').strip()
-        if len(city) < 2:
-            raise serializers.ValidationError('Enter the city where you provide services.')
-        return city
+        return (value or '').strip()
 
     def validate_service_postal_code(self, value):
-        return validate_postal_code(value)
+        raw = (value or '').strip()
+        if not raw:
+            return ''
+        return validate_postal_code(raw)
 
     def validate_business_type_slugs(self, slugs):
         unique_slugs = list(dict.fromkeys(slugs))
@@ -100,13 +104,49 @@ class RegisterBusinessSerializer(serializers.Serializer):
             )
         return unique_slugs
 
+    def validate(self, attrs):
+        type_slugs = attrs.get('business_type_slugs') or []
+        needs_address = BusinessType.objects.filter(
+            slug__in=type_slugs,
+            is_active=True,
+            location_kind=BusinessType.LocationKind.OFFICE,
+        ).exists()
+        attrs['_needs_business_address'] = needs_address
+        if needs_address:
+            city = (attrs.get('service_city') or '').strip()
+            postal = (attrs.get('service_postal_code') or '').strip()
+            if len(city) < 2:
+                raise serializers.ValidationError(
+                    {
+                        'service_city': (
+                            'Enter your business office / home address city for billing.'
+                        ),
+                    }
+                )
+            if not postal:
+                raise serializers.ValidationError(
+                    {
+                        'service_postal_code': (
+                            'Enter your business office / home postal code for billing.'
+                        ),
+                    }
+                )
+        else:
+            # Mobile-only businesses have no fixed billing address at signup.
+            attrs['service_city'] = ''
+            attrs['service_postal_code'] = ''
+            attrs['service_state'] = ''
+            attrs['service_address'] = ''
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
+        validated_data.pop('_needs_business_address', None)
         type_slugs = validated_data.pop('business_type_slugs')
         business_name = validated_data.pop('business_name')
         booking_policy = validated_data.pop('booking_policy', Organization.BookingPolicy.APPROVAL)
-        service_city = validated_data.pop('service_city')
-        service_postal_code = validated_data.pop('service_postal_code')
+        service_city = (validated_data.pop('service_city', '') or '').strip()
+        service_postal_code = (validated_data.pop('service_postal_code', '') or '').strip()
         service_state = (validated_data.pop('service_state', '') or '').strip()
         service_address = (validated_data.pop('service_address', '') or '').strip()
         address_country = (validated_data.pop('address_country', '') or '').strip()
@@ -136,7 +176,8 @@ class RegisterBusinessSerializer(serializers.Serializer):
         )
         types = BusinessType.objects.filter(slug__in=type_slugs, is_active=True)
         org.business_types.set(types)
-        assign_org_coordinates(org)
+        if service_city or service_postal_code:
+            assign_org_coordinates(org)
         OrganizationMembership.objects.create(
             organization=org,
             user=user,
@@ -178,5 +219,24 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid email or password.')
         if not user.is_active:
             raise serializers.ValidationError('This account is disabled.')
+        from .otp import user_uses_password_login
+
+        if not user_uses_password_login(user):
+            raise serializers.ValidationError(
+                'Customers sign in with an email code, not a password.'
+            )
         attrs['user'] = user
         return attrs
+
+
+class LoginStartSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class LoginOtpRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class LoginOtpVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(min_length=4, max_length=8)

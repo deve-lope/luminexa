@@ -43,10 +43,6 @@ export default function CustomerServiceRequestForm({
     setError(null);
     setSuccess(null);
     const trimmed = message.trim();
-    if (trimmed.length < 10) {
-      setError('Please describe what you need in at least 10 characters.');
-      return;
-    }
     if (serviceAddress.trim()) {
       const locationCheck = validateServiceLocationValue(serviceAddress);
       if (!locationCheck.valid) {
@@ -54,14 +50,14 @@ export default function CustomerServiceRequestForm({
         return;
       }
     } else {
-      setError('Please enter the service location.');
+      setError('Please enter the job location.');
       return;
     }
     setSubmitting(true);
     try {
       await businessesAPI.submitServiceInquiry(orgSlug, {
         service_label: serviceLabel.trim(),
-        message: trimmed,
+        message: trimmed || 'Service request',
         service_address: serviceAddress.trim(),
         preferred_date: preferredDate || null,
       });

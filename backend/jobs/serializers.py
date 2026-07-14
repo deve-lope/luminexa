@@ -155,17 +155,12 @@ class ProviderNotificationSerializer(serializers.ModelSerializer):
 class CustomerServiceInquiryCreateSerializer(serializers.Serializer):
     service_id = serializers.IntegerField(required=False, allow_null=True)
     service_label = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
-    message = serializers.CharField()
+    message = serializers.CharField(required=False, allow_blank=True, default='')
     service_address = serializers.CharField(required=False, allow_blank=True, default='')
     preferred_date = serializers.DateField(required=False, allow_null=True)
 
     def validate_message(self, value):
-        text = (value or '').strip()
-        if len(text) < 10:
-            raise serializers.ValidationError(
-                'Please describe what you need in at least 10 characters.'
-            )
-        return text
+        return (value or '').strip()
 
     def validate(self, attrs):
         service_id = attrs.get('service_id')
@@ -281,7 +276,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             'id', 'organization', 'organization_slug', 'category', 'category_name',
             'name', 'description', 'image',
             'duration_minutes', 'pricing_type', 'base_price', 'price_max',
-            'show_price', 'allow_request', 'is_active', 'sort_order',
+            'show_price', 'allow_request', 'fulfillment_kind', 'is_active', 'sort_order',
             'rating_summary', 'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -468,6 +463,9 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     service_price_max = serializers.DecimalField(
         source='service.price_max', max_digits=10, decimal_places=2, read_only=True, allow_null=True,
     )
+    fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
+    job_location = serializers.SerializerMethodField()
+    job_location_label = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -486,7 +484,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'organization', 'organization_slug', 'organization_public_ref', 'organization_name',
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
-            'service_pricing_type', 'service_price_max',
+            'service_pricing_type', 'service_price_max', 'fulfillment_kind',
+            'job_location', 'job_location_label',
             'customer', 'customer_name', 'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'customer_notes', 'service_address', 'status_events',
@@ -495,6 +494,15 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         )
         read_only_fields = fields
+
+    def get_job_location(self, obj):
+        return (obj.service_address or '').strip()
+
+    def get_job_location_label(self, obj):
+        kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
+        if kind == Service.FulfillmentKind.SHOP:
+            return 'Job location — come to the shop'
+        return 'Job location — we come to you'
 
     def _latest_return_visit(self, obj):
         visits = getattr(obj, '_prefetched_objects_cache', {}).get('return_visits')
@@ -542,6 +550,9 @@ class BookingSerializer(serializers.ModelSerializer):
     service_price_max = serializers.DecimalField(
         source='service.price_max', max_digits=10, decimal_places=2, read_only=True, allow_null=True,
     )
+    fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
+    job_location = serializers.SerializerMethodField()
+    job_location_label = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -565,7 +576,8 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'reference', 'organization', 'organization_slug', 'organization_public_ref',
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
-            'service_pricing_type', 'service_price_max',
+            'service_pricing_type', 'service_price_max', 'fulfillment_kind',
+            'job_location', 'job_location_label',
             'organization_name', 'customer', 'customer_name',
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
@@ -576,7 +588,8 @@ class BookingSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'id', 'reference', 'customer_name', 'customer_email', 'customer_phone',
             'service_name', 'service_duration_minutes', 'service_base_price',
-            'service_pricing_type', 'service_price_max',
+            'service_pricing_type', 'service_price_max', 'fulfillment_kind',
+            'job_location', 'job_location_label',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review',
@@ -592,6 +605,15 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return f'BK-{obj.pk:05d}'
+
+    def get_job_location(self, obj):
+        return (obj.service_address or '').strip()
+
+    def get_job_location_label(self, obj):
+        kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
+        if kind == Service.FulfillmentKind.SHOP:
+            return 'Job location — come to the shop'
+        return 'Job location — we come to you'
 
     def _review_for_booking(self, obj):
         request = self.context.get('request')
@@ -656,6 +678,33 @@ class BookingSerializer(serializers.ModelSerializer):
                     'Provide slot_id for a customer request, or full booking details for staff.'
                 )
         return attrs
+
+
+class BatchBookingItemSerializer(serializers.Serializer):
+    slot_id = serializers.PrimaryKeyRelatedField(queryset=AvailabilitySlot.objects.all())
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    customer_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    service_address = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class BatchBookingSerializer(serializers.Serializer):
+    bookings = BatchBookingItemSerializer(many=True, min_length=1, max_length=10)
+    customer_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    service_address = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate_bookings(self, items):
+        if len(items) < 1:
+            raise serializers.ValidationError('Select at least one service to book.')
+        slot_ids = [item['slot_id'].id for item in items]
+        if len(slot_ids) != len(set(slot_ids)):
+            raise serializers.ValidationError(
+                'Each service needs its own time slot. Pick different times.'
+            )
+        return items
 
 
 class ProviderBookSerializer(serializers.Serializer):
@@ -774,10 +823,13 @@ class TaskSerializer(serializers.ModelSerializer):
 
 
 def _absolute_media_url(request, file_field):
+    """Return a same-origin media path (e.g. /media/...).
+
+    Absolute URLs break behind the SPA nginx proxy because Django sees Host
+    ``localhost`` (no :3000), so browsers request port 80 instead of the app.
+    """
     if not file_field or not getattr(file_field, 'url', None):
         return None
-    if request:
-        return request.build_absolute_uri(file_field.url)
     return file_field.url
 
 
@@ -796,12 +848,13 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     logo_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
     gallery = serializers.SerializerMethodField()
+    rating_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
         fields = (
             'id', 'name', 'public_ref', 'slug', 'tagline', 'description', 'logo_url', 'banner_url',
-            'booking_policy', 'gallery',
+            'booking_policy', 'gallery', 'rating_summary',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
         )
@@ -815,6 +868,10 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     def get_gallery(self, obj):
         images = obj.gallery_images.all()[: OrganizationGalleryImage.MAX_PER_ORGANIZATION]
         return PublicGalleryImageSerializer(images, many=True, context=self.context).data
+
+    def get_rating_summary(self, obj):
+        from .ratings import aggregate_organization_ratings
+        return aggregate_organization_ratings(obj)
 
 
 class PublicServiceGalleryImageSerializer(serializers.ModelSerializer):
@@ -889,12 +946,14 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(source='category.id', read_only=True, allow_null=True)
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     rating_summary = serializers.SerializerMethodField()
+    shop_location = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
         fields = (
             'id', 'name', 'description', 'duration_minutes',
             'pricing_type', 'base_price', 'price_max', 'show_price', 'allow_request',
+            'fulfillment_kind', 'shop_location',
             'category_id', 'category_name', 'sort_order', 'image_url', 'rating_summary',
         )
 
@@ -905,6 +964,12 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
         if hasattr(obj, '_rating_summary'):
             return obj._rating_summary
         return aggregate_service_ratings(obj.reviews.all())
+
+    def get_shop_location(self, obj):
+        if obj.fulfillment_kind != Service.FulfillmentKind.SHOP:
+            return ''
+        from businesses.utils import organization_location_full
+        return organization_location_full(obj.organization)
 
 
 class PublicServiceDetailSerializer(PublicServiceReadSerializer):

@@ -5,10 +5,20 @@ from django.db import models
 
 
 class BusinessType(models.Model):
+    class LocationKind(models.TextChoices):
+        OFFICE = 'office', 'Business office'
+        MOBILE = 'mobile', 'Mobile service'
+
     slug = models.SlugField(max_length=80, unique=True, db_index=True)
     name = models.CharField(max_length=120)
     description = models.CharField(max_length=400, blank=True)
     icon = models.CharField(max_length=16, blank=True, help_text='Emoji or short label')
+    location_kind = models.CharField(
+        max_length=16,
+        choices=LocationKind.choices,
+        default=LocationKind.MOBILE,
+        help_text='Office types need a fixed business address for billing; mobile types do not.',
+    )
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
@@ -17,6 +27,10 @@ class BusinessType(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def requires_business_address(self):
+        return self.location_kind == self.LocationKind.OFFICE
 
 
 class Organization(models.Model):
@@ -130,6 +144,12 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+
+    def requires_business_address(self):
+        """True when any selected category is a fixed business office (billing address)."""
+        return self.business_types.filter(
+            location_kind=BusinessType.LocationKind.OFFICE,
+        ).exists()
 
     def get_timezone(self):
         """Return the org's IANA timezone as a tzinfo, falling back to UTC."""

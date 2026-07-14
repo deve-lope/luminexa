@@ -5,7 +5,7 @@ import { jobsAPI } from '../../utils/api';
 import { publicServicesCatalog, serviceDetail } from '../../utils/customerPaths';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import { formatServiceMeta, hoursFromMinutes, minutesFromHours } from '../../utils/serviceDisplay';
 
 const CATEGORY_PRESETS = ['Automobile', 'House work', 'Beauty & wellness', 'Outdoor & garden'];
 
@@ -45,12 +45,29 @@ const emptyServiceDraft = () => ({
   name: '',
   description: '',
   category: '',
-  duration_minutes: '60',
+  duration_hours: '1',
   pricing_type: 'fixed',
   base_price: '0',
   price_max: '',
   show_price: true,
   allow_request: true,
+  fulfillment_kind: 'mobile',
+});
+
+const emptyBulkRow = () => ({
+  name: '',
+  base_price: '',
+  price_max: '',
+  description: '',
+});
+
+const emptyBulkDefaults = (category = '') => ({
+  category: category || '',
+  duration_hours: '1',
+  pricing_type: 'fixed',
+  show_price: true,
+  allow_request: true,
+  fulfillment_kind: 'mobile',
 });
 
 function CategoryTile({ label, count, selected, onClick }) {
@@ -224,17 +241,65 @@ function ServiceDetailForm({
           )}
           <div>
             <label htmlFor="svc-duration" className={LABEL_CLASS}>
-              Duration (minutes)
+              Duration (hours)
             </label>
             <input
               id="svc-duration"
               type="number"
-              min={15}
-              step={15}
-              value={serviceDraft.duration_minutes}
-              onChange={(e) => setServiceDraft((d) => ({ ...d, duration_minutes: e.target.value }))}
+              min={0.25}
+              step={0.25}
+              value={serviceDraft.duration_hours}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, duration_hours: e.target.value }))}
               className={INPUT_CLASS}
             />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className={LABEL_CLASS}>Where is this job done?</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label
+              className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${
+                serviceDraft.fulfillment_kind === 'mobile'
+                  ? 'border-luminexa-accent bg-violet-50/80 ring-1 ring-luminexa-accent/20'
+                  : 'border-slate-200 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="fulfillment_kind"
+                checked={serviceDraft.fulfillment_kind === 'mobile'}
+                onChange={() => setServiceDraft((d) => ({ ...d, fulfillment_kind: 'mobile' }))}
+                className="mt-0.5 accent-luminexa-accent"
+              />
+              <span>
+                <span className="font-semibold text-slate-900">Mobile</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  You go to the customer
+                </span>
+              </span>
+            </label>
+            <label
+              className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${
+                serviceDraft.fulfillment_kind === 'shop'
+                  ? 'border-luminexa-accent bg-violet-50/80 ring-1 ring-luminexa-accent/20'
+                  : 'border-slate-200 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="fulfillment_kind"
+                checked={serviceDraft.fulfillment_kind === 'shop'}
+                onChange={() => setServiceDraft((d) => ({ ...d, fulfillment_kind: 'shop' }))}
+                className="mt-0.5 accent-luminexa-accent"
+              />
+              <span>
+                <span className="font-semibold text-slate-900">In-shop</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Customer comes to your shop
+                </span>
+              </span>
+            </label>
           </div>
         </div>
 
@@ -267,6 +332,282 @@ function ServiceDetailForm({
           className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent font-medium text-white transition hover:bg-luminexa-accent/90 disabled:opacity-60"
         >
           {savingService ? 'Saving…' : editingServiceId ? 'Save details' : 'Add service'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Create several catalog services in one go (shared category/pricing defaults + per-row name/price).
+ */
+function BulkAddServicesForm({
+  bulkDefaults,
+  setBulkDefaults,
+  bulkRows,
+  setBulkRows,
+  activeCategories,
+  savingService,
+  onSubmit,
+  onCancel,
+}) {
+  const namedCount = bulkRows.filter((r) => r.name.trim()).length;
+  const updateRow = (index, patch) => {
+    setBulkRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-luminexa-accent/10"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900">Add services</h4>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Create several offerings at once. You can refine descriptions and photos later.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-600"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path
+              d="M5 5l10 10M15 5L5 15"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor="bulk-category" className={LABEL_CLASS}>
+              Category (all rows)
+            </label>
+            <select
+              id="bulk-category"
+              value={bulkDefaults.category}
+              onChange={(e) => setBulkDefaults((d) => ({ ...d, category: e.target.value }))}
+              className={INPUT_CLASS}
+            >
+              <option value="">— No category —</option>
+              {activeCategories.map((cat) => (
+                <option key={cat.id} value={String(cat.id)}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bulk-pricing" className={LABEL_CLASS}>
+              Pricing
+            </label>
+            <select
+              id="bulk-pricing"
+              value={bulkDefaults.pricing_type}
+              onChange={(e) => setBulkDefaults((d) => ({ ...d, pricing_type: e.target.value }))}
+              className={INPUT_CLASS}
+            >
+              <option value="fixed">Fixed price</option>
+              <option value="range">Price range</option>
+              <option value="quote">Quote on request</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bulk-duration" className={LABEL_CLASS}>
+              Duration (hours)
+            </label>
+            <input
+              id="bulk-duration"
+              type="number"
+              min={0.25}
+              step={0.25}
+              value={bulkDefaults.duration_hours}
+              onChange={(e) =>
+                setBulkDefaults((d) => ({ ...d, duration_hours: e.target.value }))
+              }
+              className={INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className={LABEL_CLASS}>Where are these jobs done?</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label
+              className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${
+                bulkDefaults.fulfillment_kind === 'mobile'
+                  ? 'border-luminexa-accent bg-violet-50/80 ring-1 ring-luminexa-accent/20'
+                  : 'border-slate-200 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="bulk_fulfillment_kind"
+                checked={bulkDefaults.fulfillment_kind === 'mobile'}
+                onChange={() => setBulkDefaults((d) => ({ ...d, fulfillment_kind: 'mobile' }))}
+                className="mt-0.5 accent-luminexa-accent"
+              />
+              <span>
+                <span className="font-semibold text-slate-900">Mobile</span>
+                <span className="mt-0.5 block text-xs text-slate-500">You go to the customer</span>
+              </span>
+            </label>
+            <label
+              className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${
+                bulkDefaults.fulfillment_kind === 'shop'
+                  ? 'border-luminexa-accent bg-violet-50/80 ring-1 ring-luminexa-accent/20'
+                  : 'border-slate-200 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="bulk_fulfillment_kind"
+                checked={bulkDefaults.fulfillment_kind === 'shop'}
+                onChange={() => setBulkDefaults((d) => ({ ...d, fulfillment_kind: 'shop' }))}
+                className="mt-0.5 accent-luminexa-accent"
+              />
+              <span>
+                <span className="font-semibold text-slate-900">In-shop</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Customer comes to your shop
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <FieldToggle
+            checked={bulkDefaults.show_price}
+            onChange={(val) => setBulkDefaults((d) => ({ ...d, show_price: val }))}
+            label="Show price on public page"
+          />
+          <FieldToggle
+            checked={bulkDefaults.allow_request}
+            onChange={(val) => setBulkDefaults((d) => ({ ...d, allow_request: val }))}
+            label="Allow “Request service” from customers"
+          />
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Services</p>
+          {bulkRows.map((row, index) => (
+            <div
+              key={`bulk-row-${index}`}
+              className="rounded-xl border border-slate-200 bg-slate-50/50 p-3"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-500">#{index + 1}</span>
+                {bulkRows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkRows((rows) => rows.filter((_, i) => i !== index))}
+                    className="text-xs font-medium text-slate-500 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={LABEL_CLASS} htmlFor={`bulk-name-${index}`}>
+                    Name
+                  </label>
+                  <input
+                    id={`bulk-name-${index}`}
+                    value={row.name}
+                    onChange={(e) => updateRow(index, { name: e.target.value })}
+                    placeholder="e.g. Oil change"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+                {bulkDefaults.pricing_type !== 'quote' && (
+                  <>
+                    <div>
+                      <label className={LABEL_CLASS} htmlFor={`bulk-price-${index}`}>
+                        {bulkDefaults.pricing_type === 'range' ? 'From ($)' : 'Rate ($)'}
+                      </label>
+                      <input
+                        id={`bulk-price-${index}`}
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={row.base_price}
+                        onChange={(e) => updateRow(index, { base_price: e.target.value })}
+                        placeholder="0.00"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                    {bulkDefaults.pricing_type === 'range' && (
+                      <div>
+                        <label className={LABEL_CLASS} htmlFor={`bulk-price-max-${index}`}>
+                          To ($)
+                        </label>
+                        <input
+                          id={`bulk-price-max-${index}`}
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={row.price_max}
+                          onChange={(e) => updateRow(index, { price_max: e.target.value })}
+                          placeholder="0.00"
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="sm:col-span-2">
+                  <label className={LABEL_CLASS} htmlFor={`bulk-desc-${index}`}>
+                    Description (optional)
+                  </label>
+                  <input
+                    id={`bulk-desc-${index}`}
+                    value={row.description}
+                    onChange={(e) => updateRow(index, { description: e.target.value })}
+                    placeholder="Short note for customers"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setBulkRows((rows) => [...rows, emptyBulkRow()])}
+            className="w-full min-h-[44px] rounded-xl border border-dashed border-slate-300 text-sm font-semibold text-slate-700 hover:border-luminexa-accent/50 hover:bg-violet-50/40"
+          >
+            + Add another row
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+        <button
+          type="submit"
+          disabled={savingService || namedCount === 0}
+          className="min-h-[44px] flex-1 rounded-lg bg-luminexa-accent font-medium text-white transition hover:bg-luminexa-accent/90 disabled:opacity-60"
+        >
+          {savingService
+            ? 'Creating…'
+            : namedCount === 1
+              ? 'Create 1 service'
+              : `Create ${namedCount} services`}
         </button>
         <button
           type="button"
@@ -370,6 +711,12 @@ export default function ProviderServicesPage({ embedded = false }) {
   const [categoryName, setCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
   const [serviceDraft, setServiceDraft] = useState(emptyServiceDraft);
+  const [bulkDefaults, setBulkDefaults] = useState(() => emptyBulkDefaults());
+  const [bulkRows, setBulkRows] = useState(() => [
+    emptyBulkRow(),
+    emptyBulkRow(),
+    emptyBulkRow(),
+  ]);
   const [editingServiceId, setEditingServiceId] = useState(null);
   const [expandedServiceId, setExpandedServiceId] = useState(null);
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -481,12 +828,13 @@ export default function ProviderServicesPage({ embedded = false }) {
             name: svc.name || '',
             description: svc.description || '',
             category: svc.category ? String(svc.category) : '',
-            duration_minutes: String(svc.duration_minutes ?? 60),
+            duration_hours: hoursFromMinutes(svc.duration_minutes ?? 60),
             pricing_type: svc.pricing_type || 'fixed',
             base_price: String(svc.base_price ?? '0'),
             price_max: svc.price_max != null ? String(svc.price_max) : '',
             show_price: svc.show_price !== false,
             allow_request: svc.allow_request !== false,
+            fulfillment_kind: svc.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
           }
         : {
             ...emptyServiceDraft(),
@@ -508,8 +856,16 @@ export default function ProviderServicesPage({ embedded = false }) {
   };
 
   const startAddService = () => {
+    setEditingServiceId(null);
     setExpandedServiceId('new');
-    openServiceDraft(null);
+    setShowServiceForm(true);
+    setServiceDraft(emptyServiceDraft());
+    const category =
+      selectedCategoryId && selectedCategoryId !== 'uncategorized'
+        ? String(selectedCategoryId)
+        : '';
+    setBulkDefaults(emptyBulkDefaults(category));
+    setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   };
 
   const resetServiceForm = () => {
@@ -517,6 +873,8 @@ export default function ProviderServicesPage({ embedded = false }) {
     setExpandedServiceId(null);
     setShowServiceForm(false);
     setServiceDraft(emptyServiceDraft());
+    setBulkDefaults(emptyBulkDefaults());
+    setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   };
 
   const saveService = async (e) => {
@@ -533,7 +891,7 @@ export default function ProviderServicesPage({ embedded = false }) {
       name,
       description: serviceDraft.description.trim(),
       category: serviceDraft.category ? Number(serviceDraft.category) : null,
-      duration_minutes: Number(serviceDraft.duration_minutes) || 60,
+      duration_minutes: minutesFromHours(serviceDraft.duration_hours),
       pricing_type: serviceDraft.pricing_type,
       base_price: serviceDraft.base_price || '0',
       price_max:
@@ -542,6 +900,7 @@ export default function ProviderServicesPage({ embedded = false }) {
           : null,
       show_price: serviceDraft.show_price,
       allow_request: serviceDraft.allow_request,
+      fulfillment_kind: serviceDraft.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
       is_active: true,
     };
     try {
@@ -568,6 +927,92 @@ export default function ProviderServicesPage({ embedded = false }) {
       );
     } finally {
       setSavingService(false);
+    }
+  };
+
+  const saveBulkServices = async (e) => {
+    e.preventDefault();
+    if (!orgSlug || !orgId) return;
+    const rows = bulkRows
+      .map((row) => ({
+        name: row.name.trim(),
+        description: (row.description || '').trim(),
+        base_price: row.base_price,
+        price_max: row.price_max,
+      }))
+      .filter((row) => row.name.length >= 2);
+
+    if (rows.length === 0) {
+      setError('Enter at least one service name (2+ characters).');
+      return;
+    }
+
+    if (bulkDefaults.pricing_type === 'range') {
+      const bad = rows.find(
+        (row) => !row.price_max || Number(row.price_max) < Number(row.base_price || 0)
+      );
+      if (bad) {
+        setError(`“${bad.name}” needs a valid price range (To ≥ From).`);
+        return;
+      }
+    }
+
+    setSavingService(true);
+    setError(null);
+    const category = bulkDefaults.category ? Number(bulkDefaults.category) : null;
+    const duration = minutesFromHours(bulkDefaults.duration_hours);
+    let sortBase = services.length;
+    let created = 0;
+    const failures = [];
+
+    for (const row of rows) {
+      try {
+        await jobsAPI.createService({
+          organization: orgId,
+          name: row.name,
+          description: row.description,
+          category,
+          duration_minutes: duration,
+          pricing_type: bulkDefaults.pricing_type,
+          base_price:
+            bulkDefaults.pricing_type === 'quote' ? '0' : row.base_price || '0',
+          price_max:
+            bulkDefaults.pricing_type === 'range' && row.price_max
+              ? row.price_max
+              : null,
+          show_price: bulkDefaults.show_price,
+          allow_request: bulkDefaults.allow_request,
+          fulfillment_kind: bulkDefaults.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
+          is_active: true,
+          sort_order: sortBase,
+        });
+        sortBase += 1;
+        created += 1;
+      } catch (err) {
+        const d = err.response?.data;
+        failures.push(
+          d?.detail ||
+            d?.price_max?.[0] ||
+            d?.name?.[0] ||
+            `Could not create “${row.name}”.`
+        );
+      }
+    }
+
+    setSavingService(false);
+    if (created > 0) {
+      resetServiceForm();
+      setMessage(
+        created === 1 ? '1 service created.' : `${created} services created.`
+      );
+      await load();
+    }
+    if (failures.length > 0) {
+      setError(
+        created > 0
+          ? `${created} created, ${failures.length} failed: ${failures[0]}`
+          : failures[0]
+      );
     }
   };
 
@@ -732,19 +1177,20 @@ export default function ProviderServicesPage({ embedded = false }) {
                   onClick={startAddService}
                   className="text-sm font-medium text-luminexa-accent"
                 >
-                  + Add service
+                  + Add services
                 </button>
               )}
             </div>
 
             {showServiceForm && expandedServiceId === 'new' && (
-              <ServiceDetailForm
-                serviceDraft={serviceDraft}
-                setServiceDraft={setServiceDraft}
+              <BulkAddServicesForm
+                bulkDefaults={bulkDefaults}
+                setBulkDefaults={setBulkDefaults}
+                bulkRows={bulkRows}
+                setBulkRows={setBulkRows}
                 activeCategories={activeCategories}
-                editingServiceId={editingServiceId}
                 savingService={savingService}
-                onSubmit={saveService}
+                onSubmit={saveBulkServices}
                 onCancel={resetServiceForm}
               />
             )}

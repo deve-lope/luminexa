@@ -27,6 +27,7 @@ from .booking_services import (
     schedule_return_visit,
     customer_can_view_calendar,
     customer_request_slot,
+    customer_request_slots_batch,
     decline_booking_request,
     ensure_customer_membership,
     provider_book_customer,
@@ -59,6 +60,7 @@ from .scheduling_services import (
 from .serializers import (
     AvailabilitySlotSerializer,
     UnavailableBlockSerializer,
+    BatchBookingSerializer,
     BookingSerializer,
     BookingDetailSerializer,
     OrgCustomerSerializer,
@@ -815,6 +817,38 @@ class BookingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(detail=False, methods=['post'], url_path='batch')
+    def batch(self, request):
+        """Book multiple services from one provider in a single request."""
+        ser = BatchBookingSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        shared_notes = (data.get('customer_notes') or '').strip()
+        shared_address = (data.get('service_address') or '').strip()
+        items = []
+        for row in data['bookings']:
+            items.append({
+                'slot': row['slot_id'],
+                'service': row.get('service'),
+                'notes': (row.get('customer_notes') or shared_notes or '').strip(),
+                'service_address': (row.get('service_address') or shared_address or '').strip(),
+            })
+        bookings = customer_request_slots_batch(items=items, customer=request.user)
+        from .notifications import notify_customer_booking_created
+
+        for booking in bookings:
+            log_booking_event(
+                booking,
+                action=BookingStatusEvent.Action.CREATED,
+                actor=request.user,
+                new_status=booking.status,
+            )
+            notify_customer_booking_created(booking)
+        return Response(
+            BookingSerializer(bookings, many=True, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
     def perform_update(self, serializer):
         booking = serializer.instance
         user = self.request.user
@@ -883,8 +917,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
-        from .notifications import send_booking_email
-        send_booking_email('booking_cancelled', booking)
+        from .notifications import notify_booking_cancelled
+        notify_booking_cancelled(booking, by_user=request.user)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
@@ -1085,8 +1119,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
-        from .notifications import send_booking_email
-        send_booking_email('booking_cancelled', booking)
+        from .notifications import notify_booking_cancelled
+        notify_booking_cancelled(booking, by_user=request.user)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])

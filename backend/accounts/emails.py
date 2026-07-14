@@ -43,6 +43,25 @@ def send_email_verification(user) -> bool:
         return False
 
 
+def send_login_otp_email(email: str, code: str, *, full_name: str = '') -> bool:
+    try:
+        send_mail(
+            subject='Your Luminexa sign-in code',
+            message=(
+                f'Hi {full_name or "there"},\n\n'
+                f'Your Luminexa sign-in code is: {code}\n\n'
+                'It expires in 10 minutes. If you did not request this, you can ignore this email.\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception('Failed to send login OTP to %s', email)
+        return False
+
+
 def send_password_reset_email(user, reset_url: str) -> bool:
     try:
         send_mail(

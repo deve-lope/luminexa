@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BusinessTypeSelector from '../components/business/BusinessTypeSelector';
-import { businessesAPI, userAPI } from '../utils/api';
 import AddressFields from '../components/location/AddressFields';
-import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
+import { businessesAPI, userAPI } from '../utils/api';
 import { BOOKING_POLICIES } from '../constants/bookingPolicies';
 import BackButton from '../components/navigation/BackButton';
 import PasswordInput from '../components/ui/PasswordInput';
@@ -23,14 +22,11 @@ export default function RegisterBusinessPage() {
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [bookingPolicy, setBookingPolicy] = useState('approval');
+  const [selectedSlugs, setSelectedSlugs] = useState([]);
   const [serviceCity, setServiceCity] = useState('');
   const [servicePostalCode, setServicePostalCode] = useState('');
   const [serviceState, setServiceState] = useState('');
   const [serviceAddress, setServiceAddress] = useState('');
-  const [addressCountry, setAddressCountry] = useState(
-    () => countryFromNavigator() || defaultAddressCountry()
-  );
-  const [selectedSlugs, setSelectedSlugs] = useState([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,6 +37,24 @@ export default function RegisterBusinessPage() {
       .catch(() => setError('Could not load business types.'));
   }, []);
 
+  const needsOfficeAddress = useMemo(
+    () =>
+      selectedSlugs.some((slug) => {
+        const t = types.find((x) => x.slug === slug);
+        return t && (t.location_kind === 'office' || t.requires_business_address);
+      }),
+    [selectedSlugs, types]
+  );
+
+  useEffect(() => {
+    if (!needsOfficeAddress) {
+      setServiceCity('');
+      setServicePostalCode('');
+      setServiceState('');
+      setServiceAddress('');
+    }
+  }, [needsOfficeAddress]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -48,13 +62,15 @@ export default function RegisterBusinessPage() {
       setError('Select at least one business type.');
       return;
     }
-    if (!serviceCity.trim()) {
-      setError('Enter the city where you provide services.');
-      return;
-    }
-    if (!servicePostalCode.trim()) {
-      setError('Enter the PIN / postal code for your service area.');
-      return;
+    if (needsOfficeAddress) {
+      if (serviceCity.trim().length < 2) {
+        setError('Enter your business office / home city for billing.');
+        return;
+      }
+      if (!servicePostalCode.trim()) {
+        setError('Enter your business office / home postal code for billing.');
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -65,13 +81,14 @@ export default function RegisterBusinessPage() {
         business_name: businessName,
         booking_policy: bookingPolicy,
         business_type_slugs: selectedSlugs,
-        service_city: serviceCity.trim(),
-        service_postal_code: servicePostalCode.replace(/[\s-]+/g, '').toUpperCase(),
       };
-      if (serviceState.trim()) payload.service_state = serviceState.trim();
-      if (serviceAddress.trim()) payload.service_address = serviceAddress.trim();
       if (phone.trim()) payload.phone = phone.trim();
-      if (addressCountry) payload.address_country = addressCountry;
+      if (needsOfficeAddress) {
+        payload.service_city = serviceCity.trim();
+        payload.service_postal_code = servicePostalCode.trim();
+        payload.service_state = serviceState.trim();
+        if (serviceAddress.trim()) payload.service_address = serviceAddress.trim();
+      }
       const { data } = await userAPI.registerBusiness(payload);
       navigate('/check-email', {
         replace: true,
@@ -80,11 +97,11 @@ export default function RegisterBusinessPage() {
     } catch (err) {
       const d = err.response?.data;
       const msg =
+        d?.service_city?.[0] ||
+        d?.service_postal_code?.[0] ||
         d?.business_type_slugs?.[0] ||
         d?.business_name?.[0] ||
         d?.booking_policy?.[0] ||
-        d?.service_postal_code?.[0] ||
-        d?.service_city?.[0] ||
         d?.email?.[0] ||
         d?.detail ||
         (typeof d === 'string' ? d : 'Registration failed.');
@@ -95,14 +112,13 @@ export default function RegisterBusinessPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-luminexa-canvas bg-lx-mesh text-slate-900">
-      <div className="mx-auto grid min-h-[100dvh] max-w-6xl lg:grid-cols-12">
-        {/* Brand / pitch column */}
-        <aside className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 px-6 py-8 text-white lg:col-span-5 lg:px-10 lg:py-12">
+    <div className="min-h-[100dvh] bg-luminexa-canvas bg-lx-mesh text-slate-900 lg:h-[100dvh] lg:overflow-hidden">
+      <div className="mx-auto grid min-h-[100dvh] max-w-6xl lg:h-full lg:grid-cols-12">
+        <aside className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 px-6 py-8 text-white lg:col-span-5 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:px-10 lg:py-12">
           <div className="pointer-events-none absolute -right-16 top-20 h-56 w-56 rounded-full bg-teal-400/25 blur-3xl" />
           <div className="pointer-events-none absolute -left-10 bottom-10 h-48 w-48 rounded-full bg-cyan-300/20 blur-3xl" />
 
-          <div className="relative flex h-full flex-col">
+          <div className="relative flex min-h-full flex-col">
             <Link to="/" className="text-lg font-extrabold tracking-tight">
               Luminexa
             </Link>
@@ -138,8 +154,7 @@ export default function RegisterBusinessPage() {
           </div>
         </aside>
 
-        {/* Form column */}
-        <main className="lg:col-span-7">
+        <main className="bg-luminexa-canvas lg:col-span-7 lg:h-full lg:overflow-y-auto lg:overscroll-contain">
           <div className="px-4 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
             <BackButton
               fallback="/"
@@ -153,8 +168,8 @@ export default function RegisterBusinessPage() {
                 Register your business
               </h2>
               <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-600 sm:text-base">
-                Tell us what you offer and where you work. Customers will find you by category and
-                location.
+                Choose office or mobile categories. Office businesses add a home / office address for
+                billing; mobile services skip the address.
               </p>
             </div>
 
@@ -225,34 +240,11 @@ export default function RegisterBusinessPage() {
 
               <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
-                  Service location
-                </h3>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
-                  Customers find you by PIN / postal code and city. Pin your service area so they
-                  know you cover theirs.
-                </p>
-                <div className="mt-4">
-                  <AddressFields
-                    initialCountry={addressCountry}
-                    onCountryChange={setAddressCountry}
-                    postalCode={servicePostalCode}
-                    onPostalCodeChange={setServicePostalCode}
-                    city={serviceCity}
-                    onCityChange={setServiceCity}
-                    state={serviceState}
-                    onStateChange={setServiceState}
-                    address={serviceAddress}
-                    onAddressChange={setServiceAddress}
-                  />
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
                   What you offer
                 </h3>
                 <p className="mt-2 mb-4 text-xs leading-relaxed text-slate-500 sm:text-sm">
-                  Select the categories customers should use to find you.
+                  Select categories customers should use to find you. Office types need a billing
+                  address; mobile types do not.
                 </p>
                 <BusinessTypeSelector
                   types={types}
@@ -262,6 +254,33 @@ export default function RegisterBusinessPage() {
                   variant="light"
                 />
               </section>
+
+              {needsOfficeAddress && (
+                <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                    Business office address
+                  </h3>
+                  <p className="mt-2 mb-4 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                    Your fixed office or home address is used for billing and tax. Customers still book
+                    services at their location when you travel.
+                  </p>
+                  <AddressFields
+                    postalCode={servicePostalCode}
+                    onPostalCodeChange={setServicePostalCode}
+                    city={serviceCity}
+                    onCityChange={setServiceCity}
+                    state={serviceState}
+                    onStateChange={setServiceState}
+                    address={serviceAddress}
+                    onAddressChange={setServiceAddress}
+                    postalLabel="PIN / postal code"
+                    cityLabel="City"
+                    stateLabel="Province / state"
+                    streetLabel="Street address (optional)"
+                    inputClassName="lx-input"
+                  />
+                </section>
+              )}
 
               <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">

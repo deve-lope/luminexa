@@ -5,7 +5,7 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.formats import date_format
 
-from .models import ProviderNotification
+from .models import ProviderNotification, Service
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,11 @@ def _booking_detail_lines(booking, *, include_address=False):
     if booking.customer.phone:
         lines.append(f'Phone: {booking.customer.phone}')
     if include_address and booking.service_address:
-        lines.append(f'Location: {booking.service_address}')
+        kind = getattr(booking.service, 'fulfillment_kind', None) if booking.service_id else None
+        if kind == Service.FulfillmentKind.SHOP:
+            lines.append(f'Job location (come to the shop): {booking.service_address}')
+        else:
+            lines.append(f'Job location (we come to you): {booking.service_address}')
     if booking.customer_notes:
         lines.append(f'Notes: {booking.customer_notes}')
     return lines
@@ -81,12 +85,39 @@ def create_provider_booking_notification(booking):
     )
 
 
+def notify_booking_cancelled(booking, *, by_user=None):
+    """
+    Notify parties when a booking is cancelled.
+    Always emails the customer; emails provider staff as well.
+    When staff cancels, also leave an in-thread note for the customer.
+    """
+    from .permissions import is_org_staff
+
+    send_booking_email('booking_cancelled', booking)
+
+    if by_user is None:
+        return
+    if not is_org_staff(by_user, booking.organization):
+        return
+    if booking.customer_id == by_user.id:
+        return
+    try:
+        from .message_services import post_booking_cancellation_message
+
+        post_booking_cancellation_message(booking=booking, sender=by_user)
+    except Exception:
+        logger.exception(
+            'Failed to post cancellation message for booking %s', booking.pk
+        )
+
+
 def send_booking_email(event, booking):
     """Send booking lifecycle email; failures are logged, not raised."""
     org = booking.organization
     service_name = booking.service.name if booking.service_id else 'Service'
     when = _format_when(booking.start_at)
     provider_url = provider_booking_detail_url(org.slug, booking.id)
+    customer_bookings_url = f'{_public_app_url()}/customer/bookings'
 
     recipients = []
     subject = ''
@@ -161,7 +192,13 @@ def send_booking_email(event, booking):
             _send_to(
                 customer_email,
                 f'Booking cancelled — {org.name}',
-                [f'Your appointment for {service_name} on {when} was cancelled.'],
+                [
+                    f'Your appointment for {service_name} has been cancelled.',
+                    f'When: {when}',
+                    f'Business: {org.name}',
+                    '',
+                    f'View your bookings: {customer_bookings_url}',
+                ],
             )
         recipients = staff
         subject = f'Booking cancelled — {service_name}'
@@ -226,7 +263,11 @@ def send_booking_email(event, booking):
             f'Business: {org.name}',
         ]
         if booking.service_address:
-            body_lines.append(f'Location: {booking.service_address}')
+            kind = getattr(booking.service, 'fulfillment_kind', None) if booking.service_id else None
+            if kind == Service.FulfillmentKind.SHOP:
+                body_lines.append(f'Job location (come to the shop): {booking.service_address}')
+            else:
+                body_lines.append(f'Job location (we come to you): {booking.service_address}')
     else:
         return
 

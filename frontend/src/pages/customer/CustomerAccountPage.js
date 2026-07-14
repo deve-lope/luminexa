@@ -415,37 +415,37 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
         {isCustomerAccount ? (
           <>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Security</p>
-            <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">Keep your account secure</h2>
-            <p className="mt-1 text-sm text-slate-600">Update your password anytime.</p>
+            <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">Sign-in</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              You sign in with a one-time code emailed to you — no password to manage.
+            </p>
           </>
         ) : (
           <>
             <h2 className="text-sm font-semibold uppercase text-slate-500">Security</h2>
             <p className="mt-1 text-sm text-slate-600">Keep your account secure.</p>
+            <button
+              type="button"
+              onClick={() => setPasswordOpen(true)}
+              className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              <span>Change password</span>
+              <span className="text-slate-400" aria-hidden>
+                →
+              </span>
+            </button>
           </>
         )}
-        <button
-          type="button"
-          onClick={() => setPasswordOpen(true)}
-          className={
-            isCustomerAccount
-              ? 'mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-teal-100 bg-teal-50/50 px-4 text-left text-sm font-semibold text-teal-900 transition hover:border-teal-200 hover:bg-teal-50'
-              : 'mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50'
-          }
-        >
-          <span>Change password</span>
-          <span className={isCustomerAccount ? 'text-teal-600' : 'text-slate-400'} aria-hidden>
-            →
-          </span>
-        </button>
       </section>
 
-      <ChangePasswordDialog
-        open={passwordOpen}
-        onClose={() => setPasswordOpen(false)}
-        onSuccess={(message) => showToast(message, 'success')}
-        teal={isCustomerAccount}
-      />
+      {!isCustomerAccount && (
+        <ChangePasswordDialog
+          open={passwordOpen}
+          onClose={() => setPasswordOpen(false)}
+          onSuccess={(message) => showToast(message, 'success')}
+          teal={false}
+        />
+      )}
     </div>
   );
 }

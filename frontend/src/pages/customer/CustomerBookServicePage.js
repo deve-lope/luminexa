@@ -20,7 +20,7 @@ import {
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { serviceDetail, customerBookings } from '../../utils/customerPaths';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import { formatServiceMeta, formatFulfillmentDescription, isShopService } from '../../utils/serviceDisplay';
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
@@ -89,6 +89,18 @@ export default function CustomerBookServicePage() {
     const list = storefront?.services || [];
     return list.find((s) => String(s.id) === String(serviceId));
   }, [storefront?.services, serviceId]);
+
+  const serviceIsShop = isShopService(listedService || calendar?.service);
+  const shopLocation =
+    (listedService || calendar?.service)?.shop_location ||
+    [
+      storefront?.organization?.service_address,
+      storefront?.organization?.service_city,
+      storefront?.organization?.service_state,
+      storefront?.organization?.service_postal_code,
+    ]
+      .filter(Boolean)
+      .join(', ');
 
   useEffect(() => {
     let cancelled = false;
@@ -207,21 +219,23 @@ export default function CustomerBookServicePage() {
   }, []);
 
   const validateBookingDetails = useCallback(() => {
-    if (!serviceAddress.trim()) {
-      showAlertPopup('Please enter the service location.');
-      return false;
-    }
-    const locationCheck = validateServiceLocationValue(serviceAddress);
-    if (!locationCheck.valid) {
-      showAlertPopup(locationCheck.error || 'Please enter a valid postal code.');
-      return false;
+    if (!serviceIsShop) {
+      if (!serviceAddress.trim()) {
+        showAlertPopup('Please enter the job location where the provider should come.');
+        return false;
+      }
+      const locationCheck = validateServiceLocationValue(serviceAddress);
+      if (!locationCheck.valid) {
+        showAlertPopup(locationCheck.error || 'Please enter a valid postal code.');
+        return false;
+      }
     }
     if (!canSubmitBooking) {
       showAlertPopup('Complete the steps above before booking.');
       return false;
     }
     return true;
-  }, [serviceAddress, canSubmitBooking, showAlertPopup]);
+  }, [serviceAddress, canSubmitBooking, showAlertPopup, serviceIsShop]);
 
   const handleSlotTap = useCallback(
     (slot) => {
@@ -254,7 +268,7 @@ export default function CustomerBookServicePage() {
           slot_id: slot.id,
           service: Number(serviceId),
           customer_notes: combinedNotes,
-          service_address: serviceAddress.trim(),
+          service_address: serviceIsShop ? '' : serviceAddress.trim(),
         });
         const instant = bookingCtx?.instant_confirm;
         const successTitle = instant ? 'Booking confirmed' : 'Request sent';
@@ -296,6 +310,7 @@ export default function CustomerBookServicePage() {
       loadCalendar,
       showAlertPopup,
       showToast,
+      serviceIsShop,
     ]
   );
 
@@ -352,6 +367,9 @@ export default function CustomerBookServicePage() {
               {formatServiceMeta(service) && (
                 <p className="mt-2 text-sm text-slate-500">{formatServiceMeta(service)}</p>
               )}
+              <p className="mt-2 text-sm font-medium text-slate-700">
+                {formatFulfillmentDescription(service)}
+              </p>
             </div>
           </div>
         </section>
@@ -429,13 +447,28 @@ export default function CustomerBookServicePage() {
             </p>
           )}
 
-          {!needsContact && (
+          {!needsContact && serviceIsShop && (
+            <section className="lx-card">
+              <h2 className="text-sm font-semibold uppercase text-slate-500">Job location</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                This is an in-shop service. Come to this address for your appointment.
+              </p>
+              <div className="mt-3 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-slate-800">
+                <p className="font-semibold text-slate-900">Come to the shop</p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  {shopLocation || 'Shop address will be confirmed by the business.'}
+                </p>
+              </div>
+            </section>
+          )}
+
+          {!needsContact && !serviceIsShop && (
             <BookingServiceLocationSection
               user={user}
               value={serviceAddress}
               onChange={setServiceAddress}
-              label="Service location"
-              hint="Enter the address where the provider should come."
+              label="Job location"
+              hint="Where should the provider come for this job?"
             />
           )}
 

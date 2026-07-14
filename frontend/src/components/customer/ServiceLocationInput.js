@@ -354,7 +354,7 @@ export default function ServiceLocationInput({
 
       <div>
         <label htmlFor={`${id}-address2`} className="mb-1 block text-sm font-medium text-slate-700">
-          Address 2
+          Address 2 <span className="font-normal text-slate-400">(optional)</span>
         </label>
         <input
           id={`${id}-address2`}

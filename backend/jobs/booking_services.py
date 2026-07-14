@@ -8,6 +8,22 @@ from .booking_lead import assert_slot_bookable_for_customer
 from .models import AvailabilitySlot, Booking, Service
 
 
+def resolve_booking_service_address(*, service, customer_address=''):
+    """
+    Job location stored on the booking.
+    Mobile → customer address. Shop → business shop address.
+    """
+    from businesses.utils import organization_location_full
+
+    customer_address = (customer_address or '').strip()
+    if not service:
+        return customer_address
+    if service.fulfillment_kind == Service.FulfillmentKind.SHOP:
+        shop = organization_location_full(service.organization)
+        return shop or 'Shop location (confirm with business)'
+    return customer_address
+
+
 def require_booking_contact(customer):
     if not customer.email:
         raise ValidationError({'detail': 'Email is required before you can book.'})
@@ -168,6 +184,18 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
     if book_service.organization_id != org.id:
         raise ValidationError({'service': 'Service does not belong to this organization.'})
 
+    resolved_address = resolve_booking_service_address(
+        service=book_service,
+        customer_address=service_address,
+    )
+    if (
+        book_service.fulfillment_kind == Service.FulfillmentKind.MOBILE
+        and not (service_address or '').strip()
+    ):
+        raise ValidationError({
+            'service_address': 'Enter the job location where the provider should come.',
+        })
+
     booking = Booking.objects.create(
         organization=org,
         service=book_service,
@@ -178,11 +206,66 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
         status=booking_status,
         source=Booking.Source.CUSTOMER_REQUEST,
         customer_notes=notes or '',
-        service_address=(service_address or '').strip(),
+        service_address=resolved_address,
     )
     slot.status = slot_status
     slot.save(update_fields=['status', 'updated_at'])
     return booking
+
+
+@transaction.atomic
+def customer_request_slots_batch(*, items, customer):
+    """
+    Book multiple services for one customer in one transaction.
+    Each item: {slot, service (optional), notes, service_address}.
+    All services must share the same fulfillment_kind (mobile or shop).
+    """
+    if not items:
+        raise ValidationError({'bookings': 'Select at least one service to book.'})
+    if len(items) > 10:
+        raise ValidationError({'bookings': 'You can book at most 10 services at once.'})
+
+    seen_slot_ids = set()
+    org_id = None
+    fulfillment_kind = None
+    bookings = []
+    for item in items:
+        slot = item['slot']
+        if slot.id in seen_slot_ids:
+            raise ValidationError({
+                'bookings': 'Each service needs its own time slot. Pick different times.',
+            })
+        seen_slot_ids.add(slot.id)
+        locked = AvailabilitySlot.objects.select_for_update().select_related(
+            'organization', 'service',
+        ).get(pk=slot.pk)
+        if org_id is None:
+            org_id = locked.organization_id
+        elif locked.organization_id != org_id:
+            raise ValidationError({
+                'bookings': 'All services must be from the same business.',
+            })
+        book_service = item.get('service') or locked.service
+        if book_service is not None:
+            kind = book_service.fulfillment_kind or Service.FulfillmentKind.MOBILE
+            if fulfillment_kind is None:
+                fulfillment_kind = kind
+            elif kind != fulfillment_kind:
+                raise ValidationError({
+                    'bookings': (
+                        'Mobile and in-shop services cannot be booked together. '
+                        'Book them in separate checkouts.'
+                    ),
+                })
+        booking = customer_request_slot(
+            slot=locked,
+            customer=customer,
+            service=item.get('service'),
+            notes=item.get('notes') or '',
+            service_address=item.get('service_address') or '',
+        )
+        bookings.append(booking)
+    return bookings
 
 
 @transaction.atomic

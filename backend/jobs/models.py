@@ -39,6 +39,10 @@ class Service(models.Model):
         RANGE = 'range', 'Price range'
         QUOTE = 'quote', 'Quote on request'
 
+    class FulfillmentKind(models.TextChoices):
+        MOBILE = 'mobile', 'Mobile — we come to the customer'
+        SHOP = 'shop', 'In-shop — customer comes to us'
+
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='services'
     )
@@ -76,6 +80,12 @@ class Service(models.Model):
     allow_request = models.BooleanField(
         default=True,
         help_text='Customers can send a service request for this item.',
+    )
+    fulfillment_kind = models.CharField(
+        max_length=16,
+        choices=FulfillmentKind.choices,
+        default=FulfillmentKind.MOBILE,
+        help_text='Mobile: provider goes to the customer. Shop: customer comes to the business.',
     )
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)

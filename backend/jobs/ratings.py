@@ -30,6 +30,15 @@ def aggregate_service_ratings(reviews_qs):
     return {'count': count, 'average': average, **dims}
 
 
+def aggregate_organization_ratings(organization):
+    """Roll up all service reviews for a provider (public + analytics)."""
+    from .models import ServiceReview
+
+    return aggregate_service_ratings(
+        ServiceReview.objects.filter(service__organization_id=organization.pk)
+    )
+
+
 def customer_can_rate_service(service, user):
     if not user or not user.is_authenticated:
         return False

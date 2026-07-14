@@ -20,6 +20,14 @@ def booking_approval_message_body(booking):
     return f'Your request for {service_name} has been approved.'
 
 
+def booking_cancellation_message_body(booking):
+    service_name = booking.service.name if booking.service_id else 'your service'
+    when = _format_when(booking.start_at)
+    if when:
+        return f'Your booking for {service_name} on {when} has been cancelled.'
+    return f'Your booking for {service_name} has been cancelled.'
+
+
 def booking_incomplete_message_body(booking, *, note='', return_booking=None):
     service_name = booking.service.name if booking.service_id else 'your service'
     note_text = (note or '').strip()
@@ -189,6 +197,20 @@ def post_booking_approval_message(*, booking, sender):
         booking=booking,
         sender=sender,
         body=booking_approval_message_body(booking),
+    )
+
+
+def post_booking_cancellation_message(*, booking, sender):
+    """
+    Record a cancellation note in the booking thread.
+    Does not send a separate message email — the cancel email already notifies the customer.
+    """
+    if not can_access_booking_messages(sender, booking):
+        raise PermissionDenied('You cannot message on this booking.')
+    return ServiceRequestMessage.objects.create(
+        booking=booking,
+        sender=sender,
+        body=booking_cancellation_message_body(booking),
     )
 
 

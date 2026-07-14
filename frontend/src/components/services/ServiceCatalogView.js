@@ -4,29 +4,54 @@ import ServiceRatingSummary from './ServiceRatingSummary';
 import { serviceDetail } from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
-export function ServiceRow({ service, orgSlug, forceShowPrice, actions }) {
+export function ServiceRow({
+  service,
+  orgSlug,
+  forceShowPrice,
+  actions,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+}) {
   const meta = formatServiceMeta(service, undefined, { forceShowPrice });
   const detailHref = orgSlug ? serviceDetail(orgSlug, service.id) : null;
 
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <li
+      className={`rounded-xl border bg-white p-4 shadow-sm ${
+        selected ? 'border-luminexa-accent ring-1 ring-luminexa-accent/30' : 'border-slate-200'
+      }`}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-slate-900">{service.name}</h3>
-          {service.rating_summary?.count > 0 && (
-            <div className="mt-1">
-              <ServiceRatingSummary summary={service.rating_summary} compact />
-            </div>
+        <div className="flex min-w-0 flex-1 gap-3">
+          {selectable && (
+            <label className="mt-0.5 flex shrink-0 cursor-pointer items-start">
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggleSelect?.(service.id)}
+                className="mt-1 h-4 w-4 accent-luminexa-accent"
+                aria-label={`Select ${service.name}`}
+              />
+            </label>
           )}
-          {meta && <p className="mt-2 text-sm font-medium text-slate-700">{meta}</p>}
-          {detailHref && (
-            <Link
-              to={detailHref}
-              className="mt-2 inline-flex min-h-[36px] items-center text-sm font-medium text-luminexa-accent"
-            >
-              Show full details →
-            </Link>
-          )}
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-slate-900">{service.name}</h3>
+            {service.rating_summary?.count > 0 && (
+              <div className="mt-1">
+                <ServiceRatingSummary summary={service.rating_summary} compact />
+              </div>
+            )}
+            {meta && <p className="mt-2 text-sm font-medium text-slate-700">{meta}</p>}
+            {detailHref && (
+              <Link
+                to={detailHref}
+                className="mt-2 inline-flex min-h-[36px] items-center text-sm font-medium text-luminexa-accent"
+              >
+                Show full details →
+              </Link>
+            )}
+          </div>
         </div>
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>

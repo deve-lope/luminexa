@@ -22,11 +22,12 @@ export function appleMapsDirectionsUrl(address) {
 }
 
 /**
- * Typed service address with Get directions via Google Maps and Apple Maps.
+ * Job / service location with Get directions via Google Maps and Apple Maps.
  */
 export default function ServiceAddressBlock({
   address,
-  title = 'Service address',
+  title = 'Job location',
+  subtitle = '',
   emptyLabel = 'No address provided.',
   className = 'rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100',
 }) {
@@ -35,6 +36,7 @@ export default function ServiceAddressBlock({
     return (
       <section className={className}>
         <h2 className="text-sm font-semibold uppercase text-slate-500">{title}</h2>
+        {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
         <p className="mt-3 text-sm text-slate-500">{emptyLabel}</p>
       </section>
     );
@@ -47,6 +49,7 @@ export default function ServiceAddressBlock({
   return (
     <section className={className}>
       <h2 className="text-sm font-semibold uppercase text-slate-500">{title}</h2>
+      {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
       <p className="mt-3 whitespace-pre-wrap text-base font-medium leading-relaxed text-slate-900">
         {display}
       </p>
