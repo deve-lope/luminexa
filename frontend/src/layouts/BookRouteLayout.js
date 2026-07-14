@@ -38,10 +38,10 @@ function BookOwnerShell({ orgSlug, children }) {
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
-        isStaff: user?.is_staff,
+        isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.is_staff]
+    [logout, navigate, orgSlug, user?.can_access_django_admin]
   );
 
   const onServicesPage = location.pathname.endsWith('/services');

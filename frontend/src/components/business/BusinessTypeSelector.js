@@ -36,6 +36,7 @@ export default function BusinessTypeSelector({
   onSelectionChange,
   legend = 'Business type (select one or more)',
   variant = 'dark',
+  allowCreate = false,
 }) {
   const listRef = useRef(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -146,7 +147,7 @@ export default function BusinessTypeSelector({
       <div ref={listRef} className={boxClass}>
         {types.length === 0 && !showAdd && (
           <p className={`text-sm ${isDark ? 'text-luminexa-mist/60' : 'text-slate-500'}`}>
-            No types yet — add one below.
+            {allowCreate ? 'No types yet — add one below.' : 'No business types available yet.'}
           </p>
         )}
         {types.map((t) => {
@@ -177,7 +178,7 @@ export default function BusinessTypeSelector({
         })}
       </div>
 
-      {!showAdd ? (
+      {allowCreate && (!showAdd ? (
         <button type="button" onClick={() => setShowAdd(true)} className={`mt-2 ${addBtnClass}`}>
           + Add new type
         </button>
@@ -277,7 +278,7 @@ export default function BusinessTypeSelector({
             </div>
           </div>
         </div>
-      )}
+      ))}
     </fieldset>
   );
 }

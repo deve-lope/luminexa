@@ -14,7 +14,7 @@ class AcceptStaffInviteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        token = (request.data.get('token') or request.query_params.get('token') or '').strip()
+        token = (request.data.get('token') or '').strip()
         if not token:
             raise ValidationError({'token': 'Required.'})
         invite = StaffInvitation.objects.filter(token=token, accepted_at__isnull=True).select_related(

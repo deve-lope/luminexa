@@ -62,10 +62,10 @@ function ProviderShell() {
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
-        isStaff: user?.is_staff,
+        isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.is_staff]
+    [logout, navigate, orgSlug, user?.can_access_django_admin]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;

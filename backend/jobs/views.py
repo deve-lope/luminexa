@@ -272,9 +272,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise ValidationError(
                 f'Maximum {OrganizationGalleryImage.MAX_PER_ORGANIZATION} gallery images allowed.'
             )
-        image_file = request.FILES.get('image')
-        if not image_file:
-            raise ValidationError({'image': 'Image file is required.'})
+        from luminexa.uploads import validate_uploaded_image
+        image_file = validate_uploaded_image(request.FILES.get('image'))
         caption = request.data.get('caption', '')
         sort_order = org.gallery_images.count()
         item = OrganizationGalleryImage.objects.create(
@@ -672,10 +671,10 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 f'Maximum {ServiceGalleryImage.MAX_PER_SERVICE} images allowed per service.'
             )
         image_file = request.FILES.get('image')
-        if not image_file:
-            raise ValidationError({'image': 'Image file is required.'})
-        if image_file.size > ServiceGalleryImage.MAX_BYTES:
-            raise ValidationError({'image': 'Each image must be 3 MB or smaller.'})
+        from luminexa.uploads import validate_uploaded_image
+        image_file = validate_uploaded_image(
+            image_file, max_bytes=ServiceGalleryImage.MAX_BYTES,
+        )
         sort_order = service.gallery_images.count()
         item = ServiceGalleryImage.objects.create(
             service=service,
@@ -823,7 +822,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_throttles(self):
         from luminexa.throttles import BookingCreateThrottle
 
-        if self.action == 'create':
+        if self.action in ('create', 'batch'):
             return [BookingCreateThrottle()]
         return []
 

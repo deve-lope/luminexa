@@ -13,21 +13,25 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     has_booking_contact = serializers.BooleanField(read_only=True)
     needs_onboarding = serializers.SerializerMethodField()
+    can_access_django_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'public_ref', 'email', 'full_name', 'phone', 'default_service_address',
-            'address_country', 'email_verified', 'is_staff', 'has_booking_contact',
-            'onboarding_completed_at', 'needs_onboarding',
+            'address_country', 'email_verified', 'can_access_django_admin',
+            'has_booking_contact', 'onboarding_completed_at', 'needs_onboarding',
         )
         read_only_fields = (
-            'id', 'public_ref', 'email', 'email_verified', 'is_staff', 'has_booking_contact',
-            'onboarding_completed_at', 'needs_onboarding',
+            'id', 'public_ref', 'email', 'email_verified', 'can_access_django_admin',
+            'has_booking_contact', 'onboarding_completed_at', 'needs_onboarding',
         )
 
     def get_needs_onboarding(self, obj):
         return obj.onboarding_completed_at is None
+
+    def get_can_access_django_admin(self, obj):
+        return bool(obj.is_staff or obj.is_superuser)
 
 
 class RegisterSerializer(serializers.ModelSerializer):

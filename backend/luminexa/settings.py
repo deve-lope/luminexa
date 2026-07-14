@@ -10,7 +10,17 @@ if not SECRET_KEY:
 
 DEBUG = config('DEBUG', default='True').lower() == 'true'
 # Serve /media/ via Django (required when DEBUG=False, e.g. Docker prod-local).
+# Non-public paths require auth; see luminexa.media_views.PUBLIC_MEDIA_PREFIXES.
 SERVE_MEDIA = config('SERVE_MEDIA', default='True').lower() == 'true'
+
+# SPA auth: HttpOnly cookie (JS cannot read). Prefer same-origin via frontend nginx.
+AUTH_TOKEN_COOKIE_NAME = config('AUTH_TOKEN_COOKIE_NAME', default='lx_auth')
+AUTH_TOKEN_COOKIE_MAX_AGE = config('AUTH_TOKEN_COOKIE_MAX_AGE', default=60 * 60 * 24 * 14, cast=int)
+AUTH_TOKEN_COOKIE_SAMESITE = config('AUTH_TOKEN_COOKIE_SAMESITE', default='Lax')
+AUTH_TOKEN_COOKIE_SECURE = config(
+    'AUTH_TOKEN_COOKIE_SECURE',
+    default='false' if DEBUG else 'true',
+).lower() == 'true'
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -115,8 +125,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 REST_FRAMEWORK = {
-    # Token-only: SPA stores the token in localStorage and does not send CSRF cookies.
+    # Prefer HttpOnly cookie for the SPA; Authorization: Token still works for tests/API clients.
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.CookieTokenAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -127,6 +138,9 @@ REST_FRAMEWORK = {
         'password_reset': '10/hour',
         'booking_create': '60/hour',
         'service_inquiry': '30/hour',
+        'register_business': '5/hour',
+        'map_search': '60/minute',
+        'business_type_write': '10/hour',
     },
 }
 

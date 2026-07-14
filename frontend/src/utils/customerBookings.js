@@ -62,14 +62,22 @@ export function canCancelBooking(booking, now = new Date()) {
 }
 
 export function canRescheduleBooking(booking, now = new Date()) {
+  if (typeof booking?.can_customer_reschedule === 'boolean') {
+    return booking.can_customer_reschedule;
+  }
   if (!providerCustomerKey(booking) || !booking.service) return false;
   if (new Date(booking.start_at) <= now) return false;
 
   // Pending request with no provider decision yet — customer may pick another slot.
   if (isUntouchedBookingRequest(booking)) return true;
 
-  // Confirmed appointments — customer may request a new time (provider approves).
-  if (booking.status === 'confirmed') return true;
+  // Confirmed appointments — honor cancel cutoff when present.
+  if (booking.status === 'confirmed') {
+    const cutoff = Number(booking.cancel_cutoff_hours ?? 0);
+    if (!cutoff || cutoff <= 0) return true;
+    const hoursLeft = (new Date(booking.start_at) - now) / 3600000;
+    return hoursLeft >= cutoff;
+  }
 
   return false;
 }

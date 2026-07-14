@@ -1,5 +1,4 @@
 import React from 'react';
-import { storage } from '../../utils/helpers';
 import { jobsAPI } from '../../utils/api';
 
 function formatMoney(amount, currency = 'CAD') {
@@ -15,10 +14,7 @@ function formatMoney(amount, currency = 'CAD') {
 
 async function downloadInvoicePdf(invoice) {
   const url = invoice.download_url || jobsAPI.bookingInvoiceDownloadUrl(invoice.bookingId);
-  const token = storage.get('token');
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Token ${token}` } : {},
-  });
+  const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) throw new Error('Could not download invoice');
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);

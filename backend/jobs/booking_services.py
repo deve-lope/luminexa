@@ -420,6 +420,22 @@ def reschedule_booking(booking, *, new_slot, by_user):
     ).exists()
     if not is_customer and not is_staff:
         raise PermissionDenied('You cannot reschedule this booking.')
+    if is_customer and customer_is_blocked(booking.organization, by_user):
+        raise PermissionDenied(
+            'You cannot book with this business. Contact them if you think this is a mistake.'
+        )
+    # Same cutoff as cancel: customers may not reschedule confirmed bookings inside the window.
+    if is_customer and booking.status == Booking.Status.CONFIRMED:
+        cutoff = int(getattr(booking.organization, 'cancel_cutoff_hours', 0) or 0)
+        if cutoff > 0:
+            hours_left = (booking.start_at - timezone.now()).total_seconds() / 3600
+            if hours_left < cutoff:
+                raise ValidationError({
+                    'status': (
+                        f'This business does not allow rescheduling within '
+                        f'{cutoff} hours of the appointment. Contact them if you need help.'
+                    ),
+                })
     if is_customer:
         assert_slot_bookable_for_customer(new_slot)
     elif new_slot.start_at <= timezone.now():

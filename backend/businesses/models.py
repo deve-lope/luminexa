@@ -170,6 +170,7 @@ class Organization(models.Model):
 
 class OrganizationGalleryImage(models.Model):
     MAX_PER_ORGANIZATION = 12
+    MAX_BYTES = 3 * 1024 * 1024
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='gallery_images'

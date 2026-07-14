@@ -32,3 +32,8 @@ docker-data/
 
 # Logs
 *.log
+
+# DB / media backups (never commit)
+backups/
+*.bak
+*.sqlite3.bak*

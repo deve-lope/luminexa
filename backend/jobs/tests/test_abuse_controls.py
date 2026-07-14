@@ -183,3 +183,45 @@ class AbuseControlsTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.org.refresh_from_db()
         self.assertEqual(self.org.cancel_cutoff_hours, 48)
+
+    def test_reschedule_blocked_inside_cutoff(self):
+        booking = self._booking(hours_ahead=12)
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            status=AvailabilitySlot.Status.OPEN,
+            start_at=start,
+            end_at=end,
+        )
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': new_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_blocked_customer_cannot_reschedule(self):
+        booking = self._booking(hours_ahead=72)
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            status=AvailabilitySlot.Status.OPEN,
+            start_at=start,
+            end_at=end,
+        )
+        self.membership.customer_status = OrganizationMembership.CustomerStatus.BLOCKED
+        self.membership.save(update_fields=['customer_status'])
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': new_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 403)

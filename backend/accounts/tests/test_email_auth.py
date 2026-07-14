@@ -48,7 +48,9 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(verify.status_code, 200, verify.data)
-        self.assertIn('token', verify.data)
+        self.assertNotIn('token', verify.data)
+        from django.conf import settings as dj_settings
+        self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, verify.cookies)
         user.refresh_from_db()
         self.assertTrue(user.email_verified)
 
@@ -97,8 +99,8 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(cust_start.status_code, 200, cust_start.data)
-        self.assertEqual(cust_start.data['auth_method'], 'otp')
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertNotIn('auth_method', cust_start.data)
+        self.assertEqual(len(mail.outbox), 0)
 
         owner_start = self.client.post(
             '/accounts/api/login/start/',
@@ -107,8 +109,9 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(owner_start.status_code, 200, owner_start.data)
-        self.assertEqual(owner_start.data['auth_method'], 'password')
-        self.assertEqual(len(mail.outbox), 1)  # no extra OTP for provider
+        self.assertNotIn('auth_method', owner_start.data)
+        self.assertEqual(owner_start.data.get('detail'), cust_start.data.get('detail'))
+        self.assertEqual(len(mail.outbox), 0)
 
         login_ok = self.client.post(
             '/accounts/api/login/',
@@ -117,7 +120,9 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(login_ok.status_code, 200, login_ok.data)
-        self.assertIn('token', login_ok.data)
+        self.assertNotIn('token', login_ok.data)
+        from django.conf import settings as dj_settings
+        self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, login_ok.cookies)
 
     def test_password_reset_flow(self):
         user = User.objects.create_user(

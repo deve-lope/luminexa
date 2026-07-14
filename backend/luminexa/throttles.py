@@ -15,3 +15,15 @@ class BookingCreateThrottle(ScopedRateThrottle):
 
 class ServiceInquiryThrottle(ScopedRateThrottle):
     scope = 'service_inquiry'
+
+
+class RegisterBusinessThrottle(ScopedRateThrottle):
+    scope = 'register_business'
+
+
+class MapSearchThrottle(ScopedRateThrottle):
+    scope = 'map_search'
+
+
+class BusinessTypeWriteThrottle(ScopedRateThrottle):
+    scope = 'business_type_write'

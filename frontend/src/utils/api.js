@@ -48,13 +48,11 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
+  // Send HttpOnly auth cookie on same-origin (nginx) and proxied API calls.
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-  const token = storage.get('token');
-  if (token) {
-    config.headers.Authorization = `Token ${token}`;
-  }
   // Let the browser set multipart boundary (required for image uploads).
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     if (config.headers) {
@@ -90,7 +88,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       const { pathname, search } = window.location;
       if (!isPublicPath(pathname)) {
-        storage.remove('token');
+        storage.remove('token'); // legacy cleanup
         const next = encodeURIComponent(`${pathname}${search}`);
         window.location.assign(`/login?next=${next}`);
       }

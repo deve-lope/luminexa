@@ -112,6 +112,18 @@ class OrganizationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Use 0–720 hours (0 = no cutoff).')
         return value
 
+    def validate_logo(self, value):
+        if not value:
+            return value
+        from luminexa.uploads import validate_uploaded_image_django
+        return validate_uploaded_image_django(value)
+
+    def validate_banner(self, value):
+        if not value:
+            return value
+        from luminexa.uploads import validate_uploaded_image_django
+        return validate_uploaded_image_django(value)
+
     def validate_service_postal_code(self, value):
         if not (value or '').strip():
             return ''
@@ -421,18 +433,32 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     def _booking(self, obj):
         return getattr(obj, 'booking', None)
 
+    def _can_see_customer_pii(self, obj):
+        """Only org staff may see booking customer details on slots."""
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        from .permissions import is_org_staff
+        return is_org_staff(user, obj.organization)
+
     def get_customer_name(self, obj):
+        if not self._can_see_customer_pii(obj):
+            return None
         b = self._booking(obj)
         return b.customer.full_name if b else None
 
     def get_customer_phone(self, obj):
+        if not self._can_see_customer_pii(obj):
+            return None
         b = self._booking(obj)
         return (b.customer.phone or '') if b else None
 
     def get_service_address(self, obj):
+        if not self._can_see_customer_pii(obj):
+            return None
         b = self._booking(obj)
         return (b.service_address or '') if b else None
-
     def validate(self, attrs):
         org = attrs.get('organization') or (self.instance.organization if self.instance else None)
         service = attrs.get('service') or (self.instance.service if self.instance else None)
@@ -582,6 +608,7 @@ class BookingSerializer(serializers.ModelSerializer):
         source='organization.cancel_cutoff_hours', read_only=True,
     )
     can_customer_cancel = serializers.SerializerMethodField()
+    can_customer_reschedule = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -607,7 +634,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
-            'cancel_cutoff_hours', 'can_customer_cancel',
+            'cancel_cutoff_hours', 'can_customer_cancel', 'can_customer_reschedule',
             'organization_name', 'customer', 'customer_name',
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
@@ -620,7 +647,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'service_name', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
-            'cancel_cutoff_hours', 'can_customer_cancel',
+            'cancel_cutoff_hours', 'can_customer_cancel', 'can_customer_reschedule',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review',
@@ -649,6 +676,27 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_can_customer_cancel(self, obj):
         from django.utils import timezone as dj_tz
 
+        if obj.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
+            return False
+        if obj.start_at <= dj_tz.now():
+            return False
+        if obj.status == Booking.Status.REQUESTED:
+            return True
+        cutoff = int(getattr(obj.organization, 'cancel_cutoff_hours', 0) or 0)
+        if cutoff <= 0:
+            return True
+        hours_left = (obj.start_at - dj_tz.now()).total_seconds() / 3600
+        return hours_left >= cutoff
+
+    def get_can_customer_reschedule(self, obj):
+        from django.utils import timezone as dj_tz
+
+        from .booking_services import customer_is_blocked
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if user and user.is_authenticated and customer_is_blocked(obj.organization, user):
+            return False
         if obj.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
             return False
         if obj.start_at <= dj_tz.now():

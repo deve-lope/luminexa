@@ -10,7 +10,7 @@ export function isProviderMember(memberships) {
 }
 
 export function getPostLoginRoute(user, memberships) {
-  if (user?.is_staff) return getDjangoAdminUrl();
+  if (user?.can_access_django_admin) return getDjangoAdminUrl();
   const onboarding = getOnboardingPath(user, memberships);
   if (onboarding) return onboarding;
   if (isProviderMember(memberships)) return firstProviderHome(memberships);

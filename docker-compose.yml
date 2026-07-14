@@ -12,7 +12,8 @@ services:
     image: axllent/mailpit:latest
     container_name: luminexa-mailpit
     ports:
-      - "0.0.0.0:8025:8025"
+      # Localhost only — OTP/reset mail must not be exposed on the LAN/public interface.
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
   web:
@@ -21,8 +22,8 @@ services:
       dockerfile: Dockerfile
     container_name: luminexa-web
     ports:
-      - "0.0.0.0:9001:9001"
-      - "[::]:9001:9001"
+      # Localhost only — browsers should use frontend :3000 (nginx → web).
+      - "127.0.0.1:9001:9001"
     env_file:
       - .env.docker.prod
     environment:

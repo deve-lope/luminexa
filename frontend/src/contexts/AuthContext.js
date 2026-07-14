@@ -4,19 +4,18 @@ import { storage } from '../utils/helpers';
 
 const AuthContext = createContext(null);
 
+function clearLegacyTokenStorage() {
+  // Auth moved to HttpOnly cookie; drop any old XSS-readable tokens.
+  storage.remove('token');
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadSession = useCallback(async () => {
-    const token = storage.get('token');
-    if (!token) {
-      setUser(null);
-      setMemberships([]);
-      setLoading(false);
-      return;
-    }
+    clearLegacyTokenStorage();
     try {
       const { data: profile } = await userAPI.getProfile();
       setUser(profile);
@@ -27,7 +26,6 @@ export function AuthProvider({ children }) {
         setMemberships([]);
       }
     } catch {
-      storage.remove('token');
       setUser(null);
       setMemberships([]);
     } finally {
@@ -40,7 +38,7 @@ export function AuthProvider({ children }) {
   }, [loadSession]);
 
   const applyAuthPayload = useCallback(async (data) => {
-    storage.set('token', data.token);
+    clearLegacyTokenStorage();
     setUser(data.user);
     let list = [];
     try {
@@ -75,7 +73,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
-    storage.remove('token');
+    clearLegacyTokenStorage();
     setUser(null);
     setMemberships([]);
   }, []);

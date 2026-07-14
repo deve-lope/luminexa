@@ -71,7 +71,15 @@ class Command(BaseCommand):
         return types
 
     def handle(self, *args, **options):
-        demo_password = 'password123'
+        import os
+        import secrets
+
+        demo_password = (os.environ.get('DEMO_SEED_PASSWORD') or '').strip()
+        if not demo_password:
+            demo_password = secrets.token_urlsafe(12)
+            self.stdout.write(self.style.WARNING(
+                'DEMO_SEED_PASSWORD not set — generated a one-time password for this seed run.'
+            ))
         business_types = self._ensure_business_types()
         org, _ = Organization.objects.get_or_create(
             slug='demo',

@@ -9,8 +9,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from luminexa.throttles import LoginThrottle, PasswordResetThrottle
+from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
 
+from .auth_cookies import clear_auth_cookie, set_auth_cookie
 from .emails import send_email_verification, send_login_otp_email, send_password_reset_email
 from .models import User
 from .otp import issue_login_code, normalize_email, user_uses_password_login, verify_login_code
@@ -42,9 +43,15 @@ def _registration_pending_response(user, *, organization=None):
 
 
 def _issue_auth_token(user):
-    token, _ = Token.objects.get_or_create(user=user)
-    return Response({'token': token.key, 'user': UserSerializer(user).data})
-
+    """Issue a rotated DRF token and set it in an HttpOnly cookie (not in JSON)."""
+    Token.objects.filter(user=user).delete()
+    token = Token.objects.create(user=user)
+    response = Response({
+        'user': UserSerializer(user).data,
+        'auth': 'cookie',
+    })
+    set_auth_cookie(response, token.key)
+    return response
 
 def _send_customer_otp(email: str, *, full_name: str = '') -> None:
     code = issue_login_code(email)
@@ -72,6 +79,7 @@ class RegisterAPIView(APIView):
 
 class RegisterBusinessAPIView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [RegisterBusinessThrottle]
 
     def post(self, request):
         serializer = RegisterBusinessSerializer(data=request.data)
@@ -82,7 +90,7 @@ class RegisterBusinessAPIView(APIView):
 
 
 class LoginStartAPIView(APIView):
-    """Branch after email: providers → password, customers → OTP."""
+    """Acknowledge email without revealing whether the account uses password or OTP."""
 
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
@@ -91,18 +99,11 @@ class LoginStartAPIView(APIView):
         serializer = LoginStartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
-        user = User.objects.filter(email__iexact=email).first()
-        if user and user_uses_password_login(user):
-            return Response({'auth_method': 'password', 'email': email})
-        if user and user.is_active:
-            _send_customer_otp(email, full_name=user.full_name)
-        return Response(
-            {
-                'auth_method': 'otp',
-                'email': email,
-                'detail': 'If an account exists for that email, we sent a sign-in code.',
-            }
-        )
+        # Do not branch the response on account existence or auth method.
+        return Response({
+            'email': email,
+            'detail': 'Enter your password, or request a sign-in code.',
+        })
 
 
 class LoginOtpRequestAPIView(APIView):
@@ -114,24 +115,13 @@ class LoginOtpRequestAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
-        if user and user_uses_password_login(user):
-            return Response(
-                {
-                    'detail': 'This account uses a password. Enter your password to sign in.',
-                    'auth_method': 'password',
-                    'email': email,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if user and user.is_active:
+        # Only send OTP for active non-password accounts; response shape is always the same.
+        if user and user.is_active and not user_uses_password_login(user):
             _send_customer_otp(email, full_name=user.full_name)
-        return Response(
-            {
-                'detail': 'If an account exists for that email, we sent a sign-in code.',
-                'auth_method': 'otp',
-                'email': email,
-            }
-        )
+        return Response({
+            'detail': 'If an account exists for that email, we sent a sign-in code.',
+            'email': email,
+        })
 
 
 class LoginOtpVerifyAPIView(APIView):
@@ -183,11 +173,13 @@ class LogoutAPIView(APIView):
 
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
-        return Response({'detail': 'Logged out.'})
-
+        response = Response({'detail': 'Logged out.'})
+        clear_auth_cookie(response)
+        return response
 
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [LoginThrottle]
 
     def post(self, request):
         old_password = request.data.get('old_password', '')

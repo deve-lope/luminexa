@@ -23,7 +23,7 @@ export default function LoginPage() {
   const initialStep =
     location.state?.step === 'otp' || location.state?.requires_otp ? 'otp' : 'email';
 
-  const [step, setStep] = useState(initialStep); // email | password | otp
+  const [step, setStep] = useState(initialStep); // email | choose | password | otp
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -49,13 +49,24 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const { data } = await userAPI.loginStart({ email: email.trim() });
-      if (data.auth_method === 'password') {
-        setStep('password');
-        setInfo('Enter your business account password.');
-      } else {
-        setStep('otp');
-        setInfo(data.detail || 'If an account exists for that email, we sent a sign-in code.');
-      }
+      setStep('choose');
+      setInfo(data.detail || 'Enter your password, or request a sign-in code.');
+    } catch (err) {
+      setError(parseLoginError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startOtp = async () => {
+    setError('');
+    setInfo('');
+    setResendMsg('');
+    setSubmitting(true);
+    try {
+      const { data } = await userAPI.requestLoginOtp({ email: email.trim() });
+      setStep('otp');
+      setInfo(data.detail || 'If an account exists for that email, we sent a sign-in code.');
     } catch (err) {
       setError(parseLoginError(err));
     } finally {
@@ -125,10 +136,6 @@ export default function LoginPage() {
     try {
       const res = await userAPI.requestLoginOtp({ email: email.trim() });
       setResendMsg(res.data?.detail || 'If an account exists, we sent a new code.');
-      if (res.data?.auth_method === 'password') {
-        setStep('password');
-        setInfo('This account uses a password.');
-      }
     } catch (err) {
       setResendMsg(parseLoginError(err));
     } finally {
@@ -151,7 +158,18 @@ export default function LoginPage() {
       ? 'Enter the password for your business account.'
       : step === 'otp'
         ? 'Enter the 6-digit code we emailed you.'
-        : 'Enter your email — we’ll send a code, or ask for your password if you run a business.';
+        : step === 'choose'
+          ? 'Businesses use a password. Customers use a sign-in code.'
+          : 'Enter your email to continue.';
+
+  const onSubmit =
+    step === 'email'
+      ? handleEmailContinue
+      : step === 'password'
+        ? handlePasswordSubmit
+        : step === 'otp'
+          ? handleOtpSubmit
+          : (e) => e.preventDefault();
 
   return (
     <AuthFormShell
@@ -173,13 +191,7 @@ export default function LoginPage() {
     >
       <motion.form
         key={step}
-        onSubmit={
-          step === 'email'
-            ? handleEmailContinue
-            : step === 'password'
-              ? handlePasswordSubmit
-              : handleOtpSubmit
-        }
+        onSubmit={onSubmit}
         className="space-y-5"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -225,6 +237,30 @@ export default function LoginPage() {
             className="lx-input disabled:bg-slate-50 disabled:text-slate-600"
           />
         </div>
+
+        {step === 'choose' && (
+          <div className="space-y-3">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => {
+                setStep('password');
+                setInfo('Enter your business account password.');
+              }}
+              className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
+            >
+              Continue with password
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={startOtp}
+              className="w-full min-h-[48px] rounded-xl border border-slate-200 font-medium text-slate-800 disabled:opacity-60"
+            >
+              {submitting ? 'Sending code…' : 'Email me a sign-in code'}
+            </button>
+          </div>
+        )}
 
         {step === 'password' && (
           <div>
@@ -276,19 +312,21 @@ export default function LoginPage() {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
-        >
-          {submitting
-            ? step === 'email'
-              ? 'Checking…'
-              : 'Signing in…'
-            : step === 'email'
-              ? 'Continue'
-              : 'Sign in'}
-        </button>
+        {(step === 'email' || step === 'password' || step === 'otp') && (
+          <button
+            type="submit"
+            disabled={submitting}
+            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
+          >
+            {submitting
+              ? step === 'email'
+                ? 'Checking…'
+                : 'Signing in…'
+              : step === 'email'
+                ? 'Continue'
+                : 'Sign in'}
+          </button>
+        )}
 
         {step !== 'email' && (
           <button
