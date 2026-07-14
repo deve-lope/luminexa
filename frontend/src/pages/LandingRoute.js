@@ -2,11 +2,12 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isProviderMember } from '../utils/postLoginRoute';
+import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome, providerAbout } from '../utils/providerPaths';
 import AboutPage from './AboutPage';
 
 export default function LandingRoute() {
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, user, memberships } = useAuth();
 
   if (loading) {
     return (
@@ -14,6 +15,11 @@ export default function LandingRoute() {
         Loading…
       </div>
     );
+  }
+
+  if (isAuthenticated && needsOnboarding(user)) {
+    const path = getOnboardingPath(user, memberships);
+    if (path) return <Navigate to={path} replace />;
   }
 
   if (isAuthenticated && isProviderMember(memberships)) {

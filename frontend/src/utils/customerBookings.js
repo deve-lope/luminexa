@@ -49,10 +49,16 @@ export function isUntouchedBookingRequest(booking) {
 }
 
 export function canCancelBooking(booking, now = new Date()) {
-  return (
-    (booking.status === 'requested' || booking.status === 'confirmed') &&
-    new Date(booking.start_at) > now
-  );
+  if (typeof booking?.can_customer_cancel === 'boolean') {
+    return booking.can_customer_cancel;
+  }
+  if (booking.status !== 'requested' && booking.status !== 'confirmed') return false;
+  if (new Date(booking.start_at) <= now) return false;
+  if (booking.status === 'requested') return true;
+  const cutoff = Number(booking.cancel_cutoff_hours ?? 0);
+  if (!cutoff || cutoff <= 0) return true;
+  const hoursLeft = (new Date(booking.start_at) - now) / 3600000;
+  return hoursLeft >= cutoff;
 }
 
 export function canRescheduleBooking(booking, now = new Date()) {

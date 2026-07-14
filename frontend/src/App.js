@@ -40,6 +40,8 @@ import ProviderAnalyticsPage from './pages/provider/ProviderAnalyticsPage';
 import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
 import CustomerProvidersByTypePage from './pages/customer/CustomerProvidersByTypePage';
+import CustomerSetupPage from './pages/customer/CustomerSetupPage';
+import ProviderSetupPage from './pages/provider/ProviderSetupPage';
 import BookServiceGateway from './pages/BookServiceGateway';
 import BookMultipleGateway from './pages/BookMultipleGateway';
 import CustomerBookMultipleServicesPage from './pages/customer/CustomerBookMultipleServicesPage';
@@ -74,7 +76,9 @@ function AppRoutes() {
     location.pathname === '/forgot-password' ||
     location.pathname === '/reset-password' ||
     location.pathname === '/check-email' ||
-    location.pathname === '/verify-email';
+    location.pathname === '/verify-email' ||
+    location.pathname === '/customer/setup' ||
+    /^\/provider\/[^/]+\/setup$/.test(location.pathname);
 
   return (
     <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-canvas' : 'min-h-[100dvh] bg-slate-50'}>
@@ -89,6 +93,22 @@ function AppRoutes() {
         <Route path="/check-email" element={<CheckEmailPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/accept-staff-invite" element={<AcceptStaffInvitePage />} />
+        <Route
+          path="/customer/setup"
+          element={
+            <PrivateRoute>
+              <CustomerSetupPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/provider/:orgSlug/setup"
+          element={
+            <PrivateRoute>
+              <ProviderSetupPage />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/provider/schedule/*"
           element={

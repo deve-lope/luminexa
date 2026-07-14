@@ -35,6 +35,7 @@ export function customerConnectionState(bookingPolicy, membership) {
   if (!membership) {
     return needsExplicitConnect(bookingPolicy) ? 'disconnected' : 'implicit';
   }
+  if (membership.customer_status === 'blocked') return 'blocked';
   if (membership.customer_status === 'pending') return 'pending';
   if (membership.customer_status === 'approved') return 'approved';
   return 'connected';

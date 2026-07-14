@@ -235,6 +235,30 @@ class ProfileAPIView(APIView):
         return Response(UserSerializer(user).data)
 
 
+class CompleteOnboardingAPIView(APIView):
+    """Mark first-sign-in profile setup as done (after name/phone/address are saved)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .otp import user_uses_password_login
+
+        user = request.user
+        if not (user.full_name or '').strip():
+            raise ValidationError({'full_name': 'Name is required.'})
+        if not (user.phone or '').strip():
+            raise ValidationError({'phone': 'Phone number is required.'})
+        if not user_uses_password_login(user):
+            if not (user.default_service_address or '').strip():
+                raise ValidationError({'default_service_address': 'Address is required.'})
+        if user.onboarding_completed_at is None:
+            from django.utils import timezone
+
+            user.onboarding_completed_at = timezone.now()
+            user.save(update_fields=['onboarding_completed_at'])
+        return Response(UserSerializer(user).data)
+
+
 class PasswordResetRequestAPIView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle]

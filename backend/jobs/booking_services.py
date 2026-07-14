@@ -51,14 +51,31 @@ def ensure_customer_membership(org, customer, *, approve=False):
         },
     )
     if not created and approve and membership.role == OrganizationMembership.Role.CUSTOMER:
+        if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
+            raise ValidationError({
+                'customer': 'This customer is blocked. Unblock them before booking.',
+            })
         if membership.customer_status != OrganizationMembership.CustomerStatus.APPROVED:
             membership.customer_status = OrganizationMembership.CustomerStatus.APPROVED
             membership.save(update_fields=['customer_status'])
     return membership
 
 
+def customer_is_blocked(org, customer):
+    if not customer or not getattr(customer, 'is_authenticated', False):
+        return False
+    return OrganizationMembership.objects.filter(
+        organization=org,
+        user=customer,
+        role=OrganizationMembership.Role.CUSTOMER,
+        customer_status=OrganizationMembership.CustomerStatus.BLOCKED,
+    ).exists()
+
+
 def customer_can_book(org, customer):
     """Whether this customer may submit a booking request at this organization."""
+    if customer_is_blocked(org, customer):
+        return False
     if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
         return OrganizationMembership.objects.filter(
             organization=org,
@@ -83,18 +100,23 @@ def booking_policy_meta(org, customer):
         membership = OrganizationMembership.objects.filter(
             organization=org, user=customer, role=OrganizationMembership.Role.CUSTOMER,
         ).first()
+    blocked = bool(
+        membership and membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED
+    )
 
     return {
         'scheduling_mode': org.scheduling_mode,
         'schedule_valid_from': org.schedule_valid_from,
         'schedule_valid_until': org.schedule_valid_until,
         'booking_policy': org.booking_policy,
+        'cancel_cutoff_hours': org.cancel_cutoff_hours,
         'requires_approval': org.booking_policy == Organization.BookingPolicy.APPROVAL,
         'instant_confirm': org.booking_policy == Organization.BookingPolicy.INSTANT,
         'clients_only': org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY,
         'can_book': can_book and (customer.has_booking_contact if customer else False),
         'can_view_calendar': can_view,
         'customer_status': membership.customer_status if membership else None,
+        'is_blocked': blocked,
         'needs_contact_info': bool(customer and not customer.has_booking_contact),
     }
 
@@ -152,6 +174,10 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
     assert_slot_bookable_for_customer(slot)
 
     if not customer_can_book(org, customer):
+        if customer_is_blocked(org, customer):
+            raise PermissionDenied(
+                'You cannot book with this business. Contact them if you think this is a mistake.'
+            )
         if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
             membership = OrganizationMembership.objects.filter(
                 organization=org, user=customer, role=OrganizationMembership.Role.CUSTOMER,
@@ -318,6 +344,18 @@ def cancel_booking(booking, *, by_user):
         Booking.Status.CONFIRMED,
     ):
         raise ValidationError({'status': 'You cannot cancel this booking in its current state.'})
+    # Confirmed bookings: honor the business cancel cutoff (requested can always cancel).
+    if is_customer and booking.status == Booking.Status.CONFIRMED:
+        cutoff = int(getattr(booking.organization, 'cancel_cutoff_hours', 0) or 0)
+        if cutoff > 0:
+            hours_left = (booking.start_at - timezone.now()).total_seconds() / 3600
+            if hours_left < cutoff:
+                raise ValidationError({
+                    'status': (
+                        f'This business does not allow cancelling within '
+                        f'{cutoff} hours of the appointment. Contact them if you need help.'
+                    ),
+                })
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=['status', 'updated_at'])
     if booking.availability_slot_id:

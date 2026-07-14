@@ -143,7 +143,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Only the owner can update organization settings.')
         allowed = {
             'tagline', 'description', 'profile_public', 'booking_policy', 'name',
-            'logo', 'banner', 'scheduling_mode',
+            'logo', 'banner', 'scheduling_mode', 'cancel_cutoff_hours',
             'schedule_valid_from', 'schedule_valid_until',
             'service_city', 'service_state', 'service_postal_code', 'service_address',
             'service_latitude', 'service_longitude', 'service_radius_miles',
@@ -311,6 +311,17 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not org.profile_public:
             raise ValidationError('This business is not available.')
         membership = ensure_customer_membership(org, request.user)
+        if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
+            return Response({
+                'detail': (
+                    'You cannot book with this business. '
+                    'Contact them if you think this is a mistake.'
+                ),
+                'organization_slug': org.slug,
+                'customer_status': membership.customer_status,
+                'booking_policy': org.booking_policy,
+                'is_blocked': True,
+            })
         if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
             msg = (
                 'Connection requested. You can view the calendar while waiting for approval.'
@@ -388,6 +399,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='customers')
     def customers(self, request, slug=None):
+        from django.db.models import Count, F
+
+        from .models import BookingStatusEvent
+
         org = self.get_object()
         if not is_org_staff(request.user, org):
             raise PermissionDenied('Only staff can list customers.')
@@ -404,7 +419,33 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             memberships = memberships.filter(
                 customer_status=OrganizationMembership.CustomerStatus.APPROVED,
             )
-        memberships = memberships.order_by('user__full_name')
+        elif status_filter == 'blocked':
+            memberships = memberships.filter(
+                customer_status=OrganizationMembership.CustomerStatus.BLOCKED,
+            )
+        elif status_filter != 'all':
+            raise ValidationError({
+                'status': 'Use approved, pending, blocked, or all.',
+            })
+        memberships = list(memberships.order_by('user__full_name'))
+        user_ids = [m.user_id for m in memberships]
+        cancel_counts = {
+            row['booking__customer_id']: row['c']
+            for row in BookingStatusEvent.objects.filter(
+                booking__organization=org,
+                booking__customer_id__in=user_ids,
+                action=BookingStatusEvent.Action.CANCELLED,
+                actor_id=F('booking__customer_id'),
+            ).values('booking__customer_id').annotate(c=Count('id'))
+        }
+        no_show_counts = {
+            row['booking__customer_id']: row['c']
+            for row in BookingStatusEvent.objects.filter(
+                booking__organization=org,
+                booking__customer_id__in=user_ids,
+                action=BookingStatusEvent.Action.NO_SHOW,
+            ).values('booking__customer_id').annotate(c=Count('id'))
+        }
         data = [
             {
                 'id': m.user_id,
@@ -413,6 +454,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 'phone': m.user.phone or '',
                 'membership_id': m.id,
                 'customer_status': m.customer_status,
+                'cancel_count': cancel_counts.get(m.user_id, 0),
+                'no_show_count': no_show_counts.get(m.user_id, 0),
             }
             for m in memberships
         ]
@@ -436,6 +479,52 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         membership.customer_status = OrganizationMembership.CustomerStatus.APPROVED
         membership.save(update_fields=['customer_status'])
         return Response({'detail': 'Customer approved.', 'user_id': int(user_id)})
+
+    @action(detail=True, methods=['post'], url_path='block-customer')
+    def block_customer(self, request, slug=None):
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Only staff can block customers.')
+        user_id = request.data.get('user_id')
+        if not user_id:
+            raise ValidationError({'user_id': 'Required.'})
+        membership = OrganizationMembership.objects.filter(
+            organization=org,
+            user_id=user_id,
+            role=OrganizationMembership.Role.CUSTOMER,
+        ).first()
+        if not membership:
+            raise ValidationError({'detail': 'Customer not found.'})
+        membership.customer_status = OrganizationMembership.CustomerStatus.BLOCKED
+        membership.save(update_fields=['customer_status'])
+        return Response({
+            'detail': 'Customer blocked.',
+            'user_id': int(user_id),
+            'customer_status': membership.customer_status,
+        })
+
+    @action(detail=True, methods=['post'], url_path='unblock-customer')
+    def unblock_customer(self, request, slug=None):
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Only staff can unblock customers.')
+        user_id = request.data.get('user_id')
+        if not user_id:
+            raise ValidationError({'user_id': 'Required.'})
+        membership = OrganizationMembership.objects.filter(
+            organization=org,
+            user_id=user_id,
+            role=OrganizationMembership.Role.CUSTOMER,
+        ).first()
+        if not membership:
+            raise ValidationError({'detail': 'Customer not found.'})
+        membership.customer_status = OrganizationMembership.CustomerStatus.APPROVED
+        membership.save(update_fields=['customer_status'])
+        return Response({
+            'detail': 'Customer unblocked.',
+            'user_id': int(user_id),
+            'customer_status': membership.customer_status,
+        })
 
     @action(detail=True, methods=['post'], url_path='invite-staff')
     def invite_staff(self, request, slug=None):

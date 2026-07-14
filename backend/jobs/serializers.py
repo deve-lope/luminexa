@@ -95,6 +95,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'public_ref', 'slug', 'tagline', 'description',
             'logo', 'banner', 'profile_public', 'is_active', 'booking_policy',
+            'cancel_cutoff_hours',
             'scheduling_mode', 'schedule_valid_from', 'schedule_valid_until',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
@@ -102,6 +103,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
+
+    def validate_cancel_cutoff_hours(self, value):
+        if value is None:
+            return 24
+        value = int(value)
+        if value < 0 or value > 720:
+            raise serializers.ValidationError('Use 0–720 hours (0 = no cutoff).')
+        return value
 
     def validate_service_postal_code(self, value):
         if not (value or '').strip():
@@ -569,6 +578,10 @@ class BookingSerializer(serializers.ModelSerializer):
     fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
     job_location = serializers.SerializerMethodField()
     job_location_label = serializers.SerializerMethodField()
+    cancel_cutoff_hours = serializers.IntegerField(
+        source='organization.cancel_cutoff_hours', read_only=True,
+    )
+    can_customer_cancel = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
@@ -594,6 +607,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'service', 'service_name', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
+            'cancel_cutoff_hours', 'can_customer_cancel',
             'organization_name', 'customer', 'customer_name',
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
@@ -606,6 +620,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'service_name', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
+            'cancel_cutoff_hours', 'can_customer_cancel',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review',
@@ -630,6 +645,21 @@ class BookingSerializer(serializers.ModelSerializer):
         if kind == Service.FulfillmentKind.SHOP:
             return 'Job location — come to the shop'
         return 'Job location — we come to you'
+
+    def get_can_customer_cancel(self, obj):
+        from django.utils import timezone as dj_tz
+
+        if obj.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
+            return False
+        if obj.start_at <= dj_tz.now():
+            return False
+        if obj.status == Booking.Status.REQUESTED:
+            return True
+        cutoff = int(getattr(obj.organization, 'cancel_cutoff_hours', 0) or 0)
+        if cutoff <= 0:
+            return True
+        hours_left = (obj.start_at - dj_tz.now()).total_seconds() / 3600
+        return hours_left >= cutoff
 
     def _review_for_booking(self, obj):
         request = self.context.get('request')
@@ -781,6 +811,8 @@ class OrgCustomerSerializer(serializers.Serializer):
     phone = serializers.CharField(allow_blank=True)
     membership_id = serializers.IntegerField()
     customer_status = serializers.CharField(allow_blank=True)
+    cancel_count = serializers.IntegerField(required=False, default=0)
+    no_show_count = serializers.IntegerField(required=False, default=0)
 
 
 class TaskSerializer(serializers.ModelSerializer):

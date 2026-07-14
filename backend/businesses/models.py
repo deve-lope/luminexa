@@ -64,6 +64,13 @@ class Organization(models.Model):
         choices=BookingPolicy.choices,
         default=BookingPolicy.APPROVAL,
     )
+    cancel_cutoff_hours = models.PositiveIntegerField(
+        default=24,
+        help_text=(
+            'Customers cannot cancel confirmed bookings within this many hours of start. '
+            '0 = no cutoff (cancel anytime before start).'
+        ),
+    )
     scheduling_mode = models.CharField(
         max_length=20,
         choices=SchedulingMode.choices,
@@ -188,6 +195,7 @@ class OrganizationMembership(models.Model):
     class CustomerStatus(models.TextChoices):
         PENDING = 'pending', 'Pending approval'
         APPROVED = 'approved', 'Approved'
+        BLOCKED = 'blocked', 'Blocked'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='memberships'

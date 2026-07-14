@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../contexts/AuthContext';
 import { CUSTOMER_TABS, buildCustomerMenuItems } from '../config/navigation';
 import { isProviderMember } from '../utils/postLoginRoute';
+import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
 
@@ -101,6 +102,11 @@ export default function CustomerLayout({ children }) {
 
   if (isAuthenticated && isCustomerAppRoute && isProviderMember(memberships)) {
     return <Navigate to={firstProviderHome(memberships)} replace />;
+  }
+
+  if (isAuthenticated && needsOnboarding(user) && isCustomerAppRoute) {
+    const path = getOnboardingPath(user, memberships, `${location.pathname}${location.search}`);
+    if (path) return <Navigate to={path} replace />;
   }
 
   return (

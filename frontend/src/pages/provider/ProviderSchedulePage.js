@@ -29,6 +29,7 @@ export default function ProviderSchedulePage() {
 
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [blockedCustomers, setBlockedCustomers] = useState([]);
   const [slots, setSlots] = useState([]);
   const [unavailable, setUnavailable] = useState([]);
   const [weeklyBlocks, setWeeklyBlocks] = useState([]);
@@ -50,12 +51,13 @@ export default function ProviderSchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const [svcRes, custRes, slotRes, pendingCustRes, unavailRes, schedRes] =
+      const [svcRes, custRes, slotRes, pendingCustRes, blockedCustRes, unavailRes, schedRes] =
         await Promise.all([
           jobsAPI.listServices({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug),
           jobsAPI.listSlots({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug, { status: 'pending' }),
+          jobsAPI.listOrgCustomers(orgSlug, { status: 'blocked' }),
           jobsAPI.listUnavailableBlocks({ organization: orgSlug }),
           jobsAPI.getSchedulingSettings(orgSlug),
         ]);
@@ -70,6 +72,7 @@ export default function ProviderSchedulePage() {
       );
       setWeeklyBlocks(schedRes.data?.weekly_blocks || []);
       setPendingCustomers(pendingCustRes.data || []);
+      setBlockedCustomers(blockedCustRes.data || []);
       const ctx = await jobsAPI.getBookingContext(orgSlug);
       setSchedulingMode(ctx.data?.scheduling_mode || 'flexi');
       if (svcList.length && !slotService) setSlotService(String(svcList[0].id));
@@ -296,6 +299,88 @@ export default function ProviderSchedulePage() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {!loading && (!!customers.length || !!blockedCustomers.length) && (
+        <section className="lx-card">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Customers</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Cancel and no-show counts help spot patterns. Blocking stops them from booking again.
+          </p>
+          {!!customers.length && (
+            <ul className="mt-4 space-y-3">
+              {customers.map((c) => (
+                <li
+                  key={c.membership_id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{c.full_name}</p>
+                    <p className="truncate text-sm text-slate-600">{c.email}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
+                      {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await jobsAPI.blockCustomer(orgSlug, c.id);
+                        setMessage(`${c.full_name} blocked from booking.`);
+                        load();
+                      } catch (e) {
+                        setError(parseApiError(e));
+                      }
+                    }}
+                    className="min-h-[44px] shrink-0 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700"
+                  >
+                    Block
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!!blockedCustomers.length && (
+            <>
+              <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Blocked
+              </h3>
+              <ul className="mt-2 space-y-3">
+                {blockedCustomers.map((c) => (
+                  <li
+                    key={c.membership_id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900">{c.full_name}</p>
+                      <p className="truncate text-sm text-slate-600">{c.email}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
+                        {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await jobsAPI.unblockCustomer(orgSlug, c.id);
+                          setMessage(`${c.full_name} can book again.`);
+                          load();
+                        } catch (e) {
+                          setError(parseApiError(e));
+                        }
+                      }}
+                      className="min-h-[44px] shrink-0 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
+                    >
+                      Unblock
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 

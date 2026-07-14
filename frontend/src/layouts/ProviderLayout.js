@@ -7,6 +7,7 @@ import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgCont
 import { buildProviderMenuItems, buildProviderTabs } from '../config/navigation';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
+import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { jobsAPI } from '../utils/api';
 import {
   firstProviderHome,
@@ -127,6 +128,11 @@ function ProviderShell() {
       title: 'Today',
     };
   }, [location.pathname, activeOrg, orgSlug]);
+
+  if (needsOnboarding(user) && !location.pathname.includes('/setup')) {
+    const path = getOnboardingPath(user, memberships, `${location.pathname}${location.search}`);
+    if (path) return <Navigate to={path} replace />;
+  }
 
   return (
     <AppShell

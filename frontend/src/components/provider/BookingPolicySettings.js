@@ -6,7 +6,8 @@ import parseApiError from '../../utils/parseApiError';
 import { providerSchedule } from '../../utils/providerPaths';
 
 /**
- * Lets the business owner choose instant vs approval vs clients-only booking.
+ * Lets the business owner choose instant vs approval vs clients-only booking,
+ * and set how close to start customers may cancel confirmed appointments.
  */
 export default function BookingPolicySettings({
   orgSlug,
@@ -15,6 +16,7 @@ export default function BookingPolicySettings({
   onSaved,
 }) {
   const [policy, setPolicy] = useState('approval');
+  const [cancelCutoffHours, setCancelCutoffHours] = useState(24);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -27,6 +29,9 @@ export default function BookingPolicySettings({
       .getBookingContext(orgSlug)
       .then((res) => {
         if (res.data?.booking_policy) setPolicy(res.data.booking_policy);
+        if (res.data?.cancel_cutoff_hours != null) {
+          setCancelCutoffHours(Number(res.data.cancel_cutoff_hours));
+        }
       })
       .catch(() => setError('Could not load booking settings.'))
       .finally(() => setLoading(false));
@@ -38,7 +43,12 @@ export default function BookingPolicySettings({
     setMessage(null);
     setError(null);
     try {
-      await jobsAPI.patchOrganization(orgSlug, { booking_policy: policy });
+      const cutoff = Math.max(0, Math.min(720, Number(cancelCutoffHours) || 0));
+      await jobsAPI.patchOrganization(orgSlug, {
+        booking_policy: policy,
+        cancel_cutoff_hours: cutoff,
+      });
+      setCancelCutoffHours(cutoff);
       setMessage('Booking rules saved.');
       onSaved?.(policy);
     } catch (e) {
@@ -64,6 +74,13 @@ export default function BookingPolicySettings({
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
           Only the business owner can change booking rules. Current mode:{' '}
           <strong>{BOOKING_POLICIES.find((p) => p.value === policy)?.label || policy}</strong>
+          . Cancel cutoff:{' '}
+          <strong>
+            {Number(cancelCutoffHours) === 0
+              ? 'anytime before start'
+              : `${cancelCutoffHours} hours before start`}
+          </strong>
+          .
         </p>
       ) : (
         <>
@@ -98,6 +115,26 @@ export default function BookingPolicySettings({
               . After approval, they can book open slots.
             </p>
           )}
+
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <label htmlFor="cancel-cutoff" className="block text-sm font-medium text-slate-900">
+              Customer cancel cutoff (hours)
+            </label>
+            <p className="mt-1 text-sm text-slate-600">
+              Confirmed bookings cannot be cancelled by the customer within this many hours of
+              start. Pending requests can still be cancelled anytime. Use 0 for no cutoff.
+            </p>
+            <input
+              id="cancel-cutoff"
+              type="number"
+              min={0}
+              max={720}
+              step={1}
+              value={cancelCutoffHours}
+              onChange={(e) => setCancelCutoffHours(e.target.value)}
+              className="mt-3 w-full max-w-[10rem] rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
 
           <button
             type="button"

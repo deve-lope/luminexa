@@ -109,6 +109,7 @@ export const userAPI = {
   register: (userData) => api.post('/accounts/api/register/', userData),
   registerBusiness: (userData) => api.post('/accounts/api/register/business/', userData),
   logout: () => api.post('/accounts/api/logout/'),
+  completeOnboarding: () => api.post('/accounts/api/onboarding/complete/'),
   requestPasswordReset: (email) => api.post('/accounts/api/password-reset/', { email }),
   confirmPasswordReset: (data) => api.post('/accounts/api/password-reset/confirm/', data),
   verifyEmail: (data) => api.post('/accounts/api/verify-email/', data),
@@ -244,6 +245,10 @@ export const jobsAPI = {
     api.get(`/api/v1/organizations/${orgSlug}/customers/`, { params }),
   approveCustomer: (orgSlug, userId) =>
     api.post(`/api/v1/organizations/${orgSlug}/approve-customer/`, { user_id: userId }),
+  blockCustomer: (orgSlug, userId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/block-customer/`, { user_id: userId }),
+  unblockCustomer: (orgSlug, userId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/unblock-customer/`, { user_id: userId }),
   patchOrganization: (orgSlug, data) => api.patch(`/api/v1/organizations/${orgSlug}/`, data),
   getWeeklySchedule: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/weekly-schedule/`),
   saveWeeklySchedule: (orgSlug, blocks) =>

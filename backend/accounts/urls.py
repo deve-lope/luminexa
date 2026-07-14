@@ -18,6 +18,11 @@ urlpatterns = [
     path('api/logout/', api_views.LogoutAPIView.as_view(), name='logout_api'),
     path('api/profile/', api_views.ProfileAPIView.as_view(), name='profile_api'),
     path(
+        'api/onboarding/complete/',
+        api_views.CompleteOnboardingAPIView.as_view(),
+        name='onboarding_complete_api',
+    ),
+    path(
         'api/change-password/',
         api_views.ChangePasswordAPIView.as_view(),
         name='change_password_api',

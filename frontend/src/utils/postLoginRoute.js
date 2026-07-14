@@ -1,5 +1,6 @@
 import { getDjangoAdminUrl } from './djangoAdmin';
 import { firstProviderHome } from './providerPaths';
+import { getOnboardingPath, needsOnboarding } from './profileSetup';
 
 export const DJANGO_ADMIN_REDIRECT = '__DJANGO_ADMIN__';
 
@@ -10,14 +11,22 @@ export function isProviderMember(memberships) {
 
 export function getPostLoginRoute(user, memberships) {
   if (user?.is_staff) return getDjangoAdminUrl();
+  const onboarding = getOnboardingPath(user, memberships);
+  if (onboarding) return onboarding;
   if (isProviderMember(memberships)) return firstProviderHome(memberships);
   return '/customer';
 }
 
 /** After login/register, prefer `next` when it is a customer booking or browse path. */
 export function resolvePathAfterAuth(nextPath, user, memberships) {
+  if (needsOnboarding(user)) {
+    return getOnboardingPath(user, memberships, nextPath) || getPostLoginRoute(user, memberships);
+  }
   if (!nextPath || !nextPath.startsWith('/')) {
     return getPostLoginRoute(user, memberships);
+  }
+  if (nextPath.includes('/setup')) {
+    return nextPath;
   }
   if (nextPath.startsWith('/book/')) {
     if (isProviderMember(memberships)) return firstProviderHome(memberships);

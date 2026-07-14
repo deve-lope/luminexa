@@ -78,8 +78,9 @@ export default function CustomerBookServicePage() {
   const membership = getCustomerMembership(memberships, businessSlug);
   const staffOfOrg = isOrgStaff(memberships, businessSlug);
   const bookingPolicy = storefront?.booking_policy;
-  const connection = customerConnectionState(bookingPolicy, membership);
-  const mustConnect = needsExplicitConnect(bookingPolicy) && connection === 'disconnected';
+  const connectionFromMembership = customerConnectionState(bookingPolicy, membership);
+  const mustConnect =
+    needsExplicitConnect(bookingPolicy) && connectionFromMembership === 'disconnected';
   const mayLoadCalendar = canViewBookingCalendar({
     isAuthenticated: true,
     isStaff: staffOfOrg,
@@ -153,6 +154,10 @@ export default function CustomerBookServicePage() {
   const bookingCtx = calendar?.booking;
   const canBook = bookingCtx?.can_book ?? false;
   const needsContact = !user?.has_booking_contact;
+  const connection =
+    bookingCtx?.is_blocked || connectionFromMembership === 'blocked'
+      ? 'blocked'
+      : connectionFromMembership;
 
   useEffect(() => {
     if (service?.name && !serviceLabel) {
@@ -438,6 +443,12 @@ export default function CustomerBookServicePage() {
                 loadCalendar();
               }}
             />
+          )}
+
+          {connection === 'blocked' && (
+            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+              You cannot book with this business. Contact them if you think this is a mistake.
+            </p>
           )}
 
           {connection === 'pending' && (

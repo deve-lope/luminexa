@@ -60,6 +60,11 @@ class User(AbstractUser):
         default=False,
         help_text='True after the user confirms their email address.',
     )
+    onboarding_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Set when the user finishes first-sign-in profile setup.',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name']
