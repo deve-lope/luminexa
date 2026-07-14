@@ -166,13 +166,15 @@ function InvoiceBreakdown({ invoice, providerName }) {
 }
 
 /**
- * Invoice card with View + Download PDF. Use compact on list rows.
+ * Invoice card with in-app view (no download required) + optional PDF download.
+ * Use compact on list rows. Use showBreakdown to expand the bill inline (customers).
  */
 export default function InvoicePanel({
   invoice,
   bookingId,
   providerName,
   compact = false,
+  showBreakdown = false,
   className = '',
 }) {
   const [viewOpen, setViewOpen] = useState(false);
@@ -209,7 +211,7 @@ export default function InvoicePanel({
     <>
       <div
         className={`rounded-xl border border-teal-100 bg-teal-50/40 ${
-          compact ? 'px-3 py-3' : 'px-4 py-4'
+          compact && !showBreakdown ? 'px-3 py-3' : 'px-4 py-4'
         } ${className}`}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -223,7 +225,7 @@ export default function InvoicePanel({
               {(providerName || invoice.provider_name) &&
                 ` · ${providerName || invoice.provider_name}`}
             </p>
-            {!compact && (
+            {!compact && !showBreakdown && (
               <p className="mt-1 text-xs text-slate-500">
                 Fee {formatMoney(invoice.subtotal != null ? invoice.subtotal : invoice.amount, currency)}
                 {Number(invoice.tax_total) > 0
@@ -233,27 +235,48 @@ export default function InvoicePanel({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setViewOpen(true)}
-              className="inline-flex min-h-[40px] items-center rounded-lg bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
-            >
-              View invoice
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleDownload}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-teal-700 px-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              {busy ? 'Downloading…' : 'Download PDF'}
-            </button>
-          </div>
+          {!showBreakdown && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setViewOpen(true)}
+                className="inline-flex min-h-[40px] items-center rounded-lg bg-teal-700 px-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
+              >
+                View invoice
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleDownload}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                {busy ? 'Downloading…' : 'PDF'}
+              </button>
+            </div>
+          )}
         </div>
+
+        {showBreakdown && (
+          <div className="mt-4 border-t border-teal-100/80 pt-4">
+            <InvoiceBreakdown invoice={invoice} providerName={providerName} />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleDownload}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                {busy ? 'Downloading…' : 'Download PDF'}
+              </button>
+            </div>
+          </div>
+        )}
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
 
@@ -289,16 +312,16 @@ export default function InvoicePanel({
                 type="button"
                 disabled={busy}
                 onClick={handleDownload}
-                className="min-h-[44px] flex-1 rounded-xl bg-teal-700 text-sm font-semibold text-white disabled:opacity-60"
+                className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 disabled:opacity-60"
               >
                 {busy ? 'Downloading…' : 'Download PDF'}
               </button>
               <button
                 type="button"
                 onClick={() => setViewOpen(false)}
-                className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700"
+                className="min-h-[44px] flex-1 rounded-xl bg-teal-700 text-sm font-semibold text-white"
               >
-                Close
+                Done
               </button>
             </div>
           </div>

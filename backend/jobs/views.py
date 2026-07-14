@@ -43,12 +43,15 @@ from .models import (
     AvailabilitySlot,
     Booking,
     BookingStatusEvent,
+    CustomerNotification,
     CustomerServiceInquiry,
+    ProviderNotification,
     Service,
     ServiceCategory,
     ServiceGalleryImage,
     Task,
     UnavailableBlock,
+    WeeklyScheduleBlock,
 )
 from .permissions import is_org_member, is_org_staff, membership_for
 from .scheduling_services import (
@@ -67,6 +70,7 @@ from .serializers import (
     OrganizationSerializer,
     ProviderBookSerializer,
     ProviderNotificationSerializer,
+    CustomerNotificationSerializer,
     CustomerServiceInquiryCreateSerializer,
     CustomerServiceInquirySerializer,
     ServiceRequestMessageSerializer,
@@ -75,7 +79,6 @@ from .serializers import (
     TaskSerializer,
     WeeklyScheduleBlockSerializer,
 )
-from .models import ProviderNotification, WeeklyScheduleBlock
 
 
 def _staff_organization_ids(user):
@@ -883,8 +886,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
-        from .notifications import send_booking_email
-        send_booking_email('booking_confirmed', booking)
+        from .notifications import notify_booking_accepted
+        notify_booking_accepted(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
@@ -901,8 +904,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
-        from .notifications import send_booking_email
-        send_booking_email('booking_declined', booking)
+        from .notifications import notify_booking_declined
+        notify_booking_declined(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
@@ -977,8 +980,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             mark_paid=mark_paid,
         )
 
-        from .notifications import send_booking_email
-        send_booking_email('booking_completed', booking)
+        from .notifications import notify_booking_completed
+        notify_booking_completed(booking)
         booking = (
             Booking.objects.select_related(
                 'invoice', 'service', 'organization', 'customer', 'availability_slot',
@@ -1097,12 +1100,17 @@ class BookingViewSet(viewsets.ModelViewSet):
             new_status=booking.status,
             note=f'New time: {booking.start_at.isoformat()}',
         )
-        from .notifications import send_booking_email
+        from .notifications import (
+            create_provider_customer_reschedule_notification,
+            notify_booking_rescheduled_by_provider,
+            send_booking_email,
+        )
 
         if booking.customer_id == request.user.id:
+            create_provider_customer_reschedule_notification(booking)
             send_booking_email('booking_reschedule_requested', booking)
         else:
-            send_booking_email('booking_confirmed', booking)
+            notify_booking_rescheduled_by_provider(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='no-show')
@@ -1346,6 +1354,44 @@ class CustomerMyInquiriesAPIView(APIView):
         )
         data = CustomerServiceInquirySerializer(qs, many=True).data
         return Response(data)
+
+
+class CustomerNotificationsAPIView(APIView):
+    """In-app alerts for the logged-in customer (booking updates, invoices)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = (
+            CustomerNotification.objects.filter(
+                customer=request.user,
+                dismissed_at__isnull=True,
+            )
+            .select_related('organization', 'booking')
+            .order_by('-created_at')
+        )
+        total = qs.count()
+        results = qs[:50]
+        return Response({
+            'count': total,
+            'results': CustomerNotificationSerializer(results, many=True).data,
+        })
+
+
+class CustomerNotificationDismissAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, notification_id):
+        note = CustomerNotification.objects.filter(
+            customer=request.user,
+            pk=notification_id,
+            dismissed_at__isnull=True,
+        ).first()
+        if not note:
+            raise ValidationError({'detail': 'Notification not found.'})
+        note.dismissed_at = timezone.now()
+        note.save(update_fields=['dismissed_at'])
+        return Response({'detail': 'Dismissed.'})
 
 
 class TaskViewSet(viewsets.ModelViewSet):

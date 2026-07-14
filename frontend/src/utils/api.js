@@ -176,6 +176,9 @@ export const jobsAPI = {
     }),
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
+  listMyNotifications: () => api.get('/api/v1/me/notifications/'),
+  dismissMyNotification: (notificationId) =>
+    api.post(`/api/v1/me/notifications/${notificationId}/dismiss/`),
   listProviderServiceRequests: (orgSlug, params) =>
     api.get('/api/v1/provider-service-requests/', { params: { organization: orgSlug, ...params } }),
   getServiceInquiry: (orgSlug, inquiryId) =>

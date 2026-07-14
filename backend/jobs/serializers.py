@@ -12,6 +12,7 @@ from .models import (
     AvailabilitySlot,
     Booking,
     BookingStatusEvent,
+    CustomerNotification,
     CustomerServiceInquiry,
     Invoice,
     ProviderNotification,
@@ -149,6 +150,21 @@ class ProviderNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProviderNotification
         fields = ('id', 'kind', 'message', 'week_start', 'created_at')
+        read_only_fields = fields
+
+
+class CustomerNotificationSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(
+        source='organization.name', read_only=True, allow_null=True,
+    )
+    booking_id = serializers.IntegerField(source='booking.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = CustomerNotification
+        fields = (
+            'id', 'kind', 'title', 'message', 'link_path',
+            'organization_name', 'booking_id', 'created_at',
+        )
         read_only_fields = fields
 
 

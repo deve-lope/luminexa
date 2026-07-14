@@ -197,22 +197,31 @@ export default function ProviderTodayPage() {
         </div>
       </header>
 
-      {(dashboard.notifications || []).map((n) => (
+      {(dashboard.notifications || []).map((n) => {
+        const toRequests =
+          n.kind === 'new_customer_booking' ||
+          n.kind === 'customer_cancelled_booking' ||
+          n.kind === 'customer_reschedule_request';
+        return (
         <div
           key={n.id}
           className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm"
         >
           <div>
             <p className="font-medium text-amber-900">{n.message}</p>
-            <Link to={providerSchedule(orgSlug)} className="mt-1 inline-block text-luminexa-accent">
-              Open schedule
+            <Link
+              to={toRequests ? providerRequests(orgSlug) : providerSchedule(orgSlug)}
+              className="mt-1 inline-block text-luminexa-accent"
+            >
+              {toRequests ? 'Open requests' : 'Open schedule'}
             </Link>
           </div>
           <button type="button" onClick={() => dismissNotification(n.id)} className="text-xs text-amber-800">
             Dismiss
           </button>
         </div>
-      ))}
+        );
+      })}
 
       {(() => {
         const pendingCount =

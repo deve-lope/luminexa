@@ -44,7 +44,7 @@ export function requestFilterLabel(filter) {
   const labels = {
     all: 'All',
     pending: 'Pending',
-    active: 'Active',
+    active: 'Jobs',
     done: 'Done',
   };
   return labels[filter] || filter;

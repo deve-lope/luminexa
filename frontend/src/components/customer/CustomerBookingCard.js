@@ -122,7 +122,7 @@ export default function CustomerBookingCard({
             providerName={
               booking.invoice.provider_name || booking.organization_name
             }
-            compact
+            showBreakdown
           />
         </div>
       )}

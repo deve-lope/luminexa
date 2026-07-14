@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid';
@@ -10,7 +10,7 @@ import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { DEFAULT_RADIUS_MILES } from '../../constants/locationSearch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { businessesAPI } from '../../utils/api';
+import { businessesAPI, jobsAPI } from '../../utils/api';
 import { canRescheduleBooking, isUntouchedBookingRequest } from '../../utils/customerBookings';
 import { formatWhen } from '../../utils/datetime';
 import { customerBookings, customerFind } from '../../utils/customerPaths';
@@ -89,6 +89,14 @@ export default function CustomerHomePage() {
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [rescheduleBooking, setRescheduleBooking] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+
+  const loadNotifications = useCallback(() => {
+    jobsAPI
+      .listMyNotifications()
+      .then((res) => setNotifications(res.data?.results || []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +115,19 @@ export default function CustomerHomePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const dismissNotification = async (id) => {
+    try {
+      await jobsAPI.dismissMyNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch {
+      showToast('Could not dismiss notification.', 'error');
+    }
+  };
 
   const trimmedQuery = query.trim();
   const hasPostalFilter = isPostalSearchReady(searchPostal);
@@ -181,6 +202,46 @@ export default function CustomerHomePage() {
 
   return (
     <div className="space-y-6 pb-4 lg:space-y-8">
+      {notifications.length > 0 && (
+        <section className="space-y-2" aria-label="Updates">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="lx-eyebrow">Updates</p>
+              <h2 className="lx-section-title mt-1">From your providers</h2>
+            </div>
+          </div>
+          <ul className="space-y-2">
+            {notifications.map((n) => (
+              <li
+                key={n.id}
+                className="flex items-start gap-3 rounded-2xl border border-teal-100 bg-teal-50/80 px-4 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{n.title}</p>
+                  <p className="mt-0.5 text-sm text-slate-700">{n.message}</p>
+                  {n.link_path && (
+                    <Link
+                      to={n.link_path}
+                      className="mt-2 inline-flex text-sm font-medium text-luminexa-accent"
+                    >
+                      View details →
+                    </Link>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dismissNotification(n.id)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-white hover:text-slate-800"
+                  aria-label="Dismiss"
+                >
+                  Dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {!isSearching && (
         <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
           <header className="lx-hero flex min-h-0 flex-col">

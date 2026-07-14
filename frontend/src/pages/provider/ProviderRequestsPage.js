@@ -91,7 +91,9 @@ export default function ProviderRequestsPage() {
           <p className="mt-1 text-sm text-slate-500">
             {filter === 'all'
               ? 'When customers book or send a custom request, it will show up here.'
-              : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
+              : filter === 'active'
+                ? 'Approved jobs will show up here.'
+                : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
           </p>
         </div>
       )}

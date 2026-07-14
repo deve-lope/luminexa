@@ -14,6 +14,11 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 
 urlpatterns = [
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
+    path('me/notifications/', views.CustomerNotificationsAPIView.as_view()),
+    path(
+        'me/notifications/<int:notification_id>/dismiss/',
+        views.CustomerNotificationDismissAPIView.as_view(),
+    ),
     path('provider-dashboard/', dashboard_views.ProviderDashboardAPIView.as_view()),
     path('provider-analytics/', analytics_views.ProviderAnalyticsAPIView.as_view()),
     path('provider-service-requests/', service_request_views.ProviderServiceRequestsAPIView.as_view()),

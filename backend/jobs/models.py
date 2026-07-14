@@ -167,6 +167,8 @@ class ProviderNotification(models.Model):
     class Kind(models.TextChoices):
         FLEXI_NO_SLOTS_NEXT_WEEK = 'flexi_no_slots_next_week', 'No slots open next week'
         NEW_CUSTOMER_BOOKING = 'new_customer_booking', 'New customer booking'
+        CUSTOMER_CANCELLED_BOOKING = 'customer_cancelled_booking', 'Customer cancelled booking'
+        CUSTOMER_RESCHEDULE_REQUEST = 'customer_reschedule_request', 'Customer reschedule request'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -180,6 +182,50 @@ class ProviderNotification(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['organization', 'kind', 'week_start'])]
+
+
+class CustomerNotification(models.Model):
+    """In-app alerts for customers (booking updates, invoices)."""
+
+    class Kind(models.TextChoices):
+        BOOKING_CONFIRMED = 'booking_confirmed', 'Booking confirmed'
+        BOOKING_DECLINED = 'booking_declined', 'Booking declined'
+        BOOKING_CANCELLED = 'booking_cancelled', 'Booking cancelled'
+        BOOKING_RESCHEDULED = 'booking_rescheduled', 'Booking rescheduled'
+        BOOKING_COMPLETED = 'booking_completed', 'Booking completed'
+        INVOICE_READY = 'invoice_ready', 'Invoice ready'
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='customer_notifications',
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='customer_notifications',
+        null=True,
+        blank=True,
+    )
+    booking = models.ForeignKey(
+        'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='customer_notifications',
+    )
+    kind = models.CharField(max_length=40, choices=Kind.choices)
+    title = models.CharField(max_length=200)
+    message = models.CharField(max_length=500)
+    link_path = models.CharField(max_length=300, blank=True, default='')
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', 'dismissed_at', '-created_at']),
+        ]
 
 
 class CustomerServiceInquiry(models.Model):
