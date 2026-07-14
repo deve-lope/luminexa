@@ -1,0 +1,40 @@
+# Luminexa — dev stack (ports 3001 / 9002). Can run alongside prod-local stack.
+# Env: .env.docker.dev only
+name: luminexa-dev
+
+services:
+  web-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: luminexa-web-dev
+    ports:
+      - "127.0.0.1:9002:9001"
+    env_file:
+      - .env.docker.dev
+    environment:
+      DJANGO_SETTINGS_MODULE: luminexa.settings
+      DEBUG: "True"
+    volumes:
+      - ./backend:/app
+    command: python manage.py runserver 0.0.0.0:9001
+    restart: unless-stopped
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: luminexa-frontend-dev
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      REACT_APP_API_URL: http://127.0.0.1:9002
+      REACT_APP_PUBLIC_URL: http://localhost:3001
+      WDS_SOCKET_HOST: 127.0.0.1
+      WDS_SOCKET_PORT: "3001"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - web-dev
+    restart: unless-stopped
