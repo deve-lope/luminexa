@@ -1,0 +1,29 @@
+---
+description: Multi-location OrganizationLocation model and settings UX
+globs: backend/businesses/models.py,frontend/src/components/provider/ProviderServiceAreaSettings.js,backend/jobs/views.py
+alwaysApply: false
+---
+
+# Provider locations (branches)
+
+Full detail: `docs/PRODUCT_RULES.md` § Locations.
+
+## Binding rules
+
+- `OrganizationLocation` (migration `businesses.0017`) holds service pins; search matches **any** active location.
+- Primary location syncs to `Organization.service_*` (`service_postal_code`, lat/lng, `service_radius_miles`) via `sync_org_primary_from_location` / serializers — keep that mirror intact.
+- Max locations: `OrganizationLocation.MAX_PER_ORGANIZATION` (**20**). Enforce in API (`jobs/views.py` locations create) and UI.
+- When adding a **2nd+** location, `ProviderServiceAreaSettings` must show a choice:
+  1. Register a **separate** business (`/register/business`) — own staff/calendar/policy
+  2. **Add location on this profile** — shared schedule/settings; customers find either pin
+- Do not remove that choice UX or auto-add a second location without it.
+
+## Do not “simplify”
+
+- Do not collapse back to a single `Organization.service_*` pin only.
+- Do not skip primary ↔ org field sync (storefront and legacy fallbacks depend on it).
+
+## See also
+
+- Search dual-radius: `.cursor/rules/location-search.mdc`
+- Tests: `businesses.tests.test_location_radius` (API + multi-branch match)

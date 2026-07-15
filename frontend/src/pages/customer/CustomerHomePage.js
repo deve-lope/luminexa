@@ -85,6 +85,8 @@ export default function CustomerHomePage() {
   const [query, setQuery] = useState('');
   const [searchPostal, setSearchPostal] = useState('');
   const [searchRadius, setSearchRadius] = useState(DEFAULT_RADIUS_MILES);
+  const [searchLat, setSearchLat] = useState(null);
+  const [searchLng, setSearchLng] = useState(null);
   const [searchAreaLabel, setSearchAreaLabel] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -131,9 +133,11 @@ export default function CustomerHomePage() {
 
   const trimmedQuery = query.trim();
   const hasPostalFilter = isPostalSearchReady(searchPostal);
+  const hasCoordsFilter = searchLat != null && searchLng != null;
+  const hasLocationFilter = hasPostalFilter || hasCoordsFilter;
 
   useEffect(() => {
-    if (trimmedQuery.length < 2 && !hasPostalFilter) {
+    if (trimmedQuery.length < 2 && !hasLocationFilter) {
       setSearchResults(null);
       setSearchLoading(false);
       return undefined;
@@ -143,9 +147,16 @@ export default function CustomerHomePage() {
     const timer = setTimeout(() => {
       const params = {};
       if (trimmedQuery.length >= 2) params.q = trimmedQuery;
-      if (hasPostalFilter) {
-        params.postal = normalizePostalInput(searchPostal);
+      if (hasLocationFilter) {
         params.radius_miles = searchRadius;
+        // Prefer geocoded lat/lng so radius miles actually filter by distance.
+        if (hasCoordsFilter) {
+          params.lat = searchLat;
+          params.lng = searchLng;
+        }
+        if (hasPostalFilter) {
+          params.postal = normalizePostalInput(searchPostal);
+        }
       }
       businessesAPI
         .discoverServices(params)
@@ -163,7 +174,16 @@ export default function CustomerHomePage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmedQuery, hasPostalFilter, searchPostal, searchRadius]);
+  }, [
+    trimmedQuery,
+    hasLocationFilter,
+    hasPostalFilter,
+    hasCoordsFilter,
+    searchPostal,
+    searchRadius,
+    searchLat,
+    searchLng,
+  ]);
 
   const filteredTypes = useMemo(() => {
     const types = home?.business_types || [];
@@ -177,7 +197,22 @@ export default function CustomerHomePage() {
     );
   }, [home?.business_types, trimmedQuery]);
 
-  const isSearching = trimmedQuery.length >= 2 || hasPostalFilter;
+  const isSearching = trimmedQuery.length >= 2 || hasLocationFilter;
+
+  const handleLocationReady = useCallback(({ label, lat, lng }) => {
+    setSearchAreaLabel(label || '');
+    setSearchLat(lat != null ? Number(lat) : null);
+    setSearchLng(lng != null ? Number(lng) : null);
+  }, []);
+
+  const handlePostalChange = useCallback((value) => {
+    setSearchPostal(value);
+    if (!isPostalSearchReady(value)) {
+      setSearchLat(null);
+      setSearchLng(null);
+      setSearchAreaLabel('');
+    }
+  }, []);
   const firstName = (user?.full_name || '').split(' ')[0] || 'there';
 
   if (loading) {
@@ -292,10 +327,10 @@ export default function CustomerHomePage() {
             <div className="mt-4 flex-1 border-t border-slate-900/5 pt-4">
               <PostalRadiusFields
                 postal={searchPostal}
-                onPostalChange={setSearchPostal}
+                onPostalChange={handlePostalChange}
                 radiusMiles={searchRadius}
                 onRadiusChange={setSearchRadius}
-                onLocationReady={({ label }) => setSearchAreaLabel(label || '')}
+                onLocationReady={handleLocationReady}
                 idPrefix="home-search"
               />
             </div>
@@ -323,10 +358,10 @@ export default function CustomerHomePage() {
           <div className="mt-4 border-t border-slate-900/5 pt-4">
             <PostalRadiusFields
               postal={searchPostal}
-              onPostalChange={setSearchPostal}
+              onPostalChange={handlePostalChange}
               radiusMiles={searchRadius}
               onRadiusChange={setSearchRadius}
-              onLocationReady={({ label }) => setSearchAreaLabel(label || '')}
+              onLocationReady={handleLocationReady}
               idPrefix="home-search"
             />
           </div>

@@ -44,7 +44,7 @@ class PublicProviderStorefrontAPIView(APIView):
         if org:
             org = (
                 Organization.objects.filter(pk=org.pk)
-                .prefetch_related('gallery_images', 'business_types')
+                .prefetch_related('gallery_images', 'business_types', 'locations')
                 .first()
             )
         if not org:
@@ -131,7 +131,8 @@ class PublicServiceCalendarAPIView(APIView):
                 start_at__gte=range_start,
                 start_at__lte=range_end,
             )
-            .select_related('service')
+            .select_related('organization', 'service')
+            .prefetch_related('bookings')
             .order_by('start_at')
         )
 
@@ -139,17 +140,19 @@ class PublicServiceCalendarAPIView(APIView):
         slots_by_day = defaultdict(list)
         for slot in slots_qs:
             day_key = timezone.localtime(slot.start_at).strftime('%Y-%m-%d')
+            remaining = slot.remaining_capacity()
             # Hide past and within-lead-time slots from the customer booking UI.
-            is_open = (
-                slot.status == AvailabilitySlot.Status.OPEN
-                and slot.start_at >= bookable_after
-            )
+            # Capacity > 1 keeps a slot bookable until all seats are taken.
+            is_open = remaining > 0 and slot.start_at >= bookable_after
             entry = {
                 'id': slot.id,
                 'start_at': slot.start_at.isoformat(),
                 'end_at': slot.end_at.isoformat(),
                 'status': slot.status,
                 'available': is_open,
+                'capacity': slot.capacity,
+                'occupied_count': slot.capacity - remaining,
+                'remaining_capacity': remaining,
             }
             slots_by_day[day_key].append(entry)
             if day_key not in days_meta:

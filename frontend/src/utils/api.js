@@ -74,6 +74,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/verify-email',
   '/accept-staff-invite',
   '/services',
+  '/privacy',
+  '/privacy-policy',
 ];
 
 function isPublicPath(pathname) {
@@ -159,6 +161,12 @@ export const businessesAPI = {
 
 export const orgProfileAPI = {
   patchOrganization: (orgSlug, data) => api.patch(`/api/v1/organizations/${orgSlug}/`, data),
+  listLocations: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/locations/`),
+  createLocation: (orgSlug, data) => api.post(`/api/v1/organizations/${orgSlug}/locations/`, data),
+  updateLocation: (orgSlug, locationId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/locations/${locationId}/`, data),
+  deleteLocation: (orgSlug, locationId) =>
+    api.delete(`/api/v1/organizations/${orgSlug}/locations/${locationId}/`),
   listGallery: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/gallery/`),
   uploadGalleryImage: (orgSlug, formData) =>
     api.post(`/api/v1/organizations/${orgSlug}/gallery/`, formData),

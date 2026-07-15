@@ -1,0 +1,30 @@
+---
+description: Dual-radius ZIP/miles search — customer ∩ provider location radius
+globs: backend/businesses/location.py,backend/businesses/api_views.py,frontend/src/pages/customer/CustomerFindPage.js,frontend/src/pages/customer/CustomerHomePage.js,frontend/src/components/customer/LocationSearchBar.js,frontend/src/pages/ServicesBrowsePage.js
+alwaysApply: false
+---
+
+# Location search (dual radius)
+
+Full detail: `docs/PRODUCT_RULES.md` § Search.
+
+## Binding rules
+
+- A provider is visible only when **both** are true for at least one active location:
+  1. `distance <= customer radius_miles`
+  2. `distance <= that location’s radius_miles` (`OrganizationLocation.radius_miles`, or legacy `Organization.service_radius_miles`)
+- Core function: `organization_distances_within_radius` in `backend/businesses/location.py`. Do not replace with customer-radius-only filtering.
+- Prefer **lat/lng + radius_miles** on Find / Home / Services browse. Still send **postal** when available so ungeocoded providers with a matching ZIP/postal prefix are included (distance treated as 0).
+- `ServicesBrowsePage` must send lat/lng when coords exist — not postal-only.
+- Multi-location: org matches if **any** active branch satisfies dual radius (nearest matching distance is returned).
+
+## Do not “simplify”
+
+- Do not drop provider service radius and search by customer miles alone.
+- Do not geocode-only and skip the postal fallback for ungeocoded rows.
+- Do not require every org to have coords before appearing when postal matches.
+
+## See also
+
+- Tests: `businesses.tests.test_location_radius`
+- Multi-location UX: `.cursor/rules/provider-locations.mdc`

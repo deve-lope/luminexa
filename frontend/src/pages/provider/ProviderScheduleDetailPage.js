@@ -500,18 +500,32 @@ export default function ProviderScheduleDetailPage() {
 
   if (kind === 'slot') {
     const hasBooking = data.booking_id;
+    const capacity = Number(data.capacity) || 1;
+    const occupied = Number(data.occupied_count) || 0;
+    const remaining = Number(data.remaining_capacity);
+    const spotsLeft = Number.isFinite(remaining) ? remaining : Math.max(0, capacity - occupied);
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white shadow-lg">
           <p className="text-sm text-emerald-100 capitalize">{data.status}</p>
           <h1 className="mt-1 text-2xl font-bold">{data.service_name}</h1>
           <p className="mt-2 text-white/90">{formatWhen(data.start_at)}</p>
+          {capacity > 1 && (
+            <p className="mt-2 text-sm text-emerald-50">
+              {occupied} of {capacity} spots filled
+              {spotsLeft > 0 ? ` · ${spotsLeft} still open` : ' · full'}
+            </p>
+          )}
         </header>
 
         {hasBooking ? (
           <>
             <section className="rounded-xl bg-white p-5 shadow-sm">
-              <p className="text-sm text-slate-600">This slot has a booking attached.</p>
+              <p className="text-sm text-slate-600">
+                {capacity > 1
+                  ? 'This time has one or more bookings. Open the latest booking for details.'
+                  : 'This slot has a booking attached.'}
+              </p>
               <button
                 type="button"
                 onClick={() =>
@@ -519,7 +533,7 @@ export default function ProviderScheduleDetailPage() {
                 }
                 className="mt-4 w-full min-h-[48px] rounded-xl bg-luminexa-accent font-medium text-white"
               >
-                View full booking details
+                View booking details
               </button>
             </section>
             {data.customer_name && (
@@ -537,7 +551,11 @@ export default function ProviderScheduleDetailPage() {
           </>
         ) : (
           <section className="rounded-xl bg-white p-5 shadow-sm">
-            <p className="text-slate-600">Open slot — no customer booked yet.</p>
+            <p className="text-slate-600">
+              {capacity > 1
+                ? `Open slot — up to ${capacity} customers can book this time.`
+                : 'Open slot — no customer booked yet.'}
+            </p>
           </section>
         )}
       </div>

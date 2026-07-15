@@ -110,6 +110,7 @@ def booking_policy_meta(org, customer):
         'schedule_valid_until': org.schedule_valid_until,
         'booking_policy': org.booking_policy,
         'cancel_cutoff_hours': org.cancel_cutoff_hours,
+        'concurrent_capacity': max(1, int(getattr(org, 'concurrent_capacity', 1) or 1)),
         'requires_approval': org.booking_policy == Organization.BookingPolicy.APPROVAL,
         'instant_confirm': org.booking_policy == Organization.BookingPolicy.INSTANT,
         'clients_only': org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY,
@@ -122,10 +123,19 @@ def booking_policy_meta(org, customer):
 
 
 def release_slot(slot):
+    """Recompute slot status after a booking frees a seat (cancel / decline / reschedule)."""
     if not slot:
         return
-    slot.status = AvailabilitySlot.Status.OPEN
-    slot.save(update_fields=['status', 'updated_at'])
+    slot.refresh_status(save=True)
+
+
+def _lock_slot(slot):
+    """Row-lock a slot for capacity-safe booking mutations."""
+    return (
+        AvailabilitySlot.objects.select_for_update()
+        .select_related('organization', 'service')
+        .get(pk=slot.pk)
+    )
 
 
 @transaction.atomic
@@ -136,11 +146,12 @@ def provider_book_customer(
         raise ValidationError({'service': 'Service does not belong to this organization.'})
     ensure_customer_membership(org, customer, approve=True)
     if slot:
+        slot = _lock_slot(slot)
         if slot.organization_id != org.id:
             raise ValidationError({'slot_id': 'Slot does not match organization.'})
         if slot.service_id and slot.service_id != service.id:
             raise ValidationError({'slot_id': 'Slot does not match the selected service.'})
-        if slot.status != AvailabilitySlot.Status.OPEN:
+        if not slot.is_bookable():
             raise ValidationError({'slot_id': 'This slot is not available.'})
         if slot.start_at != start_at or slot.end_at != end_at:
             raise ValidationError({'slot_id': 'Slot times must match the booking times.'})
@@ -159,17 +170,17 @@ def provider_book_customer(
         service_address=(service_address or '').strip(),
     )
     if slot:
-        slot.status = AvailabilitySlot.Status.BOOKED
-        slot.save(update_fields=['status', 'updated_at'])
+        slot.refresh_status(save=True)
     return booking
 
 
 @transaction.atomic
 def customer_request_slot(*, slot, customer, notes='', service_address='', service=None):
+    slot = _lock_slot(slot)
     org = slot.organization
     require_booking_contact(customer)
 
-    if slot.status != AvailabilitySlot.Status.OPEN:
+    if not slot.is_bookable():
         raise ValidationError({'slot_id': 'This slot is no longer available.'})
     assert_slot_bookable_for_customer(slot)
 
@@ -199,10 +210,8 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
 
     if org.booking_policy == Organization.BookingPolicy.INSTANT:
         booking_status = Booking.Status.CONFIRMED
-        slot_status = AvailabilitySlot.Status.BOOKED
     else:
         booking_status = Booking.Status.REQUESTED
-        slot_status = AvailabilitySlot.Status.PENDING
 
     book_service = slot.service or service
     if not book_service:
@@ -234,8 +243,7 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
         customer_notes=notes or '',
         service_address=resolved_address,
     )
-    slot.status = slot_status
-    slot.save(update_fields=['status', 'updated_at'])
+    slot.refresh_status(save=True)
     return booking
 
 
@@ -302,9 +310,8 @@ def accept_booking_request(booking, staff_user):
     booking.booked_by = staff_user
     booking.save(update_fields=['status', 'booked_by', 'updated_at'])
     if booking.availability_slot_id:
-        slot = booking.availability_slot
-        slot.status = AvailabilitySlot.Status.BOOKED
-        slot.save(update_fields=['status', 'updated_at'])
+        slot = _lock_slot(booking.availability_slot)
+        slot.refresh_status(save=True)
     from .message_services import post_booking_approval_message
 
     post_booking_approval_message(booking=booking, sender=staff_user)
@@ -318,7 +325,7 @@ def decline_booking_request(booking):
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=['status', 'updated_at'])
     if booking.availability_slot_id:
-        release_slot(booking.availability_slot)
+        release_slot(_lock_slot(booking.availability_slot))
     return booking
 
 
@@ -359,7 +366,7 @@ def cancel_booking(booking, *, by_user):
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=['status', 'updated_at'])
     if booking.availability_slot_id:
-        release_slot(booking.availability_slot)
+        release_slot(_lock_slot(booking.availability_slot))
     return booking
 
 
@@ -396,6 +403,9 @@ def complete_booking(booking, *, staff_user):
         raise PermissionDenied('Only staff can complete bookings.')
     booking.status = Booking.Status.COMPLETED
     booking.save(update_fields=['status', 'updated_at'])
+    if booking.availability_slot_id:
+        # Completed jobs free a seat so remaining capacity can be booked again.
+        release_slot(_lock_slot(booking.availability_slot))
     return booking
 
 
@@ -403,11 +413,12 @@ def complete_booking(booking, *, staff_user):
 def reschedule_booking(booking, *, new_slot, by_user):
     if booking.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
         raise ValidationError({'status': 'Only active bookings can be rescheduled.'})
-    if new_slot.status != AvailabilitySlot.Status.OPEN:
+    new_slot = _lock_slot(new_slot)
+    if not new_slot.is_bookable():
         raise ValidationError({'slot_id': 'The new slot is not available.'})
     if new_slot.organization_id != booking.organization_id:
         raise ValidationError({'slot_id': 'Slot must belong to the same business.'})
-    if new_slot.service_id != booking.service_id:
+    if new_slot.service_id and new_slot.service_id != booking.service_id:
         raise ValidationError({'slot_id': 'Slot must be for the same service.'})
     is_customer = booking.customer_id == by_user.id
     is_staff = OrganizationMembership.objects.filter(
@@ -441,8 +452,8 @@ def reschedule_booking(booking, *, new_slot, by_user):
     elif new_slot.start_at <= timezone.now():
         raise ValidationError({'slot_id': 'Cannot reschedule to a past slot.'})
     old_slot = booking.availability_slot
-    if old_slot:
-        release_slot(old_slot)
+    if old_slot and old_slot.pk != new_slot.pk:
+        old_slot = _lock_slot(old_slot)
     booking.availability_slot = new_slot
     booking.start_at = new_slot.start_at
     booking.end_at = new_slot.end_at
@@ -451,15 +462,15 @@ def reschedule_booking(booking, *, new_slot, by_user):
     # original booking was already confirmed or the business uses instant booking.
     if is_customer:
         booking.status = Booking.Status.REQUESTED
-        new_slot.status = AvailabilitySlot.Status.PENDING
     else:
         # Provider reschedules take effect immediately — no customer approval needed.
         booking.status = Booking.Status.CONFIRMED
-        new_slot.status = AvailabilitySlot.Status.BOOKED
     booking.save(update_fields=[
         'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at', 'updated_at',
     ])
-    new_slot.save(update_fields=['status', 'updated_at'])
+    new_slot.refresh_status(save=True)
+    if old_slot and old_slot.pk != new_slot.pk:
+        release_slot(old_slot)
     return booking
 
 
@@ -483,7 +494,7 @@ def mark_booking_no_show(booking, *, staff_user):
     booking.customer_notes += '[Marked no-show by provider]'
     booking.save(update_fields=['status', 'customer_notes', 'updated_at'])
     if booking.availability_slot_id:
-        release_slot(booking.availability_slot)
+        release_slot(_lock_slot(booking.availability_slot))
     return booking
 
 
@@ -525,7 +536,8 @@ def schedule_return_visit(booking, *, new_slot, staff_user, note=''):
         raise ValidationError({
             'booking': 'Schedule the return visit from the original booking, not from a return visit.',
         })
-    if new_slot.status != AvailabilitySlot.Status.OPEN:
+    new_slot = _lock_slot(new_slot)
+    if not new_slot.is_bookable():
         raise ValidationError({'slot_id': 'The selected slot is not available.'})
     if new_slot.organization_id != booking.organization_id:
         raise ValidationError({'slot_id': 'Slot must belong to the same business.'})
@@ -571,6 +583,5 @@ def schedule_return_visit(booking, *, new_slot, staff_user, note=''):
         customer_notes='\n\n'.join(child_notes_parts),
         service_address=booking.service_address or '',
     )
-    new_slot.status = AvailabilitySlot.Status.BOOKED
-    new_slot.save(update_fields=['status', 'updated_at'])
+    new_slot.refresh_status(save=True)
     return return_booking

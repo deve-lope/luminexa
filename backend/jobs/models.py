@@ -364,6 +364,75 @@ class AvailabilitySlot(models.Model):
     def __str__(self):
         return f'{self.organization.slug} {self.start_at:%Y-%m-%d %H:%M} ({self.status})'
 
+    @property
+    def capacity(self):
+        """How many simultaneous bookings this slot accepts (from org setting)."""
+        return max(1, int(getattr(self.organization, 'concurrent_capacity', 1) or 1))
+
+    def occupying_bookings_qs(self):
+        """Active bookings that consume a capacity seat on this slot."""
+        return self.bookings.exclude(
+            status__in=(
+                Booking.Status.CANCELLED,
+                Booking.Status.COMPLETED,
+            ),
+        )
+
+    def _occupying_bookings_list(self):
+        """Prefer prefetched bookings when available to avoid N+1 queries."""
+        cache = getattr(self, '_prefetched_objects_cache', None)
+        if cache is not None and 'bookings' in cache:
+            excluded = {Booking.Status.CANCELLED, Booking.Status.COMPLETED}
+            return [b for b in self.bookings.all() if b.status not in excluded]
+        return list(self.occupying_bookings_qs().select_related('customer').order_by('-id'))
+
+    def occupied_count(self):
+        return len(self._occupying_bookings_list())
+
+    def remaining_capacity(self):
+        return max(0, self.capacity - self.occupied_count())
+
+    def is_bookable(self):
+        return self.remaining_capacity() > 0
+
+    def primary_booking(self):
+        """Newest occupying booking (for schedule UI that expects a single booking)."""
+        occupying = self._occupying_bookings_list()
+        if not occupying:
+            return None
+        return max(occupying, key=lambda b: b.id)
+
+    def refresh_status(self, *, save=True):
+        """
+        Derive open / pending / booked from remaining capacity and booking states.
+        Slot stays open while seats remain so additional customers can book.
+        """
+        occupying = list(
+            self.occupying_bookings_qs().values_list('status', flat=True)
+        )
+        remaining = max(0, self.capacity - len(occupying))
+        if remaining > 0:
+            new_status = self.Status.OPEN
+        elif not occupying:
+            new_status = self.Status.OPEN
+        elif any(
+            s in (
+                Booking.Status.CONFIRMED,
+                Booking.Status.IN_PROGRESS,
+                Booking.Status.NEEDS_RETURN,
+            )
+            for s in occupying
+        ):
+            new_status = self.Status.BOOKED
+        else:
+            new_status = self.Status.PENDING
+
+        if self.status != new_status:
+            self.status = new_status
+            if save:
+                self.save(update_fields=['status', 'updated_at'])
+        return self.status
+
 
 class Booking(models.Model):
     class Status(models.TextChoices):
@@ -387,12 +456,13 @@ class Booking(models.Model):
         on_delete=models.CASCADE,
         related_name='bookings_as_customer',
     )
-    availability_slot = models.OneToOneField(
+    availability_slot = models.ForeignKey(
         AvailabilitySlot,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='booking',
+        related_name='bookings',
+        help_text='Time window this booking occupies. Multiple bookings may share a slot up to org capacity.',
     )
     parent_booking = models.ForeignKey(
         'self',

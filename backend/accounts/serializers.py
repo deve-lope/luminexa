@@ -74,6 +74,13 @@ class RegisterBusinessSerializer(serializers.Serializer):
         default=Organization.BookingPolicy.APPROVAL,
         required=False,
     )
+    concurrent_capacity = serializers.IntegerField(
+        required=False,
+        default=1,
+        min_value=1,
+        max_value=50,
+        help_text='How many people can work / take bookings at the same time.',
+    )
     service_city = serializers.CharField(
         max_length=120, required=False, allow_blank=True, default='',
     )
@@ -155,6 +162,8 @@ class RegisterBusinessSerializer(serializers.Serializer):
         type_slugs = validated_data.pop('business_type_slugs')
         business_name = validated_data.pop('business_name')
         booking_policy = validated_data.pop('booking_policy', Organization.BookingPolicy.APPROVAL)
+        concurrent_capacity = int(validated_data.pop('concurrent_capacity', 1) or 1)
+        concurrent_capacity = max(1, min(50, concurrent_capacity))
         service_city = (validated_data.pop('service_city', '') or '').strip()
         service_postal_code = (validated_data.pop('service_postal_code', '') or '').strip()
         service_state = (validated_data.pop('service_state', '') or '').strip()
@@ -179,6 +188,7 @@ class RegisterBusinessSerializer(serializers.Serializer):
             profile_public=True,
             is_active=True,
             booking_policy=booking_policy,
+            concurrent_capacity=concurrent_capacity,
             service_city=service_city,
             service_postal_code=service_postal_code,
             service_state=service_state,
@@ -188,6 +198,8 @@ class RegisterBusinessSerializer(serializers.Serializer):
         org.business_types.set(types)
         if service_city or service_postal_code:
             assign_org_coordinates(org)
+        from businesses.location import ensure_primary_location
+        ensure_primary_location(org)
         OrganizationMembership.objects.create(
             organization=org,
             user=user,

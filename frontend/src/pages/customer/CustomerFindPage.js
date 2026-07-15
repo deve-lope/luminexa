@@ -40,11 +40,13 @@ export default function CustomerFindPage() {
     setError(null);
     // Prefer lat/lng from the selected address — more accurate than re-geocoding
     // a postal that may have been resolved under the wrong country (e.g. en-US → US).
+    // Still send postal when available so ungeocoded providers with a matching ZIP are included.
     const params = { radius_miles: radiusMiles };
     if (hasCoords) {
       params.lat = locationLat;
       params.lng = locationLng;
-    } else {
+    }
+    if (isPostalSearchReady(postal)) {
       params.postal = normalizePostalInput(postal);
     }
     const q = query.trim();
@@ -322,7 +324,8 @@ export default function CustomerFindPage() {
                       <div className="lx-empty">
                         <p className="text-slate-600">No services found in this area.</p>
                         <p className="mt-2 text-sm text-slate-500">
-                          Try a different ZIP / postal code, widen the radius, or search by service name.
+                          Providers only appear if you are inside their service area and your search
+                          radius. Try another ZIP, widen the radius, or search by service name.
                         </p>
                         {hasFilter && (
                           <button

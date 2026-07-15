@@ -4,6 +4,7 @@ from .models import (
     BusinessType,
     Organization,
     OrganizationGalleryImage,
+    OrganizationLocation,
     OrganizationMembership,
     PostalGeocode,
     StaffInvitation,
@@ -24,6 +25,16 @@ class OrganizationGalleryImageInline(admin.TabularInline):
     max_num = OrganizationGalleryImage.MAX_PER_ORGANIZATION
 
 
+class OrganizationLocationInline(admin.TabularInline):
+    model = OrganizationLocation
+    extra = 0
+    max_num = OrganizationLocation.MAX_PER_ORGANIZATION
+    fields = (
+        'name', 'is_primary', 'is_active', 'address', 'city', 'state',
+        'postal_code', 'latitude', 'longitude', 'radius_miles', 'sort_order',
+    )
+
+
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = (
@@ -33,7 +44,17 @@ class OrganizationAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'slug')
     filter_horizontal = ('business_types',)
-    inlines = [OrganizationGalleryImageInline]
+    inlines = [OrganizationLocationInline, OrganizationGalleryImageInline]
+
+
+@admin.register(OrganizationLocation)
+class OrganizationLocationAdmin(admin.ModelAdmin):
+    list_display = (
+        'organization', 'name', 'city', 'postal_code', 'is_primary',
+        'is_active', 'radius_miles', 'latitude', 'longitude',
+    )
+    list_filter = ('is_primary', 'is_active')
+    search_fields = ('organization__slug', 'name', 'city', 'postal_code')
 
 
 @admin.register(PostalGeocode)

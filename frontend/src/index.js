@@ -10,16 +10,31 @@ root.render(
   </React.StrictMode>
 );
 
-// Localhost/IP debugging: never register a service worker — it caches hashed
- // bundles across rebuilds and breaks the home page (HTML served as JS).
- // On the public domain we still clear old workers once, then stay SW-free for now.
+function isLocalDevHost() {
+  const host = window.location.hostname;
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '[::1]' ||
+    host.endsWith('.local')
+  );
+}
+
+// Localhost: never register — SW caching broke CRA hot rebuilds before.
+// Production / public host: register the shell SW for PWA installability.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.getRegistrations().then((regs) => {
-      regs.forEach((reg) => reg.unregister());
-    });
-    if (window.caches) {
-      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+    if (isLocalDevHost()) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
+      if (window.caches) {
+        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+      }
+      return;
     }
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Installability still works once SW is reachable; ignore transient errors.
+    });
   });
 }

@@ -78,13 +78,18 @@ def apply_unavailable_side_effects(organization, start_at, end_at) -> dict:
         decline_booking_request(booking)
         pending_declined += 1
 
+    # Only remove empty open slots; partially filled capacity slots keep their bookings.
     open_qs = AvailabilitySlot.objects.filter(
         organization=organization,
         status=AvailabilitySlot.Status.OPEN,
         start_at__lt=end_at,
         end_at__gt=start_at,
     )
-    open_removed, _ = open_qs.delete()
+    empty_ids = [
+        slot.id for slot in open_qs.prefetch_related('bookings')
+        if slot.occupied_count() == 0
+    ]
+    open_removed, _ = AvailabilitySlot.objects.filter(id__in=empty_ids).delete()
 
     return {
         'open_slots_removed': open_removed,

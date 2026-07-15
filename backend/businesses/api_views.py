@@ -432,13 +432,22 @@ def _apply_service_filters(
                         is_active=True,
                         profile_public=True,
                     ),
+                    search_postal=p,
                 )
                 if dist_map:
                     qs = qs.filter(organization_id__in=dist_map.keys())
                 else:
                     qs = qs.none()
             else:
-                qs = qs.filter(organization__service_postal_code__istartswith=p)
+                from .models import OrganizationLocation
+                matching_ids = OrganizationLocation.objects.filter(
+                    is_active=True,
+                    postal_code__istartswith=p,
+                ).values_list('organization_id', flat=True)
+                qs = qs.filter(
+                    Q(organization_id__in=matching_ids)
+                    | Q(organization__service_postal_code__istartswith=p)
+                )
     if city:
         qs = qs.filter(organization__service_city__icontains=city.strip())
     if state:
@@ -470,9 +479,16 @@ def _filter_organizations_by_location(orgs, *, postal='', city='', state='', rad
     center = resolve_coordinates(p, city=city, state=state)
     if center:
         lat, lng = center
-        dist_map = organization_distances_within_radius(lat, lng, miles, base_qs=orgs)
+        dist_map = organization_distances_within_radius(
+            lat, lng, miles, base_qs=orgs, search_postal=p,
+        )
         return orgs.filter(id__in=dist_map.keys()) if dist_map else orgs.none(), dist_map
-    return orgs.filter(service_postal_code__istartswith=p), {}
+    from .models import OrganizationLocation
+    matching_ids = OrganizationLocation.objects.filter(
+        is_active=True,
+        postal_code__istartswith=p,
+    ).values_list('organization_id', flat=True)
+    return orgs.filter(Q(id__in=matching_ids) | Q(service_postal_code__istartswith=p)), {}
 
 
 def _location_search_meta(postal, city, state, radius_miles, dist_map):
@@ -662,6 +678,7 @@ def public_services_browse_api(request):
                 center_lng,
                 miles,
                 base_qs=Organization.objects.filter(is_active=True, profile_public=True),
+                search_postal=postal,
             )
             qs = _bookable_services_queryset()
             qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
@@ -685,6 +702,14 @@ def public_services_browse_api(request):
                 'business_types': types_payload,
                 'services': services,
                 'count': len(services),
+                'location_search': {
+                    'postal': normalize_postal_code(postal) if postal else '',
+                    'radius_miles': miles,
+                    'geocoded': True,
+                    'lat': center_lat,
+                    'lng': center_lng,
+                    'result_count': len(dist_map),
+                },
                 'availability_search': (
                     {
                         'date_from': availability_window['date_from'],
@@ -781,8 +806,8 @@ def customer_discover_api(request):
     raw_lat = request.query_params.get('lat')
     raw_lng = request.query_params.get('lng')
 
-    # Support lat/lng direct coordinate search (same as public browse API)
-    if raw_lat and raw_lng and not postal:
+    # Prefer lat/lng when present (even alongside postal) so "within X miles" is real distance.
+    if raw_lat and raw_lng:
         try:
             center_lat = float(raw_lat)
             center_lng = float(raw_lng)
@@ -792,6 +817,7 @@ def customer_discover_api(request):
                 center_lng,
                 miles,
                 base_qs=Organization.objects.filter(is_active=True, profile_public=True),
+                search_postal=postal,
             )
             qs = _bookable_services_queryset()
             qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
@@ -804,11 +830,24 @@ def customer_discover_api(request):
             orgs_qs = Organization.objects.filter(
                 is_active=True, profile_public=True, id__in=dist_map.keys()
             ).order_by('name')[:15]
-            types_qs = _business_types_for_discover()[:12]
+            types_qs = _business_types_for_discover()
+            if q:
+                types_qs = types_qs.filter(
+                    Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=q.lower()),
+                )
+            types_qs = types_qs[:12]
             return Response({
                 'business_types': BusinessTypeSerializer(types_qs, many=True).data,
                 'providers': PublicProviderCardSerializer(orgs_qs, many=True, context=ctx).data,
                 'services': services,
+                'location_search': {
+                    'postal': normalize_postal_code(postal) if postal else '',
+                    'radius_miles': miles,
+                    'geocoded': True,
+                    'lat': center_lat,
+                    'lng': center_lng,
+                    'result_count': len(dist_map),
+                },
             })
         except (ValueError, TypeError):
             pass

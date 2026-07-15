@@ -547,6 +547,9 @@ function SiteFooter() {
           <Link to="/login" className="hover:text-teal-700">
             Sign in
           </Link>
+          <Link to="/privacy" className="hover:text-teal-700">
+            Privacy
+          </Link>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">

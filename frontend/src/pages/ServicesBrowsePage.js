@@ -17,11 +17,15 @@ export default function ServicesBrowsePage({ embedded = false }) {
   const [viewMode, setViewMode] = useState('list');
   const [query, setQuery] = useState('');
   const [postal, setPostal] = useState('');
+  const [locationLat, setLocationLat] = useState(null);
+  const [locationLng, setLocationLng] = useState(null);
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [types, setTypes] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const hasCoords = locationLat != null && locationLng != null;
 
   const loadBrowse = useCallback(() => {
     setLoading(true);
@@ -29,7 +33,15 @@ export default function ServicesBrowsePage({ embedded = false }) {
     const params = {};
     const q = query.trim();
     if (q) params.q = q;
-    if (isPostalSearchReady(postal)) {
+    // Prefer lat/lng from address selection; postal alone is a fallback.
+    if (hasCoords) {
+      params.lat = locationLat;
+      params.lng = locationLng;
+      params.radius_miles = radiusMiles;
+      if (isPostalSearchReady(postal)) {
+        params.postal = normalizePostalInput(postal);
+      }
+    } else if (isPostalSearchReady(postal)) {
       params.postal = normalizePostalInput(postal);
       params.radius_miles = radiusMiles;
     }
@@ -43,7 +55,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
-  }, [query, postal, radiusMiles]);
+  }, [query, postal, locationLat, locationLng, hasCoords, radiusMiles]);
 
   useEffect(() => {
     const timer = setTimeout(loadBrowse, 250);
@@ -72,8 +84,10 @@ export default function ServicesBrowsePage({ embedded = false }) {
     return `/login?next=${encodeURIComponent(path)}`;
   };
 
-  const handleLocationChange = useCallback(({ postal: nextPostal, radiusMiles: r }) => {
+  const handleLocationChange = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
     setPostal(normalizePostalInput(nextPostal || ''));
+    setLocationLat(lat != null ? Number(lat) : null);
+    setLocationLng(lng != null ? Number(lng) : null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -83,11 +97,16 @@ export default function ServicesBrowsePage({ embedded = false }) {
 
   const handleLocationClear = useCallback(() => {
     setPostal('');
+    setLocationLat(null);
+    setLocationLng(null);
     setRadiusMiles(DEFAULT_RADIUS_MILES);
   }, []);
 
-  const handleMapLocationSearch = useCallback(({ postal: nextPostal, radiusMiles: r }) => {
+  const handleMapLocationSearch = useCallback(({ postal: nextPostal, lat, lng, radiusMiles: r }) => {
     if (nextPostal) setPostal(normalizePostalInput(nextPostal));
+    else if (lat != null && lng != null) setPostal('');
+    setLocationLat(lat != null ? Number(lat) : null);
+    setLocationLng(lng != null ? Number(lng) : null);
     if (r != null) setRadiusMiles(r);
   }, []);
 
@@ -144,6 +163,9 @@ export default function ServicesBrowsePage({ embedded = false }) {
         <CustomerSearchMapView
           services={services}
           onLocationSearch={handleMapLocationSearch}
+          initialLat={locationLat}
+          initialLng={locationLng}
+          initialRadius={radiusMiles}
         />
       ) : (
         <>

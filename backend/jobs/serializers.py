@@ -95,7 +95,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'public_ref', 'slug', 'tagline', 'description',
             'logo', 'banner', 'profile_public', 'is_active', 'booking_policy',
-            'cancel_cutoff_hours',
+            'cancel_cutoff_hours', 'concurrent_capacity',
             'scheduling_mode', 'schedule_valid_from', 'schedule_valid_until',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
@@ -110,6 +110,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
         value = int(value)
         if value < 0 or value > 720:
             raise serializers.ValidationError('Use 0–720 hours (0 = no cutoff).')
+        return value
+
+    def validate_concurrent_capacity(self, value):
+        if value is None:
+            return 1
+        value = int(value)
+        if value < 1 or value > 50:
+            raise serializers.ValidationError('Use 1–50 people working at the same time.')
         return value
 
     def validate_logo(self, value):
@@ -152,11 +160,46 @@ class OrganizationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         instance = super().create(validated_data)
         self._maybe_geocode(instance, validated_data)
+        from businesses.location import ensure_primary_location
+        ensure_primary_location(instance)
         return instance
 
     def update(self, instance, validated_data):
         instance = super().update(instance, validated_data)
         self._maybe_geocode(instance, validated_data)
+        location_keys = (
+            'service_postal_code', 'service_city', 'service_state', 'service_address',
+            'service_latitude', 'service_longitude', 'service_radius_miles',
+        )
+        if any(k in validated_data for k in location_keys):
+            from businesses.location import ensure_primary_location
+            from businesses.models import OrganizationLocation
+            primary = ensure_primary_location(instance)
+            if primary:
+                primary.address = instance.service_address or ''
+                primary.city = instance.service_city or ''
+                primary.state = instance.service_state or ''
+                primary.postal_code = instance.service_postal_code or ''
+                primary.latitude = instance.service_latitude
+                primary.longitude = instance.service_longitude
+                primary.radius_miles = instance.service_radius_miles or 25
+                primary.save()
+            elif any([
+                instance.service_address, instance.service_city, instance.service_postal_code,
+                instance.service_latitude is not None,
+            ]):
+                OrganizationLocation.objects.create(
+                    organization=instance,
+                    name='Primary',
+                    is_primary=True,
+                    address=instance.service_address or '',
+                    city=instance.service_city or '',
+                    state=instance.service_state or '',
+                    postal_code=instance.service_postal_code or '',
+                    latitude=instance.service_latitude,
+                    longitude=instance.service_longitude,
+                    radius_miles=instance.service_radius_miles or 25,
+                )
         return instance
 
 
@@ -404,8 +447,11 @@ class UnavailableBlockSerializer(serializers.ModelSerializer):
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
     service_name = serializers.SerializerMethodField()
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
-    booking_id = serializers.IntegerField(source='booking.id', read_only=True, allow_null=True)
-    booking_status = serializers.CharField(source='booking.status', read_only=True, allow_null=True)
+    booking_id = serializers.SerializerMethodField()
+    booking_status = serializers.SerializerMethodField()
+    capacity = serializers.SerializerMethodField()
+    occupied_count = serializers.SerializerMethodField()
+    remaining_capacity = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
     service_address = serializers.SerializerMethodField()
@@ -415,12 +461,15 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'organization', 'organization_slug', 'service', 'service_name',
             'start_at', 'end_at', 'status', 'booking_id', 'booking_status',
+            'capacity', 'occupied_count', 'remaining_capacity',
             'customer_name', 'customer_phone', 'service_address',
             'created_by', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'organization_slug', 'service_name', 'status',
-            'booking_id', 'booking_status', 'customer_name', 'customer_phone',
+            'booking_id', 'booking_status',
+            'capacity', 'occupied_count', 'remaining_capacity',
+            'customer_name', 'customer_phone',
             'service_address', 'created_by', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -430,8 +479,25 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     def get_service_name(self, obj):
         return obj.service.name if obj.service_id else 'Any service'
 
+    def get_capacity(self, obj):
+        return obj.capacity
+
+    def get_occupied_count(self, obj):
+        return obj.occupied_count()
+
+    def get_remaining_capacity(self, obj):
+        return obj.remaining_capacity()
+
+    def get_booking_id(self, obj):
+        b = self._booking(obj)
+        return b.id if b else None
+
+    def get_booking_status(self, obj):
+        b = self._booking(obj)
+        return b.status if b else None
+
     def _booking(self, obj):
-        return getattr(obj, 'booking', None)
+        return obj.primary_booking()
 
     def _can_see_customer_pii(self, obj):
         """Only org staff may see booking customer details on slots."""
@@ -459,6 +525,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             return None
         b = self._booking(obj)
         return (b.service_address or '') if b else None
+
     def validate(self, attrs):
         org = attrs.get('organization') or (self.instance.organization if self.instance else None)
         service = attrs.get('service') or (self.instance.service if self.instance else None)
@@ -945,6 +1012,7 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     banner_url = serializers.SerializerMethodField()
     gallery = serializers.SerializerMethodField()
     rating_summary = serializers.SerializerMethodField()
+    locations = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -953,6 +1021,7 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
             'booking_policy', 'gallery', 'rating_summary',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
+            'locations',
         )
 
     def get_logo_url(self, obj):
@@ -968,6 +1037,12 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     def get_rating_summary(self, obj):
         from .ratings import aggregate_organization_ratings
         return aggregate_organization_ratings(obj)
+
+    def get_locations(self, obj):
+        from businesses.serializers import OrganizationLocationSerializer
+
+        locs = obj.locations.filter(is_active=True).order_by('-is_primary', 'sort_order', 'id')
+        return OrganizationLocationSerializer(locs, many=True).data
 
 
 class PublicServiceGalleryImageSerializer(serializers.ModelSerializer):

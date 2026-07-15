@@ -144,6 +144,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         allowed = {
             'tagline', 'description', 'profile_public', 'booking_policy', 'name',
             'logo', 'banner', 'scheduling_mode', 'cancel_cutoff_hours',
+            'concurrent_capacity',
             'schedule_valid_from', 'schedule_valid_until',
             'service_city', 'service_state', 'service_postal_code', 'service_address',
             'service_latitude', 'service_longitude', 'service_radius_miles',
@@ -163,6 +164,103 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can delete the organization.')
         instance.delete()
+
+    @action(detail=True, methods=['get', 'post'], url_path='locations')
+    def locations(self, request, slug=None):
+        """List or create service locations / branches for this organization."""
+        from businesses.location import (
+            assign_location_coordinates,
+            ensure_primary_location,
+            set_primary_location,
+            sync_org_primary_from_location,
+        )
+        from businesses.models import OrganizationLocation
+        from businesses.serializers import OrganizationLocationSerializer
+
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+
+        if request.method == 'GET':
+            ensure_primary_location(org)
+            locs = org.locations.all().order_by('-is_primary', 'sort_order', 'id')
+            return Response(OrganizationLocationSerializer(locs, many=True).data)
+
+        m = membership_for(request.user, org)
+        if not m or m.role != OrganizationMembership.Role.OWNER:
+            raise PermissionDenied('Only the owner can add locations.')
+        if org.locations.count() >= OrganizationLocation.MAX_PER_ORGANIZATION:
+            raise ValidationError({
+                'detail': f'You can add at most {OrganizationLocation.MAX_PER_ORGANIZATION} locations.',
+            })
+
+        ser = OrganizationLocationSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        make_primary = bool(ser.validated_data.get('is_primary')) or not org.locations.exists()
+        location = ser.save(organization=org, is_primary=False)
+        if location.latitude is None and (location.postal_code or location.city):
+            assign_location_coordinates(location)
+        if make_primary:
+            set_primary_location(org, location)
+        else:
+            sync_org_primary_from_location(location)
+        return Response(
+            OrganizationLocationSerializer(location).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['get', 'patch', 'delete'],
+        url_path=r'locations/(?P<location_id>[^/.]+)',
+    )
+    def location_detail(self, request, slug=None, location_id=None):
+        from businesses.location import (
+            assign_location_coordinates,
+            set_primary_location,
+            sync_org_primary_from_location,
+        )
+        from businesses.models import OrganizationLocation
+        from businesses.serializers import OrganizationLocationSerializer
+
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+        try:
+            location = org.locations.get(pk=location_id)
+        except (OrganizationLocation.DoesNotExist, ValueError, TypeError):
+            raise ValidationError({'detail': 'Location not found.'})
+
+        if request.method == 'GET':
+            return Response(OrganizationLocationSerializer(location).data)
+
+        m = membership_for(request.user, org)
+        if not m or m.role != OrganizationMembership.Role.OWNER:
+            raise PermissionDenied('Only the owner can change locations.')
+
+        if request.method == 'DELETE':
+            was_primary = location.is_primary
+            location.delete()
+            if was_primary:
+                next_loc = org.locations.filter(is_active=True).order_by('id').first()
+                if next_loc:
+                    set_primary_location(org, next_loc)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        ser = OrganizationLocationSerializer(location, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        make_primary = ser.validated_data.pop('is_primary', None)
+        location = ser.save()
+        if (
+            location.latitude is None
+            and any(k in request.data for k in ('postal_code', 'city', 'state', 'address'))
+        ):
+            assign_location_coordinates(location)
+        if make_primary is True:
+            set_primary_location(org, location)
+        elif location.is_primary:
+            sync_org_primary_from_location(location)
+        return Response(OrganizationLocationSerializer(location).data)
 
     @action(detail=True, methods=['get'], url_path='booking-context')
     def booking_context(self, request, slug=None):
@@ -717,8 +815,8 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         slug = self.request.query_params.get('organization')
 
         qs = AvailabilitySlot.objects.select_related(
-            'organization', 'service', 'booking', 'booking__customer',
-        )
+            'organization', 'service',
+        ).prefetch_related('bookings__customer')
 
         if slug:
             org = Organization.objects.filter(slug=slug, is_active=True).first()
@@ -771,6 +869,8 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if not is_org_staff(self.request.user, instance.organization):
             raise PermissionDenied('Only owners and staff can delete slots.')
+        if instance.occupied_count() > 0:
+            raise ValidationError('Only slots with no active bookings can be deleted.')
         if instance.status != AvailabilitySlot.Status.OPEN:
             raise ValidationError('Only open slots with no pending booking can be deleted.')
         org = instance.organization

@@ -71,6 +71,14 @@ class Organization(models.Model):
             '0 = no cutoff (cancel anytime before start).'
         ),
     )
+    concurrent_capacity = models.PositiveIntegerField(
+        default=1,
+        help_text=(
+            'How many people can work at the same time. '
+            'Each open slot can accept this many simultaneous bookings '
+            '(e.g. 2 employees → 2 customers at the same time).'
+        ),
+    )
     scheduling_mode = models.CharField(
         max_length=20,
         choices=SchedulingMode.choices,
@@ -166,6 +174,71 @@ class Organization(models.Model):
             return ZoneInfo(self.timezone or 'UTC')
         except (ZoneInfoNotFoundError, ValueError):
             return ZoneInfo('UTC')
+
+    def primary_location(self):
+        """Primary service location, or first active location as fallback."""
+        locs = getattr(self, 'locations', None)
+        if locs is None:
+            return None
+        primary = locs.filter(is_active=True, is_primary=True).first()
+        if primary:
+            return primary
+        return locs.filter(is_active=True).order_by('id').first()
+
+
+class OrganizationLocation(models.Model):
+    """
+    A physical service area / branch for an organization.
+    Search matches customers against any active location.
+    Organization.service_* fields mirror the primary location for compatibility.
+    """
+
+    MAX_PER_ORGANIZATION = 20
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='locations',
+    )
+    name = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        help_text='Optional label, e.g. Downtown or North branch',
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text='Primary location is shown on the storefront and used for billing address defaults.',
+    )
+    address = models.CharField(max_length=300, blank=True, default='')
+    city = models.CharField(max_length=120, blank=True, default='', db_index=True)
+    state = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    postal_code = models.CharField(max_length=12, blank=True, default='', db_index=True)
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    radius_miles = models.DecimalField(
+        max_digits=5, decimal_places=1, default=25,
+        help_text='How far from this pin the business serves customers.',
+    )
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_primary', 'sort_order', 'id']
+        indexes = [
+            models.Index(fields=['organization', 'is_active']),
+            models.Index(fields=['latitude', 'longitude']),
+        ]
+
+    def __str__(self):
+        label = (self.name or '').strip() or (self.city or '').strip() or self.postal_code or 'Location'
+        return f'{self.organization.slug}: {label}'
 
 
 class OrganizationGalleryImage(models.Model):

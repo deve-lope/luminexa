@@ -22,6 +22,7 @@ export default function RegisterBusinessPage() {
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [bookingPolicy, setBookingPolicy] = useState('approval');
+  const [concurrentCapacity, setConcurrentCapacity] = useState(1);
   const [selectedSlugs, setSelectedSlugs] = useState([]);
   const [serviceCity, setServiceCity] = useState('');
   const [servicePostalCode, setServicePostalCode] = useState('');
@@ -80,6 +81,7 @@ export default function RegisterBusinessPage() {
         password,
         business_name: businessName,
         booking_policy: bookingPolicy,
+        concurrent_capacity: Math.max(1, Math.min(50, Number(concurrentCapacity) || 1)),
         business_type_slugs: selectedSlugs,
       };
       if (phone.trim()) payload.phone = phone.trim();
@@ -235,6 +237,28 @@ export default function RegisterBusinessPage() {
                       </span>
                     </label>
                   ))}
+                </div>
+                <div className="mt-5 border-t border-slate-100 pt-4">
+                  <label
+                    htmlFor="register-concurrent-capacity"
+                    className="block text-sm font-semibold text-slate-900"
+                  >
+                    People working at the same time
+                  </label>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                    If two employees can take appointments at once, set this to 2. You can change
+                    this later in settings.
+                  </p>
+                  <input
+                    id="register-concurrent-capacity"
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
+                    value={concurrentCapacity}
+                    onChange={(e) => setConcurrentCapacity(e.target.value)}
+                    className="lx-input mt-3 max-w-[10rem]"
+                  />
                 </div>
               </section>
 

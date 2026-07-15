@@ -38,9 +38,12 @@ export default function usePwaInstall() {
     }
 
     const handler = (e) => {
+      // Only take over the install UI if we will show our banner.
+      // preventDefault without prompt() makes Chrome log a console warning.
+      if (wasDismissedRecently()) return;
       e.preventDefault();
       deferredPrompt.current = e;
-      if (!wasDismissedRecently()) setCanInstall(true);
+      setCanInstall(true);
     };
 
     window.addEventListener('beforeinstallprompt', handler);

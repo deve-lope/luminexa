@@ -556,7 +556,12 @@ export default function CustomerBookServicePage() {
                               : 'border-slate-200 bg-white text-slate-800 hover:border-violet-300 hover:bg-violet-50/50'
                           }`}
                         >
-                          {formatTimeRange(slot.start_at, slot.end_at)}
+                          <span className="block">{formatTimeRange(slot.start_at, slot.end_at)}</span>
+                          {Number(slot.capacity) > 1 && Number(slot.remaining_capacity) > 0 && (
+                            <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
+                              {slot.remaining_capacity} of {slot.capacity} spots left
+                            </span>
+                          )}
                         </button>
                       </li>
                     );

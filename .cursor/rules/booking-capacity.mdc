@@ -1,0 +1,31 @@
+---
+description: Concurrent booking capacity — slot stays open while seats remain
+globs: backend/jobs/**,frontend/src/components/provider/BookingPolicySettings.js,frontend/src/pages/customer/**Book*
+alwaysApply: false
+---
+
+# Booking capacity (concurrent workers)
+
+Full detail: `docs/PRODUCT_RULES.md` § Capacity.
+
+## Binding rules
+
+- `Organization.concurrent_capacity` (default **1**, min 1) = how many bookings may occupy the **same** `AvailabilitySlot` at once (mobile crews or shop chairs).
+- Slot is bookable while `remaining_capacity() > 0`. Do **not** mark the slot fully booked / hide it from customers after the first seat is taken.
+- `Booking.availability_slot` is a **ForeignKey** (`related_name='bookings'`), **not** OneToOne. Migration `jobs.0025` — do not revert to OneToOne.
+- Capacity helpers live on `AvailabilitySlot`: `capacity`, `occupied_count()`, `remaining_capacity()`, `is_bookable()`, `refresh_status()`.
+- `refresh_status()` keeps status **OPEN** while remaining seats > 0 so additional customers can book.
+- Settings UI: signup (`RegisterBusinessPage`) + Provider Settings → **“People working at the same time”** (`BookingPolicySettings.js`). Label must stay that phrase.
+- Occupying statuses exclude `cancelled` and `completed` only.
+
+## Do not “simplify”
+
+- Do not treat one booking as exclusive ownership of a slot when capacity > 1.
+- Do not invent per-slot capacity fields; capacity comes from the org setting.
+- Customer calendar must expose `remaining_capacity` / `available` so a half-filled slot still shows as bookable.
+---
+
+## See also
+
+- Tests: `jobs.tests.test_bookings` (`test_concurrent_capacity_*`)
+- Playbook: `docs/AGENT_PLAYBOOK.md`

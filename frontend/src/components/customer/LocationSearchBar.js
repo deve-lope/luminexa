@@ -276,7 +276,10 @@ export default function LocationSearchBar({
               <span className="font-semibold text-slate-700">{orgsOnMap.length}</span> provider{orgsOnMap.length !== 1 ? 's' : ''} in this area — tap a marker to see services.
             </p>
           ) : (
-            <p className="text-xs text-slate-500">No providers found in this area. Try widening the radius.</p>
+            <p className="text-xs text-slate-500">
+              No providers serve this area. Some businesses only travel a shorter distance than your
+              search — try another ZIP or a wider radius.
+            </p>
           )}
         </>
       )}

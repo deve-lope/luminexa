@@ -17,6 +17,7 @@ export default function BookingPolicySettings({
 }) {
   const [policy, setPolicy] = useState('approval');
   const [cancelCutoffHours, setCancelCutoffHours] = useState(24);
+  const [concurrentCapacity, setConcurrentCapacity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -32,6 +33,9 @@ export default function BookingPolicySettings({
         if (res.data?.cancel_cutoff_hours != null) {
           setCancelCutoffHours(Number(res.data.cancel_cutoff_hours));
         }
+        if (res.data?.concurrent_capacity != null) {
+          setConcurrentCapacity(Number(res.data.concurrent_capacity) || 1);
+        }
       })
       .catch(() => setError('Could not load booking settings.'))
       .finally(() => setLoading(false));
@@ -44,11 +48,14 @@ export default function BookingPolicySettings({
     setError(null);
     try {
       const cutoff = Math.max(0, Math.min(720, Number(cancelCutoffHours) || 0));
+      const capacity = Math.max(1, Math.min(50, Number(concurrentCapacity) || 1));
       await jobsAPI.patchOrganization(orgSlug, {
         booking_policy: policy,
         cancel_cutoff_hours: cutoff,
+        concurrent_capacity: capacity,
       });
       setCancelCutoffHours(cutoff);
+      setConcurrentCapacity(capacity);
       setMessage('Booking rules saved.');
       onSaved?.(policy);
     } catch (e) {
@@ -70,7 +77,7 @@ export default function BookingPolicySettings({
         {organizationName ? ` Applies to ${organizationName}.` : ''}
       </p>
 
-      {!isOwner ? (
+          {!isOwner ? (
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
           Only the business owner can change booking rules. Current mode:{' '}
           <strong>{BOOKING_POLICIES.find((p) => p.value === policy)?.label || policy}</strong>
@@ -80,7 +87,8 @@ export default function BookingPolicySettings({
               ? 'anytime before start'
               : `${cancelCutoffHours} hours before start`}
           </strong>
-          .
+          . People working at once:{' '}
+          <strong>{concurrentCapacity}</strong>.
         </p>
       ) : (
         <>
@@ -115,6 +123,26 @@ export default function BookingPolicySettings({
               . After approval, they can book open slots.
             </p>
           )}
+
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <label htmlFor="concurrent-capacity" className="block text-sm font-medium text-slate-900">
+              People working at the same time
+            </label>
+            <p className="mt-1 text-sm text-slate-600">
+              How many employees or chairs can take appointments simultaneously. For example, set
+              this to 2 if two people work and both can take bookings for the same time slot.
+            </p>
+            <input
+              id="concurrent-capacity"
+              type="number"
+              min={1}
+              max={50}
+              step={1}
+              value={concurrentCapacity}
+              onChange={(e) => setConcurrentCapacity(e.target.value)}
+              className="mt-3 w-full max-w-[10rem] rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
 
           <div className="mt-5 border-t border-slate-100 pt-4">
             <label htmlFor="cancel-cutoff" className="block text-sm font-medium text-slate-900">

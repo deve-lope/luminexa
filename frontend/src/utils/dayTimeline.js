@@ -57,7 +57,13 @@ function typeAt(ms, { slots, unavailable, workingWindows }) {
     if (inWindow(ms, st, en)) {
       if (s.status === 'booked') return 'booked';
       if (s.status === 'pending') return 'pending';
-      if (s.status === 'open') return 'open';
+      // Partially filled capacity slots stay "open" for more bookings, but show as
+      // pending on the timeline so staff can see someone is already booked.
+      if (s.status === 'open') {
+        const occupied = Number(s.occupied_count) || 0;
+        if (occupied > 0) return 'pending';
+        return 'open';
+      }
     }
   }
   for (const u of unavailable) {

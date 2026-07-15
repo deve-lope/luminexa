@@ -501,6 +501,9 @@ export default function CustomerBookMultipleServicesPage() {
                                 }`}
                               >
                                 {formatTimeRange(slot.start_at, slot.end_at)}
+                                {Number(slot.capacity) > 1 && Number(slot.remaining_capacity) > 0
+                                  ? ` · ${slot.remaining_capacity} left`
+                                  : ''}
                               </button>
                             );
                           })}

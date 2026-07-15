@@ -48,7 +48,22 @@ def miles_to_km_label(miles: float) -> str:
 
 
 def organization_service_area_label(org) -> str:
-    """Marketplace-style service coverage label."""
+    """Marketplace-style service coverage label (all active locations)."""
+    active = list(
+        org.locations.filter(is_active=True).order_by('-is_primary', 'sort_order', 'id')
+    )
+    if len(active) > 1:
+        places = []
+        for loc in active[:3]:
+            place = ', '.join(p for p in [loc.city, loc.state] if p) or loc.postal_code or loc.name
+            if place:
+                places.append(place)
+        more = len(active) - len(places)
+        joined = ', '.join(places)
+        if more > 0:
+            joined = f'{joined} +{more} more'
+        return f'{len(active)} locations · {joined}' if joined else f'{len(active)} service locations'
+
     radius = parse_radius_miles(getattr(org, 'service_radius_miles', None) or 25)
     radius_label = miles_to_km_label(radius)
     short = organization_location_short(org) or (org.service_address or '').strip()
