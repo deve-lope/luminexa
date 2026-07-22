@@ -53,8 +53,9 @@ export default function CompleteBookingInvoiceModal({
         base_price: booking.service_base_price,
         price_max: booking.service_price_max,
         show_price: true,
+        currency: booking.currency,
       },
-      undefined,
+      booking.currency,
       { forceShowPrice: true }
     );
   }, [booking]);

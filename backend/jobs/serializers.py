@@ -26,6 +26,13 @@ from .models import (
     WeeklyScheduleBlock,
 )
 from .ratings import aggregate_service_ratings
+from .tax_rates import currency_for_organization
+
+
+def _organization_currency(organization) -> str:
+    if not organization:
+        return 'CAD'
+    return currency_for_organization(organization)
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -349,6 +356,7 @@ class ServiceSerializer(serializers.ModelSerializer):
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     rating_summary = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
@@ -357,12 +365,15 @@ class ServiceSerializer(serializers.ModelSerializer):
             'name', 'description', 'image',
             'duration_minutes', 'pricing_type', 'base_price', 'price_max',
             'show_price', 'allow_request', 'fulfillment_kind', 'is_active', 'sort_order',
-            'rating_summary', 'created_at', 'updated_at',
+            'currency', 'rating_summary', 'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'organization_slug', 'category_name', 'rating_summary',
+            'id', 'organization_slug', 'category_name', 'currency', 'rating_summary',
             'created_at', 'updated_at',
         )
+
+    def get_currency(self, obj):
+        return _organization_currency(obj.organization)
 
     def get_rating_summary(self, obj):
         return aggregate_service_ratings(obj.reviews.all())
@@ -596,6 +607,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     return_visit_start_at = serializers.SerializerMethodField()
     return_visit_status = serializers.SerializerMethodField()
     invoice = InvoiceSerializer(read_only=True)
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -608,10 +620,13 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'customer_notes', 'service_address', 'status_events',
             'parent_booking_id', 'return_visit_id', 'return_visit_start_at', 'return_visit_status',
-            'invoice',
+            'invoice', 'currency',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
+
+    def get_currency(self, obj):
+        return _organization_currency(obj.organization)
 
     def get_job_location(self, obj):
         return (obj.service_address or '').strip()
@@ -687,6 +702,7 @@ class BookingSerializer(serializers.ModelSerializer):
     invoice = InvoiceSerializer(read_only=True)
     can_rate = serializers.SerializerMethodField()
     my_review = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         source='availability_slot',
@@ -706,7 +722,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_email', 'customer_phone',
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
-            'parent_booking_id', 'invoice', 'can_rate', 'my_review',
+            'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -717,7 +733,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'cancel_cutoff_hours', 'can_customer_cancel', 'can_customer_reschedule',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
-            'parent_booking_id', 'invoice', 'can_rate', 'my_review',
+            'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -730,6 +746,9 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return f'BK-{obj.pk:05d}'
+
+    def get_currency(self, obj):
+        return _organization_currency(obj.organization)
 
     def get_job_location(self, obj):
         return (obj.service_address or '').strip()
@@ -1013,6 +1032,7 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
     gallery = serializers.SerializerMethodField()
     rating_summary = serializers.SerializerMethodField()
     locations = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -1021,8 +1041,11 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
             'booking_policy', 'gallery', 'rating_summary',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
-            'locations',
+            'locations', 'currency',
         )
+
+    def get_currency(self, obj):
+        return _organization_currency(obj)
 
     def get_logo_url(self, obj):
         return _absolute_media_url(self.context.get('request'), obj.logo)
@@ -1118,6 +1141,7 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     rating_summary = serializers.SerializerMethodField()
     shop_location = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
@@ -1126,7 +1150,11 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
             'pricing_type', 'base_price', 'price_max', 'show_price', 'allow_request',
             'fulfillment_kind', 'shop_location',
             'category_id', 'category_name', 'sort_order', 'image_url', 'rating_summary',
+            'currency',
         )
+
+    def get_currency(self, obj):
+        return _organization_currency(obj.organization)
 
     def get_image_url(self, obj):
         return _absolute_media_url(self.context.get('request'), obj.image)

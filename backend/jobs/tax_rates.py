@@ -123,6 +123,15 @@ def infer_country_from_region(region: str) -> str:
     return ''
 
 
+def currency_for_country(country: str) -> str:
+    """Display / invoice currency from tax country (US → USD, else CAD)."""
+    return 'USD' if country == 'US' else 'CAD'
+
+
+def currency_for_organization(organization) -> str:
+    return resolve_business_jurisdiction(organization)['currency']
+
+
 def resolve_business_jurisdiction(organization) -> dict[str, str]:
     """Tax jurisdiction from organization business / service address."""
     region = normalize_region(getattr(organization, 'service_state', '') or '')
@@ -134,11 +143,10 @@ def resolve_business_jurisdiction(organization) -> dict[str, str]:
         country = 'US'
     if not country:
         country = infer_country_from_region(region)
-    currency = 'CAD' if country == 'CA' else 'USD' if country == 'US' else 'CAD'
     return {
         'tax_country': country,
         'tax_region': region if country else '',
-        'currency': currency,
+        'currency': currency_for_country(country),
         'business_state': (getattr(organization, 'service_state', '') or '').strip(),
         'business_city': (getattr(organization, 'service_city', '') or '').strip(),
     }
@@ -182,7 +190,7 @@ def calculate_tax(*, subtotal: Decimal, country: str, region: str) -> dict[str, 
         'total': total,
         'tax_country': country or '',
         'tax_region': normalize_region(region),
-        'currency': 'CAD' if country == 'CA' else 'USD' if country == 'US' else 'CAD',
+        'currency': currency_for_country(country),
     }
 
 

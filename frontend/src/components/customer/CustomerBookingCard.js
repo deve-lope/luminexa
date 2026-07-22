@@ -20,13 +20,17 @@ import { providerCustomerKey } from '../../utils/providerRouteKey';
 import { jobsAPI } from '../../utils/api';
 import { formatJobLocationLabel } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
+import StarRating from '../services/StarRating';
 
 function ReviewSnippet({ review }) {
   if (!review) return null;
   return (
     <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-amber-800/70">Your rating</p>
-      <p className="mt-1 text-sm font-semibold text-amber-600">★ {review.average}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <StarRating value={review.average} />
+        <span className="text-sm font-semibold text-amber-800">{review.average}</span>
+      </div>
       {review.comment ? (
         <p className="mt-1 text-sm text-slate-700 line-clamp-3">{review.comment}</p>
       ) : (

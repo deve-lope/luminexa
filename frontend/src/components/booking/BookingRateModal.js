@@ -22,7 +22,14 @@ export default function BookingRateModal({
       if (e.key === 'Escape' && !submitting) onClose?.();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Keep the dialog in view near the top of the viewport (mobile sheet used to sit at bottom).
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open, submitting, onClose]);
 
   if (!open || !booking) return null;
@@ -49,7 +56,7 @@ export default function BookingRateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-6 sm:items-center sm:pt-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rate-booking-title"

@@ -62,6 +62,52 @@ def send_login_otp_email(email: str, code: str, *, full_name: str = '') -> bool:
         return False
 
 
+def send_email_verification_otp(email: str, code: str, *, full_name: str = '') -> bool:
+    try:
+        send_mail(
+            subject='Your Luminexa verification code',
+            message=(
+                f'Hi {full_name or "there"},\n\n'
+                'Thanks for registering your business on Luminexa. '
+                f'Your email verification code is: {code}\n\n'
+                'It expires in 10 minutes. After verifying, sign in with your password.\n'
+                'If you did not sign up, you can ignore this email.\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception('Failed to send verification OTP to %s', email)
+        return False
+
+
+def send_account_deletion_email(user, confirm_url: str) -> bool:
+    try:
+        send_mail(
+            subject='Confirm your Luminexa account deletion',
+            message=(
+                f'Hi {user.full_name or "there"},\n\n'
+                'We received a request to permanently delete your Luminexa account and '
+                'personal data. To confirm, use the link below (it expires shortly):\n\n'
+                f'{confirm_url}\n\n'
+                'What happens: your profile details (name, email, phone, address) are removed '
+                'and your account is closed. Some booking / invoice records may be kept in '
+                'anonymized form where required by law.\n\n'
+                'If you did not request this, you can safely ignore this email — nothing will '
+                'be deleted.\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception('Failed to send account deletion email to %s', user.email)
+        return False
+
+
 def send_password_reset_email(user, reset_url: str) -> bool:
     try:
         send_mail(

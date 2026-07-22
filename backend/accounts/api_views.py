@@ -12,7 +12,13 @@ from rest_framework.views import APIView
 from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
 
 from .auth_cookies import clear_auth_cookie, set_auth_cookie
-from .emails import send_email_verification, send_login_otp_email, send_password_reset_email
+from .deletion import anonymize_user
+from .emails import (
+    send_account_deletion_email,
+    send_email_verification_otp,
+    send_login_otp_email,
+    send_password_reset_email,
+)
 from .models import User
 from .otp import issue_login_code, normalize_email, user_uses_password_login, verify_login_code
 from .serializers import (
@@ -28,13 +34,14 @@ from .serializers import (
     ResendVerificationSerializer,
     UserSerializer,
 )
-from .tokens import email_verification_token
+from .tokens import account_deletion_token, email_verification_token
 
 
 def _registration_pending_response(user, *, organization=None):
     payload = {
-        'detail': 'Check your email to verify your account before signing in.',
+        'detail': 'We sent a verification code to your email. Enter it to confirm your account.',
         'requires_verification': True,
+        'requires_otp': True,
         'email': user.email,
     }
     if organization is not None:
@@ -53,9 +60,15 @@ def _issue_auth_token(user):
     set_auth_cookie(response, token.key)
     return response
 
+
 def _send_customer_otp(email: str, *, full_name: str = '') -> None:
     code = issue_login_code(email)
     send_login_otp_email(email, code, full_name=full_name)
+
+
+def _send_business_verification_otp(email: str, *, full_name: str = '') -> None:
+    code = issue_login_code(email)
+    send_email_verification_otp(email, code, full_name=full_name)
 
 
 class RegisterAPIView(APIView):
@@ -85,12 +98,12 @@ class RegisterBusinessAPIView(APIView):
         serializer = RegisterBusinessSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user, org = serializer.save()
-        send_email_verification(user)
+        _send_business_verification_otp(user.email, full_name=user.full_name)
         return _registration_pending_response(user, organization=org)
 
 
 class LoginStartAPIView(APIView):
-    """Acknowledge email without revealing whether the account uses password or OTP."""
+    """Branch after email: providers → password, customers → OTP (sent automatically)."""
 
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
@@ -99,10 +112,19 @@ class LoginStartAPIView(APIView):
         serializer = LoginStartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
-        # Do not branch the response on account existence or auth method.
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user_uses_password_login(user):
+            return Response({
+                'auth_method': 'password',
+                'email': email,
+                'detail': 'Enter your business account password.',
+            })
+        if user and user.is_active:
+            _send_customer_otp(email, full_name=user.full_name)
         return Response({
+            'auth_method': 'otp',
             'email': email,
-            'detail': 'Enter your password, or request a sign-in code.',
+            'detail': 'If an account exists for that email, we sent a sign-in code.',
         })
 
 
@@ -328,6 +350,103 @@ class VerifyEmailAPIView(APIView):
         })
 
 
+class VerifyEmailOtpAPIView(APIView):
+    """Verify a business (password) account with a one-time email code."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginThrottle]
+
+    def post(self, request):
+        serializer = LoginOtpVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = normalize_email(serializer.validated_data['email'])
+        code = serializer.validated_data['code']
+        user = User.objects.filter(email__iexact=email).first()
+        if not user or not user.is_active:
+            raise ValidationError({'detail': 'Invalid or expired code.'})
+        if not user_uses_password_login(user):
+            raise ValidationError(
+                {'detail': 'Customers sign in with an email code instead.'}
+            )
+        if user.email_verified:
+            return Response({
+                'detail': 'Email already verified. You can sign in with your password.',
+                'email': user.email,
+            })
+        if not verify_login_code(email, code):
+            raise ValidationError({'detail': 'Invalid or expired code.'})
+        user.email_verified = True
+        user.save(update_fields=['email_verified'])
+        return Response({
+            'detail': 'Email verified. You can sign in with your password now.',
+            'email': user.email,
+        })
+
+
+class DeleteAccountAPIView(APIView):
+    """Delete (anonymize) the signed-in user's account. Requires explicit confirm."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.data.get('confirm') is not True:
+            raise ValidationError({'confirm': 'Confirmation is required to delete your account.'})
+        user = request.user
+        anonymize_user(user)
+        Token.objects.filter(user=user).delete()
+        response = Response({'detail': 'Your account has been deleted.'})
+        clear_auth_cookie(response)
+        return response
+
+
+class DeleteAccountRequestAPIView(APIView):
+    """Public: email a signed deletion-confirmation link if the account exists."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetThrottle]
+
+    def post(self, request):
+        email = normalize_email(request.data.get('email', ''))
+        if not email:
+            raise ValidationError({'email': 'Email is required.'})
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user.is_active and user.deleted_at is None:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = account_deletion_token.make_token(user)
+            confirm_url = (
+                f'{settings.PUBLIC_APP_URL.rstrip("/")}/delete-account'
+                f'?uid={uid}&token={token}'
+            )
+            send_account_deletion_email(user, confirm_url)
+        return Response({
+            'detail': 'If an account exists for that email, we sent a link to confirm deletion.',
+        })
+
+
+class DeleteAccountConfirmAPIView(APIView):
+    """Public: verify the signed link from the email and anonymize the account."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetThrottle]
+
+    def post(self, request):
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        if not uid or not token:
+            raise ValidationError({'detail': 'Invalid deletion link.'})
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise ValidationError({'detail': 'Invalid deletion link.'}) from None
+        if user.deleted_at is not None:
+            return Response({'detail': 'This account has already been deleted.'})
+        if not account_deletion_token.check_token(user, token):
+            raise ValidationError({'detail': 'This deletion link is invalid or has expired.'})
+        anonymize_user(user)
+        return Response({'detail': 'Your account has been deleted.'})
+
+
 class ResendVerificationAPIView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle]
@@ -339,9 +458,9 @@ class ResendVerificationAPIView(APIView):
         user = User.objects.filter(email__iexact=email).first()
         if user and not user.email_verified:
             if user_uses_password_login(user):
-                send_email_verification(user)
+                _send_business_verification_otp(email, full_name=user.full_name)
             else:
                 _send_customer_otp(email, full_name=user.full_name)
         return Response({
-            'detail': 'If that email needs verification, we sent a new message.',
+            'detail': 'If that email needs verification, we sent a new code.',
         })

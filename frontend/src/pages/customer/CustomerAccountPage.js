@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ServiceLocationInput, {
   formatServiceAddressDisplay,
   validateServiceLocationValue,
@@ -156,12 +157,108 @@ function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
   );
 }
 
+function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
+  const [confirmText, setConfirmText] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setConfirmText('');
+    setError(null);
+    setBusy(false);
+  }, [open]);
+
+  if (!open) return null;
+
+  const canDelete = confirmText.trim().toUpperCase() === 'DELETE';
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!canDelete) {
+      setError('Type DELETE to confirm.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await userAPI.deleteAccount();
+      await onDeleted();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not delete your account. Please try again.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-10 sm:items-center sm:pt-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-account-title"
+    >
+      <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-5 shadow-xl">
+        <h2 id="delete-account-title" className="text-lg font-bold tracking-tight text-slate-900">
+          Delete your account
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          This permanently closes your account and removes your personal details (name, email,
+          phone{isProvider ? ', and takes your business off Luminexa' : ', and address'}). Some
+          booking and invoice records may be kept in anonymized form where required by law.
+        </p>
+        <p className="mt-2 text-sm font-medium text-slate-800">This cannot be undone.</p>
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <div>
+            <label htmlFor="delete-confirm" className="mb-1 block text-sm font-medium text-slate-700">
+              Type <span className="font-bold">DELETE</span> to confirm
+            </label>
+            <input
+              id="delete-confirm"
+              type="text"
+              autoComplete="off"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              className="w-full min-h-[48px] rounded-xl border border-slate-200 px-3 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="min-h-[48px] flex-1 rounded-full border border-slate-200 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !canDelete}
+              className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-red-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy ? 'Deleting…' : 'Delete account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerAccountPage({ variant = 'customer' }) {
   const isCustomerAccount = variant === 'customer';
-  const { user, setUserFromProfile } = useAuth();
+  const { user, setUserFromProfile, logout } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleAccountDeleted = async () => {
+    await logout();
+    showToast('Your account has been deleted.', 'success');
+    navigate('/', { replace: true });
+  };
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -438,6 +535,32 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
         )}
       </section>
 
+      <section
+        className={
+          isCustomerAccount
+            ? 'rounded-3xl border border-red-100 bg-white p-5 shadow-sm sm:p-6'
+            : 'rounded-xl border border-red-100 bg-white p-5 shadow-sm'
+        }
+      >
+        {isCustomerAccount ? (
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-700">Danger zone</p>
+        ) : (
+          <h2 className="text-sm font-semibold uppercase text-red-600">Danger zone</h2>
+        )}
+        <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">Delete account</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Permanently close your account and remove your personal details. Some booking records may
+          be kept in anonymized form where required by law. This can&apos;t be undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-full border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+        >
+          Delete my account
+        </button>
+      </section>
+
       {!isCustomerAccount && (
         <ChangePasswordDialog
           open={passwordOpen}
@@ -446,6 +569,13 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
           teal={false}
         />
       )}
+
+      <DeleteAccountDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={handleAccountDeleted}
+        isProvider={!isCustomerAccount}
+      />
     </div>
   );
 }

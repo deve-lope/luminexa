@@ -3,6 +3,7 @@ import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom
 import ServicePictureCarousel from '../../components/services/ServicePictureCarousel';
 import ServiceRatingForm from '../../components/services/ServiceRatingForm';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
+import StarRating from '../../components/services/StarRating';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
 import {
@@ -22,10 +23,14 @@ function ReviewDimensionBreakdown({ review }) {
     { key: 'quality', label: 'Quality of work' },
   ];
   return (
-    <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+    <ul className="mt-2 space-y-1.5 text-xs text-slate-500">
       {dims.map((d) => (
-        <li key={d.key}>
-          {d.label}: <span className="font-medium text-amber-500">★ {review[d.key]}</span>
+        <li key={d.key} className="flex items-center justify-between gap-2">
+          <span>{d.label}</span>
+          <span className="flex items-center gap-1.5">
+            <StarRating value={review[d.key]} size="sm" />
+            <span className="w-4 text-right font-medium text-amber-700">{review[d.key]}</span>
+          </span>
         </li>
       ))}
     </ul>
@@ -180,8 +185,9 @@ export default function CustomerServiceDetailPage() {
                   <span className="text-sm font-medium text-slate-800">
                     {review.customer_name}
                   </span>
-                  <span className="text-sm font-medium text-amber-500">
-                    ★ {review.average}
+                  <span className="flex items-center gap-1.5">
+                    <StarRating value={review.average} size="sm" />
+                    <span className="text-sm font-medium text-amber-700">{review.average}</span>
                   </span>
                 </div>
                 <ReviewDimensionBreakdown review={review} />
@@ -218,9 +224,12 @@ export default function CustomerServiceDetailPage() {
       {service.my_review && !service.can_rate && (
         <section className="lx-card">
           <h2 className="lx-eyebrow">Your rating</h2>
-          <p className="mt-2 text-sm font-medium text-amber-500">
-            ★ {service.my_review.average} average
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <StarRating value={service.my_review.average} />
+            <span className="text-sm font-medium text-amber-800">
+              {service.my_review.average} average
+            </span>
+          </div>
           <ReviewDimensionBreakdown review={service.my_review} />
           {service.my_review.comment ? (
             <p className="mt-2 text-sm text-slate-700">{service.my_review.comment}</p>

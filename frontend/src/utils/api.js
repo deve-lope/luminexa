@@ -76,6 +76,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/services',
   '/privacy',
   '/privacy-policy',
+  '/delete-account',
 ];
 
 function isPublicPath(pathname) {
@@ -113,8 +114,13 @@ export const userAPI = {
   requestPasswordReset: (email) => api.post('/accounts/api/password-reset/', { email }),
   confirmPasswordReset: (data) => api.post('/accounts/api/password-reset/confirm/', data),
   verifyEmail: (data) => api.post('/accounts/api/verify-email/', data),
+  verifyEmailOtp: (data) => api.post('/accounts/api/verify-email/otp/', data),
   resendVerification: (email) => api.post('/accounts/api/resend-verification/', { email }),
   changePassword: (data) => api.post('/accounts/api/change-password/', data),
+  deleteAccount: () => api.post('/accounts/api/account/delete/', { confirm: true }),
+  requestAccountDeletion: (email) =>
+    api.post('/accounts/api/account/delete/request/', { email }),
+  confirmAccountDeletion: (data) => api.post('/accounts/api/account/delete/confirm/', data),
 };
 
 export const businessesAPI = {

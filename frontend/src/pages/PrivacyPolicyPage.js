@@ -101,9 +101,31 @@ export default function PrivacyPolicyPage() {
         <Section title="Retention">
           <p>
             We keep account and booking records while your account is active and as needed for
-            legitimate business, security, and legal purposes. You may request deletion of your
-            account by contacting us (see below); some records may be retained where required by law
-            or for dispute resolution.
+            legitimate business, security, and legal purposes. You can delete your account at any
+            time (see “Deleting your account” below); some records may be retained in anonymized form
+            where required by law or for dispute resolution.
+          </p>
+        </Section>
+
+        <Section title="Deleting your account">
+          <p>
+            You can permanently delete your account and personal data in two ways:
+          </p>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>
+              In the app: <strong>Account → Delete account</strong>
+            </li>
+            <li>
+              On the web:{' '}
+              <Link to="/delete-account" className="font-medium text-teal-700 hover:underline">
+                {APP_URL}/delete-account
+              </Link>
+            </li>
+          </ul>
+          <p>
+            Deletion removes your profile details (name, email, phone, address) and closes your
+            account. Booking and invoice records may be kept in anonymized form where required by
+            law or for dispute resolution.
           </p>
         </Section>
 
@@ -111,7 +133,13 @@ export default function PrivacyPolicyPage() {
           <ul className="list-disc space-y-2 pl-5">
             <li>Update profile and business settings in the app</li>
             <li>Deny or revoke device location permission in your browser/OS settings</li>
-            <li>Request access or deletion by emailing {CONTACT}</li>
+            <li>
+              Delete your account in-app or at{' '}
+              <Link to="/delete-account" className="font-medium text-teal-700 hover:underline">
+                /delete-account
+              </Link>
+            </li>
+            <li>Request access by emailing {CONTACT}</li>
             <li>Uninstall the PWA / clear site data from your browser</li>
           </ul>
         </Section>

@@ -6,7 +6,6 @@ from rest_framework.test import APIClient
 
 from accounts.models import LoginCode, User
 from accounts.otp import issue_login_code
-from accounts.tokens import email_verification_token
 from businesses.models import BusinessType, OrganizationMembership
 
 
@@ -99,8 +98,8 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(cust_start.status_code, 200, cust_start.data)
-        self.assertNotIn('auth_method', cust_start.data)
-        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(cust_start.data['auth_method'], 'otp')
+        self.assertEqual(len(mail.outbox), 1)
 
         owner_start = self.client.post(
             '/accounts/api/login/start/',
@@ -109,9 +108,8 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(owner_start.status_code, 200, owner_start.data)
-        self.assertNotIn('auth_method', owner_start.data)
-        self.assertEqual(owner_start.data.get('detail'), cust_start.data.get('detail'))
-        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(owner_start.data['auth_method'], 'password')
+        self.assertEqual(len(mail.outbox), 1)  # no extra OTP for provider
 
         login_ok = self.client.post(
             '/accounts/api/login/',
@@ -188,21 +186,30 @@ class EmailVerificationTests(TestCase):
         )
         self.assertEqual(res.status_code, 201, res.data)
         self.assertTrue(res.data.get('requires_verification'))
+        self.assertTrue(res.data.get('requires_otp'))
         membership = OrganizationMembership.objects.get(user__email='biz.owner@example.com')
         self.assertEqual(membership.organization.service_city, '')
         self.assertEqual(membership.organization.service_postal_code, '')
         self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('verification code', mail.outbox[0].subject.lower())
 
         user = User.objects.get(email='biz.owner@example.com')
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        token = email_verification_token.make_token(user)
+        self.assertFalse(user.email_verified)
+        body = mail.outbox[0].body
+        code = next(
+            line.split(':')[-1].strip()
+            for line in body.splitlines()
+            if 'code is:' in line.lower()
+        )
         verify = self.client.post(
-            '/accounts/api/verify-email/',
-            {'uid': uid, 'token': token},
+            '/accounts/api/verify-email/otp/',
+            {'email': 'biz.owner@example.com', 'code': code},
             format='json',
             HTTP_HOST='localhost',
         )
         self.assertEqual(verify.status_code, 200, verify.data)
+        user.refresh_from_db()
+        self.assertTrue(user.email_verified)
 
     def test_business_register_office_type_requires_address(self):
         BusinessType.objects.create(

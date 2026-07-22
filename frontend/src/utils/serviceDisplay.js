@@ -1,9 +1,40 @@
-const defaultCurrency = new Intl.NumberFormat(undefined, {
-  style: 'currency',
-  currency: 'USD',
-});
+const CURRENCY_CODES = new Set(['CAD', 'USD']);
 
-function formatAmount(value, currency = defaultCurrency) {
+/** Resolve ISO currency from a service/org/booking payload (defaults CAD). */
+export function currencyCodeFor(source) {
+  if (!source) return 'CAD';
+  if (typeof source === 'string') {
+    const code = source.trim().toUpperCase();
+    return CURRENCY_CODES.has(code) ? code : 'CAD';
+  }
+  const direct = String(source.currency || '').trim().toUpperCase();
+  if (CURRENCY_CODES.has(direct)) return direct;
+  return 'CAD';
+}
+
+export function moneyFormatter(currencyOrSource = 'CAD') {
+  const code = currencyCodeFor(currencyOrSource);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+    });
+  } catch {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: 'CAD',
+    });
+  }
+}
+
+function formatterFor(serviceOrCurrency) {
+  if (serviceOrCurrency && typeof serviceOrCurrency.format === 'function') {
+    return serviceOrCurrency;
+  }
+  return moneyFormatter(serviceOrCurrency);
+}
+
+function formatAmount(value, currency = moneyFormatter('CAD')) {
   if (value == null || value === '') return null;
   const n = Number(value);
   if (Number.isNaN(n)) return null;
@@ -35,15 +66,16 @@ export function formatDurationLabel(mins) {
 }
 
 /** Human-readable price for catalog cards (fixed, range, or quote). */
-export function formatServicePrice(service, currency = defaultCurrency, options = {}) {
+export function formatServicePrice(service, currency, options = {}) {
   const { forceShowPrice = false } = options;
   if (!forceShowPrice && service?.show_price === false) return null;
 
   const type = service?.pricing_type || 'fixed';
   if (type === 'quote') return 'Quote on request';
 
-  const min = formatAmount(service?.base_price, currency);
-  const max = formatAmount(service?.price_max, currency);
+  const fmt = formatterFor(currency ?? service);
+  const min = formatAmount(service?.base_price, fmt);
+  const max = formatAmount(service?.price_max, fmt);
 
   if (type === 'range' && min && max) return `${min} – ${max}`;
   if (min) return min;
@@ -52,7 +84,7 @@ export function formatServicePrice(service, currency = defaultCurrency, options 
 }
 
 /** Duration + optional price for public service cards. */
-export function formatServiceMeta(service, currency = defaultCurrency, options = {}) {
+export function formatServiceMeta(service, currency, options = {}) {
   const { forceShowPrice = false } = options;
   const parts = [];
   const duration = formatDurationLabel(service?.duration_minutes);

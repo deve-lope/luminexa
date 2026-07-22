@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
@@ -13,12 +13,10 @@ import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail } from '../../utils/providerPaths';
-import { formatDurationLabel, formatJobLocationLabel, isShopService } from '../../utils/serviceDisplay';
+import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter } from '../../utils/serviceDisplay';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
-
-const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'CAD' });
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -98,6 +96,11 @@ export default function ProviderScheduleDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const currency = useMemo(
+    () => moneyFormatter(data?.currency || data?.invoice?.currency || 'CAD'),
+    [data?.currency, data?.invoice?.currency],
+  );
 
   if (loading) {
     return (

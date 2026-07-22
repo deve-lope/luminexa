@@ -17,6 +17,12 @@ import {
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import { parseApiError } from '../../utils/taskDisplay';
+import {
+  hasFinishedProviderSetupWizard,
+  markProviderSetupWizardDone,
+  providerSetupPath,
+} from '../../utils/profileSetup';
+import { useAuth } from '../../contexts/AuthContext';
 
 function jobAccent(status) {
   if (status === 'in_progress') return 'from-violet-500 to-violet-700';
@@ -26,13 +32,27 @@ function jobAccent(status) {
 
 export default function ProviderTodayPage() {
   const { orgSlug } = useProviderOrg();
+  const { memberships } = useAuth();
+  const isOwner = useMemo(
+    () => memberships?.some((m) => m.organization_slug === orgSlug && m.role === 'owner'),
+    [memberships, orgSlug]
+  );
   const [dashboard, setDashboard] = useState(null);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
+  const [showSetupHint, setShowSetupHint] = useState(false);
 
   const [openTasksExpanded, setOpenTasksExpanded] = useState(false);
   const [expandedOpenTasks, setExpandedOpenTasks] = useState(null);
   const [expandingOpen, setExpandingOpen] = useState(false);
+
+  useEffect(() => {
+    if (!orgSlug || !isOwner) {
+      setShowSetupHint(false);
+      return;
+    }
+    setShowSetupHint(!hasFinishedProviderSetupWizard(orgSlug));
+  }, [orgSlug, isOwner]);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -196,6 +216,55 @@ export default function ProviderTodayPage() {
           </div>
         </div>
       </header>
+
+      {showSetupHint && (
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-slate-800">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-teal-950">Finish setting up your business</p>
+              <p className="mt-1 text-teal-900/80">
+                Set availability, service area, services, and your public page when you’re ready.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                markProviderSetupWizardDone(orgSlug);
+                setShowSetupHint(false);
+              }}
+              className="shrink-0 text-xs font-semibold text-teal-800 hover:text-teal-950"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to={providerSetupPath(orgSlug, 'availability')}
+              className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white"
+            >
+              Continue setup
+            </Link>
+            <Link
+              to={providerSettings(orgSlug)}
+              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
+            >
+              Settings
+            </Link>
+            <Link
+              to={providerServices(orgSlug)}
+              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
+            >
+              Services
+            </Link>
+            <Link
+              to={providerShare(orgSlug)}
+              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
+            >
+              My page
+            </Link>
+          </div>
+        </div>
+      )}
 
       {(dashboard.notifications || []).map((n) => {
         const toRequests =

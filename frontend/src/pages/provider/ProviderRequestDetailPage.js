@@ -13,9 +13,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
-import { formatDurationLabel, formatJobLocationLabel, isShopService } from '../../utils/serviceDisplay';
-
-const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter } from '../../utils/serviceDisplay';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -68,6 +66,11 @@ export default function ProviderRequestDetailPage() {
     if (kind === 'booking') return data.service_name;
     return data.service_name || data.service_label || 'Custom request';
   }, [data, kind]);
+
+  const currency = useMemo(
+    () => moneyFormatter(data?.currency || data?.invoice?.currency || 'CAD'),
+    [data?.currency, data?.invoice?.currency],
+  );
 
   const status = data?.status;
   const statusBadgeClass = requestStatusTone(kind, status);

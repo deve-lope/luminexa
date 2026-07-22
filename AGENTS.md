@@ -32,6 +32,7 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 | Test plan & high-value cases | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) |
 | Play Store / Android release | [`docs/PLAY_STORE_RELEASE.md`](docs/PLAY_STORE_RELEASE.md) |
 | Play Console listing copy | [`docs/PLAY_CONSOLE_LISTING.md`](docs/PLAY_CONSOLE_LISTING.md) |
+| TWA / Android build steps | [`docs/TWA_BUILD.md`](docs/TWA_BUILD.md) |
 | Greenfield platform spec | [`docs/LUMINEXA_PLATFORM_REPORT.md`](docs/LUMINEXA_PLATFORM_REPORT.md) |
 
 ## Shipped product truths (do not reinvent)

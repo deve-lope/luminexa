@@ -26,7 +26,7 @@ How to start work for the next ~2 weeks without rediscovering product rules from
 | Provider missing from Find at X miles | PRODUCT_RULES § Search + `location-search.mdc` + `location.py` |
 | Second shop address / branch | PRODUCT_RULES § Locations + `provider-locations.mdc` |
 | Adding tests | TEST_STRATEGY templates only — do not invent conflicting rules |
-| Android / Play Store | PLAY_STORE_RELEASE.md (TWA/PWA, not native rewrite) |
+| Android / Play Store | PLAY_STORE_RELEASE.md + TWA_BUILD.md (TWA/PWA, not native rewrite) |
 
 ---
 

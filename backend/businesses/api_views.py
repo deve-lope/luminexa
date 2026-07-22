@@ -13,6 +13,7 @@ from jobs.booking_services import customer_can_book
 from jobs.models import AvailabilitySlot, Booking, Service
 from jobs.ratings import aggregate_organization_ratings
 from jobs.serializers import BookingSerializer, PublicServiceReadSerializer
+from jobs.tax_rates import currency_for_organization
 from luminexa.throttles import BusinessTypeWriteThrottle, MapSearchThrottle
 
 from .models import BusinessType, Organization, OrganizationMembership
@@ -293,6 +294,7 @@ def _serialize_bookable_service(service, *, ctx):
         'business_types': types,
         'org_lat': float(org.service_latitude) if org.service_latitude is not None else None,
         'org_lng': float(org.service_longitude) if org.service_longitude is not None else None,
+        'currency': currency_for_organization(org),
     }
     if org.id in dist_map:
         payload['distance_miles'] = dist_map[org.id]

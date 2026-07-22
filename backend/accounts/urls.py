@@ -43,8 +43,28 @@ urlpatterns = [
         name='verify_email_api',
     ),
     path(
+        'api/verify-email/otp/',
+        api_views.VerifyEmailOtpAPIView.as_view(),
+        name='verify_email_otp_api',
+    ),
+    path(
         'api/resend-verification/',
         api_views.ResendVerificationAPIView.as_view(),
         name='resend_verification_api',
+    ),
+    path(
+        'api/account/delete/',
+        api_views.DeleteAccountAPIView.as_view(),
+        name='delete_account_api',
+    ),
+    path(
+        'api/account/delete/request/',
+        api_views.DeleteAccountRequestAPIView.as_view(),
+        name='delete_account_request_api',
+    ),
+    path(
+        'api/account/delete/confirm/',
+        api_views.DeleteAccountConfirmAPIView.as_view(),
+        name='delete_account_confirm_api',
     ),
 ]

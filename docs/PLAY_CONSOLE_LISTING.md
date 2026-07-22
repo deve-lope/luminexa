@@ -51,33 +51,69 @@ Install Luminexa on your phone for a fast, app-like experience powered by our se
 
 ---
 
-## Graphics you’ll need (you still supply)
+## Graphics
 
-- App icon: use `frontend/public/icons/icon-512.png`
-- Feature graphic: 1024×500 (Play requirement — create separately)
-- Phone screenshots: at least 2 (can reuse PWA screenshots once you upload nicer ones)
+Use these repo assets in Play Console:
+
+- App icon: `frontend/public/icons/icon-512.png`
+- Feature graphic: `frontend/public/play/feature-graphic.png` (1024×500)
+- Phone screenshot 1: `frontend/public/play/phone-screenshot-find.png` (1080×1920)
+- Phone screenshot 2: `frontend/public/play/phone-screenshot-bookings.png` (1080×1920)
+
+The PWA install screenshots used by Chrome live separately in `frontend/public/screenshots/`.
 
 ---
 
-## Data safety (declare honestly)
+## Data safety form (copy-paste answers)
 
-**Collected / shared for app functionality** (typical Luminexa answers — adjust if your practices differ):
+Play Console → **App content → Data safety**. Answer the top-level gates first, then declare each data type below with the exact toggles.
 
-| Data type | Collected? | Shared with other users/providers? | Purpose |
-|-----------|------------|------------------------------------|---------|
-| Name | Yes | Yes (with the other party on a booking) | Account, bookings |
-| Email | Yes | Usually no (account); may appear to provider as needed | Account, auth |
-| Phone | Yes (if provided) | Yes (booking contact) | Account, bookings |
-| Approximate location | Yes (search / service area) | Service area may be public on storefront | Find providers |
-| Precise location | Optional (if user allows GPS) | Not sold; used for search | Find providers |
-| Photos | Yes (provider gallery / profile if uploaded) | Yes (public storefront) | Profile |
-| App activity / bookings | Yes | Yes (between customer & provider) | Bookings |
-| Device IDs / crash logs | Possibly via hosting logs | No | Security / reliability |
+### Section 1 — Overview gates
 
-Also declare:
-- Data encrypted in transit: **Yes** (HTTPS)
-- Users can request deletion: **Yes** (email support@luminex-a.com)
-- Committed to Play Families / kids: **No** (not directed at children)
+| Question | Answer |
+|----------|--------|
+| Does your app collect or share any of the required user data types? | **Yes** |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** (HTTPS/TLS) |
+| Do you provide a way for users to request that their data is deleted? | **Yes** — in-app (Account → Delete account) **and** web |
+
+**Account deletion (Play Console → App content → Data safety → Account deletion):**
+
+| Field | Value |
+|-------|--------|
+| Do users create accounts? | **Yes** |
+| Can users request account + data deletion? | **Yes** |
+| Deletion request URL (public, no login required) | **https://app.luminex-a.com/delete-account** |
+| In-app deletion path | Account → **Delete account** |
+| Data deleted vs retained | Profile (name/email/phone/address) deleted; booking/invoice records retained **anonymized** for legal/tax/dispute purposes |
+
+### Section 2 — Data types (declare each of these)
+
+For every row: **Collected = Yes**. Set **Shared** and **Required/Optional** per the table. Google never treats this as “sold”; do **not** tick any “sold to third parties” option.
+
+| Play data type (category) | Collected | Shared | Processed ephemerally | Optional? | Purposes to tick |
+|---------------------------|-----------|--------|----------------------|-----------|------------------|
+| **Name** (Personal info) | Yes | Yes* | No | Required | Account management; App functionality |
+| **Email address** (Personal info) | Yes | No | No | Required | Account management; App functionality |
+| **Phone number** (Personal info) | Yes | Yes* | No | Optional | App functionality (booking contact); Account management |
+| **Address** (Personal info) | Yes | No | No | Optional | App functionality (service area / search) |
+| **Approximate location** (Location) | Yes | No | No | Required | App functionality (find providers by area) |
+| **Precise location** (Location) | Yes | No | No | Optional | App functionality (GPS “near me” search) |
+| **Photos** (Photos and videos) | Yes | Yes* | No | Optional | App functionality (provider storefront/profile gallery) |
+| **App interactions / bookings** (App activity) | Yes | Yes* | No | Required | App functionality (bookings between customer & provider) |
+| **Crash logs & diagnostics** (App info & performance) | Yes | No | No | Required | Analytics; App functionality (reliability/security) |
+
+\* **“Shared” meaning:** on a booking, the relevant details (name, phone, uploaded profile photos, booking activity) are visible to the **other party** and, for providers, on the **public storefront**. This is user-to-user disclosure to make the service work — declare it as *Shared* for **App functionality**. It is **not** sold or shared with advertisers/data brokers.
+
+### Section 3 — Security practices
+
+| Question | Answer |
+|----------|--------|
+| Data encrypted in transit | **Yes** |
+| Users can request data deletion | **Yes** (support@luminex-a.com) |
+| Committed to the Play Families Policy (targets children) | **No** — not directed at children |
+| Independent security review | Leave **No** unless you have one |
+
+> If you ever add third-party analytics/ads SDKs later, revisit this form — the current answers assume first-party collection only (your own backend + hosting logs).
 
 ---
 
@@ -96,4 +132,11 @@ Also declare:
 
 ## After listing shell exists
 
-Next engineering step: wrap https://app.luminex-a.com/ with **Bubblewrap** or **PWABuilder**, then upload the AAB to Internal testing.
+Next engineering step: wrap https://app.luminex-a.com/ with **Bubblewrap** (recommended) using
+[`docs/TWA_BUILD.md`](TWA_BUILD.md), then upload the AAB to Internal testing.
+
+Blockers for an agent-only workflow:
+
+- You must create the Play Console app in your Google account.
+- You must choose and keep the package ID (recommended: `com.luminexa.app`).
+- A valid `assetlinks.json` requires the Android signing certificate SHA-256 fingerprint from the generated/signed app.

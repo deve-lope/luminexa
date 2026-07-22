@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.luminexa.app",
+      "sha256_cert_fingerprints": [
+        "89:16:19:8C:97:45:05:B4:B0:34:99:18:BD:3F:06:B9:8A:3C:76:FE:B2:48:A8:01:D5:AF:BD:42:72:22:88:5D"
+      ]
+    }
+  }
+]

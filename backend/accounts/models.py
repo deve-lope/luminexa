@@ -65,6 +65,11 @@ class User(AbstractUser):
         blank=True,
         help_text='Set when the user finishes first-sign-in profile setup.',
     )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Set when the account is deleted / anonymized on user request.',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name']

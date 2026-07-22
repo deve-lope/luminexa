@@ -37,3 +37,13 @@ docker-data/
 backups/
 *.bak
 *.sqlite3.bak*
+
+# Android / Play release outputs
+android-twa/
+*.aab
+*.apk
+*.jks
+*.keystore
+_keystore-backup-DO-NOT-COMMIT/
+KEYSTORE-PASSWORD.txt
+*keystore-backup*.zip
