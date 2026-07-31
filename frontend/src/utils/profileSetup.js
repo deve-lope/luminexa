@@ -4,6 +4,7 @@ import { firstProviderHome, providerHome } from './providerPaths';
 
 const OPTIONAL_SKIP_PREFIX = 'lx_provider_optional_setup_skipped:';
 const WIZARD_DONE_PREFIX = 'lx_provider_setup_wizard_done:';
+const WIZARD_PROGRESS_PREFIX = 'lx_provider_setup_progress:';
 
 /** Owner guided steps after required contact (all skippable). */
 export const PROVIDER_WIZARD_STEPS = ['availability', 'service_area', 'services', 'profile'];
@@ -38,6 +39,58 @@ export function getOnboardingPath(user, memberships, nextPath) {
   return `/customer/setup${q}`;
 }
 
+function readProgress(orgSlug) {
+  if (!orgSlug || typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(`${WIZARD_PROGRESS_PREFIX}${orgSlug}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProgress(orgSlug, progress) {
+  if (!orgSlug || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${WIZARD_PROGRESS_PREFIX}${orgSlug}`, JSON.stringify(progress));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Mark a wizard step as done (and any steps before it). */
+export function markProviderWizardStepDone(orgSlug, step) {
+  if (!orgSlug || !PROVIDER_WIZARD_STEPS.includes(step)) return;
+  const progress = readProgress(orgSlug);
+  const idx = PROVIDER_WIZARD_STEPS.indexOf(step);
+  PROVIDER_WIZARD_STEPS.forEach((s, i) => {
+    if (i <= idx) progress[s] = true;
+  });
+  writeProgress(orgSlug, progress);
+  if (PROVIDER_WIZARD_STEPS.every((s) => progress[s])) {
+    markProviderSetupWizardDone(orgSlug);
+  }
+}
+
+export function isProviderWizardStepDone(orgSlug, step) {
+  if (hasFinishedProviderSetupWizard(orgSlug)) return true;
+  return Boolean(readProgress(orgSlug)[step]);
+}
+
+/** First incomplete optional step, or null if wizard is finished. */
+export function getResumeProviderWizardStep(orgSlug) {
+  if (hasFinishedProviderSetupWizard(orgSlug)) return null;
+  const progress = readProgress(orgSlug);
+  return PROVIDER_WIZARD_STEPS.find((s) => !progress[s]) || null;
+}
+
+export function providerResumeSetupPath(orgSlug) {
+  const step = getResumeProviderWizardStep(orgSlug) || 'availability';
+  return providerSetupPath(orgSlug, step);
+}
+
 export function hasSkippedProviderOptionalSetup(orgSlug) {
   if (!orgSlug || typeof window === 'undefined') return false;
   try {
@@ -63,6 +116,11 @@ export function markProviderSetupWizardDone(orgSlug) {
   try {
     window.localStorage.setItem(`${WIZARD_DONE_PREFIX}${orgSlug}`, '1');
     window.localStorage.setItem(`${OPTIONAL_SKIP_PREFIX}${orgSlug}`, '1');
+    const progress = {};
+    PROVIDER_WIZARD_STEPS.forEach((s) => {
+      progress[s] = true;
+    });
+    writeProgress(orgSlug, progress);
   } catch {
     /* ignore */
   }
@@ -75,7 +133,7 @@ export function providerSetupPath(orgSlug, step = 'contact') {
 }
 
 export function providerOptionalSetupPath(orgSlug) {
-  return providerSetupPath(orgSlug, 'availability');
+  return providerResumeSetupPath(orgSlug);
 }
 
 export function nextProviderWizardStep(current) {

@@ -180,7 +180,7 @@ export default function BusinessTypeSelector({
 
       {allowCreate && (!showAdd ? (
         <button type="button" onClick={() => setShowAdd(true)} className={`mt-2 ${addBtnClass}`}>
-          + Add new type
+          + Other — add your own type
         </button>
       ) : (
         <div

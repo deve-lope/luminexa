@@ -1,9 +1,14 @@
 import { providerCustomerKey } from './providerRouteKey';
 
-export function bookingStatusLabel(status, { isPast = false } = {}) {
+export function bookingStatusLabel(status, { isPast = false, bookingPolicy, servicePricingType } = {}) {
+  const needsQuote = bookingPolicy === 'quote' || servicePricingType === 'quote';
   if (status === 'requested') {
+    if (needsQuote) {
+      return isPast ? 'No quote sent' : 'Awaiting quote';
+    }
     return isPast ? 'Not confirmed' : 'Awaiting provider approval';
   }
+  if (status === 'quoted') return isPast ? 'Quote expired' : 'Quote ready — review & accept';
   if (status === 'confirmed') return isPast ? 'Confirmed (past)' : 'Confirmed';
   if (status === 'in_progress') return 'In progress';
   if (status === 'needs_return') return 'Needs return visit';
@@ -14,6 +19,7 @@ export function bookingStatusLabel(status, { isPast = false } = {}) {
 
 export function bookingStatusClass(status) {
   if (status === 'requested') return 'bg-amber-100 text-amber-800';
+  if (status === 'quoted') return 'bg-violet-100 text-violet-800';
   if (status === 'confirmed') return 'bg-emerald-100 text-emerald-800';
   if (status === 'in_progress') return 'bg-sky-100 text-sky-800';
   if (status === 'needs_return') return 'bg-orange-100 text-orange-900';
@@ -52,9 +58,11 @@ export function canCancelBooking(booking, now = new Date()) {
   if (typeof booking?.can_customer_cancel === 'boolean') {
     return booking.can_customer_cancel;
   }
-  if (booking.status !== 'requested' && booking.status !== 'confirmed') return false;
+  if (booking.status !== 'requested' && booking.status !== 'quoted' && booking.status !== 'confirmed') {
+    return false;
+  }
   if (new Date(booking.start_at) <= now) return false;
-  if (booking.status === 'requested') return true;
+  if (booking.status === 'requested' || booking.status === 'quoted') return true;
   const cutoff = Number(booking.cancel_cutoff_hours ?? 0);
   if (!cutoff || cutoff <= 0) return true;
   const hoursLeft = (new Date(booking.start_at) - now) / 3600000;
@@ -69,7 +77,7 @@ export function canRescheduleBooking(booking, now = new Date()) {
   if (new Date(booking.start_at) <= now) return false;
 
   // Pending request with no provider decision yet — customer may pick another slot.
-  if (isUntouchedBookingRequest(booking)) return true;
+  if (isUntouchedBookingRequest(booking) || booking.status === 'quoted') return true;
 
   // Confirmed appointments — honor cancel cutoff when present.
   if (booking.status === 'confirmed') {

@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { publicServicesCatalog, serviceDetail } from '../../utils/customerPaths';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { formatServiceMeta, hoursFromMinutes, minutesFromHours } from '../../utils/serviceDisplay';
+import {
+  hasFinishedProviderSetupWizard,
+  isProviderWizardStepDone,
+  markProviderWizardStepDone,
+  providerSetupPath,
+} from '../../utils/profileSetup';
 
 const CATEGORY_PRESETS = ['Automobile', 'House work', 'Beauty & wellness', 'Outdoor & garden'];
 
@@ -49,6 +55,7 @@ const emptyServiceDraft = () => ({
   pricing_type: 'fixed',
   base_price: '0',
   price_max: '',
+  quote_questions: [''],
   show_price: true,
   allow_request: true,
   fulfillment_kind: 'mobile',
@@ -238,6 +245,54 @@ function ServiceDetailForm({
                 </div>
               )}
             </>
+          )}
+          {serviceDraft.pricing_type === 'quote' && (
+            <div className="col-span-2 space-y-2">
+              <p className={LABEL_CLASS}>Quote questions (asked when customer requests)</p>
+              <p className="text-xs text-slate-500">
+                Prefill questions so customers answer up front — less back-and-forth before you price.
+              </p>
+              {(serviceDraft.quote_questions || ['']).map((q, idx) => (
+                <div key={`qq-${idx}`} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={q}
+                    placeholder={`Question ${idx + 1}`}
+                    onChange={(e) => {
+                      const next = [...(serviceDraft.quote_questions || [''])];
+                      next[idx] = e.target.value;
+                      setServiceDraft((d) => ({ ...d, quote_questions: next }));
+                    }}
+                    className={INPUT_CLASS}
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-slate-200 px-2 text-sm text-slate-600"
+                    onClick={() => {
+                      const next = (serviceDraft.quote_questions || ['']).filter((_, i) => i !== idx);
+                      setServiceDraft((d) => ({
+                        ...d,
+                        quote_questions: next.length ? next : [''],
+                      }));
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-sm font-medium text-luminexa-accent"
+                onClick={() =>
+                  setServiceDraft((d) => ({
+                    ...d,
+                    quote_questions: [...(d.quote_questions || []), ''],
+                  }))
+                }
+              >
+                + Add question
+              </button>
+            </div>
           )}
           <div>
             <label htmlFor="svc-duration" className={LABEL_CLASS}>
@@ -701,7 +756,14 @@ function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow,
 
 export default function ProviderServicesPage({ embedded = false }) {
   const { orgSlug, activeOrg } = useProviderOrg();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const orgId = activeOrg?.organization;
+  const fromSetup = searchParams.get('from') === 'setup';
+  const showSetupContinue =
+    !embedded &&
+    Boolean(orgSlug) &&
+    (fromSetup || (!hasFinishedProviderSetupWizard(orgSlug) && !isProviderWizardStepDone(orgSlug, 'services')));
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -832,6 +894,12 @@ export default function ProviderServicesPage({ embedded = false }) {
             pricing_type: svc.pricing_type || 'fixed',
             base_price: String(svc.base_price ?? '0'),
             price_max: svc.price_max != null ? String(svc.price_max) : '',
+            quote_questions:
+              Array.isArray(svc.quote_questions) && svc.quote_questions.length
+                ? svc.quote_questions.map((q) =>
+                    typeof q === 'string' ? q : q?.question || ''
+                  )
+                : [''],
             show_price: svc.show_price !== false,
             allow_request: svc.allow_request !== false,
             fulfillment_kind: svc.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
@@ -856,6 +924,7 @@ export default function ProviderServicesPage({ embedded = false }) {
   };
 
   const startAddService = () => {
+    setEditing(true);
     setEditingServiceId(null);
     setExpandedServiceId('new');
     setShowServiceForm(true);
@@ -898,6 +967,10 @@ export default function ProviderServicesPage({ embedded = false }) {
         serviceDraft.pricing_type === 'range' && serviceDraft.price_max
           ? serviceDraft.price_max
           : null,
+      quote_questions:
+        serviceDraft.pricing_type === 'quote'
+          ? (serviceDraft.quote_questions || []).map((q) => q.trim()).filter(Boolean)
+          : [],
       show_price: serviceDraft.show_price,
       allow_request: serviceDraft.allow_request,
       fulfillment_kind: serviceDraft.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
@@ -1034,14 +1107,44 @@ export default function ProviderServicesPage({ embedded = false }) {
 
   return (
     <div className="space-y-6">
+      {showSetupContinue && (
+        <section className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+          <p className="text-sm font-semibold text-teal-950">Business setup</p>
+          <p className="mt-1 text-sm text-teal-900/80">
+            Add at least one service customers can book, then continue. You can edit these anytime.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                markProviderWizardStepDone(orgSlug, 'services');
+                navigate(providerSetupPath(orgSlug, 'profile'));
+              }}
+              className="min-h-[44px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white"
+            >
+              Save & continue setup
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                markProviderWizardStepDone(orgSlug, 'services');
+                navigate(providerSetupPath(orgSlug, 'profile'));
+              }}
+              className="min-h-[44px] rounded-xl border border-teal-200 bg-white px-4 text-sm font-semibold text-teal-900"
+            >
+              Skip & continue
+            </button>
+          </div>
+        </section>
+      )}
+
       {!embedded && (
         <section className="lx-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold uppercase text-slate-500">Service catalog</h2>
               <p className="mt-1 text-sm text-slate-600">
-                Browse your categories and services. Tap <strong>Edit</strong> when you need to add or
-                change something.
+                Add services customers can book. Use Edit to manage categories or hide items.
               </p>
               {publicCatalogPath && (
                 <Link
@@ -1052,27 +1155,36 @@ export default function ProviderServicesPage({ embedded = false }) {
                 </Link>
               )}
             </div>
-            {!editing ? (
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setEditing(true)}
-                className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
-              >
-                Edit
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(false);
-                  setShowAddCategory(false);
-                  resetServiceForm();
-                }}
+                onClick={startAddService}
                 className="min-h-[44px] shrink-0 rounded-xl bg-luminexa-accent px-4 text-sm font-medium text-white"
               >
-                Done
+                + Add services
               </button>
-            )}
+              {!editing ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
+                >
+                  Edit
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setShowAddCategory(false);
+                    resetServiceForm();
+                  }}
+                  className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
+                >
+                  Done
+                </button>
+              )}
+            </div>
           </div>
         </section>
       )}
@@ -1163,7 +1275,8 @@ export default function ProviderServicesPage({ embedded = false }) {
 
             {!editing && categoryTiles.length === 0 && allActiveCount === 0 && (
               <p className="mt-3 text-sm text-slate-500">
-                No categories yet. Tap <strong>Edit</strong> to add your first category and services.
+                No categories yet. Use <strong>+ Add services</strong> or <strong>Edit</strong> to get
+                started.
               </p>
             )}
           </section>
@@ -1171,15 +1284,13 @@ export default function ProviderServicesPage({ embedded = false }) {
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold uppercase text-slate-500">{selectedCategoryLabel}</h3>
-              {editing && (
-                <button
-                  type="button"
-                  onClick={startAddService}
-                  className="text-sm font-medium text-luminexa-accent"
-                >
-                  + Add services
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={startAddService}
+                className="text-sm font-medium text-luminexa-accent"
+              >
+                + Add services
+              </button>
             </div>
 
             {showServiceForm && expandedServiceId === 'new' && (
@@ -1229,15 +1340,13 @@ export default function ProviderServicesPage({ embedded = false }) {
                     ? 'No services in this category yet.'
                     : 'No services yet.'}
                 </p>
-                {editing && (
-                  <button
-                    type="button"
-                    onClick={startAddService}
-                    className="mt-3 text-sm font-medium text-luminexa-accent"
-                  >
-                    Add a service
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={startAddService}
+                  className="mt-4 min-h-[44px] rounded-xl bg-luminexa-accent px-5 text-sm font-semibold text-white"
+                >
+                  + Add services
+                </button>
               </div>
             )}
 
@@ -1278,6 +1387,21 @@ export default function ProviderServicesPage({ embedded = false }) {
 
       {message && <p className="text-sm text-emerald-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {showSetupContinue && (
+        <div className="sticky bottom-20 z-30 rounded-2xl border border-teal-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-4">
+          <button
+            type="button"
+            onClick={() => {
+              markProviderWizardStepDone(orgSlug, 'services');
+              navigate(providerSetupPath(orgSlug, 'profile'));
+            }}
+            className="lx-btn-primary min-h-[48px] w-full"
+          >
+            Continue setup
+          </button>
+        </div>
+      )}
     </div>
   );
 }

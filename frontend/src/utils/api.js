@@ -189,6 +189,7 @@ export const jobsAPI = {
     }),
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
+  listMyConversations: () => api.get('/api/v1/me/conversations/'),
   listMyNotifications: () => api.get('/api/v1/me/notifications/'),
   dismissMyNotification: (notificationId) =>
     api.post(`/api/v1/me/notifications/${notificationId}/dismiss/`),
@@ -213,6 +214,8 @@ export const jobsAPI = {
   requestBooking: (data) => api.post('/api/v1/bookings/', data),
   requestBookingsBatch: (data) => api.post('/api/v1/bookings/batch/', data),
   acceptBooking: (id) => api.post(`/api/v1/bookings/${id}/accept/`),
+  sendBookingQuote: (id, data) => api.post(`/api/v1/bookings/${id}/send-quote/`, data),
+  acceptBookingQuote: (id, data = {}) => api.post(`/api/v1/bookings/${id}/accept-quote/`, data),
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
   cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
@@ -221,6 +224,23 @@ export const jobsAPI = {
   issueBookingInvoice: (id, data) => api.post(`/api/v1/bookings/${id}/invoice/`, data),
   markBookingInvoicePaid: (id) => api.post(`/api/v1/bookings/${id}/invoice/mark-paid/`),
   bookingInvoiceDownloadUrl: (id) => `/api/v1/bookings/${id}/invoice/download/`,
+  payBookingInvoice: (id, data = {}) => api.post(`/api/v1/bookings/${id}/invoice/pay/`, data),
+  syncBookingInvoicePayment: (id, sessionId) =>
+    api.post(`/api/v1/bookings/${id}/invoice/pay/sync/`, { session_id: sessionId }),
+  getMyUnpaidInvoice: () => api.get('/api/v1/me/unpaid-invoice/'),
+  getOrgBilling: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/billing/`),
+  startConnectOnboarding: (orgSlug, data = {}) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/connect/onboard/`, data),
+  openConnectDashboard: (orgSlug) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/connect/login/`),
+  startSubscription: (orgSlug, data = {}) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/subscribe/`, data),
+  openBillingPortal: (orgSlug, data = {}) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/portal/`, data),
+  syncSubscriptionCheckout: (orgSlug, sessionId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/sync-checkout/`, {
+      session_id: sessionId,
+    }),
   markBookingIncomplete: (id, data = {}) =>
     api.post(`/api/v1/bookings/${id}/incomplete/`, data),
   scheduleReturnVisit: (id, data) =>
@@ -267,13 +287,17 @@ export const jobsAPI = {
     api.put(`/api/v1/organizations/${orgSlug}/weekly-schedule/`, blocks),
   getSchedulingSettings: (orgSlug) =>
     api.get(`/api/v1/organizations/${orgSlug}/scheduling-settings/`),
+  // Setup / schedule edits: save settings quickly; slot sync may run in background.
   saveSchedulingSettings: (orgSlug, data) =>
-    api.put(`/api/v1/organizations/${orgSlug}/scheduling-settings/`, data),
+    api.put(`/api/v1/organizations/${orgSlug}/scheduling-settings/`, data, { timeout: 30000 }),
   syncRecurringSlots: (orgSlug) =>
     api.post(`/api/v1/organizations/${orgSlug}/sync-recurring-slots/`),
   dismissNotification: (orgSlug, notificationId) =>
     api.post(`/api/v1/organizations/${orgSlug}/notifications/${notificationId}/dismiss/`),
-  getBookingContext: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/booking-context/`),
+  getBookingContext: (orgSlug, { serviceId } = {}) =>
+    api.get(`/api/v1/organizations/${orgSlug}/booking-context/`, {
+      params: serviceId ? { service: serviceId } : undefined,
+    }),
   listTasks: (params) => api.get('/api/v1/tasks/', { params }),
   createTask: (data) => api.post('/api/v1/tasks/', data),
   patchTask: (id, data) => api.patch(`/api/v1/tasks/${id}/`, data),

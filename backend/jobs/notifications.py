@@ -224,6 +224,24 @@ def notify_booking_accepted(booking):
     send_booking_email('booking_confirmed', booking)
 
 
+def notify_booking_quoted(booking):
+    service_name = booking.service.name if booking.service_id else 'Service'
+    amount = booking.quote_amount
+    amount_txt = f'${amount}' if amount is not None else 'a price'
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Quote ready — {booking.organization.name}',
+        message=(
+            f'{booking.organization.name} sent a quote of {amount_txt} for {service_name} '
+            f'on {_format_when(booking.start_at)}. Review and accept it in your bookings.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+    )
+    send_booking_email('booking_requested', booking)
+
+
 def notify_booking_declined(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
     create_customer_notification(
@@ -272,6 +290,70 @@ def notify_booking_completed(booking):
         link_path='/customer/history',
     )
     send_booking_email('booking_completed', booking)
+
+
+def notify_invoice_ready(booking):
+    """Create or refresh the customer's actionable invoice notification."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    existing = (
+        CustomerNotification.objects.filter(
+            customer=booking.customer,
+            booking=booking,
+            kind=CustomerNotification.Kind.INVOICE_READY,
+            dismissed_at__isnull=True,
+        )
+        .order_by('-created_at')
+        .first()
+    )
+    title = f'Invoice ready — {booking.organization.name}'
+    message = f'Your invoice for {service_name} is ready. Pay securely in Luminexa.'
+    if existing:
+        existing.title = title
+        existing.message = message
+        existing.link_path = '/customer/history'
+        existing.save(update_fields=['title', 'message', 'link_path'])
+        return existing
+    return create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.INVOICE_READY,
+        title=title,
+        message=message,
+        organization=booking.organization,
+        booking=booking,
+        link_path='/customer/history',
+    )
+
+
+def notify_invoice_paid(invoice):
+    """Confirm an online payment to both customer and provider."""
+    booking = invoice.booking
+    amount = f'{invoice.amount:.2f} {invoice.currency or "CAD"}'
+    CustomerNotification.objects.filter(
+        customer=booking.customer,
+        booking=booking,
+        kind=CustomerNotification.Kind.INVOICE_READY,
+        dismissed_at__isnull=True,
+    ).update(dismissed_at=timezone.now())
+    CustomerNotification.objects.get_or_create(
+        customer=booking.customer,
+        booking=booking,
+        kind=CustomerNotification.Kind.PAYMENT_CONFIRMED,
+        defaults={
+            'organization': booking.organization,
+            'title': f'Payment confirmed — {booking.organization.name}',
+            'message': f'Your payment of {amount} for invoice {invoice.number} was successful.',
+            'link_path': '/customer/history',
+        },
+    )
+    customer_name = _customer_label(booking)
+    ProviderNotification.objects.get_or_create(
+        organization=booking.organization,
+        kind=ProviderNotification.Kind.PAYMENT_RECEIVED,
+        message=(
+            f'Payment received: {customer_name} paid {amount} '
+            f'for invoice {invoice.number}.'
+        ),
+    )
 
 
 def send_invoice_email(booking):

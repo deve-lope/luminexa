@@ -23,7 +23,7 @@ from .message_services import (
 
 
 def _booking_bucket(status):
-    if status == Booking.Status.REQUESTED:
+    if status in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
         return 'pending'
     if status in (
         Booking.Status.CONFIRMED,

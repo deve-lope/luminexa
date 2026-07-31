@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.formats import date_format
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -84,6 +85,81 @@ def list_inquiry_messages(inquiry):
         .select_related('sender', 'inquiry', 'inquiry__customer')
         .order_by('created_at')
     )
+
+
+def _preview_body(body, *, max_len=140):
+    text = ' '.join((body or '').split())
+    if len(text) <= max_len:
+        return text
+    return f'{text[: max_len - 1].rstrip()}…'
+
+
+def list_customer_conversation_summaries(user):
+    """Booking + inquiry threads for the customer inbox, newest activity first."""
+    messages = (
+        ServiceRequestMessage.objects.filter(
+            Q(booking__customer=user) | Q(inquiry__customer=user),
+        )
+        .select_related(
+            'sender',
+            'booking',
+            'booking__organization',
+            'booking__service',
+            'inquiry',
+            'inquiry__organization',
+            'inquiry__service',
+        )
+        .order_by('-created_at', '-id')
+    )
+
+    summaries = []
+    seen = set()
+    for msg in messages:
+        if msg.booking_id:
+            key = ('booking', msg.booking_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            booking = msg.booking
+            org = booking.organization
+            subject = booking.service.name if booking.service_id else 'Booking'
+            summaries.append({
+                'kind': 'booking',
+                'id': booking.id,
+                'reference': f'BK-{booking.pk:05d}',
+                'subject': subject,
+                'organization_name': org.name,
+                'organization_slug': org.slug,
+                'organization_public_ref': org.public_ref or '',
+                'last_message_preview': _preview_body(msg.body),
+                'last_message_at': msg.created_at,
+                'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+            })
+        elif msg.inquiry_id:
+            key = ('inquiry', msg.inquiry_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            inquiry = msg.inquiry
+            org = inquiry.organization
+            subject = (
+                inquiry.service.name
+                if inquiry.service_id
+                else (inquiry.service_label or 'Custom request')
+            )
+            summaries.append({
+                'kind': 'inquiry',
+                'id': inquiry.id,
+                'reference': f'SR-{inquiry.pk:05d}',
+                'subject': subject,
+                'organization_name': org.name,
+                'organization_slug': org.slug,
+                'organization_public_ref': org.public_ref or '',
+                'last_message_preview': _preview_body(msg.body),
+                'last_message_at': msg.created_at,
+                'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+            })
+    return summaries
 
 
 def _notify_new_message(message):

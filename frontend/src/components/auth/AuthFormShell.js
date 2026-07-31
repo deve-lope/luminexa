@@ -9,6 +9,7 @@ export default function AuthFormShell({
   children,
   backTo = '/',
   footer = null,
+  preferFallbackBack = false,
 }) {
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#d8f3ef] text-slate-900">
@@ -40,6 +41,7 @@ export default function AuthFormShell({
           </Link>
           <BackButton
             fallback={backTo}
+            preferFallback={preferFallbackBack}
             className="text-sm font-medium text-teal-900/75 hover:text-teal-950"
           >
             ← Back

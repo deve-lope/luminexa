@@ -43,6 +43,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     service_name = serializers.SerializerMethodField()
     booking_reference = serializers.SerializerMethodField()
     discount = serializers.SerializerMethodField()
+    can_pay_online = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -54,6 +55,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'description', 'notes', 'issued_at', 'paid_at', 'download_url',
             'provider_name', 'customer_name', 'customer_email',
             'service_name', 'booking_reference', 'discount',
+            'payment_method', 'can_pay_online',
         )
         read_only_fields = fields
 
@@ -87,6 +89,18 @@ class InvoiceSerializer(serializers.ModelSerializer):
     def get_discount(self, obj):
         # Reserved for future discount support; always expose for invoice UI.
         return '0.00'
+
+    def get_can_pay_online(self, obj):
+        from django.conf import settings as dj_settings
+        from .stripe_services import org_can_accept_card_payments
+
+        if not getattr(dj_settings, 'STRIPE_ENABLED', False):
+            return False
+        if obj.status != Invoice.Status.ISSUED:
+            return False
+        if not obj.booking_id:
+            return False
+        return org_can_accept_card_payments(obj.booking.organization)
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -302,6 +316,19 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+
+class CustomerConversationSummarySerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=('booking', 'inquiry'))
+    id = serializers.IntegerField()
+    reference = serializers.CharField()
+    subject = serializers.CharField()
+    organization_name = serializers.CharField()
+    organization_slug = serializers.CharField()
+    organization_public_ref = serializers.CharField(allow_blank=True)
+    last_message_preview = serializers.CharField()
+    last_message_at = serializers.DateTimeField()
+    last_sender_name = serializers.CharField(allow_blank=True)
+
     def get_sender_role(self, obj):
         booking = getattr(obj, 'booking', None)
         inquiry = getattr(obj, 'inquiry', None)
@@ -364,7 +391,8 @@ class ServiceSerializer(serializers.ModelSerializer):
             'id', 'organization', 'organization_slug', 'category', 'category_name',
             'name', 'description', 'image',
             'duration_minutes', 'pricing_type', 'base_price', 'price_max',
-            'show_price', 'allow_request', 'fulfillment_kind', 'is_active', 'sort_order',
+            'show_price', 'quote_questions', 'allow_request', 'fulfillment_kind',
+            'is_active', 'sort_order',
             'currency', 'rating_summary', 'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -394,6 +422,28 @@ class ServiceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'price_max': 'Maximum must be at least the minimum price.'}
                 )
+        quote_questions = attrs.get(
+            'quote_questions',
+            getattr(self.instance, 'quote_questions', None),
+        )
+        if quote_questions is not None:
+            if not isinstance(quote_questions, list):
+                raise serializers.ValidationError({
+                    'quote_questions': 'Must be a list of question strings.',
+                })
+            cleaned = []
+            for item in quote_questions[:20]:
+                if isinstance(item, str):
+                    text = item.strip()[:300]
+                elif isinstance(item, dict):
+                    text = (item.get('question') or item.get('text') or '').strip()[:300]
+                else:
+                    continue
+                if text:
+                    cleaned.append(text)
+            attrs['quote_questions'] = cleaned
+            if pricing_type != Service.PricingType.QUOTE:
+                attrs['quote_questions'] = cleaned  # keep templates even if switching later
         category = attrs.get('category', getattr(self.instance, 'category', None))
         org = attrs.get('organization') or getattr(self.instance, 'organization', None)
         if category and org and category.organization_id != org.id:
@@ -608,6 +658,12 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     return_visit_status = serializers.SerializerMethodField()
     invoice = InvoiceSerializer(read_only=True)
     currency = serializers.SerializerMethodField()
+    booking_policy = serializers.CharField(source='organization.booking_policy', read_only=True)
+    quote_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True, allow_null=True)
+    quote_message = serializers.CharField(read_only=True)
+    quote_questions = serializers.JSONField(read_only=True)
+    quoted_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    requires_quote = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -621,12 +677,19 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'customer_notes', 'service_address', 'status_events',
             'parent_booking_id', 'return_visit_id', 'return_visit_start_at', 'return_visit_status',
             'invoice', 'currency',
+            'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
+            'quote_questions', 'quoted_at',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
+
+    def get_requires_quote(self, obj):
+        from .booking_services import booking_requires_quote
+
+        return booking_requires_quote(obj.organization, obj.service)
 
     def get_job_location(self, obj):
         return (obj.service_address or '').strip()
@@ -689,6 +752,7 @@ class BookingSerializer(serializers.ModelSerializer):
     cancel_cutoff_hours = serializers.IntegerField(
         source='organization.cancel_cutoff_hours', read_only=True,
     )
+    booking_policy = serializers.CharField(source='organization.booking_policy', read_only=True)
     can_customer_cancel = serializers.SerializerMethodField()
     can_customer_reschedule = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
@@ -709,6 +773,8 @@ class BookingSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    quote_answers = serializers.JSONField(required=False, write_only=True)
+    requires_quote = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -723,6 +789,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'slot_id', 'availability_slot', 'start_at', 'end_at', 'status', 'source',
             'booked_by', 'customer_notes', 'service_address', 'status_events',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
+            'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
+            'quote_questions', 'quoted_at', 'quote_answers',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -734,6 +802,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'organization_name', 'organization_slug', 'organization_public_ref',
             'availability_slot', 'source', 'booked_by',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
+            'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
+            'quote_questions', 'quoted_at',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -746,6 +816,11 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return f'BK-{obj.pk:05d}'
+
+    def get_requires_quote(self, obj):
+        from .booking_services import booking_requires_quote
+
+        return booking_requires_quote(obj.organization, obj.service)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -762,11 +837,15 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_can_customer_cancel(self, obj):
         from django.utils import timezone as dj_tz
 
-        if obj.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
+        if obj.status not in (
+            Booking.Status.REQUESTED,
+            Booking.Status.QUOTED,
+            Booking.Status.CONFIRMED,
+        ):
             return False
         if obj.start_at <= dj_tz.now():
             return False
-        if obj.status == Booking.Status.REQUESTED:
+        if obj.status in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
             return True
         cutoff = int(getattr(obj.organization, 'cancel_cutoff_hours', 0) or 0)
         if cutoff <= 0:
@@ -783,11 +862,15 @@ class BookingSerializer(serializers.ModelSerializer):
         user = getattr(request, 'user', None) if request else None
         if user and user.is_authenticated and customer_is_blocked(obj.organization, user):
             return False
-        if obj.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
+        if obj.status not in (
+            Booking.Status.REQUESTED,
+            Booking.Status.QUOTED,
+            Booking.Status.CONFIRMED,
+        ):
             return False
         if obj.start_at <= dj_tz.now():
             return False
-        if obj.status == Booking.Status.REQUESTED:
+        if obj.status in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
             return True
         cutoff = int(getattr(obj.organization, 'cancel_cutoff_hours', 0) or 0)
         if cutoff <= 0:
@@ -869,6 +952,7 @@ class BatchBookingItemSerializer(serializers.Serializer):
     )
     customer_notes = serializers.CharField(required=False, allow_blank=True, default='')
     service_address = serializers.CharField(required=False, allow_blank=True, default='')
+    quote_answers = serializers.JSONField(required=False)
 
 
 class BatchBookingSerializer(serializers.Serializer):
@@ -1147,7 +1231,8 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
         model = Service
         fields = (
             'id', 'name', 'description', 'duration_minutes',
-            'pricing_type', 'base_price', 'price_max', 'show_price', 'allow_request',
+            'pricing_type', 'base_price', 'price_max', 'show_price', 'quote_questions',
+            'allow_request',
             'fulfillment_kind', 'shop_location',
             'category_id', 'category_name', 'sort_order', 'image_url', 'rating_summary',
             'currency',

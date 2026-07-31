@@ -111,6 +111,16 @@ class EmailVerificationTests(TestCase):
         self.assertEqual(owner_start.data['auth_method'], 'password')
         self.assertEqual(len(mail.outbox), 1)  # no extra OTP for provider
 
+        missing = self.client.post(
+            '/accounts/api/login/start/',
+            {'email': 'nobody@example.com'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(missing.status_code, 404, missing.data)
+        self.assertEqual(missing.data['code'], 'account_not_found')
+        self.assertEqual(len(mail.outbox), 1)  # still no OTP for unknown email
+
         login_ok = self.client.post(
             '/accounts/api/login/',
             {'email': owner.email, 'password': 'password123'},

@@ -84,6 +84,7 @@ export default function CustomerBookingsPage() {
               onReschedule={canRescheduleBooking(b) ? () => setRescheduleBooking(b) : null}
               onCancel={canCancelBooking(b) ? () => setConfirmCancelId(b.id) : null}
               cancelling={cancellingId === b.id}
+              onQuoteUpdated={load}
             />
           ))}
         </ul>

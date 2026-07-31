@@ -225,8 +225,10 @@ def issue_or_update_invoice(
 
 
 @transaction.atomic
-def mark_invoice_paid(invoice: Invoice, *, staff_user) -> Invoice:
-    _assert_staff(staff_user, invoice.booking.organization)
+def mark_invoice_paid(invoice: Invoice, *, staff_user=None) -> Invoice:
+    """Mark paid. Pass staff_user for offline POS; omit for trusted Stripe webhooks."""
+    if staff_user is not None:
+        _assert_staff(staff_user, invoice.booking.organization)
     if invoice.status == Invoice.Status.VOID:
         raise ValidationError({'status': 'Cannot mark a void invoice as paid.'})
     invoice.status = Invoice.Status.PAID

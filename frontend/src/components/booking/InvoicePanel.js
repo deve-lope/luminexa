@@ -171,6 +171,7 @@ export default function InvoicePanel({
   providerName,
   compact = false,
   showBreakdown = false,
+  allowPayOnline = false,
   className = '',
 }) {
   const [viewOpen, setViewOpen] = useState(false);
@@ -190,6 +191,11 @@ export default function InvoicePanel({
 
   const currency = invoice.currency || 'CAD';
   const amountLabel = formatMoney(invoice.amount, currency);
+  const canPay =
+    allowPayOnline &&
+    invoice.status === 'issued' &&
+    invoice.can_pay_online &&
+    bookingId;
 
   const handleDownload = async () => {
     setBusy(true);
@@ -202,6 +208,37 @@ export default function InvoicePanel({
       setBusy(false);
     }
   };
+
+  const handlePay = async () => {
+    if (!bookingId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const path = window.location.pathname + window.location.search;
+      window.sessionStorage.setItem('luminexa.pendingInvoiceBookingId', String(bookingId));
+      const res = await jobsAPI.payBookingInvoice(bookingId, {
+        success_path: path,
+        cancel_path: path,
+      });
+      const url = res.data?.checkout_url;
+      if (!url) throw new Error('No checkout URL');
+      window.location.href = url;
+    } catch (e) {
+      setError(e?.response?.data?.detail || 'Could not start card payment.');
+      setBusy(false);
+    }
+  };
+
+  const payButton = canPay ? (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={handlePay}
+      className="inline-flex min-h-[40px] items-center rounded-lg bg-emerald-700 px-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60"
+    >
+      {busy ? 'Opening payment…' : 'Pay with wallet or card'}
+    </button>
+  ) : null;
 
   return (
     <>
@@ -233,6 +270,7 @@ export default function InvoicePanel({
           </div>
           {!showBreakdown && (
             <div className="flex flex-wrap gap-2">
+              {payButton}
               <button
                 type="button"
                 onClick={() => setViewOpen(true)}
@@ -259,6 +297,7 @@ export default function InvoicePanel({
           <div className="mt-4 border-t border-teal-100/80 pt-4">
             <InvoiceBreakdown invoice={invoice} providerName={providerName} />
             <div className="mt-4 flex flex-wrap gap-2">
+              {payButton}
               <button
                 type="button"
                 disabled={busy}
@@ -303,7 +342,8 @@ export default function InvoicePanel({
             <div className="mt-4">
               <InvoiceBreakdown invoice={invoice} providerName={providerName} />
             </div>
-            <div className="mt-5 flex gap-2">
+            <div className="mt-5 flex flex-wrap gap-2">
+              {payButton}
               <button
                 type="button"
                 disabled={busy}

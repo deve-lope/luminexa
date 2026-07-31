@@ -181,7 +181,7 @@ class PublicServiceCalendarAPIView(APIView):
             'year': year,
             'month': month,
             'service': PublicServiceReadSerializer(service, context={'request': request}).data,
-            'booking': booking_policy_meta(org, request.user),
+            'booking': booking_policy_meta(org, request.user, service=service),
             'days': days,
             'slots_by_day': dict(slots_by_day),
         })

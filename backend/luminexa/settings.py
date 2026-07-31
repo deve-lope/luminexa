@@ -198,3 +198,17 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 3600.0,
     },
 }
+
+# ── Stripe (Connect marketplace + Billing subscriptions) ───────────────────
+# Leave secret key empty in local/dev until configured — APIs return 503.
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
+STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
+# Flat platform fee per customer→provider job payment (cents). Default $0.70.
+STRIPE_PLATFORM_FEE_CENTS = config('STRIPE_PLATFORM_FEE_CENTS', default=70, cast=int)
+# Stripe Price IDs for provider SaaS plans (create in Stripe Dashboard).
+STRIPE_PRICE_PRO_MONTHLY = config('STRIPE_PRICE_PRO_MONTHLY', default='')
+STRIPE_PRICE_PRO_YEARLY = config('STRIPE_PRICE_PRO_YEARLY', default='')
+# Free trial for provider Pro subscriptions (days). 0 = no trial from the API.
+STRIPE_TRIAL_DAYS = config('STRIPE_TRIAL_DAYS', default=30, cast=int)
+STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)

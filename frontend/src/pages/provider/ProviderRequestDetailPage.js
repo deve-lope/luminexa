@@ -36,6 +36,10 @@ export default function ProviderRequestDetailPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [quoteAmount, setQuoteAmount] = useState('');
+  const [quoteMessage, setQuoteMessage] = useState('');
+  const [quoteQuestions, setQuoteQuestions] = useState(['']);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +78,54 @@ export default function ProviderRequestDetailPage() {
 
   const status = data?.status;
   const statusBadgeClass = requestStatusTone(kind, status);
+  const isQuotePolicy = data?.booking_policy === 'quote';
+  const needsQuote =
+    kind === 'booking' &&
+    (data?.requires_quote || isQuotePolicy || data?.service_pricing_type === 'quote') &&
+    (status === 'requested' || status === 'quoted');
+
+  useEffect(() => {
+    if (!data || kind !== 'booking') return;
+    const existing = data.quote_questions || [];
+    if (existing.length) {
+      setQuoteQuestions(existing.map((q) => q.question || ''));
+      if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
+      if (data.quote_message) setQuoteMessage(data.quote_message);
+    }
+  }, [data, kind]);
+
+  const sendQuote = async () => {
+    const amount = Number(quoteAmount);
+    if (!(amount > 0)) {
+      setError('Enter a quote amount greater than zero.');
+      return;
+    }
+    const existing = data?.quote_questions || [];
+    const questions = quoteQuestions
+      .map((q, i) => {
+        const text = q.trim();
+        if (!text) return null;
+        const prior =
+          existing.find((eq) => (eq.question || '').trim() === text) || existing[i] || null;
+        return {
+          id: prior?.id || `q${i + 1}`,
+          question: text,
+          answer: prior?.answer || '',
+        };
+      })
+      .filter(Boolean);
+    const payload = {
+      amount,
+      message: quoteMessage.trim(),
+    };
+    // Omit questions when empty so existing customer answers are kept server-side.
+    if (questions.length) payload.questions = questions;
+    await runBookingAction(
+      () => jobsAPI.sendBookingQuote(id, payload),
+      'Quote sent to customer.'
+    );
+    setShowQuoteForm(false);
+  };
 
   const runBookingAction = async (fn, successMessage) => {
     setActionBusy(true);
@@ -139,7 +191,7 @@ export default function ProviderRequestDetailPage() {
         {kind === 'inquiry' && data.preferred_date && (
           <p className="mt-2 text-white/90">Preferred date: {data.preferred_date}</p>
         )}
-        {kind === 'booking' && status === 'requested' && (
+        {kind === 'booking' && status === 'requested' && !needsQuote && (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
@@ -156,6 +208,39 @@ export default function ProviderRequestDetailPage() {
               className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
             >
               Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() =>
+                runBookingAction(async () => {
+                  await jobsAPI.declineBooking(id);
+                  navigate(providerRequests(orgSlug));
+                }, null)
+              }
+              className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+        {kind === 'booking' && needsQuote && (
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setShowQuoteForm((v) => !v)}
+              className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+            >
+              {showQuoteForm ? 'Hide quote form' : status === 'quoted' ? 'Update quote' : 'Send quote'}
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy || new Date(data.start_at) <= new Date()}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Change time
             </button>
             <button
               type="button"
@@ -233,6 +318,121 @@ export default function ProviderRequestDetailPage() {
           </button>
         )}
       </header>
+
+      {kind === 'booking' && showQuoteForm && needsQuote && (
+        <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-violet-800">Send quote</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Set a price and optional questions. Use Change time above if you need a different slot
+            before sending.
+          </p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label htmlFor="quote-amount" className="mb-1 block text-xs font-medium text-slate-600">
+                Quote amount
+              </label>
+              <input
+                id="quote-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={quoteAmount}
+                onChange={(e) => setQuoteAmount(e.target.value)}
+                className="w-full min-h-[44px] rounded-lg border border-slate-200 px-3 text-sm"
+                placeholder="e.g. 120.00"
+              />
+            </div>
+            <div>
+              <label htmlFor="quote-message" className="mb-1 block text-xs font-medium text-slate-600">
+                What’s included
+              </label>
+              <textarea
+                id="quote-message"
+                rows={3}
+                value={quoteMessage}
+                onChange={(e) => setQuoteMessage(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Scope, materials, notes…"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium text-slate-600">Questions for the customer</p>
+              <div className="space-y-2">
+                {quoteQuestions.map((q, idx) => (
+                  <input
+                    key={`qq-${idx}`}
+                    value={q}
+                    onChange={(e) => {
+                      const next = [...quoteQuestions];
+                      next[idx] = e.target.value;
+                      setQuoteQuestions(next);
+                    }}
+                    className="w-full min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm"
+                    placeholder={`Question ${idx + 1}`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuoteQuestions((list) => [...list, ''])}
+                className="mt-2 text-xs font-semibold text-violet-700"
+              >
+                + Add question
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={sendQuote}
+              className="min-h-[44px] w-full rounded-xl bg-violet-700 font-semibold text-white disabled:opacity-60"
+            >
+              {actionBusy ? 'Sending…' : 'Send quote to customer'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {kind === 'booking' &&
+        status === 'requested' &&
+        (data.quote_questions || []).some((q) => (q.answer || '').trim()) && (
+        <section className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Customer answers</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            {data.quote_questions.map((q) => (
+              <li key={q.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="font-medium">{q.question}</p>
+                <p className="mt-1 text-slate-600">{q.answer || '—'}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {kind === 'booking' && status === 'quoted' && data.quote_amount != null && !showQuoteForm && (
+        <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Quote sent</h2>
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {currency.format(Number(data.quote_amount))}
+          </p>
+          {data.quote_message && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{data.quote_message}</p>
+          )}
+          {(data.quote_questions || []).length > 0 && (
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {data.quote_questions.map((q) => (
+                <li key={q.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="font-medium">{q.question}</p>
+                  {q.answer ? (
+                    <p className="mt-1 text-slate-600">Answer: {q.answer}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">Waiting for customer answer</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
         <h2 className="text-sm font-semibold uppercase text-slate-500">Customer</h2>
@@ -377,7 +577,10 @@ export default function ProviderRequestDetailPage() {
       )}
 
       <RequestMessageThread
+        peerName={data.customer_name}
         customerName={data.customer_name}
+        emptyHint="Chat with the customer about this request."
+        idleOpenLabel="Message customer"
         loadMessages={() =>
           kind === 'booking'
             ? jobsAPI.listBookingMessages(id)

@@ -24,6 +24,14 @@ export function customerHistory() {
   return '/customer/history';
 }
 
+export function customerMessages() {
+  return '/customer/messages';
+}
+
+export function customerNotifications() {
+  return '/customer/notifications';
+}
+
 export function customerFind() {
   return '/customer/find';
 }

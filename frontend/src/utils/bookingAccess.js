@@ -22,9 +22,9 @@ export function isOrgStaff(memberships, providerKey) {
   );
 }
 
-/** Request-access-first businesses require provider approval before booking. */
+/** Invitation-only no longer requires a separate connect step — booking is the request. */
 export function needsExplicitConnect(bookingPolicy) {
-  return bookingPolicy === 'clients_only';
+  return false;
 }
 
 export function canViewBookingCalendar({ isAuthenticated, isStaff }) {
@@ -33,7 +33,7 @@ export function canViewBookingCalendar({ isAuthenticated, isStaff }) {
 
 export function customerConnectionState(bookingPolicy, membership) {
   if (!membership) {
-    return needsExplicitConnect(bookingPolicy) ? 'disconnected' : 'implicit';
+    return 'implicit';
   }
   if (membership.customer_status === 'blocked') return 'blocked';
   if (membership.customer_status === 'pending') return 'pending';

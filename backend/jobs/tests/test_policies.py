@@ -40,19 +40,23 @@ class BookingPolicyTests(TestCase):
         return org, service, slot
 
     def test_instant_booking_confirms_immediately(self):
-        org, _service, slot = self._org(Organization.BookingPolicy.INSTANT)
+        org, service, slot = self._org(Organization.BookingPolicy.INSTANT)
         self.client.force_authenticate(user=self.customer)
         res = self.client.post(
             '/api/v1/bookings/',
-            {'slot_id': slot.id},
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
             format='json',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status_code, 201, res.data)
         self.assertEqual(res.data['status'], Booking.Status.CONFIRMED)
 
-    def test_clients_only_blocks_booking_until_approved(self):
-        org, _service, slot = self._org(Organization.BookingPolicy.CLIENTS_ONLY)
+    def test_clients_only_allows_pending_booking_request(self):
+        org, service, slot = self._org(Organization.BookingPolicy.CLIENTS_ONLY)
         OrganizationMembership.objects.create(
             organization=org,
             user=self.customer,
@@ -62,11 +66,144 @@ class BookingPolicyTests(TestCase):
         self.client.force_authenticate(user=self.customer)
         res = self.client.post(
             '/api/v1/bookings/',
-            {'slot_id': slot.id},
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
             format='json',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data['status'], Booking.Status.REQUESTED)
+
+        self.client.force_authenticate(user=self.owner)
+        accept = self.client.post(
+            f'/api/v1/bookings/{res.data["id"]}/accept/',
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200, accept.data)
+        membership = OrganizationMembership.objects.get(
+            organization=org,
+            user=self.customer,
+            role=OrganizationMembership.Role.CUSTOMER,
+        )
+        self.assertEqual(
+            membership.customer_status,
+            OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        self.assertEqual(
+            Booking.objects.get(pk=res.data['id']).status,
+            Booking.Status.CONFIRMED,
+        )
+
+    def test_service_quote_pricing_with_prefilled_answers(self):
+        """Fixed org policy + quote-priced service still requires quote; answers at request."""
+        org, service, slot = self._org(Organization.BookingPolicy.INSTANT)
+        service.pricing_type = Service.PricingType.QUOTE
+        service.quote_questions = ['How many rooms?', 'Pets on site?']
+        service.save()
+
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+                'quote_answers': [
+                    {'id': 'q1', 'answer': '4'},
+                    {'id': 'q2', 'answer': 'One dog'},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        self.assertEqual(create.data['status'], Booking.Status.REQUESTED)
+        self.assertTrue(create.data['requires_quote'])
+        self.assertEqual(create.data['quote_questions'][0]['answer'], '4')
+
+        self.client.force_authenticate(user=self.owner)
+        blocked = self.client.post(
+            f'/api/v1/bookings/{create.data["id"]}/accept/',
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(blocked.status_code, 400)
+
+        quoted = self.client.post(
+            f'/api/v1/bookings/{create.data["id"]}/send-quote/',
+            {'amount': '120.00', 'message': 'Deep clean'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+        self.assertEqual(quoted.data['quote_questions'][0]['answer'], '4')
+
+        self.client.force_authenticate(user=self.customer)
+        accepted = self.client.post(
+            f'/api/v1/bookings/{create.data["id"]}/accept-quote/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
+
+    def test_quote_policy_send_and_accept(self):
+        org, service, slot = self._org(Organization.BookingPolicy.QUOTE)
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        self.assertEqual(create.data['status'], Booking.Status.REQUESTED)
+        booking_id = create.data['id']
+
+        # Direct approve blocked for quote policy
+        self.client.force_authenticate(user=self.owner)
+        blocked = self.client.post(
+            f'/api/v1/bookings/{booking_id}/accept/',
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.data)
+
+        quoted = self.client.post(
+            f'/api/v1/bookings/{booking_id}/send-quote/',
+            {
+                'amount': '85.50',
+                'message': 'Includes supplies',
+                'questions': ['How many rooms?', 'Pets on site?'],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+        self.assertEqual(quoted.data['status'], Booking.Status.QUOTED)
+        self.assertEqual(str(quoted.data['quote_amount']), '85.50')
+        self.assertEqual(len(quoted.data['quote_questions']), 2)
+
+        self.client.force_authenticate(user=self.customer)
+        qid = quoted.data['quote_questions'][0]['id']
+        accepted = self.client.post(
+            f'/api/v1/bookings/{booking_id}/accept-quote/',
+            {'answers': [{'id': qid, 'answer': '3 bedrooms'}]},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
+        self.assertEqual(accepted.data['quote_questions'][0]['answer'], '3 bedrooms')
 
 
 class ServiceInquiryPermissionTests(TestCase):

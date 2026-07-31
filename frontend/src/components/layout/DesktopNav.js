@@ -77,12 +77,14 @@ export default function DesktopNav({
 }
 
 function DesktopMenuRow({ item }) {
+  const Icon = item.iconId ? TAB_ICONS[item.iconId] : null;
   const className = `flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-sm font-medium transition ${
     item.danger ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700' : 'lx-nav-idle'
   }`;
 
   const label = (
     <>
+      {Icon && <Icon className="h-5 w-5 shrink-0" />}
       <span className="min-w-0 flex-1 truncate" title={item.label}>
         {item.label}
       </span>

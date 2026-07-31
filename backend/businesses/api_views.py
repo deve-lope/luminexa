@@ -5,7 +5,6 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -49,11 +48,8 @@ def _unique_business_type_slug(name: str) -> str:
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def business_types_list_api(request):
-    from rest_framework.permissions import IsAdminUser
-
     if request.method == 'POST':
-        if not IsAdminUser().has_permission(request, None):
-            raise PermissionDenied('Only administrators can create business types.')
+        # Registration lets providers add a custom type when the catalog has no fit.
         throttle = BusinessTypeWriteThrottle()
         if not throttle.allow_request(request, business_types_list_api):
             from rest_framework.exceptions import Throttled

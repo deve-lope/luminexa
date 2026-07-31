@@ -35,7 +35,7 @@ export default function ProviderStorefrontPreview({
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="relative h-44 overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200">
+      <div className="relative aspect-[3/1] overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200">
         {organization.banner_url && (
           <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
         )}

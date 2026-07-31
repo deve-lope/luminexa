@@ -77,6 +77,12 @@ class Service(models.Model):
         default=True,
         help_text='When off, price is hidden on the public booking profile.',
     )
+    quote_questions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Template questions for quote-priced services (list of strings). '
+                  'Customers answer these when requesting; providers can edit on the quote.',
+    )
     allow_request = models.BooleanField(
         default=True,
         help_text='Customers can send a service request for this item.',
@@ -169,6 +175,7 @@ class ProviderNotification(models.Model):
         NEW_CUSTOMER_BOOKING = 'new_customer_booking', 'New customer booking'
         CUSTOMER_CANCELLED_BOOKING = 'customer_cancelled_booking', 'Customer cancelled booking'
         CUSTOMER_RESCHEDULE_REQUEST = 'customer_reschedule_request', 'Customer reschedule request'
+        PAYMENT_RECEIVED = 'payment_received', 'Payment received'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -194,6 +201,7 @@ class CustomerNotification(models.Model):
         BOOKING_RESCHEDULED = 'booking_rescheduled', 'Booking rescheduled'
         BOOKING_COMPLETED = 'booking_completed', 'Booking completed'
         INVOICE_READY = 'invoice_ready', 'Invoice ready'
+        PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -437,6 +445,7 @@ class AvailabilitySlot(models.Model):
 class Booking(models.Model):
     class Status(models.TextChoices):
         REQUESTED = 'requested', 'Requested'
+        QUOTED = 'quoted', 'Quote sent'
         CONFIRMED = 'confirmed', 'Confirmed'
         IN_PROGRESS = 'in_progress', 'In progress'
         NEEDS_RETURN = 'needs_return', 'Needs return visit'
@@ -498,6 +507,24 @@ class Booking(models.Model):
         blank=True,
         help_text='When the 24h reminder email was sent.',
     )
+    quote_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Provider quote amount awaiting customer acceptance.',
+    )
+    quote_message = models.TextField(
+        blank=True,
+        default='',
+        help_text='What the quote covers / notes for the customer.',
+    )
+    quote_questions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='[{id, question, answer}] questions the provider asks before/with the quote.',
+    )
+    quoted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -585,6 +612,20 @@ class Invoice(models.Model):
     )
     issued_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    # Stripe Connect payment (customer → provider + platform fee)
+    stripe_checkout_session_id = models.CharField(max_length=255, blank=True, default='')
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, default='')
+    platform_fee_cents = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Luminexa application fee charged on this payment (cents).',
+    )
+    payment_method = models.CharField(
+        max_length=32,
+        blank=True,
+        default='',
+        help_text='offline | stripe | …',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -658,6 +699,8 @@ class BookingStatusEvent(models.Model):
         ACCEPTED = 'accepted', 'Accepted'
         DECLINED = 'declined', 'Declined'
         CANCELLED = 'cancelled', 'Cancelled'
+        QUOTED = 'quoted', 'Quote sent'
+        QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         STARTED = 'started', 'Started'
         COMPLETED = 'completed', 'Completed'
         RESCHEDULED = 'rescheduled', 'Rescheduled'

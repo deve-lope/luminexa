@@ -38,6 +38,8 @@ class Organization(models.Model):
         INSTANT = 'instant', 'Open — instant confirmation'
         APPROVAL = 'approval', 'Open — requires approval'
         CLIENTS_ONLY = 'clients_only', 'By invitation only — approved customers'
+        QUOTE = 'quote', 'Quote before confirm — price then accept'
+
 
     class SchedulingMode(models.TextChoices):
         RECURRING = 'recurring', 'Weekly schedule (auto slots)'
@@ -151,6 +153,27 @@ class Organization(models.Model):
         default=25,
         help_text='How far from the map center this provider serves customers',
     )
+    # ── Stripe Connect (customer job payments → provider) ──────────────────
+    stripe_account_id = models.CharField(max_length=255, blank=True, default='')
+    stripe_charges_enabled = models.BooleanField(default=False)
+    stripe_payouts_enabled = models.BooleanField(default=False)
+    stripe_details_submitted = models.BooleanField(default=False)
+    # ── Stripe Billing (provider pays Luminexa subscription) ───────────────
+    stripe_customer_id = models.CharField(max_length=255, blank=True, default='')
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, default='')
+    subscription_status = models.CharField(
+        max_length=32,
+        blank=True,
+        default='none',
+        help_text='none | trialing | active | past_due | canceled | unpaid',
+    )
+    subscription_plan = models.CharField(
+        max_length=32,
+        blank=True,
+        default='free',
+        help_text='free | pro_monthly | pro_yearly',
+    )
+    subscription_current_period_end = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

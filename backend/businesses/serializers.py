@@ -8,6 +8,13 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     organization_name = serializers.CharField(source='organization.name', read_only=True)
+    subscription_status = serializers.CharField(
+        source='organization.subscription_status', read_only=True,
+    )
+    subscription_plan = serializers.CharField(
+        source='organization.subscription_plan', read_only=True,
+    )
+    subscription_active = serializers.SerializerMethodField()
 
     class Meta:
         model = OrganizationMembership
@@ -19,9 +26,21 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
             'organization_name',
             'role',
             'customer_status',
+            'subscription_status',
+            'subscription_plan',
+            'subscription_active',
             'created_at',
         )
         read_only_fields = fields
+
+    def get_subscription_active(self, obj):
+        from django.conf import settings
+
+        # No Stripe keys → do not paywall local/dev installs.
+        if not getattr(settings, 'STRIPE_ENABLED', False):
+            return True
+        status = (obj.organization.subscription_status or 'none').lower()
+        return status in ('active', 'trialing')
 
 
 class BusinessTypeSerializer(serializers.ModelSerializer):

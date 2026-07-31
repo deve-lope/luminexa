@@ -74,6 +74,17 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
 
     created = 0
     day = max(range_start, today)
+    to_create = []
+
+    # Existing keys in range (one query) — avoid per-slot EXISTS.
+    existing = set(
+        AvailabilitySlot.objects.filter(
+            organization=organization,
+            start_at__gte=purge_start,
+            start_at__lt=purge_end,
+            service_id__in=[s.id for s in services],
+        ).values_list('service_id', 'start_at')
+    )
 
     while day <= range_end:
         weekday = day.weekday()
@@ -88,22 +99,24 @@ def sync_recurring_slots(organization, *, weeks_ahead: int = 3) -> int:
                     if cursor <= timezone.now():
                         cursor += duration
                         continue
-                    exists = AvailabilitySlot.objects.filter(
-                        organization=organization,
-                        service=service,
-                        start_at=cursor,
-                    ).exists()
-                    if not exists:
-                        AvailabilitySlot.objects.create(
-                            organization=organization,
-                            service=service,
-                            start_at=cursor,
-                            end_at=slot_end,
-                            status=AvailabilitySlot.Status.OPEN,
+                    key = (service.id, cursor)
+                    if key not in existing:
+                        to_create.append(
+                            AvailabilitySlot(
+                                organization=organization,
+                                service=service,
+                                start_at=cursor,
+                                end_at=slot_end,
+                                status=AvailabilitySlot.Status.OPEN,
+                            )
                         )
+                        existing.add(key)
                         created += 1
                     cursor += duration
         day += timedelta(days=1)
+
+    if to_create:
+        AvailabilitySlot.objects.bulk_create(to_create, batch_size=500)
 
     return created
 

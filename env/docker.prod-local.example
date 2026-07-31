@@ -11,10 +11,14 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 PUBLIC_APP_URL=http://localhost:3000
 
-# Docker prod-local DB (named volume luminexa_prod_data)
-SQLITE_DB_PATH=/app/data/db.sqlite3
-# Optional production DB (when set, SQLITE_DB_PATH is ignored):
-# DATABASE_URL=postgres://luminexa:secret@db:5432/luminexa
+# Docker prod-local DB — PostgreSQL (service `db` in docker-compose.yml)
+POSTGRES_USER=luminexa
+POSTGRES_PASSWORD=luminexa_change_me_before_deploy
+POSTGRES_DB=luminexa
+DATABASE_URL=postgres://luminexa:luminexa_change_me_before_deploy@db:5432/luminexa
+
+# Legacy SQLite fallback (ignored when DATABASE_URL is set):
+# SQLITE_DB_PATH=/app/data/db.sqlite3
 
 # Celery (redis service in docker-compose.yml)
 CELERY_BROKER_URL=redis://redis:6379/0
@@ -58,3 +62,18 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # EMAIL_HOST_PASSWORD=your-ses-smtp-password
 # EMAIL_USE_TLS=True
 # DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+
+# ── Stripe (Connect marketplace + provider subscriptions) ───────────────────
+# Leave empty until configured — APIs return a clear "not configured" error.
+# STRIPE_SECRET_KEY=sk_live_...
+# STRIPE_PUBLISHABLE_KEY=pk_live_...
+# STRIPE_WEBHOOK_SECRET=whsec_...
+# Flat platform fee per customer→provider card payment (cents). Default $0.70.
+# STRIPE_PLATFORM_FEE_CENTS=70
+# Create Prices in Stripe Dashboard for provider Pro plans:
+# STRIPE_PRICE_PRO_MONTHLY=price_...
+# STRIPE_PRICE_PRO_YEARLY=price_...
+# STRIPE_TRIAL_DAYS=30
+# Webhook URL: https://YOUR_API_HOST/api/v1/webhooks/stripe/
+# Events: checkout.session.completed, customer.subscription.*, account.updated,
+#         payment_intent.succeeded

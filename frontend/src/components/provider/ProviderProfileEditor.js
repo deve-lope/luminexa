@@ -1,6 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ImageCropDialog from '../media/ImageCropDialog';
 import { businessesAPI, orgProfileAPI } from '../../utils/api';
+import {
+  COVER_CROP,
+  LOGO_CROP,
+  validateImageSourceFile,
+} from '../../utils/cropImage';
 import { providerSettings } from '../../utils/providerPaths';
 
 function parseUploadError(err) {
@@ -21,6 +27,20 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
   const [uploading, setUploading] = useState(null);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+  const [cropState, setCropState] = useState(null);
+  const cropObjectUrlRef = useRef(null);
+
+  const clearCropObjectUrl = useCallback(() => {
+    if (cropObjectUrlRef.current) {
+      URL.revokeObjectURL(cropObjectUrlRef.current);
+      cropObjectUrlRef.current = null;
+    }
+  }, []);
+
+  const closeCrop = useCallback(() => {
+    clearCropObjectUrl();
+    setCropState(null);
+  }, [clearCropObjectUrl]);
 
   const refreshPreview = useCallback(() => {
     if (!orgSlug) return;
@@ -53,6 +73,8 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
     loadGallery();
   }, [refreshPreview, loadGallery]);
 
+  useEffect(() => () => clearCropObjectUrl(), [clearCropObjectUrl]);
+
   const notifyMediaChange = useCallback(() => {
     refreshPreview();
     loadGallery();
@@ -78,41 +100,62 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
     }
   };
 
-  const uploadBanner = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !orgSlug) return;
-    const fd = new FormData();
-    fd.append('banner', file);
-    setUploading('banner');
-    setError(null);
-    try {
-      await orgProfileAPI.patchOrganization(orgSlug, fd);
-      setMessage('Cover photo updated.');
-      notifyMediaChange();
-    } catch (err) {
-      setError(parseUploadError(err));
-    } finally {
-      setUploading(null);
-      e.target.value = '';
+  const beginCrop = (file, kind) => {
+    const config = kind === 'banner' ? COVER_CROP : LOGO_CROP;
+    const validationError = validateImageSourceFile(file, { maxBytes: config.maxSourceBytes });
+    if (validationError) {
+      setError(validationError);
+      return;
     }
+    clearCropObjectUrl();
+    const objectUrl = URL.createObjectURL(file);
+    cropObjectUrlRef.current = objectUrl;
+    setError(null);
+    setCropState({
+      kind,
+      imageSrc: objectUrl,
+      aspect: config.aspect,
+      exportWidth: config.exportWidth,
+      exportHeight: config.exportHeight,
+      mimeType: config.mimeType,
+      quality: config.quality,
+      fileName: kind === 'banner' ? 'cover.webp' : 'logo.webp',
+      title: kind === 'banner' ? 'Crop cover photo' : 'Crop logo',
+    });
   };
 
-  const uploadLogo = async (e) => {
+  const onBannerSelected = (e) => {
     const file = e.target.files?.[0];
-    if (!file || !orgSlug) return;
+    e.target.value = '';
+    if (!file) return;
+    beginCrop(file, 'banner');
+  };
+
+  const onLogoSelected = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    beginCrop(file, 'logo');
+  };
+
+  const applyCroppedUpload = async (file) => {
+    if (!orgSlug || !cropState) return;
+    const field = cropState.kind === 'banner' ? 'banner' : 'logo';
     const fd = new FormData();
-    fd.append('logo', file);
-    setUploading('logo');
+    fd.append(field, file);
+    setUploading(field);
     setError(null);
     try {
       await orgProfileAPI.patchOrganization(orgSlug, fd);
-      setMessage('Logo updated.');
+      setMessage(field === 'banner' ? 'Cover photo updated.' : 'Logo updated.');
+      closeCrop();
       notifyMediaChange();
     } catch (err) {
-      setError(parseUploadError(err));
+      const message = parseUploadError(err);
+      setError(message);
+      throw new Error(message);
     } finally {
       setUploading(null);
-      e.target.value = '';
     }
   };
 
@@ -162,17 +205,20 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
       <div className="mt-4 space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-700">Cover photo</label>
-          {bannerUrl && (
-            <img
-              src={bannerUrl}
-              alt=""
-              className="mt-2 h-28 w-full rounded-lg object-cover"
-            />
-          )}
+          <p className="mt-0.5 text-xs text-slate-500">Shown at 3:1. Cropped to 1500×500 WebP.</p>
+          <div className="mt-2 aspect-[3/1] w-full overflow-hidden rounded-lg bg-slate-100">
+            {bannerUrl ? (
+              <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                No cover photo
+              </div>
+            )}
+          </div>
           <input
             type="file"
-            accept="image/*"
-            onChange={uploadBanner}
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={onBannerSelected}
             disabled={uploading === 'banner'}
             className="mt-2 block w-full text-sm"
           />
@@ -183,17 +229,22 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
 
         <div>
           <label className="block text-sm font-medium text-slate-700">Logo</label>
-          {logoUrl && (
+          <p className="mt-0.5 text-xs text-slate-500">Square crop, exported at 512×512 WebP.</p>
+          {logoUrl ? (
             <img
               src={logoUrl}
               alt=""
               className="mt-2 h-16 w-16 rounded-lg border border-slate-200 object-cover"
             />
+          ) : (
+            <div className="mt-2 flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-200 text-[10px] text-slate-400">
+              Logo
+            </div>
           )}
           <input
             type="file"
-            accept="image/*"
-            onChange={uploadLogo}
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={onLogoSelected}
             disabled={uploading === 'logo'}
             className="mt-2 block w-full text-sm"
           />
@@ -271,6 +322,20 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
 
       {message && <p className="mt-3 text-sm text-emerald-700">{message}</p>}
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+      <ImageCropDialog
+        open={Boolean(cropState)}
+        imageSrc={cropState?.imageSrc}
+        title={cropState?.title}
+        aspect={cropState?.aspect}
+        exportWidth={cropState?.exportWidth}
+        exportHeight={cropState?.exportHeight}
+        mimeType={cropState?.mimeType}
+        quality={cropState?.quality}
+        fileName={cropState?.fileName}
+        onCancel={closeCrop}
+        onApply={applyCroppedUpload}
+      />
     </section>
   );
 }

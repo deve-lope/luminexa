@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BusinessTypeSelector from '../components/business/BusinessTypeSelector';
 import AddressFields from '../components/location/AddressFields';
 import { businessesAPI, userAPI } from '../utils/api';
@@ -15,8 +15,9 @@ const BENEFITS = [
 
 export default function RegisterBusinessPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [types, setTypes] = useState([]);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => location.state?.email || '');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -276,6 +277,7 @@ export default function RegisterBusinessPage() {
                   selectedSlugs={selectedSlugs}
                   onSelectionChange={setSelectedSlugs}
                   variant="light"
+                  allowCreate
                 />
               </section>
 

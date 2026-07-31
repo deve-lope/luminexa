@@ -3,6 +3,20 @@
 name: luminexa
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: luminexa-db
+    env_file:
+      - .env.docker.prod
+    volumes:
+      - luminexa_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: luminexa-redis
@@ -28,15 +42,18 @@ services:
       - .env.docker.prod
     environment:
       DJANGO_SETTINGS_MODULE: luminexa.settings
-      SQLITE_DB_PATH: /app/data/db.sqlite3
+      RUN_DB_MIGRATE: "1"
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      PUBLIC_APP_URL: http://localhost:3000
+      # PUBLIC_APP_URL comes from .env.docker.prod (must be your real site for Stripe returns)
     depends_on:
-      - redis
-      - mailpit
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mailpit:
+        condition: service_started
     volumes:
-      - luminexa_prod_data:/app/data
       - luminexa_media:/app/media
     restart: unless-stopped
 
@@ -50,14 +67,17 @@ services:
       - .env.docker.prod
     environment:
       DJANGO_SETTINGS_MODULE: luminexa.settings
-      SQLITE_DB_PATH: /app/data/db.sqlite3
+      RUN_DB_MIGRATE: "0"
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
-      - redis
-      - web
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_started
     volumes:
-      - luminexa_prod_data:/app/data
       - luminexa_media:/app/media
     restart: unless-stopped
 
@@ -71,14 +91,16 @@ services:
       - .env.docker.prod
     environment:
       DJANGO_SETTINGS_MODULE: luminexa.settings
-      SQLITE_DB_PATH: /app/data/db.sqlite3
+      RUN_DB_MIGRATE: "0"
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
-      - redis
-      - web
-    volumes:
-      - luminexa_prod_data:/app/data
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -97,5 +119,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  luminexa_prod_data:
+  luminexa_pg_data:
   luminexa_media:

@@ -3,6 +3,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'rea
 import AppShell from '../components/layout/AppShell';
 import OrgSwitcher from '../components/provider/OrgSwitcher';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgContext';
 import { buildProviderMenuItems, buildProviderTabs } from '../config/navigation';
 import { isProviderMember } from '../utils/postLoginRoute';
@@ -18,11 +19,17 @@ import {
   providerServices,
   providerSettings,
   providerShare,
+  providerSubscribe,
 } from '../utils/providerPaths';
 import { resolveProviderBack } from '../utils/navigationBack';
+import {
+  isProviderSubscriptionExemptPath,
+  orgHasActiveSubscription,
+} from '../utils/providerSubscription';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const { orgSlug, activeOrg } = useProviderOrg();
@@ -36,10 +43,19 @@ function ProviderShell() {
         const stats = res.data?.stats || {};
         const pending = stats.pending_requests_count || 0;
         const inquiries = stats.customer_inquiries_count || 0;
-        setAlertCount(pending + inquiries);
+        const notifications = res.data?.notifications || [];
+        setAlertCount(pending + inquiries + notifications.length);
+        const payment = notifications.find((n) => n.kind === 'payment_received');
+        if (payment) {
+          const seenKey = `luminexa.seenProviderPayment.${payment.id}`;
+          if (!window.sessionStorage.getItem(seenKey)) {
+            window.sessionStorage.setItem(seenKey, '1');
+            showToast(payment.message, 'success');
+          }
+        }
       })
       .catch(() => {});
-  }, [orgSlug]);
+  }, [orgSlug, showToast]);
 
   useEffect(() => {
     loadAlerts();
@@ -102,6 +118,9 @@ function ProviderShell() {
     if (location.pathname.startsWith(`${base}/settings`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Settings' };
     }
+    if (location.pathname.startsWith(`${base}/subscribe`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Subscribe' };
+    }
     if (location.pathname.startsWith(`${base}/account`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My account' };
     }
@@ -132,6 +151,16 @@ function ProviderShell() {
   if (needsOnboarding(user) && !location.pathname.includes('/setup')) {
     const path = getOnboardingPath(user, memberships, `${location.pathname}${location.search}`);
     if (path) return <Navigate to={path} replace />;
+  }
+
+  const membership =
+    (memberships || []).find((m) => m.organization_slug === orgSlug) || activeOrg;
+  if (
+    membership &&
+    !orgHasActiveSubscription(membership) &&
+    !isProviderSubscriptionExemptPath(location.pathname, orgSlug)
+  ) {
+    return <Navigate to={providerSubscribe(orgSlug)} replace />;
   }
 
   return (

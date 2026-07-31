@@ -22,6 +22,8 @@ export function resolveCustomerBack(pathname) {
   }
   if (path === '/customer/account') return { to: '/customer' };
   if (path === '/customer/bookings') return { to: '/customer' };
+  if (path === '/customer/messages') return { to: '/customer' };
+  if (path === '/customer/notifications') return { to: '/customer' };
   if (path === '/customer/history') return { to: '/customer' };
   if (path === '/customer/about') return { to: '/customer' };
   if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(path)) {

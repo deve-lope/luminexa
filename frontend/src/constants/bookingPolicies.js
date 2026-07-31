@@ -15,7 +15,13 @@ export const BOOKING_POLICIES = [
     value: 'clients_only',
     label: 'Request access first',
     description:
-      'Customer sends a request first. Once you approve them, they can book available slots.',
+      'Customer sends a booking request. When you accept it, they become an approved client.',
+  },
+  {
+    value: 'quote',
+    label: 'Quote before confirm (all services)',
+    description:
+      'Every booking needs a quote. Prefer setting individual services to “Quote on request” instead when only some jobs need pricing.',
   },
 ];
 
@@ -28,7 +34,8 @@ export function customerPolicyLabel(value) {
   const labels = {
     instant: 'Confirmed as soon as you book a slot',
     approval: 'The business will confirm your booking request',
-    clients_only: 'Request access before you can book',
+    clients_only: 'Send a booking request — the business reviews and accepts you',
+    quote: 'Request a time — the business sends a quote for you to accept',
   };
   return labels[value] || '';
 }

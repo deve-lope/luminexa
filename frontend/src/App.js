@@ -35,12 +35,15 @@ import ProviderScheduleDetailPage from './pages/provider/ProviderScheduleDetailP
 import ProviderRequestsPage from './pages/provider/ProviderRequestsPage';
 import ProviderRequestDetailPage from './pages/provider/ProviderRequestDetailPage';
 import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
+import ProviderSubscribePage from './pages/provider/ProviderSubscribePage';
 import ProviderNotificationsPage from './pages/provider/ProviderNotificationsPage';
 import ProviderAddTaskPage from './pages/provider/ProviderAddTaskPage';
 import ProviderTasksPage from './pages/provider/ProviderTasksPage';
 import ProviderAnalyticsPage from './pages/provider/ProviderAnalyticsPage';
 import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
+import CustomerMessagesPage from './pages/customer/CustomerMessagesPage';
+import CustomerNotificationsPage from './pages/customer/CustomerNotificationsPage';
 import CustomerProvidersByTypePage from './pages/customer/CustomerProvidersByTypePage';
 import CustomerSetupPage from './pages/customer/CustomerSetupPage';
 import ProviderSetupPage from './pages/provider/ProviderSetupPage';
@@ -163,6 +166,7 @@ function AppRoutes() {
           <Route path="requests/:kind/:id" element={<ProviderRequestDetailPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
           <Route path="settings" element={<ProviderSettingsPage />} />
+          <Route path="subscribe" element={<ProviderSubscribePage />} />
           <Route path="account" element={<CustomerAccountPage variant="provider" />} />
           <Route path="about" element={<AboutPage embedded />} />
           <Route path="my-page" element={<ProviderSharePage />} />
@@ -180,6 +184,8 @@ function AppRoutes() {
         >
           <Route index element={<CustomerHomePage />} />
           <Route path="bookings" element={<CustomerBookingsPage />} />
+          <Route path="messages" element={<CustomerMessagesPage />} />
+          <Route path="notifications" element={<CustomerNotificationsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />
           <Route path="account" element={<CustomerAccountPage />} />
           <Route path="about" element={<AboutPage embedded />} />

@@ -76,13 +76,8 @@ def customer_can_book(org, customer):
     """Whether this customer may submit a booking request at this organization."""
     if customer_is_blocked(org, customer):
         return False
-    if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
-        return OrganizationMembership.objects.filter(
-            organization=org,
-            user=customer,
-            role=OrganizationMembership.Role.CUSTOMER,
-            customer_status=OrganizationMembership.CustomerStatus.APPROVED,
-        ).exists()
+    # Instant / approval / clients_only: pending or new customers may request.
+    # Blocked customers are denied above. Accepting a request approves clients_only.
     return True
 
 
@@ -91,7 +86,64 @@ def customer_can_view_calendar(org, customer):
     return org.profile_public and org.is_active
 
 
-def booking_policy_meta(org, customer):
+def booking_requires_quote(org, service=None):
+    """Quote workflow if the org uses quote policy or this service is quote-priced."""
+    if service is not None and getattr(service, 'pricing_type', None) == Service.PricingType.QUOTE:
+        return True
+    return org.booking_policy == Organization.BookingPolicy.QUOTE
+
+
+def service_quote_question_template(service):
+    """Normalize Service.quote_questions into [{id, question, answer}]."""
+    if not service:
+        return []
+    return _normalize_quote_questions(getattr(service, 'quote_questions', None) or [])
+
+
+def apply_quote_answers(template_questions, answers=None):
+    """
+    Merge customer answers into template questions.
+    answers: [{id, answer}] or [{question, answer}] or ["answer", ...] aligned by index.
+    """
+    questions = [dict(q) for q in (template_questions or [])]
+    if not answers:
+        return questions
+    if isinstance(answers, dict):
+        answers = [{'id': k, 'answer': v} for k, v in answers.items()]
+    if not isinstance(answers, list):
+        raise ValidationError({'quote_answers': 'Answers must be a list.'})
+
+    by_id = {}
+    by_question = {}
+    indexed = []
+    for item in answers:
+        if isinstance(item, str):
+            indexed.append(item.strip()[:1000])
+            continue
+        if not isinstance(item, dict):
+            continue
+        ans = (item.get('answer') or '').strip()[:1000]
+        qid = str(item.get('id') or '').strip()
+        qtext = (item.get('question') or item.get('text') or '').strip().lower()
+        if qid:
+            by_id[qid] = ans
+        if qtext:
+            by_question[qtext] = ans
+        indexed.append(ans)
+
+    for i, q in enumerate(questions):
+        qid = str(q.get('id') or '')
+        qtext = (q.get('question') or '').strip().lower()
+        if qid and qid in by_id:
+            q['answer'] = by_id[qid]
+        elif qtext and qtext in by_question:
+            q['answer'] = by_question[qtext]
+        elif i < len(indexed) and indexed[i]:
+            q['answer'] = indexed[i]
+    return questions
+
+
+def booking_policy_meta(org, customer, service=None):
     """Frontend hints for slot UI."""
     can_book = customer_can_book(org, customer) if customer and customer.is_authenticated else False
     can_view = customer_can_view_calendar(org, customer) if customer and customer.is_authenticated else False
@@ -103,6 +155,7 @@ def booking_policy_meta(org, customer):
     blocked = bool(
         membership and membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED
     )
+    requires_quote = booking_requires_quote(org, service)
 
     return {
         'scheduling_mode': org.scheduling_mode,
@@ -111,9 +164,19 @@ def booking_policy_meta(org, customer):
         'booking_policy': org.booking_policy,
         'cancel_cutoff_hours': org.cancel_cutoff_hours,
         'concurrent_capacity': max(1, int(getattr(org, 'concurrent_capacity', 1) or 1)),
-        'requires_approval': org.booking_policy == Organization.BookingPolicy.APPROVAL,
-        'instant_confirm': org.booking_policy == Organization.BookingPolicy.INSTANT,
+        'requires_approval': requires_quote or org.booking_policy in (
+            Organization.BookingPolicy.APPROVAL,
+            Organization.BookingPolicy.CLIENTS_ONLY,
+            Organization.BookingPolicy.QUOTE,
+        ),
+        'instant_confirm': (
+            org.booking_policy == Organization.BookingPolicy.INSTANT and not requires_quote
+        ),
         'clients_only': org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY,
+        'requires_quote': requires_quote,
+        'service_quote_questions': [
+            q['question'] for q in service_quote_question_template(service)
+        ] if service is not None else [],
         'can_book': can_book and (customer.has_booking_contact if customer else False),
         'can_view_calendar': can_view,
         'customer_status': membership.customer_status if membership else None,
@@ -130,10 +193,14 @@ def release_slot(slot):
 
 
 def _lock_slot(slot):
-    """Row-lock a slot for capacity-safe booking mutations."""
+    """Row-lock a slot for capacity-safe booking mutations.
+
+    Do not select_related nullable FKs (e.g. service): Postgres rejects
+    SELECT FOR UPDATE on the nullable side of an outer join.
+    """
     return (
         AvailabilitySlot.objects.select_for_update()
-        .select_related('organization', 'service')
+        .select_related('organization')
         .get(pk=slot.pk)
     )
 
@@ -175,7 +242,15 @@ def provider_book_customer(
 
 
 @transaction.atomic
-def customer_request_slot(*, slot, customer, notes='', service_address='', service=None):
+def customer_request_slot(
+    *,
+    slot,
+    customer,
+    notes='',
+    service_address='',
+    service=None,
+    quote_answers=None,
+):
     slot = _lock_slot(slot)
     org = slot.organization
     require_booking_contact(customer)
@@ -189,35 +264,22 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
             raise PermissionDenied(
                 'You cannot book with this business. Contact them if you think this is a mistake.'
             )
-        if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
-            membership = OrganizationMembership.objects.filter(
-                organization=org, user=customer, role=OrganizationMembership.Role.CUSTOMER,
-            ).first()
-            if not membership:
-                raise PermissionDenied(
-                    'This business reviews customers before booking. '
-                    'Send an access request and book after they approve you.'
-                )
-            if membership.customer_status == OrganizationMembership.CustomerStatus.PENDING:
-                raise PermissionDenied(
-                    'Your access request is pending. You can view the calendar '
-                    'but cannot book until the business approves you.'
-                )
         raise PermissionDenied('You cannot book with this business.')
 
-    if org.booking_policy != Organization.BookingPolicy.CLIENTS_ONLY:
-        ensure_customer_membership(org, customer)
-
-    if org.booking_policy == Organization.BookingPolicy.INSTANT:
-        booking_status = Booking.Status.CONFIRMED
-    else:
-        booking_status = Booking.Status.REQUESTED
+    # Creates pending membership for clients_only; approved for open policies.
+    ensure_customer_membership(org, customer)
 
     book_service = slot.service or service
     if not book_service:
         raise ValidationError({'service': 'Service is required for this booking.'})
     if book_service.organization_id != org.id:
         raise ValidationError({'service': 'Service does not belong to this organization.'})
+
+    requires_quote = booking_requires_quote(org, book_service)
+    if requires_quote or org.booking_policy != Organization.BookingPolicy.INSTANT:
+        booking_status = Booking.Status.REQUESTED
+    else:
+        booking_status = Booking.Status.CONFIRMED
 
     resolved_address = resolve_booking_service_address(
         service=book_service,
@@ -231,6 +293,16 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
             'service_address': 'Enter the job location where the provider should come.',
         })
 
+    quote_questions = []
+    if requires_quote:
+        template = service_quote_question_template(book_service)
+        quote_questions = apply_quote_answers(template, quote_answers)
+        missing = [q['question'] for q in quote_questions if not (q.get('answer') or '').strip()]
+        if missing:
+            raise ValidationError({
+                'quote_answers': f'Please answer: {missing[0]}',
+            })
+
     booking = Booking.objects.create(
         organization=org,
         service=book_service,
@@ -242,6 +314,7 @@ def customer_request_slot(*, slot, customer, notes='', service_address='', servi
         source=Booking.Source.CUSTOMER_REQUEST,
         customer_notes=notes or '',
         service_address=resolved_address,
+        quote_questions=quote_questions,
     )
     slot.refresh_status(save=True)
     return booking
@@ -271,7 +344,7 @@ def customer_request_slots_batch(*, items, customer):
             })
         seen_slot_ids.add(slot.id)
         locked = AvailabilitySlot.objects.select_for_update().select_related(
-            'organization', 'service',
+            'organization',
         ).get(pk=slot.pk)
         if org_id is None:
             org_id = locked.organization_id
@@ -297,6 +370,7 @@ def customer_request_slots_batch(*, items, customer):
             service=item.get('service'),
             notes=item.get('notes') or '',
             service_address=item.get('service_address') or '',
+            quote_answers=item.get('quote_answers'),
         )
         bookings.append(booking)
     return bookings
@@ -306,9 +380,17 @@ def customer_request_slots_batch(*, items, customer):
 def accept_booking_request(booking, staff_user):
     if booking.status != Booking.Status.REQUESTED:
         raise ValidationError({'status': 'Only requested bookings can be accepted.'})
+    if booking_requires_quote(booking.organization, booking.service):
+        raise ValidationError({
+            'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
+            'code': 'quote_required',
+        })
     booking.status = Booking.Status.CONFIRMED
     booking.booked_by = staff_user
     booking.save(update_fields=['status', 'booked_by', 'updated_at'])
+    # Accepting the service request also approves invitation-only customers.
+    if booking.customer_id:
+        ensure_customer_membership(booking.organization, booking.customer, approve=True)
     if booking.availability_slot_id:
         slot = _lock_slot(booking.availability_slot)
         slot.refresh_status(save=True)
@@ -318,10 +400,130 @@ def accept_booking_request(booking, staff_user):
     return booking
 
 
+def _normalize_quote_questions(raw):
+    questions = []
+    if not raw:
+        return questions
+    if not isinstance(raw, list):
+        raise ValidationError({'questions': 'Questions must be a list.'})
+    for i, item in enumerate(raw):
+        if isinstance(item, str):
+            text = item.strip()
+            if not text:
+                continue
+            questions.append({'id': f'q{i + 1}', 'question': text[:300], 'answer': ''})
+            continue
+        if not isinstance(item, dict):
+            continue
+        text = (item.get('question') or item.get('text') or '').strip()
+        if not text:
+            continue
+        qid = (item.get('id') or f'q{i + 1}')[:40]
+        answer = (item.get('answer') or '').strip()[:1000]
+        questions.append({'id': qid, 'question': text[:300], 'answer': answer})
+    return questions[:20]
+
+
+def _merge_quote_questions(existing, incoming):
+    """Prefer incoming question list; preserve prior answers when possible."""
+    if incoming is None:
+        return list(existing or [])
+    normalized = _normalize_quote_questions(incoming)
+    prior = list(existing or [])
+    by_id = {str(q.get('id')): q for q in prior if q.get('id')}
+    by_text = {(q.get('question') or '').strip().lower(): q for q in prior}
+    for q in normalized:
+        if not (q.get('answer') or '').strip():
+            prev = by_id.get(str(q.get('id'))) or by_text.get((q.get('question') or '').strip().lower())
+            if prev and (prev.get('answer') or '').strip():
+                q['answer'] = prev['answer']
+    return normalized
+
+
+@transaction.atomic
+def send_booking_quote(
+    booking,
+    *,
+    staff_user,
+    amount,
+    message='',
+    questions=None,
+    new_slot=None,
+):
+    """Provider sends a priced quote (optional questions + optional new time)."""
+    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
+        raise ValidationError({'status': 'Only open requests can receive a quote.'})
+    try:
+        from decimal import Decimal, InvalidOperation
+
+        amount = Decimal(str(amount))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValidationError({'amount': 'Enter a valid quote amount.'}) from exc
+    if amount <= 0:
+        raise ValidationError({'amount': 'Quote amount must be greater than zero.'})
+
+    if new_slot is not None:
+        reschedule_booking(booking, new_slot=new_slot, by_user=staff_user)
+        booking.refresh_from_db()
+
+    booking.quote_amount = amount
+    booking.quote_message = (message or '').strip()[:4000]
+    booking.quote_questions = _merge_quote_questions(booking.quote_questions, questions)
+    booking.quoted_at = timezone.now()
+    booking.status = Booking.Status.QUOTED
+    booking.booked_by = staff_user
+    booking.save(
+        update_fields=[
+            'quote_amount',
+            'quote_message',
+            'quote_questions',
+            'quoted_at',
+            'status',
+            'booked_by',
+            'updated_at',
+        ]
+    )
+    if booking.availability_slot_id:
+        slot = _lock_slot(booking.availability_slot)
+        slot.refresh_status(save=True)
+    return booking
+
+
+@transaction.atomic
+def accept_booking_quote(booking, *, customer, answers=None):
+    if booking.status != Booking.Status.QUOTED:
+        raise ValidationError({'status': 'Only quoted bookings can be accepted.'})
+    if booking.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can accept this quote.')
+    if booking.quote_amount is None:
+        raise ValidationError({'detail': 'This quote has no amount yet.'})
+
+    questions = list(booking.quote_questions or [])
+    if answers:
+        by_id = {}
+        if isinstance(answers, list):
+            for item in answers:
+                if isinstance(item, dict) and item.get('id'):
+                    by_id[str(item['id'])] = (item.get('answer') or '').strip()[:1000]
+        for q in questions:
+            qid = str(q.get('id') or '')
+            if qid in by_id:
+                q['answer'] = by_id[qid]
+
+    booking.quote_questions = questions
+    booking.status = Booking.Status.CONFIRMED
+    booking.save(update_fields=['quote_questions', 'status', 'updated_at'])
+    ensure_customer_membership(booking.organization, customer, approve=True)
+    if booking.availability_slot_id:
+        slot = _lock_slot(booking.availability_slot)
+        slot.refresh_status(save=True)
+    return booking
+
+
 @transaction.atomic
 def decline_booking_request(booking):
-    if booking.status != Booking.Status.REQUESTED:
-        raise ValidationError({'status': 'Only requested bookings can be declined.'})
+    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
+        raise ValidationError({'status': 'Only requested or quoted bookings can be declined.'})
     booking.status = Booking.Status.CANCELLED
     booking.save(update_fields=['status', 'updated_at'])
     if booking.availability_slot_id:
@@ -348,6 +550,7 @@ def cancel_booking(booking, *, by_user):
         raise PermissionDenied('You cannot cancel this booking.')
     if is_customer and booking.status not in (
         Booking.Status.REQUESTED,
+        Booking.Status.QUOTED,
         Booking.Status.CONFIRMED,
     ):
         raise ValidationError({'status': 'You cannot cancel this booking in its current state.'})
@@ -411,7 +614,11 @@ def complete_booking(booking, *, staff_user):
 
 @transaction.atomic
 def reschedule_booking(booking, *, new_slot, by_user):
-    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.CONFIRMED):
+    if booking.status not in (
+        Booking.Status.REQUESTED,
+        Booking.Status.QUOTED,
+        Booking.Status.CONFIRMED,
+    ):
         raise ValidationError({'status': 'Only active bookings can be rescheduled.'})
     new_slot = _lock_slot(new_slot)
     if not new_slot.is_bookable():

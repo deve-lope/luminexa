@@ -16,6 +16,10 @@ export function providerSettings(orgSlug) {
   return `/provider/${orgSlug}/settings`;
 }
 
+export function providerSubscribe(orgSlug) {
+  return `/provider/${orgSlug}/subscribe`;
+}
+
 export function providerShare(orgSlug) {
   return `/provider/${orgSlug}/my-page`;
 }

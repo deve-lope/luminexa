@@ -20,7 +20,7 @@ import { parseApiError } from '../../utils/taskDisplay';
 import {
   hasFinishedProviderSetupWizard,
   markProviderSetupWizardDone,
-  providerSetupPath,
+  providerResumeSetupPath,
 } from '../../utils/profileSetup';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -239,7 +239,7 @@ export default function ProviderTodayPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
-              to={providerSetupPath(orgSlug, 'availability')}
+              to={providerResumeSetupPath(orgSlug)}
               className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white"
             >
               Continue setup

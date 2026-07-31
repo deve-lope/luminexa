@@ -6,15 +6,17 @@ export default function BackButton({
   children = '← Back',
   className = 'lx-link',
   ariaLabel = 'Go back',
+  /** When true, always go to fallback (avoids history loops e.g. setup redirects). */
+  preferFallback = false,
 }) {
   const navigate = useNavigate();
 
   const goBack = () => {
-    if (window.history.length > 1) {
+    if (!preferFallback && window.history.length > 1) {
       navigate(-1);
-    } else {
-      navigate(fallback, { replace: true });
+      return;
     }
+    navigate(fallback, { replace: true });
   };
 
   return (

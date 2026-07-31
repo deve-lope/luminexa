@@ -4,3 +4,4 @@ django-cors-headers==4.3.1
 python-decouple==3.8
 Pillow==10.1.0
 whitenoise==6.6.0
+stripe==11.1.1

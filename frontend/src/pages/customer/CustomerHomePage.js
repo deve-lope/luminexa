@@ -278,9 +278,9 @@ export default function CustomerHomePage() {
       )}
 
       {!isSearching && (
-        <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
-          <header className="lx-hero flex min-h-0 flex-col">
-            <div className="relative flex flex-1 flex-col justify-between p-5 sm:p-6 lg:p-7">
+        <>
+          <header className="lx-hero">
+            <div className="relative flex flex-col justify-between p-5 sm:p-6 lg:flex-row lg:items-end lg:gap-8 lg:p-7">
               <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-emerald-300/20 blur-3xl" />
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold tracking-tight ring-1 ring-white/20 backdrop-blur-sm lg:h-14 lg:w-14 lg:text-xl">
@@ -304,12 +304,37 @@ export default function CustomerHomePage() {
               </div>
               <Link
                 to={customerFind()}
-                className="lx-btn-ghost mt-5 w-full border-transparent bg-white text-teal-900 hover:bg-teal-50 sm:w-auto lg:mt-7"
+                className="lx-btn-ghost mt-5 w-full border-transparent bg-white text-teal-900 hover:bg-teal-50 sm:w-auto lg:mt-0"
               >
                 Browse services
               </Link>
             </div>
           </header>
+
+          <section className="lx-section-band">
+            <div className="mb-4 flex items-end justify-between gap-2">
+              <div>
+                <p className="lx-eyebrow">Browse</p>
+                <h2 className="lx-section-title mt-1">Popular categories</h2>
+              </div>
+              <Link to={customerFind()} className="lx-link shrink-0">
+                See all
+              </Link>
+            </div>
+            {filteredTypes.length === 0 ? (
+              <div className="lx-empty">
+                <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
+                <p className="lx-muted mt-1">
+                  Search below or browse providers when categories appear.
+                </p>
+                <Link to={customerFind()} className="lx-btn-primary mt-4 inline-flex">
+                  Explore providers
+                </Link>
+              </div>
+            ) : (
+              <BusinessTypeTileGrid types={filteredTypes} />
+            )}
+          </section>
 
           <section className="lx-find-panel flex min-h-0 flex-col lg:p-7">
             <div className="mb-4">
@@ -338,7 +363,7 @@ export default function CustomerHomePage() {
               Browse by location
             </Link>
           </section>
-        </div>
+        </>
       )}
 
       {isSearching && (
@@ -441,31 +466,6 @@ export default function CustomerHomePage() {
               )}
             </div>
           )}
-
-          <section className="lx-section-band">
-            <div className="mb-4 flex items-end justify-between gap-2">
-              <div>
-                <p className="lx-eyebrow">Browse</p>
-                <h2 className="lx-section-title mt-1">Popular categories</h2>
-              </div>
-              <Link to={customerFind()} className="lx-link shrink-0">
-                See all
-              </Link>
-            </div>
-            {filteredTypes.length === 0 ? (
-              <div className="lx-empty">
-                <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
-                <p className="lx-muted mt-1">
-                  Search above or browse providers when categories appear.
-                </p>
-                <Link to={customerFind()} className="lx-btn-primary mt-4 inline-flex">
-                  Explore providers
-                </Link>
-              </div>
-            ) : (
-              <BusinessTypeTileGrid types={filteredTypes} />
-            )}
-          </section>
         </>
       )}
 

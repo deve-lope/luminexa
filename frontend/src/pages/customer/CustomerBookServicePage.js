@@ -56,6 +56,7 @@ export default function CustomerBookServicePage() {
   const [serviceAddress, setServiceAddress] = useState(
     () => (user?.default_service_address || '').trim()
   );
+  const [quoteAnswers, setQuoteAnswers] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
@@ -152,6 +153,35 @@ export default function CustomerBookServicePage() {
 
   const service = calendar?.service || listedService;
   const bookingCtx = calendar?.booking;
+  const requiresQuote =
+    Boolean(bookingCtx?.requires_quote) ||
+    service?.pricing_type === 'quote' ||
+    bookingPolicy === 'quote';
+  const quoteQuestionList = useMemo(() => {
+    const fromCtx = bookingCtx?.service_quote_questions;
+    const fromService = service?.quote_questions;
+    const raw = Array.isArray(fromCtx) && fromCtx.length
+      ? fromCtx
+      : Array.isArray(fromService)
+        ? fromService
+        : [];
+    return raw
+      .map((q) => (typeof q === 'string' ? q : q?.question || ''))
+      .map((q) => q.trim())
+      .filter(Boolean);
+  }, [bookingCtx?.service_quote_questions, service?.quote_questions]);
+
+  useEffect(() => {
+    setQuoteAnswers((prev) => {
+      const next = {};
+      quoteQuestionList.forEach((q, i) => {
+        const key = `q${i + 1}`;
+        next[key] = prev[key] || '';
+      });
+      return next;
+    });
+  }, [quoteQuestionList]);
+
   const canBook = bookingCtx?.can_book ?? false;
   const needsContact = !user?.has_booking_contact;
   const connection =
@@ -235,12 +265,27 @@ export default function CustomerBookServicePage() {
         return false;
       }
     }
+    if (requiresQuote && quoteQuestionList.length) {
+      const missing = quoteQuestionList.find((_, i) => !(quoteAnswers[`q${i + 1}`] || '').trim());
+      if (missing) {
+        showAlertPopup(`Please answer: ${missing}`);
+        return false;
+      }
+    }
     if (!canSubmitBooking) {
       showAlertPopup('Complete the steps above before booking.');
       return false;
     }
     return true;
-  }, [serviceAddress, canSubmitBooking, showAlertPopup, serviceIsShop]);
+  }, [
+    serviceAddress,
+    canSubmitBooking,
+    showAlertPopup,
+    serviceIsShop,
+    requiresQuote,
+    quoteQuestionList,
+    quoteAnswers,
+  ]);
 
   const handleSlotTap = useCallback(
     (slot) => {
@@ -274,12 +319,22 @@ export default function CustomerBookServicePage() {
           service: Number(serviceId),
           customer_notes: combinedNotes,
           service_address: serviceIsShop ? '' : serviceAddress.trim(),
+          quote_answers: requiresQuote
+            ? quoteQuestionList.map((question, i) => ({
+                id: `q${i + 1}`,
+                question,
+                answer: (quoteAnswers[`q${i + 1}`] || '').trim(),
+              }))
+            : undefined,
         });
-        const instant = bookingCtx?.instant_confirm;
+        const instant = bookingCtx?.instant_confirm && !requiresQuote;
+        const quote = requiresQuote;
         const successTitle = instant ? 'Booking confirmed' : 'Request sent';
         const successMessage = instant
           ? 'Your appointment is confirmed.'
-          : 'Your booking request was sent to the provider for approval.';
+          : quote
+            ? 'Your time request was sent. The provider will send a quote for you to accept.'
+            : 'Your booking request was sent to the provider for approval.';
         const successDetail = `${selectedDayLabel} · ${formatTimeRange(slot.start_at, slot.end_at)}`;
         const toastMessage = instant
           ? `Booking confirmed for ${successDetail}`
@@ -288,7 +343,9 @@ export default function CustomerBookServicePage() {
         setMessage(
           instant
             ? `Booking confirmed for ${successDetail}.`
-            : `Request sent for ${successDetail}. The provider will confirm your appointment.`
+            : quote
+              ? `Request sent for ${successDetail}. Await a quote from the provider.`
+              : `Request sent for ${successDetail}. The provider will confirm your appointment.`
         );
         showToast(toastMessage, 'success');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -297,6 +354,7 @@ export default function CustomerBookServicePage() {
           message: `${successMessage}\n\n${successDetail}`,
         });
         setNotes('');
+        setQuoteAnswers({});
         setSelectedSlot(null);
         loadCalendar();
       } catch (e) {
@@ -311,6 +369,9 @@ export default function CustomerBookServicePage() {
       serviceId,
       serviceAddress,
       bookingCtx?.instant_confirm,
+      requiresQuote,
+      quoteQuestionList,
+      quoteAnswers,
       selectedDayLabel,
       loadCalendar,
       showAlertPopup,
@@ -453,8 +514,8 @@ export default function CustomerBookServicePage() {
 
           {connection === 'pending' && (
             <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Awaiting approval — you can view open times, but booking unlocks once the business
-              approves your connection.
+              This business reviews new customers. Pick a time and send a booking request — they
+              will accept or decline it.
             </p>
           )}
 
@@ -607,9 +668,37 @@ export default function CustomerBookServicePage() {
                 requireMessage={false}
               />
 
-              {!canSubmitBooking && connection === 'pending' && (
-                <p className="text-sm text-amber-800">
-                  Booking unlocks once the business approves your access request.
+              {requiresQuote && quoteQuestionList.length > 0 && (
+                <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">
+                    Details for your quote
+                  </p>
+                  {quoteQuestionList.map((question, i) => {
+                    const key = `q${i + 1}`;
+                    return (
+                      <div key={key}>
+                        <label htmlFor={`quote-ans-${key}`} className="mb-1 block text-sm font-medium text-slate-800">
+                          {question}
+                        </label>
+                        <textarea
+                          id={`quote-ans-${key}`}
+                          rows={2}
+                          value={quoteAnswers[key] || ''}
+                          onChange={(e) =>
+                            setQuoteAnswers((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          placeholder="Your answer"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!canSubmitBooking && connection === 'blocked' && (
+                <p className="text-sm text-red-800">
+                  You cannot book with this business.
                 </p>
               )}
 
@@ -622,7 +711,7 @@ export default function CustomerBookServicePage() {
                 >
                   {submittingId === selectedSlot.id
                     ? 'Booking…'
-                    : bookingCtx?.instant_confirm
+                    : bookingCtx?.instant_confirm && !requiresQuote
                       ? 'Confirm booking'
                       : 'Request appointment'}
                 </button>
@@ -662,9 +751,15 @@ export default function CustomerBookServicePage() {
 
       <ConfirmDialog
         open={!!bookingConfirmSlot}
-        title={bookingCtx?.instant_confirm ? 'Confirm booking?' : 'Send booking request?'}
+        title={
+          bookingCtx?.instant_confirm && !requiresQuote
+            ? 'Confirm booking?'
+            : 'Send booking request?'
+        }
         message={`Book ${service?.name || 'this service'} for:\n\n${bookingConfirmLabel}`}
-        confirmLabel={bookingCtx?.instant_confirm ? 'Confirm booking' : 'Send request'}
+        confirmLabel={
+          bookingCtx?.instant_confirm && !requiresQuote ? 'Confirm booking' : 'Send request'
+        }
         cancelLabel="Go back"
         tone="default"
         busy={submittingId != null}

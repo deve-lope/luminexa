@@ -1,5 +1,5 @@
 from datetime import timedelta
-from zoneinfo import available_timezones
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db.models import Case, DateTimeField, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce
@@ -36,6 +36,7 @@ from .booking_services import (
 from .message_services import (
     can_access_booking_messages,
     list_booking_messages,
+    list_customer_conversation_summaries,
     post_booking_incomplete_message,
     post_booking_message,
 )
@@ -70,6 +71,7 @@ from .serializers import (
     OrganizationSerializer,
     ProviderBookSerializer,
     ProviderNotificationSerializer,
+    CustomerConversationSummarySerializer,
     CustomerNotificationSerializer,
     CustomerServiceInquiryCreateSerializer,
     CustomerServiceInquirySerializer,
@@ -265,7 +267,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='booking-context')
     def booking_context(self, request, slug=None):
         org = self.get_object()
-        return Response(booking_policy_meta(org, request.user))
+        service = None
+        service_id = request.query_params.get('service') or request.query_params.get('service_id')
+        if service_id:
+            from jobs.models import Service
+
+            service = Service.objects.filter(pk=service_id, organization=org).first()
+        return Response(booking_policy_meta(org, request.user, service=service))
 
     @action(detail=True, methods=['get', 'put'], url_path='scheduling-settings')
     def scheduling_settings(self, request, slug=None):
@@ -298,8 +306,12 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             org.schedule_valid_until = coerce_org_date(raw) if raw else None
         if 'timezone' in data:
             tz_value = (data['timezone'] or '').strip()
-            if tz_value not in available_timezones():
-                raise ValidationError({'timezone': 'Unknown timezone.'})
+            if not tz_value:
+                raise ValidationError({'timezone': 'Timezone is required.'})
+            try:
+                ZoneInfo(tz_value)
+            except ZoneInfoNotFoundError as exc:
+                raise ValidationError({'timezone': 'Unknown timezone.'}) from exc
             org.timezone = tz_value
             update_fields.append('timezone')
         org.save(update_fields=update_fields)
@@ -312,8 +324,17 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 WeeklyScheduleBlock.objects.create(organization=org, **ser.validated_data)
 
         created = 0
+        sync_queued = False
         if org.scheduling_mode == Organization.SchedulingMode.RECURRING:
-            created = sync_recurring_slots(org, weeks_ahead=12)
+            # Slot generation can take well over the SPA timeout — run in Celery.
+            from .tasks import sync_org_recurring_slots
+
+            try:
+                sync_org_recurring_slots.delay(org.id, weeks_ahead=12)
+                sync_queued = True
+            except Exception:
+                # Broker unavailable — do a short sync so something is bookable.
+                created = sync_recurring_slots(org, weeks_ahead=2)
         ensure_flexi_slot_alert(org)
 
         blocks = WeeklyScheduleBlock.objects.filter(organization=org)
@@ -321,8 +342,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'scheduling_mode': org.scheduling_mode,
             'schedule_valid_from': org.schedule_valid_from,
             'schedule_valid_until': org.schedule_valid_until,
+            'timezone': org.timezone,
             'weekly_blocks': WeeklyScheduleBlockSerializer(blocks, many=True).data,
             'slots_created': created,
+            'sync_queued': sync_queued,
         })
 
     @action(detail=True, methods=['get', 'put'], url_path='weekly-schedule')
@@ -853,9 +876,14 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         if slug:
             org = Organization.objects.filter(slug=slug).first()
             if org:
+                service = None
+                service_id = request.query_params.get('service')
+                if service_id:
+                    from .models import Service
+                    service = Service.objects.filter(pk=service_id, organization=org).first()
                 response.data = {
                     'slots': response.data,
-                    'booking': booking_policy_meta(org, request.user),
+                    'booking': booking_policy_meta(org, request.user, service=service),
                 }
         return response
 
@@ -993,6 +1021,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             service=ser.validated_data.get('service'),
             notes=notes,
             service_address=ser.validated_data.get('service_address', '') or '',
+            quote_answers=ser.validated_data.get('quote_answers'),
         )
         log_booking_event(
             booking,
@@ -1023,6 +1052,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 'service': row.get('service'),
                 'notes': (row.get('customer_notes') or shared_notes or '').strip(),
                 'service_address': (row.get('service_address') or shared_address or '').strip(),
+                'quote_answers': row.get('quote_answers'),
             })
         bookings = customer_request_slots_batch(items=items, customer=request.user)
         from .notifications import notify_customer_booking_created
@@ -1078,11 +1108,73 @@ class BookingViewSet(viewsets.ModelViewSet):
         notify_booking_accepted(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='send-quote')
+    def send_quote(self, request, pk=None):
+        from .booking_services import send_booking_quote
+
+        booking = self.get_object()
+        if not is_org_staff(request.user, booking.organization):
+            raise PermissionDenied('Only staff can send quotes.')
+        slot = None
+        slot_id = request.data.get('slot_id')
+        if slot_id not in (None, ''):
+            slot = AvailabilitySlot.objects.filter(pk=slot_id).first()
+            if not slot:
+                raise ValidationError({'slot_id': 'Slot not found.'})
+        old = booking.status
+        send_booking_quote(
+            booking,
+            staff_user=request.user,
+            amount=request.data.get('amount'),
+            message=request.data.get('message') or '',
+            questions=request.data.get('questions'),
+            new_slot=slot,
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.QUOTED,
+            old_status=old,
+            new_status=booking.status,
+            note=(request.data.get('message') or '')[:200],
+        )
+        from .notifications import notify_booking_quoted
+
+        notify_booking_quoted(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='accept-quote')
+    def accept_quote(self, request, pk=None):
+        from .booking_services import accept_booking_quote
+
+        booking = self.get_object()
+        old = booking.status
+        accept_booking_quote(
+            booking,
+            customer=request.user,
+            answers=request.data.get('answers'),
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.QUOTE_ACCEPTED,
+            old_status=old,
+            new_status=booking.status,
+        )
+        from .notifications import notify_booking_accepted
+        notify_booking_accepted(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'])
     def decline(self, request, pk=None):
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can decline requests.')
+        # Staff decline OR customer declining a quote
+        is_staff = is_org_staff(request.user, booking.organization)
+        is_customer = booking.customer_id == request.user.id
+        if not is_staff and not is_customer:
+            raise PermissionDenied('Only staff or the customer can decline this request.')
+        if is_customer and booking.status != Booking.Status.QUOTED:
+            raise PermissionDenied('You can only decline after a quote is sent.')
         old = booking.status
         decline_booking_request(booking)
         log_booking_status_change(
@@ -1228,6 +1320,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             mark_paid=mark_paid,
             description=description,
         )
+        if not mark_paid:
+            from .notifications import notify_invoice_ready
+
+            notify_invoice_ready(booking)
         return Response(InvoiceSerializer(inv, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='invoice/mark-paid')
@@ -1542,6 +1638,17 @@ class CustomerMyInquiriesAPIView(APIView):
         )
         data = CustomerServiceInquirySerializer(qs, many=True).data
         return Response(data)
+
+
+class CustomerConversationsAPIView(APIView):
+    """Unified booking + inquiry message threads for the customer inbox."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        summaries = list_customer_conversation_summaries(request.user)
+        data = CustomerConversationSummarySerializer(summaries, many=True).data
+        return Response({'count': len(data), 'results': data})
 
 
 class CustomerNotificationsAPIView(APIView):

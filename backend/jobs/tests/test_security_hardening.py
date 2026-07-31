@@ -158,6 +158,21 @@ class CookieAuthTests(TestCase):
         profile = self.client.get('/accounts/api/profile/', HTTP_HOST='localhost')
         self.assertEqual(profile.status_code, 401)
 
+    def test_stale_cookie_does_not_block_new_login(self):
+        self.client.cookies[settings.AUTH_TOKEN_COOKIE_NAME] = 'stale-deleted-token'
+        start = self.client.post(
+            '/accounts/api/login/start/',
+            {'email': self.owner.email},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(start.status_code, 200, start.data)
+        self.assertEqual(start.data['auth_method'], 'password')
+
+        # The same stale cookie still grants no protected access.
+        profile = self.client.get('/accounts/api/profile/', HTTP_HOST='localhost')
+        self.assertEqual(profile.status_code, 401)
+
 
 @override_settings(DEBUG=False, SERVE_MEDIA=True)
 class MediaAccessTests(TestCase):

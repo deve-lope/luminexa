@@ -12,7 +12,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
-import { providerSchedule, providerScheduleDetail } from '../../utils/providerPaths';
+import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter } from '../../utils/serviceDisplay';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
@@ -273,7 +273,8 @@ export default function ProviderScheduleDetailPage() {
           </button>
         </section>
 
-        {data.status === 'requested' && (
+        {data.status === 'requested' &&
+          !(data.requires_quote || data.booking_policy === 'quote' || data.service_pricing_type === 'quote') && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
@@ -319,6 +320,16 @@ export default function ProviderScheduleDetailPage() {
               Decline
             </button>
           </div>
+        )}
+
+        {(data.status === 'requested' || data.status === 'quoted') &&
+          (data.requires_quote || data.booking_policy === 'quote' || data.service_pricing_type === 'quote') && (
+          <Link
+            to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
+            className="lx-btn-primary flex min-h-[48px] items-center justify-center"
+          >
+            {data.status === 'quoted' ? 'Update quote' : 'Send quote'}
+          </Link>
         )}
 
         {data.status === 'confirmed' && new Date(data.start_at) > new Date() && (

@@ -6,7 +6,7 @@ import parseApiError from '../../utils/parseApiError';
 import { providerSchedule } from '../../utils/providerPaths';
 
 /**
- * Lets the business owner choose instant vs approval vs clients-only booking,
+ * Lets the business owner choose booking policy (instant / approval / clients-only / quote),
  * and set how close to start customers may cancel confirmed appointments.
  */
 export default function BookingPolicySettings({
@@ -116,11 +116,26 @@ export default function BookingPolicySettings({
 
           {policy === 'clients_only' && (
             <p className="mt-3 text-xs text-slate-500">
-              Approve customer access requests on{' '}
+              New customers send a booking request on{' '}
               <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
-                Schedule
+                Schedule / Requests
               </Link>
-              . After approval, they can book open slots.
+              . Accepting the request confirms the job and approves them as a client.
+            </p>
+          )}
+          {policy === 'clients_only' && (
+            <p className="mt-3 text-xs text-slate-500">
+              New customers send a booking request on{' '}
+              <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
+                Schedule / Requests
+              </Link>
+              . Accepting the request confirms the job and approves them as a client.
+            </p>
+          )}
+          {policy === 'quote' && (
+            <p className="mt-3 text-xs text-slate-500">
+              Customers request a time. You send a quote (price + optional questions), and can change
+              the time before they accept.
             </p>
           )}
 

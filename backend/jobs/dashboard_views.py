@@ -82,7 +82,7 @@ class ProviderDashboardAPIView(APIView):
         pending_requests = (
             Booking.objects.filter(
                 organization=org,
-                status=Booking.Status.REQUESTED,
+                status__in=(Booking.Status.REQUESTED, Booking.Status.QUOTED),
             )
             .select_related('service', 'customer')
             .order_by('start_at')[:50]

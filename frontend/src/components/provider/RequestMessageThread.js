@@ -35,7 +35,7 @@ function MessageBubble({ msg }) {
 function ConversationSheet({
   open,
   onClose,
-  customerName,
+  peerName,
   messages,
   loading,
   error,
@@ -61,7 +61,7 @@ function ConversationSheet({
       className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/40 sm:justify-center sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={`Conversation with ${customerName || 'customer'}`}
+      aria-label={`Conversation with ${peerName || 'the other party'}`}
       onClick={onClose}
     >
       <div
@@ -71,8 +71,8 @@ function ConversationSheet({
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div className="min-w-0 pr-3">
             <h2 className="font-semibold text-slate-900">Conversation</h2>
-            {customerName && (
-              <p className="truncate text-sm text-slate-600">{customerName}</p>
+            {peerName && (
+              <p className="truncate text-sm text-slate-600">{peerName}</p>
             )}
           </div>
           <button
@@ -125,10 +125,21 @@ function ConversationSheet({
 export default function RequestMessageThread({
   loadMessages,
   sendMessage,
+  /** Other party display name (customer or business). */
+  peerName,
+  /** @deprecated use peerName */
   customerName,
   emptyHint,
+  idleOpenLabel = 'Message',
+  compact = false,
+  /** Open the conversation sheet on mount (e.g. inbox selection). */
+  initiallyOpen = false,
+  /** When true, render only the conversation sheet (no inline card trigger). */
+  sheetOnly = false,
+  onClose,
 }) {
-  const [open, setOpen] = useState(false);
+  const displayName = peerName || customerName || '';
+  const [open, setOpen] = useState(Boolean(initiallyOpen || sheetOnly));
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -188,51 +199,60 @@ export default function RequestMessageThread({
   const openLabel =
     messages.length > 0
       ? `Open conversation (${messages.length})`
-      : 'Message customer';
+      : idleOpenLabel;
+
+  const closeSheet = () => {
+    setOpen(false);
+    onClose?.();
+  };
 
   return (
     <>
-      <section className="lx-card">
-        <div className="flex items-start gap-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700"
-            aria-hidden
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-              />
-            </svg>
+      {!sheetOnly && (
+        <section className={compact ? 'mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3' : 'lx-card'}>
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700"
+              aria-hidden
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-slate-900">Messages</h2>
+              <p className="mt-0.5 text-sm text-slate-600">
+                {emptyHint || 'Chat about this request.'}
+              </p>
+              {loaded && previewText && (
+                <p className="mt-2 line-clamp-2 text-sm text-slate-700">{previewText}</p>
+              )}
+              {loaded && !messages.length && (
+                <p className="mt-2 text-sm text-slate-500">No messages yet.</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-slate-900">Messages</h2>
-            <p className="mt-0.5 text-sm text-slate-600">
-              {emptyHint || 'Chat with the customer about this request.'}
-            </p>
-            {loaded && previewText && (
-              <p className="mt-2 line-clamp-2 text-sm text-slate-700">{previewText}</p>
-            )}
-            {loaded && !messages.length && (
-              <p className="mt-2 text-sm text-slate-500">No messages yet.</p>
-            )}
-          </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-4 min-h-[48px] w-full rounded-xl bg-luminexa-accent text-sm font-medium text-white"
-        >
-          {loaded ? openLabel : 'Open conversation'}
-        </button>
-      </section>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={`mt-3 min-h-[44px] w-full rounded-xl text-sm font-medium text-white ${
+              compact ? 'bg-violet-700' : 'mt-4 min-h-[48px] bg-luminexa-accent'
+            }`}
+          >
+            {loaded ? openLabel : 'Open conversation'}
+          </button>
+        </section>
+      )}
 
       <ConversationSheet
         open={open}
-        onClose={() => setOpen(false)}
-        customerName={customerName}
+        onClose={closeSheet}
+        peerName={displayName}
         messages={messages}
         loading={loading}
         error={error}

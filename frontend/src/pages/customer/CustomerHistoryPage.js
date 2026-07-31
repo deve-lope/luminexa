@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
 import BookingsSubNav from '../../components/customer/BookingsSubNav';
+import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { isHistoryBooking } from '../../utils/customerBookings';
@@ -106,6 +107,27 @@ export default function CustomerHistoryPage() {
                   {inquiryStatusLabel(inq)}
                 </span>
                 <p className="mt-2 text-sm text-slate-700 line-clamp-3">{inq.message}</p>
+                {(inq.organization_slug || providerCustomerKey(inq)) && (
+                  <RequestMessageThread
+                    compact
+                    peerName={inq.organization_name}
+                    emptyHint="Message the business about this request."
+                    idleOpenLabel="Message business"
+                    loadMessages={() =>
+                      jobsAPI.listInquiryMessages(
+                        inq.organization_slug || providerCustomerKey(inq),
+                        inq.id,
+                      )
+                    }
+                    sendMessage={(body) =>
+                      jobsAPI.sendInquiryMessage(
+                        inq.organization_slug || providerCustomerKey(inq),
+                        inq.id,
+                        body,
+                      )
+                    }
+                  />
+                )}
                 {providerCustomerKey(inq) && (
                   <Link
                     to={customerProviderPage(providerCustomerKey(inq))}

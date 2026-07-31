@@ -16,7 +16,7 @@ export const CUSTOMER_TABS = [
   { id: 'home', label: 'Home', to: '/customer', end: true },
   { id: 'book', label: 'Book', to: '/customer/find' },
   { id: 'bookings', label: 'Bookings', to: '/customer/bookings' },
-  { id: 'account', label: 'Account', to: '/customer/account' },
+  { id: 'messages', label: 'Messages', to: '/customer/messages' },
 ];
 
 /** Guest / public booking pages (/book/:slug) */
@@ -122,7 +122,19 @@ export function buildCustomerMenuItems({ logout }) {
   const items = [];
 
   items.push({ id: 'section-more', divider: true, label: 'More' });
+  items.push({
+    id: 'account',
+    label: 'Account',
+    to: '/customer/account',
+    iconId: 'account',
+  });
   items.push({ id: 'history', label: 'History', to: '/customer/history' });
+  items.push({
+    id: 'notifications',
+    label: 'Notifications',
+    to: '/customer/notifications',
+    iconId: 'notifications',
+  });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
   return items;

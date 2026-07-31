@@ -21,6 +21,7 @@ DEFAULT_BUSINESS_TYPES = (
     ('landscaping', 'Landscaping', 'Lawns and outdoor care', '🌿', 70, 'mobile'),
     ('handyman', 'Handyman', 'General repairs and small jobs', '🛠️', 80, 'mobile'),
     ('painting', 'Painting', 'Interior and exterior painting', '🎨', 90, 'mobile'),
+    ('other', 'Other', 'Something else — or add a custom type below', '✨', 999, 'mobile'),
 )
 
 

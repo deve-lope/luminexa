@@ -1,5 +1,6 @@
 const BOOKING_LABELS = {
-  requested: 'Awaiting approval',
+  requested: 'Awaiting response',
+  quoted: 'Quote ready',
   confirmed: 'Approved',
   in_progress: 'In progress',
   needs_return: 'Needs return visit',
@@ -16,6 +17,7 @@ const INQUIRY_LABELS = {
 
 const BOOKING_TONES = {
   requested: 'bg-amber-100 text-amber-900',
+  quoted: 'bg-violet-100 text-violet-900',
   confirmed: 'bg-emerald-100 text-emerald-900',
   in_progress: 'bg-sky-100 text-sky-900',
   needs_return: 'bg-orange-100 text-orange-900',

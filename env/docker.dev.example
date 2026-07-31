@@ -9,3 +9,11 @@ ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,web-dev
 CORS_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
 CSRF_TRUSTED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
 PUBLIC_APP_URL=http://localhost:3001
+
+# Stripe (optional in dev — leave blank to disable online payments)
+# STRIPE_SECRET_KEY=
+# STRIPE_PUBLISHABLE_KEY=
+# STRIPE_WEBHOOK_SECRET=
+# STRIPE_PLATFORM_FEE_CENTS=70
+# STRIPE_PRICE_PRO_MONTHLY=
+# STRIPE_PRICE_PRO_YEARLY=

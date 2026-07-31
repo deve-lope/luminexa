@@ -11,6 +11,7 @@ export default function AppShell({
   eyebrow,
   title,
   headerExtra,
+  headerActions = null,
   tabs,
   menuItems = [],
   menuTitle = 'Menu',
@@ -58,6 +59,9 @@ export default function AppShell({
                 {title}
               </h1>
             </div>
+            {headerActions ? (
+              <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
+            ) : null}
           </div>
           {headerExtra && (
             <div className="lx-container border-t border-slate-100/80 pb-3">

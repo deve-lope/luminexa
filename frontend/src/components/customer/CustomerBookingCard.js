@@ -17,6 +17,7 @@ import {
   customerProviderServiceDetail,
 } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
+import RequestMessageThread from '../provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
 import { formatJobLocationLabel } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
@@ -49,17 +50,28 @@ export default function CustomerBookingCard({
   onCancel,
   cancelling = false,
   onReviewSubmitted,
+  onQuoteUpdated,
 }) {
   const [rateOpen, setRateOpen] = useState(false);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
+  const [answers, setAnswers] = useState(() =>
+    (booking.quote_questions || []).map((q) => ({ id: q.id, answer: q.answer || '' }))
+  );
   const past = isPastBooking(booking);
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
   const providerKey = providerCustomerKey(booking);
   const canRate = Boolean(booking.can_rate);
   const myReview = booking.my_review;
+  const isQuoted = booking.status === 'quoted';
 
   let statusHint = null;
-  if (isUntouchedBookingRequest(booking) && !past) {
+  if (isQuoted && !past) {
+    statusHint = 'Review the quote below. You can accept, answer questions, or decline.';
+  } else if (booking.status === 'requested' && (booking.booking_policy === 'quote' || booking.service_pricing_type === 'quote') && !past) {
+    statusHint = 'Waiting for the business to send a quote. You can change the time or cancel.';
+  } else if (isUntouchedBookingRequest(booking) && !past) {
     statusHint =
       'Waiting for the business to respond. You can reschedule to another day or time, or cancel.';
   } else if (booking.status === 'requested' && past) {
@@ -75,6 +87,34 @@ export default function CustomerBookingCard({
       ? 'Service completed — leave a rating when you are ready.'
       : 'Service completed.';
   }
+
+  const acceptQuote = async () => {
+    setQuoteBusy(true);
+    setQuoteError('');
+    try {
+      await jobsAPI.acceptBookingQuote(booking.id, { answers });
+      onQuoteUpdated?.();
+    } catch (e) {
+      const d = e.response?.data;
+      setQuoteError(d?.detail || d?.status?.[0] || 'Could not accept quote.');
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
+  const declineQuote = async () => {
+    setQuoteBusy(true);
+    setQuoteError('');
+    try {
+      await jobsAPI.declineBooking(booking.id);
+      onQuoteUpdated?.();
+    } catch (e) {
+      const d = e.response?.data;
+      setQuoteError(d?.detail || 'Could not decline quote.');
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
 
   return (
     <li className="lx-card">
@@ -94,9 +134,82 @@ export default function CustomerBookingCard({
       <span
         className={`mt-2 inline-block capitalize ${bookingStatusClass(booking.status)}`}
       >
-        {bookingStatusLabel(booking.status, { isPast: past })}
+        {bookingStatusLabel(booking.status, {
+          isPast: past,
+          bookingPolicy: booking.booking_policy,
+          servicePricingType: booking.service_pricing_type,
+        })}
       </span>
       {statusHint && <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
+
+      {booking.status === 'requested' &&
+        (booking.quote_questions || []).some((q) => (q.answer || '').trim()) && (
+        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your answers</p>
+          <ul className="mt-2 space-y-2 text-sm text-slate-700">
+            {booking.quote_questions.map((q) => (
+              <li key={q.id}>
+                <span className="font-medium">{q.question}</span>
+                {q.answer ? <span className="text-slate-600"> — {q.answer}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isQuoted && booking.quote_amount != null && (
+        <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-800/80">Quote</p>
+          <p className="mt-1 text-xl font-bold text-slate-900">
+            ${Number(booking.quote_amount).toFixed(2)}
+          </p>
+          {booking.quote_message ? (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{booking.quote_message}</p>
+          ) : null}
+          {(booking.quote_questions || []).length > 0 && (
+            <div className="mt-3 space-y-2">
+              {booking.quote_questions.map((q, idx) => (
+                <div key={q.id || idx}>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">{q.question}</label>
+                  <input
+                    value={answers.find((a) => a.id === q.id)?.answer || ''}
+                    onChange={(e) => {
+                      setAnswers((prev) => {
+                        const next = [...prev];
+                        const i = next.findIndex((a) => a.id === q.id);
+                        if (i >= 0) next[i] = { ...next[i], answer: e.target.value };
+                        else next.push({ id: q.id, answer: e.target.value });
+                        return next;
+                      });
+                    }}
+                    className="w-full min-h-[40px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    placeholder="Your answer"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              disabled={quoteBusy}
+              onClick={acceptQuote}
+              className="min-h-[44px] flex-1 rounded-xl bg-violet-700 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {quoteBusy ? 'Saving…' : 'Accept quote'}
+            </button>
+            <button
+              type="button"
+              disabled={quoteBusy}
+              onClick={declineQuote}
+              className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-60"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
 
       {booking.status === 'completed' && canRate && (
         <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-3">
@@ -127,9 +240,20 @@ export default function CustomerBookingCard({
               booking.invoice.provider_name || booking.organization_name
             }
             showBreakdown
+            allowPayOnline
           />
         </div>
       )}
+
+      <RequestMessageThread
+        compact
+        peerName={booking.organization_name}
+        emptyHint="Message the business about this booking."
+        idleOpenLabel="Message business"
+        loadMessages={() => jobsAPI.listBookingMessages(booking.id)}
+        sendMessage={(body) => jobsAPI.sendBookingMessage(booking.id, body)}
+      />
+
       {booking.status_events?.length > 0 && (
         <div className="mt-4 border-t border-slate-100/80 pt-4">
           <button

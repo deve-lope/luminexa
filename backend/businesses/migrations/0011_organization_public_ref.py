@@ -37,7 +37,6 @@ class Migration(migrations.Migration):
             name='public_ref',
             field=models.CharField(
                 blank=True,
-                db_index=True,
                 default='',
                 help_text='Customer-facing ID, e.g. pro1, pro2',
                 max_length=16,

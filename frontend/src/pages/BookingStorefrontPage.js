@@ -195,7 +195,7 @@ export default function BookingStorefrontPage() {
 
   return (
     <div className={shellClass}>
-      <div className="relative -mx-4 h-44 overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200 sm:mx-0 sm:rounded-t-xl">
+      <div className="relative -mx-4 aspect-[3/1] overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200 sm:mx-0 sm:rounded-t-xl">
         {organization.banner_url && (
           <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
         )}

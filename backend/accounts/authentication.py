@@ -1,5 +1,6 @@
 from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 
 
 class CookieTokenAuthentication(TokenAuthentication):
@@ -16,4 +17,11 @@ class CookieTokenAuthentication(TokenAuthentication):
         raw = request.COOKIES.get(settings.AUTH_TOKEN_COOKIE_NAME)
         if not raw:
             return None
-        return self.authenticate_credentials(raw)
+        try:
+            return self.authenticate_credentials(raw)
+        except AuthenticationFailed:
+            # HttpOnly cookies cannot be cleared by the SPA. Treat a stale
+            # rotated/deleted cookie as signed out so public login endpoints
+            # can issue fresh credentials. Protected endpoints still return
+            # 401 through their IsAuthenticated permission.
+            return None

@@ -12,6 +12,10 @@ function parseLoginError(err) {
   return parseApiError(err, 'Could not sign in. Try again.');
 }
 
+function isAccountNotFound(err) {
+  return err?.response?.status === 404 && err?.response?.data?.code === 'account_not_found';
+}
+
 export default function LoginPage() {
   const { login, loginWithOtp } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +32,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [accountMissing, setAccountMissing] = useState(false);
   const [info, setInfo] = useState(
     location.state?.message || (initialStep === 'otp' ? 'Enter the code we emailed you.' : '')
   );
@@ -36,8 +41,19 @@ export default function LoginPage() {
   const [resending, setResending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const registerQs = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
+
   const finishLogin = (user, memberships) => {
     applyPostLoginNavigation(navigate, user, memberships, nextPath);
+  };
+
+  const showAccountMissing = (msg) => {
+    setAccountMissing(true);
+    setStep('email');
+    setCode('');
+    setPassword('');
+    setError(msg || 'No account found for that email.');
+    setInfo('');
   };
 
   const handleEmailContinue = async (e) => {
@@ -46,6 +62,7 @@ export default function LoginPage() {
     setInfo('');
     setResendMsg('');
     setUnverifiedEmail('');
+    setAccountMissing(false);
     setSubmitting(true);
     try {
       const { data } = await userAPI.loginStart({ email: email.trim() });
@@ -54,10 +71,14 @@ export default function LoginPage() {
         setInfo(data.detail || 'Enter your business account password.');
       } else {
         setStep('otp');
-        setInfo(data.detail || 'If an account exists for that email, we sent a sign-in code.');
+        setInfo(data.detail || 'We sent a sign-in code to your email.');
       }
     } catch (err) {
-      setError(parseLoginError(err));
+      if (isAccountNotFound(err)) {
+        showAccountMissing(err.response?.data?.detail);
+      } else {
+        setError(parseLoginError(err));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -69,6 +90,7 @@ export default function LoginPage() {
     setInfo('');
     setResendMsg('');
     setUnverifiedEmail('');
+    setAccountMissing(false);
     setSubmitting(true);
     try {
       const { user, memberships } = await login(email.trim(), password);
@@ -91,6 +113,7 @@ export default function LoginPage() {
     setError('');
     setInfo('');
     setResendMsg('');
+    setAccountMissing(false);
     setSubmitting(true);
     try {
       const { user, memberships } = await loginWithOtp(email.trim(), code.trim());
@@ -122,15 +145,21 @@ export default function LoginPage() {
     setResending(true);
     setResendMsg('');
     setError('');
+    setAccountMissing(false);
     try {
       const res = await userAPI.requestLoginOtp({ email: email.trim() });
-      setResendMsg(res.data?.detail || 'If an account exists, we sent a new code.');
+      setResendMsg(res.data?.detail || 'We sent a new code.');
       if (res.data?.auth_method === 'password') {
         setStep('password');
         setInfo('This account uses a password.');
       }
     } catch (err) {
-      setResendMsg(parseLoginError(err));
+      if (isAccountNotFound(err)) {
+        showAccountMissing(err.response?.data?.detail);
+        setResendMsg('');
+      } else {
+        setResendMsg(parseLoginError(err));
+      }
     } finally {
       setResending(false);
     }
@@ -144,6 +173,7 @@ export default function LoginPage() {
     setInfo('');
     setResendMsg('');
     setUnverifiedEmail('');
+    setAccountMissing(false);
   };
 
   const subtitle =
@@ -161,11 +191,14 @@ export default function LoginPage() {
       footer={
         <>
           New here?{' '}
-          <Link to="/register" className="font-semibold text-teal-700 hover:text-teal-800">
+          <Link to={`/register${registerQs}`} className="font-semibold text-teal-700 hover:text-teal-800">
             Create account
           </Link>
           {' · '}
-          <Link to="/register/business" className="font-semibold text-teal-700 hover:text-teal-800">
+          <Link
+            to={`/register/business${registerQs}`}
+            className="font-semibold text-teal-700 hover:text-teal-800"
+          >
             Register a business
           </Link>
         </>
@@ -191,7 +224,28 @@ export default function LoginPage() {
         )}
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-            <p>{error}</p>
+            <p className="font-medium">{error}</p>
+            {accountMissing && (
+              <div className="mt-3 space-y-2">
+                <p className="text-red-800/80">Create an account to continue:</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Link
+                    to={`/register${registerQs}`}
+                    state={{ email: email.trim() }}
+                    className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800"
+                  >
+                    I’m a customer
+                  </Link>
+                  <Link
+                    to={`/register/business${registerQs}`}
+                    state={{ email: email.trim() }}
+                    className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+                  >
+                    I’m a service provider
+                  </Link>
+                </div>
+              </div>
+            )}
             {unverifiedEmail && (
               <button
                 type="button"
@@ -220,7 +274,13 @@ export default function LoginPage() {
             required
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (accountMissing) {
+                setAccountMissing(false);
+                setError('');
+              }
+            }}
             disabled={step !== 'email'}
             className="lx-input disabled:bg-slate-50 disabled:text-slate-600"
           />

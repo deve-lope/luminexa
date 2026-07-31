@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AuthFormShell from '../components/auth/AuthFormShell';
 import AddressCountrySelect from '../components/location/AddressCountrySelect';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
@@ -7,7 +7,8 @@ import { userAPI } from '../utils/api';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const [email, setEmail] = useState(() => location.state?.email || '');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [addressCountry, setAddressCountry] = useState(

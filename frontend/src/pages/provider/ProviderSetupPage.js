@@ -17,13 +17,17 @@ import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI, jobsAPI, orgProfileAPI, userAPI } from '../../utils/api';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
-import { applyPostLoginNavigation, isProviderMember } from '../../utils/postLoginRoute';
+import { isProviderMember } from '../../utils/postLoginRoute';
 import {
   hasFinishedProviderSetupWizard,
+  isProviderWizardStepDone,
   markProviderSetupWizardDone,
+  markProviderWizardStepDone,
   needsOnboarding,
   nextProviderWizardStep,
   PROVIDER_WIZARD_STEPS,
+  providerResumeSetupPath,
+  providerSetupPath,
 } from '../../utils/profileSetup';
 import {
   firstProviderHome,
@@ -150,6 +154,23 @@ export default function ProviderSetupPage() {
               }))
             );
           }
+          // Already configured on the server — don't force this step again.
+          const scheduleConfigured =
+            d.scheduling_mode === 'flexi' ||
+            (d.scheduling_mode === 'recurring' && list.length > 0);
+          if (scheduleConfigured) {
+            markProviderWizardStepDone(orgSlug, 'availability');
+            const onAvailability =
+              stepParam === 'availability' ||
+              (!stepParam && step === 'availability') ||
+              step === 'availability';
+            if (onAvailability && !hasFinishedProviderSetupWizard(orgSlug)) {
+              const resume = providerResumeSetupPath(orgSlug);
+              if (!resume.includes('step=availability')) {
+                navigate(resume, { replace: true });
+              }
+            }
+          }
         }
       })
       .catch(() => {})
@@ -159,16 +180,16 @@ export default function ProviderSetupPage() {
     return () => {
       cancelled = true;
     };
-  }, [isOwner, orgSlug, user?.address_country]);
+  }, [isOwner, orgSlug, user?.address_country, stepParam, step, navigate]);
 
   const goHome = (profile = user) => {
     if (profile) setUserFromProfile(profile);
-    applyPostLoginNavigation(
-      navigate,
-      profile || user,
-      memberships,
-      nextPath || providerHome(orgSlug)
-    );
+    // Never bounce back into setup via a stale `next` path.
+    const dest =
+      nextPath && nextPath.startsWith('/') && !nextPath.includes('/setup')
+        ? nextPath
+        : providerHome(orgSlug);
+    navigate(dest, { replace: true });
   };
 
   const finishWizard = (profile) => {
@@ -177,9 +198,19 @@ export default function ProviderSetupPage() {
   };
 
   const goNextWizardStep = (fromStep) => {
+    markProviderWizardStepDone(orgSlug, fromStep);
     const next = nextProviderWizardStep(fromStep);
-    if (next) setStep(next);
-    else finishWizard();
+    if (next) {
+      setStep(next);
+      navigate(providerSetupPath(orgSlug, next), { replace: true });
+    } else {
+      finishWizard();
+    }
+  };
+
+  const leaveSetupToDashboard = () => {
+    markProviderSetupWizardDone(orgSlug);
+    navigate(providerHome(orgSlug), { replace: true });
   };
 
   if (authLoading) {
@@ -201,10 +232,30 @@ export default function ProviderSetupPage() {
   // Contact already done — only allow optional wizard steps
   if (!needsOnboarding(user) && step === 'contact') {
     if (isOwner && !hasFinishedProviderSetupWizard(orgSlug) && !stepParam) {
-      return <Navigate to={`/provider/${orgSlug}/setup?step=availability`} replace />;
+      return <Navigate to={providerResumeSetupPath(orgSlug)} replace />;
     }
-    const fallback = nextPath && nextPath.startsWith('/') ? nextPath : providerHome(orgSlug);
+    const fallback =
+      nextPath && nextPath.startsWith('/') && !nextPath.includes('/setup')
+        ? nextPath
+        : providerHome(orgSlug);
     return <Navigate to={fallback} replace />;
+  }
+
+  // If this step was already completed, jump to the next incomplete one (or home).
+  if (
+    isOwner &&
+    stepParam &&
+    PROVIDER_WIZARD_STEPS.includes(stepParam) &&
+    isProviderWizardStepDone(orgSlug, stepParam)
+  ) {
+    const resume = providerResumeSetupPath(orgSlug);
+    const resumeStep = new URLSearchParams(resume.split('?')[1] || '').get('step');
+    if (hasFinishedProviderSetupWizard(orgSlug)) {
+      return <Navigate to={providerHome(orgSlug)} replace />;
+    }
+    if (resumeStep && resumeStep !== stepParam) {
+      return <Navigate to={resume} replace />;
+    }
   }
 
   const submitContact = async (e) => {
@@ -242,6 +293,7 @@ export default function ProviderSetupPage() {
 
       if (isOwner && !hasFinishedProviderSetupWizard(orgSlug)) {
         setStep('availability');
+        navigate(providerResumeSetupPath(orgSlug), { replace: true });
       } else {
         goHome(completed || profile);
       }
@@ -267,24 +319,42 @@ export default function ProviderSetupPage() {
       }
     }
     setSaving(true);
+    const tz = timezone || detectTimezone() || 'America/New_York';
+    const payload = {
+      scheduling_mode: mode,
+      timezone: tz,
+      schedule_valid_from: mode === 'recurring' ? validFrom || null : null,
+      schedule_valid_until: mode === 'recurring' ? validUntil || null : null,
+      weekly_blocks:
+        mode === 'recurring'
+          ? blocks.map((b) => ({
+              weekday: b.weekday,
+              start_time: b.start_time.length === 5 ? `${b.start_time}:00` : b.start_time,
+              end_time: b.end_time.length === 5 ? `${b.end_time}:00` : b.end_time,
+              is_active: true,
+            }))
+          : [],
+    };
     try {
-      await jobsAPI.saveSchedulingSettings(orgSlug, {
-        scheduling_mode: mode,
-        timezone: timezone || detectTimezone() || 'America/New_York',
-        schedule_valid_from: mode === 'recurring' ? validFrom || null : null,
-        schedule_valid_until: mode === 'recurring' ? validUntil || null : null,
-        weekly_blocks:
-          mode === 'recurring'
-            ? blocks.map((b) => ({
-                weekday: b.weekday,
-                start_time: b.start_time.length === 5 ? `${b.start_time}:00` : b.start_time,
-                end_time: b.end_time.length === 5 ? `${b.end_time}:00` : b.end_time,
-                is_active: true,
-              }))
-            : [],
-      });
+      await jobsAPI.saveSchedulingSettings(orgSlug, payload);
       goNextWizardStep('availability');
     } catch (err) {
+      // Retry once with a safe timezone if the host rejects the browser tz name.
+      const tzError = err.response?.data?.timezone;
+      if (tzError && tz !== 'America/New_York') {
+        try {
+          await jobsAPI.saveSchedulingSettings(orgSlug, {
+            ...payload,
+            timezone: 'America/New_York',
+          });
+          setTimezone('America/New_York');
+          goNextWizardStep('availability');
+          return;
+        } catch (retryErr) {
+          setError(parseApiError(retryErr) || 'Could not save availability.');
+          return;
+        }
+      }
       setError(parseApiError(err) || 'Could not save availability.');
     } finally {
       setSaving(false);
@@ -338,6 +408,7 @@ export default function ProviderSetupPage() {
         title="How do you take bookings?"
         subtitle="Choose weekly hours that auto-open slots, or Flexi where you open dates yourself. You can change this anytime in Settings."
         backTo={providerHome(orgSlug)}
+        preferFallbackBack
       >
         <WizardProgress step="availability" />
         <form onSubmit={submitAvailability} className="space-y-4">
@@ -475,25 +546,25 @@ export default function ProviderSetupPage() {
           )}
 
           <button
+            type="button"
+            onClick={leaveSetupToDashboard}
+            className="lx-btn-primary w-full min-h-[48px]"
+          >
+            Skip for now — go to dashboard
+          </button>
+          <button
             type="submit"
             disabled={saving}
-            className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
+            className="w-full min-h-[44px] rounded-xl border border-teal-200 text-sm font-semibold text-teal-800 disabled:opacity-60"
           >
-            {saving ? 'Saving…' : 'Save & continue'}
+            {saving ? 'Saving…' : 'Save availability & continue'}
           </button>
           <button
             type="button"
             onClick={() => goNextWizardStep('availability')}
             className="w-full min-h-[44px] text-sm font-semibold text-slate-600 hover:text-slate-900"
           >
-            Skip for now
-          </button>
-          <button
-            type="button"
-            onClick={() => finishWizard()}
-            className="w-full text-xs font-medium text-slate-500 hover:text-slate-700"
-          >
-            Skip remaining setup
+            Continue without saving
           </button>
         </form>
       </AuthFormShell>
@@ -506,6 +577,7 @@ export default function ProviderSetupPage() {
         title="Where do you serve?"
         subtitle="Add a service location and radius so nearby customers can find you. Same controls as Settings — you can refine this later."
         backTo={providerHome(orgSlug)}
+        preferFallbackBack
       >
         <WizardProgress step="service_area" />
         <div className="space-y-4">
@@ -526,10 +598,10 @@ export default function ProviderSetupPage() {
           </button>
           <button
             type="button"
-            onClick={() => finishWizard()}
+            onClick={leaveSetupToDashboard}
             className="w-full text-xs font-medium text-slate-500 hover:text-slate-700"
           >
-            Skip remaining setup
+            Skip remaining setup — go to dashboard
           </button>
         </div>
       </AuthFormShell>
@@ -542,6 +614,7 @@ export default function ProviderSetupPage() {
         title="Add your services"
         subtitle="Customers book from your catalog. Add at least one service when you’re ready — you can do it now or later."
         backTo={providerHome(orgSlug)}
+        preferFallbackBack
       >
         <WizardProgress step="services" />
         <div className="space-y-4">
@@ -550,11 +623,18 @@ export default function ProviderSetupPage() {
             page.
           </div>
           <Link
-            to={providerServices(orgSlug)}
+            to={`${providerServices(orgSlug)}?from=setup`}
             className="lx-btn-primary flex w-full min-h-[48px] items-center justify-center"
           >
             Go to Services
           </Link>
+          <button
+            type="button"
+            onClick={() => goNextWizardStep('services')}
+            className="w-full min-h-[48px] rounded-xl border border-teal-200 text-sm font-semibold text-teal-800"
+          >
+            Continue to next step
+          </button>
           <button
             type="button"
             onClick={() => goNextWizardStep('services')}
@@ -564,10 +644,10 @@ export default function ProviderSetupPage() {
           </button>
           <button
             type="button"
-            onClick={() => finishWizard()}
+            onClick={leaveSetupToDashboard}
             className="w-full text-xs font-medium text-slate-500 hover:text-slate-700"
           >
-            Skip remaining setup
+            Skip remaining setup — go to dashboard
           </button>
         </div>
       </AuthFormShell>
@@ -580,6 +660,7 @@ export default function ProviderSetupPage() {
         title="Public profile (optional)"
         subtitle="Add a short intro customers see on your page. You can finish this later on My page."
         backTo={providerHome(orgSlug)}
+        preferFallbackBack
       >
         <WizardProgress step="profile" />
         <form onSubmit={submitProfile} className="space-y-4">
@@ -622,10 +703,10 @@ export default function ProviderSetupPage() {
           </button>
           <button
             type="button"
-            onClick={() => finishWizard()}
+            onClick={leaveSetupToDashboard}
             className="w-full min-h-[44px] text-sm font-semibold text-slate-600 hover:text-slate-900"
           >
-            Skip for now
+            Skip for now — go to dashboard
           </button>
         </form>
       </AuthFormShell>

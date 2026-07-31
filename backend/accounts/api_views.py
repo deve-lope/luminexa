@@ -113,18 +113,26 @@ class LoginStartAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
-        if user and user_uses_password_login(user):
+        if not user or not user.is_active:
+            return Response(
+                {
+                    'detail': 'No account found for that email.',
+                    'code': 'account_not_found',
+                    'email': email,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if user_uses_password_login(user):
             return Response({
                 'auth_method': 'password',
                 'email': email,
                 'detail': 'Enter your business account password.',
             })
-        if user and user.is_active:
-            _send_customer_otp(email, full_name=user.full_name)
+        _send_customer_otp(email, full_name=user.full_name)
         return Response({
             'auth_method': 'otp',
             'email': email,
-            'detail': 'If an account exists for that email, we sent a sign-in code.',
+            'detail': 'We sent a sign-in code to your email.',
         })
 
 
@@ -137,12 +145,26 @@ class LoginOtpRequestAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
-        # Only send OTP for active non-password accounts; response shape is always the same.
-        if user and user.is_active and not user_uses_password_login(user):
-            _send_customer_otp(email, full_name=user.full_name)
+        if not user or not user.is_active:
+            return Response(
+                {
+                    'detail': 'No account found for that email.',
+                    'code': 'account_not_found',
+                    'email': email,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if user_uses_password_login(user):
+            return Response({
+                'detail': 'This account uses a password.',
+                'auth_method': 'password',
+                'email': email,
+            })
+        _send_customer_otp(email, full_name=user.full_name)
         return Response({
-            'detail': 'If an account exists for that email, we sent a sign-in code.',
+            'detail': 'We sent a new sign-in code to your email.',
             'email': email,
+            'auth_method': 'otp',
         })
 
 
