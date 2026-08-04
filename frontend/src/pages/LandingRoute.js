@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
-import { firstProviderHome, providerAbout } from '../utils/providerPaths';
+import { firstProviderHome } from '../utils/providerPaths';
 import AboutPage from './AboutPage';
 
 export default function LandingRoute() {
@@ -23,13 +23,11 @@ export default function LandingRoute() {
   }
 
   if (isAuthenticated && isProviderMember(memberships)) {
-    const home = firstProviderHome(memberships);
-    const slug = home.split('/').pop();
-    return <Navigate to={providerAbout(slug)} replace />;
+    return <Navigate to={firstProviderHome(memberships)} replace />;
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/customer/about" replace />;
+    return <Navigate to="/customer" replace />;
   }
 
   return <AboutPage />;

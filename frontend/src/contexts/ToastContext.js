@@ -18,7 +18,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 px-safe pb-safe lg:bottom-6 lg:pb-0">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 px-safe pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6 lg:pb-0">
         {toasts.map((t) => (
           <div
             key={t.id}

@@ -15,27 +15,7 @@ import {
 import { providerRouteKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
-function ReviewDimensionBreakdown({ review }) {
-  const dims = [
-    { key: 'communication', label: 'Communication' },
-    { key: 'price', label: 'Price' },
-    { key: 'punctual', label: 'Punctual' },
-    { key: 'quality', label: 'Quality of work' },
-  ];
-  return (
-    <ul className="mt-2 space-y-1.5 text-xs text-slate-500">
-      {dims.map((d) => (
-        <li key={d.key} className="flex items-center justify-between gap-2">
-          <span>{d.label}</span>
-          <span className="flex items-center gap-1.5">
-            <StarRating value={review[d.key]} size="sm" />
-            <span className="w-4 text-right font-medium text-amber-700">{review[d.key]}</span>
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+const COMMENT_PREVIEW = 2;
 
 export default function CustomerServiceDetailPage() {
   const params = useParams();
@@ -51,6 +31,8 @@ export default function CustomerServiceDetailPage() {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [editingReview, setEditingReview] = useState(false);
+  const [showAllComments, setShowAllComments] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,16 +52,26 @@ export default function CustomerServiceDetailPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setEditingReview(false);
+    setShowAllComments(false);
+  }, [serviceId]);
+
   const submitReview = async (payload) => {
     setSubmittingReview(true);
     setMessage(null);
     setError(null);
     try {
       await businessesAPI.submitServiceReview(providerKey, serviceId, payload);
-      setMessage('Thank you for your rating!');
+      setMessage(editingReview ? 'Your rating was updated.' : 'Thank you for your rating!');
+      setEditingReview(false);
       await load();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not submit rating.');
+      setError(
+        err.response?.data?.detail
+          || (typeof err.response?.data === 'string' ? err.response.data : null)
+          || 'Could not submit rating.',
+      );
     } finally {
       setSubmittingReview(false);
     }
@@ -95,6 +87,15 @@ export default function CustomerServiceDetailPage() {
     return [];
   }, [service]);
 
+  const commentReviews = useMemo(() => {
+    if (!service?.reviews?.length) return [];
+    return service.reviews.filter((r) => r.comment?.trim());
+  }, [service]);
+
+  const visibleComments = showAllComments
+    ? commentReviews
+    : commentReviews.slice(0, COMMENT_PREVIEW);
+
   if (loading) {
     return <p className="py-8 text-center text-slate-500">Loading service…</p>;
   }
@@ -103,6 +104,14 @@ export default function CustomerServiceDetailPage() {
   const providerPath = isCustomerProviderRoute
     ? customerProviderPage(customerKey)
     : businessPage(customerKey);
+  const providerBackPath = (() => {
+    const cat = new URLSearchParams(location.search).get('cat');
+    const base = cat
+      ? `${providerPath}?cat=${encodeURIComponent(cat)}`
+      : providerPath;
+    const sid = service?.id || serviceId;
+    return sid ? `${base}#service-${sid}` : base;
+  })();
   const bookPath = isCustomerProviderRoute
     ? customerProviderService(customerKey, service?.id)
     : bookService(customerKey, service?.id);
@@ -119,12 +128,15 @@ export default function CustomerServiceDetailPage() {
   }
 
   const meta = formatServiceMeta(service);
+  const myReview = service.my_review;
+  const canEdit = Boolean(service.can_edit_review || myReview);
 
   return (
     <div className="space-y-6">
       <header>
         <Link
-          to={providerPath}
+          to={providerBackPath}
+          replace
           className="text-sm font-medium text-luminexa-accent"
         >
           ← {service.organization_name}
@@ -165,43 +177,6 @@ export default function CustomerServiceDetailPage() {
         )}
       </div>
 
-      <section className="lx-card">
-        <h2 className="lx-eyebrow">Ratings</h2>
-        <div className="mt-3">
-          <ServiceRatingSummary summary={service.rating_summary} showBreakdown />
-        </div>
-      </section>
-
-      {service.reviews?.length > 0 && (
-        <section className="lx-card">
-          <h2 className="lx-eyebrow">Customer comments</h2>
-          <ul className="mt-3 space-y-4">
-            {service.reviews.map((review) => (
-              <li
-                key={review.id}
-                className="border-b border-slate-100 pb-4 last:border-0 last:pb-0"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-800">
-                    {review.customer_name}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <StarRating value={review.average} size="sm" />
-                    <span className="text-sm font-medium text-amber-700">{review.average}</span>
-                  </span>
-                </div>
-                <ReviewDimensionBreakdown review={review} />
-                {review.comment ? (
-                  <p className="mt-2 text-sm leading-relaxed text-slate-700">{review.comment}</p>
-                ) : (
-                  <p className="mt-2 text-sm italic text-slate-400">No written comment.</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {message && (
         <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>
       )}
@@ -221,29 +196,102 @@ export default function CustomerServiceDetailPage() {
         </section>
       )}
 
-      {service.my_review && !service.can_rate && (
+      {myReview && !service.can_rate && (
         <section className="lx-card">
-          <h2 className="lx-eyebrow">Your rating</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <StarRating value={service.my_review.average} />
-            <span className="text-sm font-medium text-amber-800">
-              {service.my_review.average} average
-            </span>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="lx-eyebrow">Your rating</h2>
+            {canEdit && !editingReview && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage(null);
+                  setError(null);
+                  setEditingReview(true);
+                }}
+                className="shrink-0 text-sm font-medium text-luminexa-accent"
+              >
+                Edit rating
+              </button>
+            )}
           </div>
-          <ReviewDimensionBreakdown review={service.my_review} />
-          {service.my_review.comment ? (
-            <p className="mt-2 text-sm text-slate-700">{service.my_review.comment}</p>
+
+          {editingReview ? (
+            <div className="mt-3">
+              <ServiceRatingForm
+                key={`edit-${myReview.id}`}
+                onSubmit={submitReview}
+                submitting={submittingReview}
+                initialValues={myReview}
+                submitLabel="Save rating"
+                onCancel={() => setEditingReview(false)}
+              />
+            </div>
           ) : (
-            <p className="mt-2 text-sm italic text-slate-400">You did not leave a comment.</p>
+            <>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <StarRating value={myReview.average} size="lg" />
+                <span className="text-sm font-medium text-amber-800">
+                  {myReview.average}
+                </span>
+              </div>
+              {myReview.comment ? (
+                <p className="mt-3 text-sm leading-relaxed text-slate-700">{myReview.comment}</p>
+              ) : null}
+            </>
           )}
         </section>
       )}
 
-      {!service.can_rate && !service.my_review && isAuthenticated && (
+      {!service.can_rate && !myReview && isAuthenticated && !isOwnerView && (
         <p className="text-sm text-slate-500">
           You can rate and comment on this service after a completed booking.
         </p>
       )}
+
+      <section className="lx-card">
+        <h2 className="lx-eyebrow">Ratings</h2>
+        <div className="mt-3">
+          <ServiceRatingSummary summary={service.rating_summary} showBreakdown />
+        </div>
+      </section>
+
+      <section className="lx-card">
+        <h2 className="lx-eyebrow">Comments</h2>
+        {commentReviews.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No comments yet.</p>
+        ) : (
+          <>
+            <ul className="mt-3 space-y-4">
+              {visibleComments.map((review) => (
+                <li
+                  key={review.id}
+                  className="border-b border-slate-100 pb-4 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-slate-800">
+                      {review.customer_name}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <StarRating value={review.average} size="sm" />
+                      <span className="text-sm font-medium text-amber-700">{review.average}</span>
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-700">{review.comment}</p>
+                </li>
+              ))}
+            </ul>
+            {commentReviews.length > COMMENT_PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setShowAllComments((v) => !v)}
+                className="mt-3 text-sm font-medium text-luminexa-accent"
+              >
+                {showAllComments ? 'Show less' : `Show all (${commentReviews.length})`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

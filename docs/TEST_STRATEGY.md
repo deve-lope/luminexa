@@ -27,7 +27,18 @@ Use the focused suite that matches the change. Full suite before claiming done o
 | Capacity | `jobs.tests.test_bookings` | Two bookings same slot; third rejected; default capacity=1 rejects second; cancel frees a seat; public calendar `available` when 1 of 2 filled; owner PATCH capacity |
 | Dual radius + multi-location | `businesses.tests.test_location_radius` | Provider radius hides far orgs; both radii required; tight customer radius; ungeocoded postal; any-branch match; nearby but provider radius too small; inactive locations excluded; locations API; primary → `service_*` sync; max locations enforced |
 
-When adding coverage, put new cases next to these modules unless a new file is clearly warranted.
+## Browse categories vs catalog services
+
+Customer **Popular categories** / type browse list a provider only when that org has
+**≥1 active service** in a `ServiceCategory` whose name matches the platform
+`BusinessType` name. Org `business_types` tags alone are not enough.
+
+Code: `jobs.catalog.organizations_with_services_for_business_type`,
+`business_types_with_service_provider_counts` · API: `business_type_providers_api`,
+customer home / discover type tiles.
+
+Test: `businesses.tests.test_browse_by_category`
+
 
 ---
 

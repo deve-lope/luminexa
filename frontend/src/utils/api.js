@@ -190,9 +190,10 @@ export const jobsAPI = {
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
   listMyConversations: () => api.get('/api/v1/me/conversations/'),
-  listMyNotifications: () => api.get('/api/v1/me/notifications/'),
+  listMyNotifications: (params) => api.get('/api/v1/me/notifications/', { params }),
   dismissMyNotification: (notificationId) =>
     api.post(`/api/v1/me/notifications/${notificationId}/dismiss/`),
+  dismissAllMyNotifications: () => api.post('/api/v1/me/notifications/dismiss-all/'),
   listProviderServiceRequests: (orgSlug, params) =>
     api.get('/api/v1/provider-service-requests/', { params: { organization: orgSlug, ...params } }),
   getServiceInquiry: (orgSlug, inquiryId) =>
@@ -216,6 +217,8 @@ export const jobsAPI = {
   acceptBooking: (id) => api.post(`/api/v1/bookings/${id}/accept/`),
   sendBookingQuote: (id, data) => api.post(`/api/v1/bookings/${id}/send-quote/`, data),
   acceptBookingQuote: (id, data = {}) => api.post(`/api/v1/bookings/${id}/accept-quote/`, data),
+  acceptBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/accept-time-change/`),
+  declineBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/decline-time-change/`),
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
   cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
@@ -249,6 +252,8 @@ export const jobsAPI = {
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),
   bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
+  downloadBookingIcal: (id) =>
+    api.get(`/api/v1/bookings/${id}/ical/`, { responseType: 'blob' }),
   inviteStaff: (orgSlug, email) =>
     api.post(`/api/v1/organizations/${orgSlug}/invite-staff/`, { email }),
   listStaffInvitations: (orgSlug) =>
@@ -292,8 +297,12 @@ export const jobsAPI = {
     api.put(`/api/v1/organizations/${orgSlug}/scheduling-settings/`, data, { timeout: 30000 }),
   syncRecurringSlots: (orgSlug) =>
     api.post(`/api/v1/organizations/${orgSlug}/sync-recurring-slots/`),
+  listProviderConversations: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/conversations/`),
   dismissNotification: (orgSlug, notificationId) =>
     api.post(`/api/v1/organizations/${orgSlug}/notifications/${notificationId}/dismiss/`),
+  listProviderNotifications: (orgSlug, params) =>
+    api.get(`/api/v1/organizations/${orgSlug}/notifications/`, { params }),
   getBookingContext: (orgSlug, { serviceId } = {}) =>
     api.get(`/api/v1/organizations/${orgSlug}/booking-context/`, {
       params: serviceId ? { service: serviceId } : undefined,

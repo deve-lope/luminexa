@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ServiceRow } from './ServiceCatalogView';
 
 /**
  * Category grid first; tap a category to see its services.
+ * Selected category is kept in ?cat= so Back from service details restores the list.
  */
 export default function ServiceCategoryBrowse({
   catalog,
@@ -13,8 +15,10 @@ export default function ServiceCategoryBrowse({
   selectable = false,
   selectedIds = [],
   onToggleSelect,
+  useCustomerProviderUrls = false,
 }) {
-  const [selectedId, setSelectedId] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('cat');
 
   const tiles = useMemo(() => {
     const categories = (catalog?.categories || []).filter((c) => (c.services || []).length > 0);
@@ -22,7 +26,7 @@ export default function ServiceCategoryBrowse({
     const items = categories.map((c) => {
       const services = c.services || [];
       return {
-        id: c.id,
+        id: String(c.id),
         name: c.name,
         services,
         count: services.length,
@@ -39,18 +43,28 @@ export default function ServiceCategoryBrowse({
     return items;
   }, [catalog]);
 
+  const setCategory = (id) => {
+    const next = new URLSearchParams(searchParams);
+    if (id == null) {
+      next.delete('cat');
+    } else {
+      next.set('cat', String(id));
+    }
+    setSearchParams(next, { replace: true });
+  };
+
   if (!tiles.length) {
     return <p className="text-sm text-slate-500">{emptyMessage}</p>;
   }
 
-  if (selectedId === null) {
+  if (selectedId == null || !tiles.some((t) => t.id === selectedId)) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
         {tiles.map((tile) => (
           <button
             key={tile.id}
             type="button"
-            onClick={() => setSelectedId(tile.id)}
+            onClick={() => setCategory(tile.id)}
             className="flex min-h-[88px] flex-col items-start justify-center rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-luminexa-accent/40 hover:shadow-md"
           >
             <span className="font-semibold text-slate-900">{tile.name}</span>
@@ -64,31 +78,12 @@ export default function ServiceCategoryBrowse({
   }
 
   const selected = tiles.find((t) => t.id === selectedId);
-  if (!selected) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {tiles.map((tile) => (
-          <button
-            key={tile.id}
-            type="button"
-            onClick={() => setSelectedId(tile.id)}
-            className="flex min-h-[88px] flex-col items-start justify-center rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-luminexa-accent/40 hover:shadow-md"
-          >
-            <span className="font-semibold text-slate-900">{tile.name}</span>
-            <span className="mt-1 text-sm text-slate-500">
-              {tile.count} service{tile.count === 1 ? '' : 's'}
-            </span>
-          </button>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
       <button
         type="button"
-        onClick={() => setSelectedId(null)}
+        onClick={() => setCategory(null)}
         className="inline-flex min-h-[40px] items-center text-sm font-medium text-luminexa-accent"
       >
         ← All categories
@@ -111,6 +106,8 @@ export default function ServiceCategoryBrowse({
             selectable={selectable}
             selected={selectedIds.includes(svc.id) || selectedIds.includes(String(svc.id))}
             onToggleSelect={onToggleSelect}
+            useCustomerProviderUrls={useCustomerProviderUrls}
+            categoryId={selectedId}
           />
         ))}
       </ul>

@@ -65,9 +65,8 @@ export function buildProviderMenuItems({
   providerSettingsPath,
   providerAccountPath,
   providerSharePath,
-  providerNotificationsPath,
+  providerMessagesPath,
   providerAnalyticsPath,
-  notificationsBadgeCount = 0,
   isStaff,
   adminUrl,
 }) {
@@ -80,6 +79,14 @@ export function buildProviderMenuItems({
       label: 'Analytics',
       to: providerAnalyticsPath,
       iconId: 'analytics',
+    });
+  }
+  if (providerMessagesPath) {
+    items.push({
+      id: 'messages',
+      label: 'Messages',
+      to: providerMessagesPath,
+      iconId: 'messages',
     });
   }
   if (providerAccountPath) {
@@ -96,15 +103,6 @@ export function buildProviderMenuItems({
       label: 'Settings',
       to: providerSettingsPath,
       iconId: 'settings',
-    });
-  }
-  if (providerNotificationsPath) {
-    items.push({
-      id: 'notifications',
-      label: 'Notifications',
-      to: providerNotificationsPath,
-      iconId: 'notifications',
-      badgeCount: notificationsBadgeCount > 0 ? notificationsBadgeCount : undefined,
     });
   }
   if (providerSharePath) {
@@ -135,13 +133,13 @@ export function buildCustomerMenuItems({ logout }) {
     to: '/customer/account',
     iconId: 'account',
   });
-  items.push({ id: 'history', label: 'History', to: '/customer/history' });
   items.push({
-    id: 'notifications',
-    label: 'Notifications',
-    to: '/customer/notifications',
-    iconId: 'notifications',
+    id: 'messages',
+    label: 'Messages',
+    to: '/customer/messages',
+    iconId: 'messages',
   });
+  items.push({ id: 'history', label: 'History', to: '/customer/history' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
   return items;

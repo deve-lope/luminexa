@@ -43,7 +43,7 @@ export default function BookingServiceLocationSection({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-violet-700 hover:bg-violet-50"
+            className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-luminexa-accent hover:bg-teal-50"
           >
             Change address
           </button>
@@ -61,7 +61,7 @@ export default function BookingServiceLocationSection({
         <button
           type="button"
           onClick={handleUseSaved}
-          className="text-sm font-medium text-violet-700 hover:text-violet-900"
+          className="text-sm font-medium text-luminexa-accent hover:text-teal-800"
         >
           ← Use saved address
         </button>

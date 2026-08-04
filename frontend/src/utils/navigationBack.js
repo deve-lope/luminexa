@@ -12,25 +12,45 @@ export function isMarketingOrLogin(pathname) {
 }
 
 /** Fallback when history is empty — Back still uses navigate(-1) first. */
-export function resolveCustomerBack(pathname) {
+export function resolveCustomerBack(pathname, search = '') {
   const path = normalizePath(pathname);
+  const qs = (search || '').startsWith('?') ? search : search ? `?${search}` : '';
+  const catOnly = (() => {
+    if (!qs) return '';
+    try {
+      const cat = new URLSearchParams(qs).get('cat');
+      return cat ? `?cat=${encodeURIComponent(cat)}` : '';
+    } catch {
+      return '';
+    }
+  })();
+
   if (path === '/customer') return null;
 
   if (path === '/customer/find') return { to: '/customer' };
+  if (path === '/customer/categories') return { to: '/customer' };
   if (path.startsWith('/customer/find/')) {
-    return { to: '/customer/find' };
+    return { to: '/customer/categories' };
   }
   if (path === '/customer/account') return { to: '/customer' };
+  if (/^\/customer\/bookings\/[^/]+$/.test(path)) {
+    return { to: '/customer/bookings' };
+  }
   if (path === '/customer/bookings') return { to: '/customer' };
   if (path === '/customer/messages') return { to: '/customer' };
   if (path === '/customer/notifications') return { to: '/customer' };
   if (path === '/customer/history') return { to: '/customer' };
   if (path === '/customer/about') return { to: '/customer' };
-  if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(path)) {
+  if (/^\/customer\/provider\/[^/]+\/checkout$/.test(path)) {
     const key = path.split('/')[3];
     return { to: `/customer/provider/${key}` };
   }
   if (/^\/customer\/provider\/[^/]+\/services\/[^/]+$/.test(path)) {
+    const key = path.split('/')[3];
+    const serviceId = path.split('/')[5];
+    return { to: `/customer/provider/${key}${catOnly}#service-${serviceId}` };
+  }
+  if (/^\/customer\/provider\/[^/]+\/[^/]+$/.test(path)) {
     const key = path.split('/')[3];
     return { to: `/customer/provider/${key}` };
   }
@@ -39,6 +59,11 @@ export function resolveCustomerBack(pathname) {
   }
   if (path === '/services') return { to: '/customer' };
 
+  if (/^\/book\/[^/]+\/services\/[^/]+$/.test(path)) {
+    const orgSlug = path.split('/')[2];
+    const serviceId = path.split('/')[4];
+    return { to: `/book/${orgSlug}${catOnly}#service-${serviceId}` };
+  }
   if (/^\/book\/[^/]+\/services$/.test(path)) {
     return { to: path.replace(/\/services$/, '') };
   }
@@ -75,7 +100,9 @@ export function resolveProviderBack(pathname, orgSlug) {
   if (path.startsWith(`${base}/requests/`)) {
     return { to: `${base}/requests` };
   }
+  if (path === `${base}/messages`) return { to: base };
   if (path === `${base}/notifications`) return { to: base };
+  if (path === `${base}/notifications/all`) return { to: `${base}/notifications` };
   if (path === `${base}/my-page` || path === `${base}/share`) return { to: base };
   if (path === `${base}/tasks`) return { to: base };
   if (path === `${base}/tasks/new`) return { to: `${base}/tasks` };

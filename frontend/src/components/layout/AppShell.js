@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import { IconMenu } from '../icons/NavIcons';
 import AppMenuDrawer from './AppMenuDrawer';
 import BottomTabBar from './BottomTabBar';
@@ -21,7 +20,6 @@ export default function AppShell({
   showBack = Boolean(backTo),
   children,
 }) {
-  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu = menuItems.length > 0;
   const hasTabs = tabs?.length > 0;
@@ -81,7 +79,7 @@ export default function AppShell({
           className="lx-container py-5 pb-28 lg:py-6 lg:pb-8"
           tabIndex={-1}
         >
-          <div key={location.pathname} className="page-enter min-w-0">
+          <div className="page-enter min-w-0">
             {children}
           </div>
         </main>

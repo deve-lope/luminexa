@@ -15,6 +15,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import CheckEmailPage from './pages/CheckEmailPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import CustomerBookingsPage from './pages/customer/CustomerBookingsPage';
+import CustomerBookingDetailPage from './pages/customer/CustomerBookingDetailPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
@@ -37,11 +38,14 @@ import ProviderRequestDetailPage from './pages/provider/ProviderRequestDetailPag
 import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 import ProviderSubscribePage from './pages/provider/ProviderSubscribePage';
 import ProviderNotificationsPage from './pages/provider/ProviderNotificationsPage';
+import ProviderNotificationsAllPage from './pages/provider/ProviderNotificationsAllPage';
+import ProviderMessagesPage from './pages/provider/ProviderMessagesPage';
 import ProviderAddTaskPage from './pages/provider/ProviderAddTaskPage';
 import ProviderTasksPage from './pages/provider/ProviderTasksPage';
 import ProviderAnalyticsPage from './pages/provider/ProviderAnalyticsPage';
 import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
+import CustomerCategoriesPage from './pages/customer/CustomerCategoriesPage';
 import CustomerMessagesPage from './pages/customer/CustomerMessagesPage';
 import CustomerNotificationsPage from './pages/customer/CustomerNotificationsPage';
 import CustomerProvidersByTypePage from './pages/customer/CustomerProvidersByTypePage';
@@ -164,7 +168,9 @@ function AppRoutes() {
           <Route path="schedule/:kind/:id" element={<ProviderScheduleDetailPage />} />
           <Route path="requests" element={<ProviderRequestsPage />} />
           <Route path="requests/:kind/:id" element={<ProviderRequestDetailPage />} />
+          <Route path="messages" element={<ProviderMessagesPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
+          <Route path="notifications/all" element={<ProviderNotificationsAllPage />} />
           <Route path="settings" element={<ProviderSettingsPage />} />
           <Route path="subscribe" element={<ProviderSubscribePage />} />
           <Route path="account" element={<CustomerAccountPage variant="provider" />} />
@@ -184,12 +190,14 @@ function AppRoutes() {
         >
           <Route index element={<CustomerHomePage />} />
           <Route path="bookings" element={<CustomerBookingsPage />} />
+          <Route path="bookings/:bookingId" element={<CustomerBookingDetailPage />} />
           <Route path="messages" element={<CustomerMessagesPage />} />
           <Route path="notifications" element={<CustomerNotificationsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />
           <Route path="account" element={<CustomerAccountPage />} />
           <Route path="about" element={<AboutPage embedded />} />
           <Route path="find" element={<CustomerFindPage />} />
+          <Route path="categories" element={<CustomerCategoriesPage />} />
           <Route path="find/:typeSlug" element={<CustomerProvidersByTypePage />} />
           <Route path="provider/:providerKey" element={<CustomerProviderRoutes />}>
             <Route index element={<BookingStorefrontPage />} />

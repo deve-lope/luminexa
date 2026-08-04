@@ -5,6 +5,8 @@ from django.core.mail import EmailMessage, send_mail
 from django.utils import timezone
 from django.utils.formats import date_format
 
+from businesses.models import Organization
+
 from .models import CustomerNotification, ProviderNotification, Service
 
 logger = logging.getLogger(__name__)
@@ -91,7 +93,8 @@ def create_customer_notification(
         kind=kind,
         title=title[:200],
         message=message[:500],
-        link_path=link_path or '/customer/bookings',
+        link_path=link_path
+        or (f'/customer/bookings/{booking.pk}' if booking is not None else '/customer/bookings'),
     )
 
 
@@ -239,7 +242,7 @@ def notify_booking_quoted(booking):
         ),
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/bookings',
+        link_path=f'/customer/bookings/{booking.pk}',
     )
     send_booking_email('booking_quoted', booking)
 
@@ -263,18 +266,38 @@ def notify_booking_declined(booking):
 
 def notify_booking_rescheduled_by_provider(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
+    new_when = _format_when(booking.start_at)
+    if booking.prior_start_at:
+        old_when = _format_when(booking.prior_start_at)
+        change_line = f'New time: {new_when} (was {old_when}).'
+    else:
+        change_line = f'New time: {new_when}.'
+
+    quote_line = ''
+    if booking.quote_amount is not None:
+        quote_line = f' Quote: ${booking.quote_amount}.'
+    else:
+        pricing = getattr(booking.service, 'pricing_type', None) if booking.service_id else None
+        needs_quote = (
+            Service.pricing_requires_quote(pricing)
+            or booking.organization.booking_policy == Organization.BookingPolicy.QUOTE
+        )
+        if needs_quote:
+            quote_line = ' A quote will follow before you can confirm.'
+
     create_customer_notification(
         customer=booking.customer,
-        kind=CustomerNotification.Kind.BOOKING_RESCHEDULED,
-        title=f'Booking rescheduled — {booking.organization.name}',
+        kind=CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+        title=f'New time proposed — {booking.organization.name}',
         message=(
-            f'{booking.organization.name} moved your {service_name} appointment '
-            f'to {_format_when(booking.start_at)}.'
+            f'{booking.organization.name} proposed a new time for {service_name}. '
+            f'{change_line}{quote_line} Review and accept in Bookings.'
         ),
         organization=booking.organization,
         booking=booking,
+        link_path='/customer/bookings',
     )
-    send_booking_email('booking_rescheduled', booking)
+    send_booking_email('booking_time_change_proposed', booking)
 
 
 def notify_booking_completed(booking):
@@ -468,6 +491,38 @@ def send_booking_email(event, booking):
             '',
             f'View your bookings: {bookings_url}',
         ]
+    elif event == 'booking_time_change_proposed':
+        recipients = [booking.customer.email] if booking.customer.email else []
+        subject = f'New time proposed — {org.name}'
+        body_lines = [
+            f'{org.name} proposed a new time for {service_name}.',
+            f'Proposed time: {when}',
+        ]
+        if booking.prior_start_at:
+            body_lines.append(f'Previous time: {_format_when(booking.prior_start_at)}')
+        if booking.quote_amount is not None:
+            body_lines.append(f'Quote: ${booking.quote_amount}')
+            if (booking.quote_message or '').strip():
+                body_lines.extend(['', 'Note from the business:', booking.quote_message.strip()])
+            body_lines.extend([
+                '',
+                'Open Bookings to review the quote and new time, then accept or decline.',
+            ])
+        else:
+            pricing = getattr(booking.service, 'pricing_type', None) if booking.service_id else None
+            needs_quote = (
+                Service.pricing_requires_quote(pricing)
+                or org.booking_policy == Organization.BookingPolicy.QUOTE
+            )
+            if needs_quote:
+                body_lines.append('The business will send a quote before you can confirm.')
+            else:
+                body_lines.append('Open Bookings to accept or decline this new time.')
+        body_lines.extend([
+            *_job_location_lines(booking),
+            '',
+            f'View your bookings: {bookings_url}',
+        ])
     elif event == 'booking_declined':
         recipients = [booking.customer.email] if booking.customer.email else []
         subject = f'Booking declined — {org.name}'

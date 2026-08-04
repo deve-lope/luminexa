@@ -32,14 +32,20 @@ function StarPicker({ value, onChange, label }) {
   );
 }
 
-export default function ServiceRatingForm({ onSubmit, submitting }) {
+export default function ServiceRatingForm({
+  onSubmit,
+  submitting,
+  initialValues = null,
+  submitLabel = 'Submit rating',
+  onCancel = null,
+}) {
   const [ratings, setRatings] = useState({
-    communication: 0,
-    price: 0,
-    punctual: 0,
-    quality: 0,
+    communication: initialValues?.communication || 0,
+    price: initialValues?.price || 0,
+    punctual: initialValues?.punctual || 0,
+    quality: initialValues?.quality || 0,
   });
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(initialValues?.comment || '');
 
   const allRated = DIMENSIONS.every((d) => ratings[d.key] >= 1);
 
@@ -73,13 +79,25 @@ export default function ServiceRatingForm({ onSubmit, submitting }) {
           className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
         />
       </label>
-      <button
-        type="submit"
-        disabled={!allRated || submitting}
-        className="min-h-[44px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-50"
-      >
-        {submitting ? 'Submitting…' : 'Submit rating'}
-      </button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="submit"
+          disabled={!allRated || submitting}
+          className="min-h-[44px] flex-1 rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-50"
+        >
+          {submitting ? 'Saving…' : submitLabel}
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="min-h-[44px] rounded-xl border border-slate-200 px-4 font-medium text-slate-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }

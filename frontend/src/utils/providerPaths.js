@@ -24,8 +24,16 @@ export function providerShare(orgSlug) {
   return `/provider/${orgSlug}/my-page`;
 }
 
+export function providerMessages(orgSlug) {
+  return `/provider/${orgSlug}/messages`;
+}
+
 export function providerNotifications(orgSlug) {
   return `/provider/${orgSlug}/notifications`;
+}
+
+export function providerNotificationsAll(orgSlug) {
+  return `/provider/${orgSlug}/notifications/all`;
 }
 
 export function providerServices(orgSlug) {

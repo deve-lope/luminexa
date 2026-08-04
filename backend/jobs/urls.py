@@ -17,6 +17,10 @@ urlpatterns = [
     path('me/conversations/', views.CustomerConversationsAPIView.as_view()),
     path('me/notifications/', views.CustomerNotificationsAPIView.as_view()),
     path(
+        'me/notifications/dismiss-all/',
+        views.CustomerNotificationsDismissAllAPIView.as_view(),
+    ),
+    path(
         'me/notifications/<int:notification_id>/dismiss/',
         views.CustomerNotificationDismissAPIView.as_view(),
     ),

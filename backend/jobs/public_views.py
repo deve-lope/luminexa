@@ -19,7 +19,6 @@ from .booking_services import booking_policy_meta, customer_can_view_calendar
 from .catalog import build_service_catalog
 from .models import AvailabilitySlot, Booking, Service, ServiceReview
 from .scheduling_services import sync_recurring_slots
-from .ratings import customer_can_rate_service
 from .serializers import (
     PublicOrganizationReadSerializer,
     PublicServiceDetailSerializer,
@@ -215,6 +214,8 @@ class PublicServiceReviewAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, slug, service_id):
+        from .ratings import customer_can_edit_service_review, customer_can_rate_service
+
         org = _public_organization(slug)
         if not org:
             return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -225,15 +226,14 @@ class PublicServiceReviewAPIView(APIView):
         if not service:
             return Response({'detail': 'Service not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if not customer_can_rate_service(service, request.user):
-            raise ValidationError(
-                'You can rate this service after a completed booking, and only once.'
-            )
-
         ser = ServiceReviewWriteSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = dict(ser.validated_data)
         booking_id = data.pop('booking_id', None)
+
+        existing = ServiceReview.objects.filter(
+            service=service, customer=request.user,
+        ).first()
 
         completed_booking = None
         if booking_id:
@@ -256,13 +256,31 @@ class PublicServiceReviewAPIView(APIView):
                 .first()
             )
 
+        from .serializers import PublicServiceReviewSerializer
+
+        if existing:
+            if not customer_can_edit_service_review(service, request.user):
+                raise ValidationError('You cannot edit this rating.')
+            for key, value in data.items():
+                setattr(existing, key, value)
+            if completed_booking and not existing.booking_id:
+                existing.booking = completed_booking
+            existing.save()
+            return Response(
+                PublicServiceReviewSerializer(existing, context={'request': request}).data,
+            )
+
+        if not customer_can_rate_service(service, request.user):
+            raise ValidationError(
+                'You can rate this service after a completed booking, and only once.'
+            )
+
         review = ServiceReview.objects.create(
             service=service,
             customer=request.user,
             booking=completed_booking,
             **data,
         )
-        from .serializers import PublicServiceReviewSerializer
         return Response(
             PublicServiceReviewSerializer(review, context={'request': request}).data,
             status=status.HTTP_201_CREATED,

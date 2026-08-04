@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import BookingServiceLocationSection from '../customer/BookingServiceLocationSection';
 import CustomerServiceDetailsForm from '../customer/CustomerServiceDetailsForm';
+import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
 import {
   formatFulfillmentDescription,
@@ -15,13 +17,23 @@ function parseError(err) {
 }
 
 export default function ServiceRequestModal({ orgSlug, service, onClose, onSuccess }) {
+  const { user } = useAuth();
   const [message, setMessage] = useState('');
-  const [serviceAddress, setServiceAddress] = useState('');
+  const [serviceAddress, setServiceAddress] = useState(
+    () => (user?.default_service_address || '').trim()
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   const shop = isShopService(service);
   const shopLocation = (service?.shop_location || '').trim();
+
+  useEffect(() => {
+    const saved = (user?.default_service_address || '').trim();
+    if (saved && !serviceAddress) {
+      setServiceAddress(saved);
+    }
+  }, [user?.default_service_address, serviceAddress]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -97,16 +109,24 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
               </div>
             </>
           ) : (
-            <CustomerServiceDetailsForm
-              serviceLabel={service?.name || ''}
-              onServiceLabelChange={() => {}}
-              message={message}
-              onMessageChange={setMessage}
-              serviceAddress={serviceAddress}
-              onServiceAddressChange={setServiceAddress}
-              showServiceLabel={false}
-              compact
-            />
+            <>
+              <CustomerServiceDetailsForm
+                serviceLabel={service?.name || ''}
+                onServiceLabelChange={() => {}}
+                message={message}
+                onMessageChange={setMessage}
+                serviceAddress={serviceAddress}
+                onServiceAddressChange={setServiceAddress}
+                showServiceLabel={false}
+                showLocation={false}
+                compact
+              />
+              <BookingServiceLocationSection
+                user={user}
+                value={serviceAddress}
+                onChange={setServiceAddress}
+              />
+            </>
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button

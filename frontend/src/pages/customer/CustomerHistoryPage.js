@@ -6,7 +6,7 @@ import RequestMessageThread from '../../components/provider/RequestMessageThread
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { isHistoryBooking } from '../../utils/customerBookings';
-import { customerFind, customerProviderPage } from '../../utils/customerPaths';
+import { customerBookingDetail, customerFind, customerProviderPage } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 function inquiryStatusLabel(inquiry) {
@@ -23,7 +23,6 @@ export default function CustomerHistoryPage() {
   const [bookings, setBookings] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [error, setError] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
 
   const load = useCallback(() => {
     Promise.all([jobsAPI.listBookings(), jobsAPI.listMyServiceInquiries()])
@@ -77,10 +76,8 @@ export default function CustomerHistoryPage() {
               <CustomerBookingCard
                 key={b.id}
                 booking={b}
-                expanded={expandedId === b.id}
-                onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
-                showActions
-                onReviewSubmitted={load}
+                compact
+                detailTo={customerBookingDetail(b.id)}
               />
             ))}
           </ul>

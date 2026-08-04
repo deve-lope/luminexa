@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import BookingContactForm from '../../components/BookingContactForm';
 import BookingServiceLocationSection from '../../components/customer/BookingServiceLocationSection';
-import CustomerServiceDetailsForm from '../../components/customer/CustomerServiceDetailsForm';
 import {
   validateServiceLocationValue,
 } from '../../components/customer/ServiceLocationInput';
@@ -51,7 +50,6 @@ export default function CustomerBookServicePage() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const [serviceLabel, setServiceLabel] = useState('');
   const [notes, setNotes] = useState('');
   const [serviceAddress, setServiceAddress] = useState(
     () => (user?.default_service_address || '').trim()
@@ -60,7 +58,6 @@ export default function CustomerBookServicePage() {
   const [submittingId, setSubmittingId] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
-  const [successPopup, setSuccessPopup] = useState(null);
   const [alertPopup, setAlertPopup] = useState(null);
   const confirmPanelRef = useRef(null);
 
@@ -189,12 +186,6 @@ export default function CustomerBookServicePage() {
       ? 'blocked'
       : connectionFromMembership;
 
-  useEffect(() => {
-    if (service?.name && !serviceLabel) {
-      setServiceLabel(service.name);
-    }
-  }, [service?.name, serviceLabel]);
-
   const connect = async () => {
     setConnecting(true);
     setError(null);
@@ -298,10 +289,14 @@ export default function CustomerBookServicePage() {
 
   const promptBookingConfirm = useCallback(
     (slot) => {
-      if (!slot || !validateBookingDetails()) return;
+      if (!slot) return;
+      if (!validateBookingDetails()) {
+        scrollToConfirmPanel();
+        return;
+      }
       setBookingConfirmSlot(slot);
     },
-    [validateBookingDetails]
+    [validateBookingDetails, scrollToConfirmPanel]
   );
 
   const requestSlot = useCallback(
@@ -311,13 +306,11 @@ export default function CustomerBookServicePage() {
       setSubmittingId(slot.id);
       setError(null);
       try {
-        const label = serviceLabel.trim();
         const detail = notes.trim();
-        const combinedNotes = [label && `Service: ${label}`, detail].filter(Boolean).join('\n\n');
         await jobsAPI.requestBooking({
           slot_id: slot.id,
           service: Number(serviceId),
-          customer_notes: combinedNotes,
+          customer_notes: detail,
           service_address: serviceIsShop ? '' : serviceAddress.trim(),
           quote_answers: requiresQuote
             ? quoteQuestionList.map((question, i) => ({
@@ -329,34 +322,18 @@ export default function CustomerBookServicePage() {
         });
         const instant = bookingCtx?.instant_confirm && !requiresQuote;
         const quote = requiresQuote;
-        const successTitle = instant ? 'Booking confirmed' : 'Request sent';
-        const successMessage = instant
-          ? 'Your appointment is confirmed.'
-          : quote
-            ? 'Your time request was sent. Watch Bookings for a quote you can accept or decline.'
-            : 'Your booking request was sent to the provider for approval.';
         const successDetail = `${selectedDayLabel} · ${formatTimeRange(slot.start_at, slot.end_at)}`;
         const toastMessage = instant
           ? `Booking confirmed for ${successDetail}`
-          : `Request sent for ${successDetail}`;
+          : quote
+            ? `Request sent for ${successDetail}. Check Bookings for your quote.`
+            : `Request sent for ${successDetail}`;
 
-        setMessage(
-          instant
-            ? `Booking confirmed for ${successDetail}.`
-            : quote
-              ? `Request sent for ${successDetail}. You'll get a quote to review in Bookings.`
-              : `Request sent for ${successDetail}. The provider will confirm your appointment.`
-        );
         showToast(toastMessage, 'success');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        setSuccessPopup({
-          title: successTitle,
-          message: `${successMessage}\n\n${successDetail}`,
-        });
         setNotes('');
         setQuoteAnswers({});
         setSelectedSlot(null);
-        loadCalendar();
+        navigate(customerBookings(), { replace: true });
       } catch (e) {
         showAlertPopup(parseApiError(e));
       } finally {
@@ -365,7 +342,6 @@ export default function CustomerBookServicePage() {
     },
     [
       notes,
-      serviceLabel,
       serviceId,
       serviceAddress,
       bookingCtx?.instant_confirm,
@@ -373,10 +349,10 @@ export default function CustomerBookServicePage() {
       quoteQuestionList,
       quoteAnswers,
       selectedDayLabel,
-      loadCalendar,
       showAlertPopup,
       showToast,
       serviceIsShop,
+      navigate,
     ]
   );
 
@@ -408,6 +384,13 @@ export default function CustomerBookServicePage() {
       <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
     );
   }
+
+  const primaryBookingLabel =
+    submittingId != null
+      ? 'Booking…'
+      : bookingCtx?.instant_confirm && !requiresQuote
+        ? 'Confirm booking'
+        : 'Request appointment';
 
   return (
     <div className="space-y-4">
@@ -613,8 +596,8 @@ export default function CustomerBookServicePage() {
                           onClick={() => handleSlotTap(slot)}
                           className={`w-full min-h-[44px] rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
                             isSelected
-                              ? 'border-violet-600 bg-violet-50 text-violet-900 ring-2 ring-violet-200'
-                              : 'border-slate-200 bg-white text-slate-800 hover:border-violet-300 hover:bg-violet-50/50'
+                              ? 'border-luminexa-accent bg-teal-50 text-teal-900 ring-2 ring-teal-100'
+                              : 'border-slate-200 bg-white text-slate-800 hover:border-teal-300 hover:bg-teal-50/50'
                           }`}
                         >
                           <span className="block">{formatTimeRange(slot.start_at, slot.end_at)}</span>
@@ -635,16 +618,12 @@ export default function CustomerBookServicePage() {
           {selectedSlot && (
             <section
               ref={confirmPanelRef}
-              className="lx-card space-y-4 border-2 border-violet-200 scroll-mt-24"
+              className="lx-card space-y-4 scroll-mt-24"
             >
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Complete your booking</h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  Selected time:{' '}
-                  <span className="font-medium text-slate-800">
-                    {selectedDayLabel}{' '}
-                    · {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)}
-                  </span>
+                  {selectedDayLabel} · {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)}
                 </p>
               </div>
 
@@ -654,23 +633,23 @@ export default function CustomerBookServicePage() {
                 </div>
               )}
 
-              <CustomerServiceDetailsForm
-                serviceLabel={serviceLabel}
-                onServiceLabelChange={setServiceLabel}
-                message={notes}
-                onMessageChange={setNotes}
-                serviceAddress={serviceAddress}
-                onServiceAddressChange={setServiceAddress}
-                showServiceLabel
-                showLocation={false}
-                showAddressPreview={Boolean((serviceAddress || '').trim())}
-                compact
-                requireMessage={false}
-              />
+              <div>
+                <label htmlFor="booking-notes" className="mb-1 block text-sm font-medium text-slate-700">
+                  Notes <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <textarea
+                  id="booking-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Anything the provider should know…"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
+                />
+              </div>
 
               {requiresQuote && quoteQuestionList.length > 0 && (
-                <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Details for your quote
                   </p>
                   {quoteQuestionList.map((question, i) => {
@@ -702,49 +681,24 @@ export default function CustomerBookServicePage() {
                 </p>
               )}
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-2">
                 <button
                   type="button"
                   disabled={submittingId != null}
                   onClick={() => promptBookingConfirm(selectedSlot)}
-                  className="lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60"
+                  className="lx-btn-primary min-h-[48px] w-full disabled:opacity-60"
                 >
-                  {submittingId === selectedSlot.id
-                    ? 'Booking…'
-                    : bookingCtx?.instant_confirm && !requiresQuote
-                      ? 'Confirm booking'
-                      : 'Request appointment'}
+                  {primaryBookingLabel}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedSlot(null)}
-                  className="lx-btn-ghost min-h-[48px]"
+                  className="lx-btn-ghost min-h-[44px] w-full"
                 >
                   Change time
                 </button>
               </div>
-
             </section>
-          )}
-
-          {selectedSlot && (
-            <div className="fixed inset-x-0 bottom-20 z-40 px-4 sm:hidden">
-              <div className="mx-auto max-w-lg rounded-2xl border border-violet-200 bg-white/95 p-3 shadow-xl backdrop-blur">
-                <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
-                  Time selected
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  {selectedDayLabel} · {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)}
-                </p>
-                <button
-                  type="button"
-                  onClick={scrollToConfirmPanel}
-                  className="lx-btn-primary mt-3 min-h-[44px] w-full"
-                >
-                  Review & confirm booking
-                </button>
-              </div>
-            </div>
           )}
         </>
       )}
@@ -769,19 +723,6 @@ export default function CustomerBookServicePage() {
           requestSlot(slot);
         }}
         onClose={() => !submittingId && setBookingConfirmSlot(null)}
-      />
-      <ConfirmDialog
-        open={!!successPopup}
-        title={successPopup?.title}
-        message={successPopup?.message}
-        confirmLabel="View my bookings"
-        cancelLabel="OK"
-        tone="success"
-        onConfirm={() => {
-          setSuccessPopup(null);
-          navigate(customerBookings());
-        }}
-        onClose={() => setSuccessPopup(null)}
       />
       <ConfirmDialog
         open={!!alertPopup}

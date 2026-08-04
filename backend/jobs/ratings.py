@@ -40,9 +40,22 @@ def aggregate_organization_ratings(organization):
 
 
 def customer_can_rate_service(service, user):
+    """True when the customer may create a first review for this service."""
     if not user or not user.is_authenticated:
         return False
     if service.reviews.filter(customer=user).exists():
+        return False
+    return service.bookings.filter(
+        customer=user,
+        status=service.bookings.model.Status.COMPLETED,
+    ).exists()
+
+
+def customer_can_edit_service_review(service, user):
+    """True when the customer already reviewed and may update that review."""
+    if not user or not user.is_authenticated:
+        return False
+    if not service.reviews.filter(customer=user).exists():
         return False
     return service.bookings.filter(
         customer=user,

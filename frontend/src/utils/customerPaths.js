@@ -20,6 +20,10 @@ export function customerBookings() {
   return '/customer/bookings';
 }
 
+export function customerBookingDetail(bookingId) {
+  return `/customer/bookings/${bookingId}`;
+}
+
 export function customerHistory() {
   return '/customer/history';
 }
@@ -34,6 +38,10 @@ export function customerNotifications() {
 
 export function customerFind() {
   return '/customer/find';
+}
+
+export function customerCategories() {
+  return '/customer/categories';
 }
 
 export function customerFindType(typeSlug) {

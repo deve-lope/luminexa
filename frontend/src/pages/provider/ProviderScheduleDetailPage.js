@@ -459,7 +459,7 @@ export default function ProviderScheduleDetailPage() {
           }}
           onClose={() => setRescheduleOpen(false)}
           onRescheduled={() => {
-            showToast('Booking rescheduled.', 'success');
+            showToast('New time sent — waiting for the customer to accept.', 'success');
             setRescheduleOpen(false);
             load();
           }}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingStatusTimeline from '../booking/BookingStatusTimeline';
 import BookingRateModal from '../booking/BookingRateModal';
+import AddToCalendarModal from '../booking/AddToCalendarModal';
 import InvoicePanel from '../booking/InvoicePanel';
 import { formatWhen } from '../../utils/datetime';
 import {
@@ -46,6 +47,9 @@ export default function CustomerBookingCard({
   expanded,
   onToggleExpand,
   showActions = false,
+  /** List-row mode: service / when / status + link to full detail page. */
+  compact = false,
+  detailTo = null,
   onReschedule,
   onCancel,
   cancelling = false,
@@ -53,6 +57,7 @@ export default function CustomerBookingCard({
   onQuoteUpdated,
 }) {
   const [rateOpen, setRateOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState('');
   const [answers, setAnswers] = useState(() =>
@@ -65,11 +70,24 @@ export default function CustomerBookingCard({
   const canRate = Boolean(booking.can_rate);
   const myReview = booking.my_review;
   const isQuoted = booking.status === 'quoted';
+  const awaitingTimeChange = Boolean(booking.awaiting_customer_acceptance);
+  const needsQuote =
+    booking.requires_quote ||
+    booking.booking_policy === 'quote' ||
+    serviceRequiresQuote(booking.service_pricing_type);
 
   let statusHint = null;
-  if (isQuoted && !past) {
+  if (awaitingTimeChange && isQuoted && !past) {
+    statusHint =
+      'The business proposed a new time and sent a quote. Review both below, then accept or decline.';
+  } else if (awaitingTimeChange && needsQuote && !isQuoted && !past) {
+    statusHint =
+      'The business proposed a new time. They still need to send a quote before you can confirm.';
+  } else if (awaitingTimeChange && !past) {
+    statusHint = 'The business proposed a new appointment time. Accept to lock it in, or decline.';
+  } else if (isQuoted && !past) {
     statusHint = 'Quote ready — review the price below, answer any questions, then accept or decline.';
-  } else if (booking.status === 'requested' && (booking.requires_quote || booking.booking_policy === 'quote' || serviceRequiresQuote(booking.service_pricing_type)) && !past) {
+  } else if (booking.status === 'requested' && needsQuote && !past) {
     statusHint = 'Your request is in. The business will send a quote — you can still change the time or cancel.';
   } else if (isUntouchedBookingRequest(booking) && !past) {
     statusHint =
@@ -87,6 +105,100 @@ export default function CustomerBookingCard({
       ? 'Service completed — leave a rating when you are ready.'
       : 'Service completed.';
   }
+
+  const statusLabel = bookingStatusLabel(booking.status, {
+    isPast: past,
+    bookingPolicy: booking.booking_policy,
+    servicePricingType: booking.service_pricing_type,
+    awaitingCustomerAcceptance: awaitingTimeChange,
+  });
+
+  if (compact) {
+    const needsAttention =
+      (!past && (isQuoted || awaitingTimeChange)) ||
+      (booking.status === 'completed' && canRate);
+    const compactHint = needsAttention
+      ? isQuoted && !past
+        ? 'Quote ready — open for details'
+        : awaitingTimeChange && !past
+          ? 'Time change proposed — open for details'
+          : canRate
+            ? 'Ready to rate — open for details'
+            : null
+      : null;
+    const body = (
+      <>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
+            <p className="mt-0.5 truncate text-sm text-slate-600">{booking.organization_name}</p>
+          </div>
+          <span className={`shrink-0 ${bookingStatusClass(booking.status)}`}>
+            {statusLabel}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-slate-700">
+          <span className="font-medium text-slate-500">When · </span>
+          {formatWhen(booking.start_at)}
+        </p>
+        {(booking.job_location || booking.service_address) && (
+          <p className="mt-1 line-clamp-1 text-sm text-slate-600">
+            <span className="font-medium text-slate-500">Place · </span>
+            {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
+          </p>
+        )}
+        {compactHint && <p className="mt-2 text-xs font-medium text-amber-800">{compactHint}</p>}
+        {detailTo && (
+          <p className="mt-3 text-sm font-medium text-teal-700">
+            Full details →
+          </p>
+        )}
+      </>
+    );
+
+    return (
+      <li className="lx-card">
+        {detailTo ? (
+          <Link
+            to={detailTo}
+            className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+          >
+            {body}
+          </Link>
+        ) : (
+          body
+        )}
+      </li>
+    );
+  }
+
+  const acceptTimeChange = async () => {
+    setQuoteBusy(true);
+    setQuoteError('');
+    try {
+      await jobsAPI.acceptBookingTimeChange(booking.id);
+      onQuoteUpdated?.();
+    } catch (e) {
+      const d = e.response?.data;
+      setQuoteError(d?.detail || d?.status?.[0] || 'Could not accept the new time.');
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
+  const declineTimeChange = async () => {
+    setQuoteBusy(true);
+    setQuoteError('');
+    try {
+      await jobsAPI.declineBookingTimeChange(booking.id);
+      onQuoteUpdated?.();
+    } catch (e) {
+      const d = e.response?.data;
+      setQuoteError(d?.detail || d?.status?.[0] || 'Could not decline the new time.');
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
 
   const acceptQuote = async () => {
     setQuoteBusy(true);
@@ -119,28 +231,78 @@ export default function CustomerBookingCard({
   return (
     <li className="lx-card">
       <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
-      <p className="text-sm text-slate-600">{booking.organization_name}</p>
-      <p className="mt-1 text-sm text-slate-500">{formatWhen(booking.start_at)}</p>
-      {(booking.job_location || booking.service_address) && (
-        <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {formatJobLocationLabel(booking)}
-          </p>
-          <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
-            {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
-          </p>
-        </div>
+      {providerKey ? (
+        <Link
+          to={customerProviderPage(providerKey)}
+          className="text-sm font-medium text-teal-700 underline-offset-2 hover:underline"
+        >
+          {booking.organization_name}
+        </Link>
+      ) : (
+        <p className="text-sm text-slate-600">{booking.organization_name}</p>
       )}
-      <span
-        className={`mt-2 inline-block capitalize ${bookingStatusClass(booking.status)}`}
-      >
-        {bookingStatusLabel(booking.status, {
-          isPast: past,
-          bookingPolicy: booking.booking_policy,
-          servicePricingType: booking.service_pricing_type,
-        })}
+
+      <div className="mt-2 space-y-1.5 text-sm text-slate-700">
+        <p>
+          <span className="font-medium text-slate-500">When · </span>
+          {formatWhen(booking.start_at)}
+        </p>
+        {(booking.job_location || booking.service_address) && (
+          <p>
+            <span className="font-medium text-slate-500">
+              {formatJobLocationLabel(booking).replace(/^Job location — /i, '')} ·{' '}
+            </span>
+            <span className="whitespace-pre-wrap">
+              {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
+            </span>
+          </p>
+        )}
+      </div>
+      <span className={`mt-2 ${bookingStatusClass(booking.status)}`}>
+        {statusLabel}
       </span>
       {statusHint && <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
+
+      {awaitingTimeChange && booking.prior_start_at && !past && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800/80">
+            Time change proposed
+          </p>
+          <p className="mt-1 text-sm text-slate-700">
+            <span className="text-slate-500 line-through">{formatWhen(booking.prior_start_at)}</span>
+            <span className="mx-2 text-slate-400">→</span>
+            <span className="font-semibold text-slate-900">{formatWhen(booking.start_at)}</span>
+          </p>
+          {awaitingTimeChange && !needsQuote && (
+            <>
+              {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={quoteBusy}
+                  onClick={acceptTimeChange}
+                  className="min-h-[44px] flex-1 rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {quoteBusy ? 'Saving…' : 'Accept new time'}
+                </button>
+                <button
+                  type="button"
+                  disabled={quoteBusy}
+                  onClick={declineTimeChange}
+                  className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-60"
+                >
+                  Decline change
+                </button>
+              </div>
+            </>
+          )}
+          {awaitingTimeChange && needsQuote && !isQuoted && (
+            <p className="mt-2 text-xs text-amber-900">
+              Waiting for the business to send a quote for this new time.
+            </p>
+          )}
+        </div>
+      )}
 
       {booking.status === 'requested' &&
         (booking.quote_questions || []).some((q) => (q.answer || '').trim()) && (
@@ -195,9 +357,13 @@ export default function CustomerBookingCard({
               type="button"
               disabled={quoteBusy}
               onClick={acceptQuote}
-              className="min-h-[44px] flex-1 rounded-xl bg-violet-700 text-sm font-semibold text-white disabled:opacity-60"
+              className="min-h-[44px] flex-1 rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
             >
-              {quoteBusy ? 'Saving…' : 'Accept quote'}
+              {quoteBusy
+                ? 'Saving…'
+                : awaitingTimeChange
+                  ? 'Accept quote & new time'
+                  : 'Accept quote'}
             </button>
             <button
               type="button"
@@ -271,56 +437,67 @@ export default function CustomerBookingCard({
         </div>
       )}
       {showActions && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {providerKey && (
-            <Link
-              to={customerProviderPage(providerKey)}
-              className="lx-btn-ghost"
-            >
-              View provider
-            </Link>
-          )}
-          {providerKey && booking.service && (
-            <Link
-              to={customerProviderServiceDetail(providerKey, booking.service)}
-              className="lx-btn-ghost"
-            >
-              Service details
-            </Link>
-          )}
-          {booking.status === 'confirmed' && (
-            <a
-              href={jobsAPI.bookingIcalUrl(booking.id)}
-              download
-              className="lx-btn-ghost gap-1.5"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              Add to calendar
-            </a>
-          )}
-          {onReschedule && (
-            <button
-              type="button"
-              onClick={() => onReschedule(booking)}
-              className="lx-btn-secondary"
-            >
-              Reschedule
-            </button>
-          )}
-          {onCancel && (
-            <button
-              type="button"
-              disabled={cancelling}
-              onClick={() => onCancel(booking.id)}
-              className="min-h-[44px] rounded-xl border border-red-200/80 bg-red-50/80 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100/80 disabled:opacity-60"
-            >
-              {cancelling ? 'Cancelling…' : 'Cancel booking'}
-            </button>
+        <div className="mt-4 space-y-2 border-t border-slate-100/80 pt-4">
+          <div className="grid grid-cols-2 gap-2">
+            {detailTo && (
+              <Link to={detailTo} className="lx-btn-ghost w-full px-3 text-center">
+                Full details
+              </Link>
+            )}
+            {providerKey && (
+              <Link
+                to={customerProviderPage(providerKey)}
+                className="lx-btn-ghost w-full px-3 text-center"
+              >
+                View provider
+              </Link>
+            )}
+            {providerKey && booking.service && (
+              <Link
+                to={customerProviderServiceDetail(providerKey, booking.service)}
+                className="lx-btn-ghost w-full px-3 text-center"
+              >
+                Service details
+              </Link>
+            )}
+            {booking.status === 'confirmed' && (
+              <button
+                type="button"
+                onClick={() => setCalendarOpen(true)}
+                className="lx-btn-ghost inline-flex w-full items-center justify-center gap-1.5 px-3 text-center"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                Add to calendar
+              </button>
+            )}
+          </div>
+          {(onReschedule || onCancel) && (
+            <div className={`grid gap-2 ${onReschedule && onCancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {onReschedule && (
+                <button
+                  type="button"
+                  onClick={() => onReschedule(booking)}
+                  className="lx-btn-secondary w-full px-3"
+                >
+                  Reschedule
+                </button>
+              )}
+              {onCancel && (
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={() => onCancel(booking.id)}
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                >
+                  {cancelling ? 'Cancelling…' : 'Cancel'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -330,6 +507,11 @@ export default function CustomerBookingCard({
         booking={booking}
         onClose={() => setRateOpen(false)}
         onSubmitted={() => onReviewSubmitted?.()}
+      />
+      <AddToCalendarModal
+        open={calendarOpen}
+        booking={booking}
+        onClose={() => setCalendarOpen(false)}
       />
     </li>
   );

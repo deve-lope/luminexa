@@ -1,6 +1,6 @@
 from datetime import datetime, time
 
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import status
@@ -9,6 +9,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from jobs.booking_services import customer_can_book
+from jobs.catalog import (
+    business_types_with_service_provider_counts,
+    organizations_with_services_for_business_type,
+)
 from jobs.models import AvailabilitySlot, Booking, Service
 from jobs.ratings import aggregate_organization_ratings
 from jobs.serializers import BookingSerializer, PublicServiceReadSerializer
@@ -76,22 +80,11 @@ def business_types_list_api(request):
 
     for_registration = request.query_params.get('for_registration', '').lower() == 'true'
     for_browse = request.query_params.get('browse', '').lower() == 'true'
-    qs = BusinessType.objects.filter(is_active=True).order_by('sort_order', 'name')
     if for_registration:
-        data = BusinessTypeSerializer(qs, many=True).data
-        return Response(data)
-
-    qs = qs.annotate(
-        provider_count=Count(
-            'organizations',
-            filter=Q(organizations__is_active=True, organizations__profile_public=True),
-            distinct=True,
-        )
-    )
-    if for_browse:
+        qs = BusinessType.objects.filter(is_active=True).order_by('sort_order', 'name')
         return Response(BusinessTypeSerializer(qs, many=True).data)
 
-    qs = qs.filter(provider_count__gt=0)
+    qs = business_types_with_service_provider_counts(require_providers=not for_browse)
     return Response(BusinessTypeSerializer(qs, many=True).data)
 
 
@@ -229,15 +222,7 @@ def business_type_providers_api(request, slug):
     except BusinessType.DoesNotExist:
         return Response({'detail': 'Business type not found.'}, status=404)
 
-    orgs = (
-        Organization.objects.filter(
-            is_active=True,
-            profile_public=True,
-            business_types=business_type,
-        )
-        .distinct()
-        .order_by('name')
-    )
+    orgs = organizations_with_services_for_business_type(business_type)
     ctx = {'request': request}
     return Response({
         'business_type': BusinessTypeSerializer(business_type).data,
@@ -253,18 +238,7 @@ def my_memberships_api(request):
 
 
 def _business_types_for_discover():
-    return (
-        BusinessType.objects.filter(is_active=True)
-        .annotate(
-            provider_count=Count(
-                'organizations',
-                filter=Q(organizations__is_active=True, organizations__profile_public=True),
-                distinct=True,
-            )
-        )
-        .filter(provider_count__gt=0)
-        .order_by('sort_order', 'name')
-    )
+    return business_types_with_service_provider_counts(require_providers=True)
 
 
 def _serialize_bookable_service(service, *, ctx):
@@ -655,17 +629,17 @@ def public_services_browse_api(request):
     if availability_window and availability_window.get('error'):
         return Response({'detail': availability_window['error']}, status=status.HTTP_400_BAD_REQUEST)
 
-    types_qs = BusinessType.objects.filter(is_active=True).annotate(
-        provider_count=Count(
-            'organizations',
-            filter=Q(organizations__is_active=True, organizations__profile_public=True),
-            distinct=True,
-        )
-    ).order_by('sort_order', 'name')
+    types_list = business_types_with_service_provider_counts(require_providers=False)
     if q:
-        types_qs = types_qs.filter(
-            Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=q.lower()),
-        )
+        ql = q.lower()
+        types_list = [
+            t
+            for t in types_list
+            if ql in (t.name or '').lower()
+            or ql in (t.description or '').lower()
+            or ql in (t.slug or '').lower()
+        ]
+    types_qs = types_list
 
     # Prefer explicit lat/lng from address selection over postal re-geocode
     # (postal alone can resolve in the wrong country when browser locale is en-US).

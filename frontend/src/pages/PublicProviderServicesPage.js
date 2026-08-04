@@ -126,6 +126,7 @@ export default function PublicProviderServicesPage() {
       <CustomerServiceRequestForm
         orgSlug={slug}
         businessTypes={businessTypes}
+        categories={catalog?.categories || []}
         isGuest={!isAuthenticated}
         loginNextUrl={businessPage(slug)}
       />

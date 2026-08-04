@@ -22,6 +22,8 @@ import {
 import { providerHome, providerSchedule } from '../utils/providerPaths';
 import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
 import { isShopService } from '../utils/serviceDisplay';
+import { getStorefrontCache, setStorefrontCache } from '../utils/storefrontCache';
+import { scrollToHashTarget } from '../components/ScrollToTop';
 
 /**
  * Public booking profile at /book/:slug
@@ -38,8 +40,8 @@ export default function BookingStorefrontPage() {
   const isGuest = variant === 'guest';
   const { memberships, refreshSession } = useAuth();
   const staffOfOrg = isOrgStaff(memberships, businessSlug);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getStorefrontCache(providerKey));
+  const [loading, setLoading] = useState(() => !getStorefrontCache(providerKey));
   const [error, setError] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [message, setMessage] = useState(null);
@@ -52,20 +54,44 @@ export default function BookingStorefrontPage() {
   const mustConnect = !isOwnerView && needsExplicitConnect(bookingPolicy) && connection === 'disconnected';
   const canPickService = !isOwnerView && !mustConnect;
 
-  const load = useCallback(() => {
+  const load = useCallback((opts = {}) => {
     if (!businessSlug) return;
-    setLoading(true);
+    const silent = Boolean(opts.silent);
+    if (!silent) setLoading(true);
     setError(null);
     businessesAPI
       .getPublicStorefront(businessSlug)
-      .then((res) => setData(res.data))
-      .catch(() => setError('Provider not found.'))
+      .then((res) => {
+        setStorefrontCache(businessSlug, res.data);
+        const org = res.data?.organization;
+        if (org?.public_ref) setStorefrontCache(org.public_ref, res.data);
+        if (org?.slug) setStorefrontCache(org.slug, res.data);
+        setData(res.data);
+      })
+      .catch(() => {
+        if (!getStorefrontCache(businessSlug)) {
+          setError('Provider not found.');
+        }
+      })
       .finally(() => setLoading(false));
   }, [businessSlug]);
 
   useEffect(() => {
+    const cached = getStorefrontCache(businessSlug);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      load({ silent: true });
+      return;
+    }
     load();
-  }, [load]);
+  }, [businessSlug, load]);
+
+  // After services render, jump back to the row you opened (Android-safe).
+  useEffect(() => {
+    if (!data || !location.hash.startsWith('#service-')) return undefined;
+    return scrollToHashTarget(location.hash);
+  }, [data, location.hash, location.pathname, location.search]);
 
   const connect = async () => {
     setConnecting(true);
@@ -190,12 +216,18 @@ export default function BookingStorefrontPage() {
     return null;
   };
 
-  const shellClass =
-    variant === 'customer' ? '-mx-4 -mt-2 space-y-4 sm:mx-0 sm:mt-0' : 'space-y-5';
+  const isCustomerView = variant === 'customer';
+  const shellClass = isCustomerView
+    ? '-mx-4 -mt-2 space-y-4 sm:mx-0 sm:mt-0'
+    : 'space-y-5';
 
   return (
     <div className={shellClass}>
-      <div className="relative -mx-4 aspect-[3/1] overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200 sm:mx-0 sm:rounded-t-xl">
+      <div
+        className={`relative aspect-[3/1] overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200 sm:rounded-t-xl ${
+          isCustomerView ? '' : '-mx-4 sm:mx-0'
+        }`}
+      >
         {organization.banner_url && (
           <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
         )}
@@ -229,7 +261,7 @@ export default function BookingStorefrontPage() {
         )}
       </div>
 
-      <div className="space-y-5 pt-4">
+      <div className={`space-y-5 pt-5 ${isCustomerView ? 'px-4 pb-2 sm:px-0' : ''}`}>
         {!isOwnerView && staffOfOrg && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <p className="font-medium">You manage this business</p>
@@ -373,12 +405,13 @@ export default function BookingStorefrontPage() {
               ) : (
                 <ServiceCategoryBrowse
                   catalog={serviceCatalog}
-                  orgSlug={businessSlug}
+                  orgSlug={customerKey}
                   forceShowPrice={forceShowPrice}
                   renderServiceActions={renderCatalogActions}
                   selectable={canPickService}
                   selectedIds={selectedServiceIds}
                   onToggleSelect={toggleServiceSelect}
+                  useCustomerProviderUrls={isCustomerProviderRoute}
                 />
               )}
             </section>
@@ -453,6 +486,7 @@ export default function BookingStorefrontPage() {
               <CustomerServiceRequestForm
                 orgSlug={customerKey}
                 businessTypes={businessTypes}
+                categories={serviceCatalog?.categories || []}
                 isGuest={isGuest}
                 loginNextUrl={providerPagePath}
               />

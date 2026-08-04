@@ -12,19 +12,22 @@ export default function ServiceRatingSummary({
   summary,
   showBreakdown = false,
   compact = false,
+  onDark = false,
 }) {
   if (!summary || !summary.count) {
     return (
-      <p className="text-sm text-slate-500">No ratings yet</p>
+      <p className={`text-sm ${onDark ? 'text-white/70' : 'text-slate-500'}`}>No ratings yet</p>
     );
   }
 
   if (compact) {
     return (
-      <p className="flex items-center gap-1.5 text-sm text-slate-600">
+      <p className={`flex items-center gap-1.5 text-sm ${onDark ? 'text-white/90' : 'text-slate-600'}`}>
         <StarRating value={summary.average} size="sm" />
-        <span className="font-medium text-slate-800">{summary.average}</span>
-        <span className="text-slate-500">
+        <span className={`font-medium ${onDark ? 'text-white' : 'text-slate-800'}`}>
+          {summary.average}
+        </span>
+        <span className={onDark ? 'text-white/80' : 'text-slate-500'}>
           ({summary.count} {summary.count === 1 ? 'rating' : 'ratings'})
         </span>
       </p>

@@ -12,6 +12,8 @@ export default function CustomerServiceDetailsForm({
   serviceAddress,
   onServiceAddressChange,
   showServiceLabel = true,
+  serviceLabelTitle = 'What type of service?',
+  serviceLabelPlaceholder = 'e.g. Plumbing, Car wash interior, Electrical outlet',
   showLocation = true,
   showAddressPreview = false,
   compact = false,
@@ -22,14 +24,14 @@ export default function CustomerServiceDetailsForm({
       {showServiceLabel && (
         <div>
           <label htmlFor="service-label" className="mb-1 block text-sm font-medium text-slate-700">
-            What type of service?
+            {serviceLabelTitle}
           </label>
           <input
             id="service-label"
             type="text"
             value={serviceLabel}
             onChange={(e) => onServiceLabelChange(e.target.value)}
-            placeholder="e.g. Plumbing, Car wash interior, Electrical outlet"
+            placeholder={serviceLabelPlaceholder}
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
           />
         </div>

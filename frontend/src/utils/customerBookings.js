@@ -1,14 +1,27 @@
 import { providerCustomerKey } from './providerRouteKey';
 
-export function bookingStatusLabel(status, { isPast = false, bookingPolicy, servicePricingType } = {}) {
-  const needsQuote = bookingPolicy === 'quote' || servicePricingType === 'quote';
+export function bookingStatusLabel(status, { isPast = false, bookingPolicy, servicePricingType, awaitingCustomerAcceptance } = {}) {
+  const needsQuote = bookingPolicy === 'quote' || servicePricingType === 'quote'
+    || servicePricingType === 'range' || servicePricingType === 'average';
+  if (awaitingCustomerAcceptance && status === 'requested' && !needsQuote) {
+    return isPast ? 'Time change expired' : 'New time — accept to confirm';
+  }
+  if (awaitingCustomerAcceptance && status === 'requested' && needsQuote) {
+    return isPast ? 'No quote sent' : 'New time — waiting for quote';
+  }
   if (status === 'requested') {
     if (needsQuote) {
       return isPast ? 'No quote sent' : 'Awaiting quote';
     }
     return isPast ? 'Not confirmed' : 'Awaiting provider approval';
   }
-  if (status === 'quoted') return isPast ? 'Quote expired' : 'Quote ready — review & accept';
+  if (status === 'quoted') {
+    return isPast
+      ? 'Quote expired'
+      : awaitingCustomerAcceptance
+        ? 'Review new time & quote'
+        : 'Quote ready — review & accept';
+  }
   if (status === 'confirmed') return isPast ? 'Confirmed (past)' : 'Confirmed';
   if (status === 'in_progress') return 'In progress';
   if (status === 'needs_return') return 'Needs return visit';
@@ -18,14 +31,16 @@ export function bookingStatusLabel(status, { isPast = false, bookingPolicy, serv
 }
 
 export function bookingStatusClass(status) {
-  if (status === 'requested') return 'bg-amber-100 text-amber-800';
-  if (status === 'quoted') return 'bg-violet-100 text-violet-800';
-  if (status === 'confirmed') return 'bg-emerald-100 text-emerald-800';
-  if (status === 'in_progress') return 'bg-sky-100 text-sky-800';
-  if (status === 'needs_return') return 'bg-orange-100 text-orange-900';
-  if (status === 'cancelled') return 'bg-slate-100 text-slate-600';
-  if (status === 'completed') return 'bg-violet-100 text-violet-800';
-  return 'bg-slate-100 text-slate-700';
+  const base =
+    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize tracking-wide';
+  if (status === 'requested') return `${base} bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/15`;
+  if (status === 'quoted') return `${base} bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-600/15`;
+  if (status === 'confirmed') return `${base} bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20`;
+  if (status === 'in_progress') return `${base} bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-600/15`;
+  if (status === 'needs_return') return `${base} bg-orange-50 text-orange-900 ring-1 ring-inset ring-orange-600/15`;
+  if (status === 'cancelled') return `${base} bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/20`;
+  if (status === 'completed') return `${base} bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-600/15`;
+  return `${base} bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-400/20`;
 }
 
 export function isPastBooking(booking, now = new Date()) {

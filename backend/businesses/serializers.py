@@ -45,6 +45,7 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
 
 class BusinessTypeSerializer(serializers.ModelSerializer):
     provider_count = serializers.IntegerField(read_only=True, required=False)
+    booking_count = serializers.IntegerField(read_only=True, required=False)
     requires_business_address = serializers.SerializerMethodField()
 
     class Meta:
@@ -58,6 +59,7 @@ class BusinessTypeSerializer(serializers.ModelSerializer):
             'requires_business_address',
             'sort_order',
             'provider_count',
+            'booking_count',
         )
 
     def get_requires_business_address(self, obj):

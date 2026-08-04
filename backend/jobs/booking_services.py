@@ -517,7 +517,11 @@ def accept_booking_quote(booking, *, customer, answers=None):
 
     booking.quote_questions = questions
     booking.status = Booking.Status.CONFIRMED
-    booking.save(update_fields=['quote_questions', 'status', 'updated_at'])
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'quote_questions', 'status', 'awaiting_customer_acceptance',
+        'prior_start_at', 'prior_end_at', 'prior_availability_slot', 'updated_at',
+    ])
     ensure_customer_membership(booking.organization, customer, approve=True)
     if booking.availability_slot_id:
         slot = _lock_slot(booking.availability_slot)
@@ -530,7 +534,11 @@ def decline_booking_request(booking):
     if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
         raise ValidationError({'status': 'Only requested or quoted bookings can be declined.'})
     booking.status = Booking.Status.CANCELLED
-    booking.save(update_fields=['status', 'updated_at'])
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'status', 'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+        'prior_availability_slot', 'updated_at',
+    ])
     if booking.availability_slot_id:
         release_slot(_lock_slot(booking.availability_slot))
     return booking
@@ -664,6 +672,8 @@ def reschedule_booking(booking, *, new_slot, by_user):
     elif new_slot.start_at <= timezone.now():
         raise ValidationError({'slot_id': 'Cannot reschedule to a past slot.'})
     old_slot = booking.availability_slot
+    prior_start = booking.start_at
+    prior_end = booking.end_at
     if old_slot and old_slot.pk != new_slot.pk:
         old_slot = _lock_slot(old_slot)
     booking.availability_slot = new_slot
@@ -674,15 +684,130 @@ def reschedule_booking(booking, *, new_slot, by_user):
     # original booking was already confirmed or the business uses instant booking.
     if is_customer:
         booking.status = Booking.Status.REQUESTED
+        booking.awaiting_customer_acceptance = False
+        booking.prior_start_at = None
+        booking.prior_end_at = None
+        booking.prior_availability_slot = None
+        booking.save(update_fields=[
+            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
+            'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+            'prior_availability_slot', 'updated_at',
+        ])
     else:
-        # Provider reschedules take effect immediately — no customer approval needed.
-        booking.status = Booking.Status.CONFIRMED
-    booking.save(update_fields=[
-        'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at', 'updated_at',
-    ])
+        # Provider proposes a new time — customer must accept before it is fixed.
+        booking.prior_start_at = prior_start
+        booking.prior_end_at = prior_end
+        booking.prior_availability_slot = old_slot
+        booking.awaiting_customer_acceptance = True
+        if booking_requires_quote(booking.organization, booking.service):
+            booking.status = (
+                Booking.Status.QUOTED
+                if booking.quote_amount is not None
+                else Booking.Status.REQUESTED
+            )
+        else:
+            booking.status = Booking.Status.REQUESTED
+        booking.save(update_fields=[
+            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
+            'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+            'prior_availability_slot', 'updated_at',
+        ])
     new_slot.refresh_status(save=True)
     if old_slot and old_slot.pk != new_slot.pk:
         release_slot(old_slot)
+    return booking
+
+
+def _clear_provider_time_proposal(booking):
+    booking.awaiting_customer_acceptance = False
+    booking.prior_start_at = None
+    booking.prior_end_at = None
+    booking.prior_availability_slot = None
+
+
+@transaction.atomic
+def accept_provider_time_change(booking, *, customer):
+    """Customer accepts a provider-proposed time change (fixed-price path)."""
+    if booking.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can accept this time change.')
+    if not booking.awaiting_customer_acceptance:
+        raise ValidationError({'status': 'There is no pending time change to accept.'})
+    if booking_requires_quote(booking.organization, booking.service):
+        if booking.status == Booking.Status.QUOTED:
+            raise ValidationError({
+                'status': 'Accept the quote to confirm this booking and the new time.',
+            })
+        raise ValidationError({
+            'status': 'Wait for the provider to send a quote, then accept it to confirm.',
+        })
+    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
+        raise ValidationError({'status': 'This booking cannot be confirmed right now.'})
+    booking.status = Booking.Status.CONFIRMED
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'status', 'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+        'prior_availability_slot', 'updated_at',
+    ])
+    ensure_customer_membership(booking.organization, customer, approve=True)
+    if booking.availability_slot_id:
+        slot = _lock_slot(booking.availability_slot)
+        slot.refresh_status(save=True)
+    return booking
+
+
+@transaction.atomic
+def decline_provider_time_change(booking, *, customer):
+    """
+    Customer rejects a provider time change.
+    Prefer reverting to the prior slot when it is still free; otherwise cancel.
+    """
+    if booking.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can decline this time change.')
+    if not booking.awaiting_customer_acceptance:
+        raise ValidationError({'status': 'There is no pending time change to decline.'})
+
+    prior_slot = booking.prior_availability_slot
+    prior_start = booking.prior_start_at
+    prior_end = booking.prior_end_at
+    current_slot = booking.availability_slot
+
+    if prior_slot and prior_start and prior_end:
+        prior_slot = _lock_slot(prior_slot)
+        if current_slot and prior_slot.pk == current_slot.pk:
+            _clear_provider_time_proposal(booking)
+            booking.status = Booking.Status.CONFIRMED
+            booking.save(update_fields=[
+                'status', 'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+                'prior_availability_slot', 'updated_at',
+            ])
+            return booking
+        if prior_slot.remaining_capacity() > 0:
+            if current_slot:
+                current_slot = _lock_slot(current_slot)
+            booking.availability_slot = prior_slot
+            booking.start_at = prior_start
+            booking.end_at = prior_end
+            booking.status = Booking.Status.CONFIRMED
+            _clear_provider_time_proposal(booking)
+            booking.save(update_fields=[
+                'availability_slot', 'start_at', 'end_at', 'status',
+                'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+                'prior_availability_slot', 'updated_at',
+            ])
+            prior_slot.refresh_status(save=True)
+            if current_slot:
+                release_slot(current_slot)
+            return booking
+
+    # Cannot revert — cancel the booking.
+    booking.status = Booking.Status.CANCELLED
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'status', 'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+        'prior_availability_slot', 'updated_at',
+    ])
+    if current_slot:
+        release_slot(_lock_slot(current_slot))
     return booking
 
 

@@ -162,6 +162,80 @@ def list_customer_conversation_summaries(user):
     return summaries
 
 
+def list_provider_conversation_summaries(organization):
+    """Booking + inquiry threads for one provider org inbox, newest activity first."""
+    messages = (
+        ServiceRequestMessage.objects.filter(
+            Q(booking__organization=organization) | Q(inquiry__organization=organization),
+        )
+        .select_related(
+            'sender',
+            'booking',
+            'booking__organization',
+            'booking__service',
+            'booking__customer',
+            'inquiry',
+            'inquiry__organization',
+            'inquiry__service',
+            'inquiry__customer',
+        )
+        .order_by('-created_at', '-id')
+    )
+
+    summaries = []
+    seen = set()
+    for msg in messages:
+        if msg.booking_id:
+            key = ('booking', msg.booking_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            booking = msg.booking
+            org = booking.organization
+            subject = booking.service.name if booking.service_id else 'Booking'
+            customer = booking.customer
+            summaries.append({
+                'kind': 'booking',
+                'id': booking.id,
+                'reference': f'BK-{booking.pk:05d}',
+                'subject': subject,
+                'organization_name': org.name,
+                'organization_slug': org.slug,
+                'organization_public_ref': org.public_ref or '',
+                'customer_name': (customer.full_name if customer else '') or (customer.email if customer else ''),
+                'last_message_preview': _preview_body(msg.body),
+                'last_message_at': msg.created_at,
+                'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+            })
+        elif msg.inquiry_id:
+            key = ('inquiry', msg.inquiry_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            inquiry = msg.inquiry
+            org = inquiry.organization
+            subject = (
+                inquiry.service.name
+                if inquiry.service_id
+                else (inquiry.service_label or 'Custom request')
+            )
+            customer = inquiry.customer
+            summaries.append({
+                'kind': 'inquiry',
+                'id': inquiry.id,
+                'reference': f'SR-{inquiry.pk:05d}',
+                'subject': subject,
+                'organization_name': org.name,
+                'organization_slug': org.slug,
+                'organization_public_ref': org.public_ref or '',
+                'customer_name': (customer.full_name if customer else '') or (customer.email if customer else ''),
+                'last_message_preview': _preview_body(msg.body),
+                'last_message_at': msg.created_at,
+                'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+            })
+    return summaries
+
+
 def _notify_new_message(message):
     """Email the other party about a new message (non-blocking — failures are logged)."""
     from .notifications import _send_to, _public_app_url, _provider_staff_emails

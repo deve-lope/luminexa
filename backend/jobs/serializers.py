@@ -234,10 +234,15 @@ class WeeklyScheduleBlockSerializer(serializers.ModelSerializer):
 
 
 class ProviderNotificationSerializer(serializers.ModelSerializer):
+    is_read = serializers.SerializerMethodField()
+
     class Meta:
         model = ProviderNotification
-        fields = ('id', 'kind', 'message', 'week_start', 'created_at')
+        fields = ('id', 'kind', 'message', 'week_start', 'created_at', 'dismissed_at', 'is_read')
         read_only_fields = fields
+
+    def get_is_read(self, obj):
+        return obj.dismissed_at is not None
 
 
 class CustomerNotificationSerializer(serializers.ModelSerializer):
@@ -245,14 +250,19 @@ class CustomerNotificationSerializer(serializers.ModelSerializer):
         source='organization.name', read_only=True, allow_null=True,
     )
     booking_id = serializers.IntegerField(source='booking.id', read_only=True, allow_null=True)
+    is_read = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerNotification
         fields = (
             'id', 'kind', 'title', 'message', 'link_path',
             'organization_name', 'booking_id', 'created_at',
+            'dismissed_at', 'is_read',
         )
         read_only_fields = fields
+
+    def get_is_read(self, obj):
+        return obj.dismissed_at is not None
 
 
 class CustomerServiceInquiryCreateSerializer(serializers.Serializer):
@@ -318,19 +328,6 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-
-class CustomerConversationSummarySerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=('booking', 'inquiry'))
-    id = serializers.IntegerField()
-    reference = serializers.CharField()
-    subject = serializers.CharField()
-    organization_name = serializers.CharField()
-    organization_slug = serializers.CharField()
-    organization_public_ref = serializers.CharField(allow_blank=True)
-    last_message_preview = serializers.CharField()
-    last_message_at = serializers.DateTimeField()
-    last_sender_name = serializers.CharField(allow_blank=True)
-
     def get_sender_role(self, obj):
         booking = getattr(obj, 'booking', None)
         inquiry = getattr(obj, 'inquiry', None)
@@ -345,6 +342,20 @@ class CustomerConversationSummarySerializer(serializers.Serializer):
         if not request or not request.user.is_authenticated:
             return False
         return obj.sender_id == request.user.id
+
+
+class CustomerConversationSummarySerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=('booking', 'inquiry'))
+    id = serializers.IntegerField()
+    reference = serializers.CharField()
+    subject = serializers.CharField()
+    organization_name = serializers.CharField()
+    organization_slug = serializers.CharField()
+    organization_public_ref = serializers.CharField(allow_blank=True)
+    last_message_preview = serializers.CharField()
+    last_message_at = serializers.DateTimeField()
+    last_sender_name = serializers.CharField(allow_blank=True)
+    customer_name = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class ProviderServiceRequestListSerializer(serializers.Serializer):
@@ -703,6 +714,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'invoice', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at',
+            'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
@@ -716,7 +728,14 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         return booking_requires_quote(obj.organization, obj.service)
 
     def get_job_location(self, obj):
-        return (obj.service_address or '').strip()
+        addr = (obj.service_address or '').strip()
+        if addr:
+            return addr
+        svc = obj.service if obj.service_id else None
+        if svc and getattr(svc, 'fulfillment_kind', None) == Service.FulfillmentKind.SHOP:
+            from businesses.utils import organization_location_full
+            return organization_location_full(obj.organization) or ''
+        return ''
 
     def get_job_location_label(self, obj):
         kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
@@ -815,6 +834,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at', 'quote_answers',
+            'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -828,6 +848,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at',
+            'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -850,7 +871,14 @@ class BookingSerializer(serializers.ModelSerializer):
         return _organization_currency(obj.organization)
 
     def get_job_location(self, obj):
-        return (obj.service_address or '').strip()
+        addr = (obj.service_address or '').strip()
+        if addr:
+            return addr
+        svc = obj.service if obj.service_id else None
+        if svc and getattr(svc, 'fulfillment_kind', None) == Service.FulfillmentKind.SHOP:
+            from businesses.utils import organization_location_full
+            return organization_location_full(obj.organization) or ''
+        return ''
 
     def get_job_location_label(self, obj):
         kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
@@ -1209,8 +1237,13 @@ class PublicServiceReviewSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_customer_name(self, obj):
-        name = obj.customer.get_full_name() or obj.customer.username
-        return name.split()[0] if name else 'Customer'
+        name = (getattr(obj.customer, 'full_name', None) or '').strip()
+        if name:
+            return name.split()[0]
+        email = (getattr(obj.customer, 'email', None) or '').strip()
+        if '@' in email:
+            return email.split('@')[0]
+        return 'Customer'
 
     def get_average(self, obj):
         return obj.average
@@ -1285,13 +1318,14 @@ class PublicServiceDetailSerializer(PublicServiceReadSerializer):
     reviews = serializers.SerializerMethodField()
     my_review = serializers.SerializerMethodField()
     can_rate = serializers.SerializerMethodField()
+    can_edit_review = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
 
     class Meta(PublicServiceReadSerializer.Meta):
         fields = PublicServiceReadSerializer.Meta.fields + (
-            'gallery', 'reviews', 'my_review', 'can_rate',
+            'gallery', 'reviews', 'my_review', 'can_rate', 'can_edit_review',
             'organization_name', 'organization_slug', 'organization_public_ref',
         )
 
@@ -1320,3 +1354,9 @@ class PublicServiceDetailSerializer(PublicServiceReadSerializer):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
         return customer_can_rate_service(obj, user)
+
+    def get_can_edit_review(self, obj):
+        from .ratings import customer_can_edit_service_review
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return customer_can_edit_service_review(obj, user)

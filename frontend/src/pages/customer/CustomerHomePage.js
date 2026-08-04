@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import { Link, useNavigate } from 'react-router-dom';
 import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid';
 import CustomerSearchResults from '../../components/customer/CustomerSearchResults';
 import ScheduledProviderCard from '../../components/customer/ScheduledProviderCard';
@@ -11,13 +10,20 @@ import { DEFAULT_RADIUS_MILES } from '../../constants/locationSearch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { businessesAPI, jobsAPI } from '../../utils/api';
-import { canRescheduleBooking, isUntouchedBookingRequest } from '../../utils/customerBookings';
+import { bookingStatusLabel } from '../../utils/customerBookings';
 import { formatWhen } from '../../utils/datetime';
-import { customerBookings, customerFind } from '../../utils/customerPaths';
+import { customerBookingDetail, customerBookings, customerCategories, customerFind, customerNotifications } from '../../utils/customerPaths';
+import {
+  dismissAllNotifications,
+  dismissNotificationQuietly,
+  emitNotificationsChanged,
+  notificationDestination,
+} from '../../utils/customerNotifications';
 import { lxPillTone } from '../../utils/pillGradients';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 
 const MAX_HOME_PROVIDERS = 3;
+const MAX_HOME_CATEGORIES = 8;
 
 function ProvidersSection({ providers }) {
   const [expanded, setExpanded] = useState(false);
@@ -79,6 +85,7 @@ function initials(name) {
 export default function CustomerHomePage() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [home, setHome] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +97,6 @@ export default function CustomerHomePage() {
   const [searchAreaLabel, setSearchAreaLabel] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [rescheduleBooking, setRescheduleBooking] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
   const loadNotifications = useCallback(() => {
@@ -126,8 +132,26 @@ export default function CustomerHomePage() {
     try {
       await jobsAPI.dismissMyNotification(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
+      emitNotificationsChanged();
     } catch {
       showToast('Could not dismiss notification.', 'error');
+    }
+  };
+
+  const openNotification = async (n) => {
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+    await dismissNotificationQuietly(n.id);
+    navigate(notificationDestination(n));
+  };
+
+  const markAllRead = async () => {
+    if (notifications.length === 0) return;
+    try {
+      await dismissAllNotifications();
+      setNotifications([]);
+      showToast('All updates marked as read.', 'success');
+    } catch {
+      showToast('Could not mark updates as read.', 'error');
     }
   };
 
@@ -197,6 +221,11 @@ export default function CustomerHomePage() {
     );
   }, [home?.business_types, trimmedQuery]);
 
+  const popularTypes = useMemo(
+    () => filteredTypes.slice(0, MAX_HOME_CATEGORIES),
+    [filteredTypes],
+  );
+
   const isSearching = trimmedQuery.length >= 2 || hasLocationFilter;
 
   const handleLocationReady = useCallback(({ label, lat, lng }) => {
@@ -234,35 +263,50 @@ export default function CustomerHomePage() {
 
   const providers = home?.providers || [];
   const upcoming = home?.upcoming_bookings || [];
+  const homeNotifications = notifications.slice(0, 2);
+  const extraNotificationCount = Math.max(0, notifications.length - 2);
 
   return (
     <div className="space-y-6 pb-4 lg:space-y-8">
-      {notifications.length > 0 && (
+      {homeNotifications.length > 0 && (
         <section className="space-y-2" aria-label="Updates">
           <div className="flex items-end justify-between gap-2">
             <div>
               <p className="lx-eyebrow">Updates</p>
               <h2 className="lx-section-title mt-1">From your providers</h2>
             </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="text-sm font-medium text-slate-600 hover:text-slate-900"
+              >
+                Mark all read
+              </button>
+              <Link to={customerNotifications()} className="lx-link">
+                {extraNotificationCount > 0
+                  ? `See all (${notifications.length})`
+                  : 'See all'}
+              </Link>
+            </div>
           </div>
           <ul className="space-y-2">
-            {notifications.map((n) => (
+            {homeNotifications.map((n) => (
               <li
                 key={n.id}
                 className="flex items-start gap-3 rounded-2xl border border-teal-100 bg-teal-50/80 px-4 py-3"
               >
-                <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => openNotification(n)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="text-sm font-semibold text-slate-900">{n.title}</p>
                   <p className="mt-0.5 text-sm text-slate-700">{n.message}</p>
-                  {n.link_path && (
-                    <Link
-                      to={n.link_path}
-                      className="mt-2 inline-flex text-sm font-medium text-luminexa-accent"
-                    >
-                      View details →
-                    </Link>
-                  )}
-                </div>
+                  <span className="mt-2 inline-flex text-sm font-medium text-luminexa-accent">
+                    View details →
+                  </span>
+                </button>
                 <button
                   type="button"
                   onClick={() => dismissNotification(n.id)}
@@ -274,6 +318,14 @@ export default function CustomerHomePage() {
               </li>
             ))}
           </ul>
+          {extraNotificationCount > 0 && (
+            <Link
+              to={customerNotifications()}
+              className="flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800"
+            >
+              Show all updates ({notifications.length})
+            </Link>
+          )}
         </section>
       )}
 
@@ -317,11 +369,11 @@ export default function CustomerHomePage() {
                 <p className="lx-eyebrow">Browse</p>
                 <h2 className="lx-section-title mt-1">Popular categories</h2>
               </div>
-              <Link to={customerFind()} className="lx-link shrink-0">
+              <Link to={customerCategories()} className="lx-link shrink-0">
                 See all
               </Link>
             </div>
-            {filteredTypes.length === 0 ? (
+            {popularTypes.length === 0 ? (
               <div className="lx-empty">
                 <p className="text-sm font-medium text-slate-800">Ready for your first booking?</p>
                 <p className="lx-muted mt-1">
@@ -332,9 +384,71 @@ export default function CustomerHomePage() {
                 </Link>
               </div>
             ) : (
-              <BusinessTypeTileGrid types={filteredTypes} />
+              <BusinessTypeTileGrid types={popularTypes} />
             )}
           </section>
+
+          {upcoming.length > 0 && (
+            <section className="min-w-0">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="lx-eyebrow">Schedule</p>
+                  <h2 className="lx-section-title mt-1">Up next</h2>
+                </div>
+                <Link to={customerBookings()} className="lx-link">
+                  All
+                </Link>
+              </div>
+              <ul
+                className={`grid gap-3 ${
+                  upcoming.length === 1
+                    ? 'grid-cols-1 sm:max-w-md'
+                    : upcoming.length === 2
+                      ? 'grid-cols-1 sm:grid-cols-2'
+                      : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
+                }`}
+              >
+                {upcoming.map((b, i) => {
+                  const tone = lxPillTone(i, upcoming.length);
+                  return (
+                    <li key={b.id} className="min-w-0">
+                      <Link
+                        to={customerBookingDetail(b.id)}
+                        className={`flex min-h-[148px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 transition hover:-translate-y-0.5 hover:shadow-lx-elevated ${tone.surface} ${tone.ring}`}
+                      >
+                        <div>
+                          <p className={`font-semibold tracking-tight ${tone.title}`}>{b.service_name}</p>
+                          <p className={`mt-0.5 text-sm ${tone.body}`}>{b.organization_name}</p>
+                          <p className={`mt-3 text-sm font-medium ${tone.title}`}>
+                            <span className={`font-normal ${tone.body}`}>When · </span>
+                            {formatWhen(b.start_at)}
+                          </p>
+                          {(b.job_location || b.service_address) && (
+                            <p className={`mt-1 line-clamp-2 text-sm ${tone.body}`}>
+                              <span className="font-medium">Place · </span>
+                              {b.job_location || b.service_address}
+                            </p>
+                          )}
+                          <span
+                            className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status, tone)}`}
+                          >
+                            {bookingStatusLabel(b.status, {
+                              bookingPolicy: b.booking_policy,
+                              servicePricingType: b.service_pricing_type,
+                              awaitingCustomerAcceptance: b.awaiting_customer_acceptance,
+                            })}
+                          </span>
+                        </div>
+                        <span className={`mt-3 text-sm font-medium ${tone.link}`}>
+                          View details →
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
           <section className="lx-find-panel flex min-h-0 flex-col lg:p-7">
             <div className="mb-4">
@@ -404,88 +518,8 @@ export default function CustomerHomePage() {
           loading={searchLoading}
         />
       ) : (
-        <>
-          {(upcoming.length > 0 || providers.length > 0) && (
-            <div className="space-y-6 lg:space-y-8">
-              {upcoming.length > 0 && (
-                <section className="min-w-0">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="lx-eyebrow">Schedule</p>
-                      <h2 className="lx-section-title mt-1">Up next</h2>
-                    </div>
-                    <Link to={customerBookings()} className="lx-link">
-                      All
-                    </Link>
-                  </div>
-                  {/* Full-width row: dark (left) → lighter (right), same direction as page */}
-                  <ul
-                    className={`grid gap-3 ${
-                      upcoming.length === 1
-                        ? 'grid-cols-1 sm:max-w-md'
-                        : upcoming.length === 2
-                          ? 'grid-cols-1 sm:grid-cols-2'
-                          : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
-                    }`}
-                  >
-                    {upcoming.map((b, i) => {
-                      const tone = lxPillTone(i, upcoming.length);
-                      return (
-                      <li
-                        key={b.id}
-                        className={`flex min-h-[148px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 ${tone.surface} ${tone.ring}`}
-                      >
-                        <div>
-                          <p className={`font-semibold tracking-tight ${tone.title}`}>{b.service_name}</p>
-                          <p className={`mt-0.5 text-sm ${tone.body}`}>{b.organization_name}</p>
-                          <p className={`mt-3 text-sm font-medium ${tone.title}`}>{formatWhen(b.start_at)}</p>
-                          <span
-                            className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status, tone)}`}
-                          >
-                            {b.status === 'requested' ? 'Awaiting provider' : b.status}
-                          </span>
-                        </div>
-                        {canRescheduleBooking(b) && (
-                          <button
-                            type="button"
-                            onClick={() => setRescheduleBooking(b)}
-                            className={`mt-3 min-h-[40px] w-full rounded-xl border text-sm font-medium backdrop-blur-sm transition ${tone.btn}`}
-                          >
-                            Reschedule
-                          </button>
-                        )}
-                      </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-
-              {providers.length > 0 && (
-                <ProvidersSection providers={providers} />
-              )}
-            </div>
-          )}
-        </>
+        providers.length > 0 && <ProvidersSection providers={providers} />
       )}
-
-      <RescheduleBookingModal
-        open={!!rescheduleBooking}
-        booking={rescheduleBooking}
-        audience="customer"
-        onClose={() => setRescheduleBooking(null)}
-        onRescheduled={(updated) => {
-          const pending = isUntouchedBookingRequest(updated) || updated?.status === 'requested';
-          showToast(
-            pending
-              ? 'New time submitted. Still waiting for the business to approve.'
-              : 'Reschedule request sent. The business will confirm your new time.',
-            'success',
-          );
-          setRescheduleBooking(null);
-          businessesAPI.getCustomerHome().then((res) => setHome(res.data));
-        }}
-      />
     </div>
   );
 }

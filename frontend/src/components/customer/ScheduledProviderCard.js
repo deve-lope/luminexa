@@ -56,7 +56,7 @@ export default function ScheduledProviderCard({
         </div>
         {ratingSummary?.count > 0 && (
           <div className="mt-1.5">
-            <ServiceRatingSummary summary={ratingSummary} compact />
+            <ServiceRatingSummary summary={ratingSummary} compact onDark={tone.onDark} />
           </div>
         )}
         {!compact && nextBooking && (

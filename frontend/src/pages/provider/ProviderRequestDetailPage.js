@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
+import AddToCalendarModal from '../../components/booking/AddToCalendarModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
@@ -35,6 +36,7 @@ export default function ProviderRequestDetailPage() {
   const [error, setError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [quoteAmount, setQuoteAmount] = useState('');
   const [quoteMessage, setQuoteMessage] = useState('');
@@ -193,7 +195,16 @@ export default function ProviderRequestDetailPage() {
         {kind === 'inquiry' && data.preferred_date && (
           <p className="mt-2 text-white/90">Preferred date: {data.preferred_date}</p>
         )}
-        {kind === 'booking' && status === 'requested' && !needsQuote && (
+        {kind === 'booking' && data.awaiting_customer_acceptance && (
+          <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95">
+            Waiting for the customer to accept the new time
+            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+            {needsQuote && status !== 'quoted'
+              ? ' Send a quote so they can confirm.'
+              : ''}
+          </p>
+        )}
+        {kind === 'booking' && status === 'requested' && !needsQuote && !data.awaiting_customer_acceptance && (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
@@ -223,6 +234,31 @@ export default function ProviderRequestDetailPage() {
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Decline
+            </button>
+          </div>
+        )}
+        {kind === 'booking' && status === 'requested' && !needsQuote && data.awaiting_customer_acceptance && (
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={actionBusy || new Date(data.start_at) <= new Date()}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+            >
+              Change time again
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() =>
+                runBookingAction(async () => {
+                  await jobsAPI.declineBooking(id);
+                  navigate(providerRequests(orgSlug));
+                }, null)
+              }
+              className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+            >
+              Cancel request
             </button>
           </div>
         )}
@@ -546,10 +582,10 @@ export default function ProviderRequestDetailPage() {
       )}
 
       {kind === 'booking' && (status === 'confirmed' || status === 'completed') && (
-        <a
-          href={jobsAPI.bookingIcalUrl(id)}
-          download
-          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        <button
+          type="button"
+          onClick={() => setCalendarOpen(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
         >
           <svg className="h-4 w-4 text-luminexa-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -558,7 +594,7 @@ export default function ProviderRequestDetailPage() {
             <line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
           Add to calendar
-        </a>
+        </button>
       )}
 
       {kind === 'booking' &&
@@ -605,10 +641,21 @@ export default function ProviderRequestDetailPage() {
           }}
           onClose={() => setRescheduleOpen(false)}
           onRescheduled={() => {
-            showToast('Booking rescheduled.', 'success');
+            showToast('New time sent — waiting for the customer to accept.', 'success');
             setRescheduleOpen(false);
             load();
           }}
+        />
+      )}
+
+      {kind === 'booking' && data && (
+        <AddToCalendarModal
+          open={calendarOpen}
+          booking={{
+            ...data,
+            organization_name: data.organization_name || activeOrg?.organization_name,
+          }}
+          onClose={() => setCalendarOpen(false)}
         />
       )}
 

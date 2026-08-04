@@ -79,6 +79,13 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
+    def get_full_name(self):
+        return (self.full_name or '').strip()
+
+    def get_short_name(self):
+        name = self.get_full_name()
+        return name.split()[0] if name else (self.email or '')
+
     @property
     def has_booking_contact(self) -> bool:
         return bool(self.email and (self.phone or '').strip())

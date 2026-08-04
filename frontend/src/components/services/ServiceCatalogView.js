@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ServiceRatingSummary from './ServiceRatingSummary';
-import { serviceDetail } from '../../utils/customerPaths';
+import {
+  customerProviderServiceDetail,
+  serviceDetail,
+} from '../../utils/customerPaths';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 
 export function ServiceRow({
@@ -12,12 +15,23 @@ export function ServiceRow({
   selectable = false,
   selected = false,
   onToggleSelect,
+  useCustomerProviderUrls = false,
+  categoryId = null,
 }) {
   const meta = formatServiceMeta(service, undefined, { forceShowPrice });
-  const detailHref = orgSlug ? serviceDetail(orgSlug, service.id) : null;
+  let detailHref = null;
+  if (orgSlug) {
+    detailHref = useCustomerProviderUrls
+      ? customerProviderServiceDetail(orgSlug, service.id)
+      : serviceDetail(orgSlug, service.id);
+    if (categoryId) {
+      detailHref += `?cat=${encodeURIComponent(categoryId)}`;
+    }
+  }
 
   return (
     <li
+      id={`service-${service.id}`}
       className={`rounded-xl border bg-white p-4 shadow-sm ${
         selected ? 'border-luminexa-accent ring-1 ring-luminexa-accent/30' : 'border-slate-200'
       }`}

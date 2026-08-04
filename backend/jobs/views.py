@@ -37,6 +37,7 @@ from .message_services import (
     can_access_booking_messages,
     list_booking_messages,
     list_customer_conversation_summaries,
+    list_provider_conversation_summaries,
     post_booking_incomplete_message,
     post_booking_message,
 )
@@ -365,6 +366,38 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         require_staff_ops(request.user, org)
         count = sync_recurring_slots(org)
         return Response({'created': count})
+
+    @action(detail=True, methods=['get'], url_path='conversations')
+    def conversations(self, request, slug=None):
+        """Provider inbox: booking + inquiry message threads for this organization."""
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+        summaries = list_provider_conversation_summaries(org)
+        return Response({
+            'count': len(summaries),
+            'results': CustomerConversationSummarySerializer(summaries, many=True).data,
+        })
+
+    @action(detail=True, methods=['get'], url_path='notifications')
+    def notifications(self, request, slug=None):
+        """List provider in-app notifications (active by default; include dismissed with ?include_dismissed=1)."""
+        org = self.get_object()
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+        from .scheduling_services import ensure_flexi_slot_alert
+
+        ensure_flexi_slot_alert(org)
+        include_dismissed = str(
+            request.query_params.get('include_dismissed', '')
+        ).lower() in ('1', 'true', 'yes')
+        qs = ProviderNotification.objects.filter(organization=org).order_by('-created_at')
+        if not include_dismissed:
+            qs = qs.filter(dismissed_at__isnull=True)
+        qs = qs[:100]
+        return Response({
+            'results': ProviderNotificationSerializer(qs, many=True).data,
+        })
 
     @action(detail=True, methods=['post'], url_path=r'notifications/(?P<notification_id>[^/.]+)/dismiss')
     def dismiss_notification(self, request, slug=None, notification_id=None):
@@ -1201,6 +1234,51 @@ class BookingViewSet(viewsets.ModelViewSet):
         notify_booking_accepted(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='accept-time-change')
+    def accept_time_change(self, request, pk=None):
+        from .booking_services import accept_provider_time_change
+
+        booking = self.get_object()
+        old = booking.status
+        accept_provider_time_change(booking, customer=request.user)
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.ACCEPTED,
+            old_status=old,
+            new_status=booking.status,
+            note='Customer accepted provider time change',
+        )
+        from .notifications import notify_booking_accepted
+
+        notify_booking_accepted(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='decline-time-change')
+    def decline_time_change(self, request, pk=None):
+        from .booking_services import decline_provider_time_change
+
+        booking = self.get_object()
+        old = booking.status
+        decline_provider_time_change(booking, customer=request.user)
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=(
+                BookingStatusEvent.Action.DECLINED
+                if booking.status == Booking.Status.CANCELLED
+                else BookingStatusEvent.Action.RESCHEDULED
+            ),
+            old_status=old,
+            new_status=booking.status,
+            note='Customer declined provider time change',
+        )
+        if booking.status == Booking.Status.CANCELLED:
+            from .notifications import notify_booking_declined
+
+            notify_booking_declined(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'])
     def decline(self, request, pk=None):
         booking = self.get_object()
@@ -1690,18 +1768,18 @@ class CustomerNotificationsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = (
-            CustomerNotification.objects.filter(
-                customer=request.user,
-                dismissed_at__isnull=True,
-            )
-            .select_related('organization', 'booking')
-            .order_by('-created_at')
-        )
-        total = qs.count()
+        include_dismissed = str(
+            request.query_params.get('include_dismissed', '')
+        ).lower() in ('1', 'true', 'yes')
+        base = CustomerNotification.objects.filter(customer=request.user)
+        unread_count = base.filter(dismissed_at__isnull=True).count()
+        qs = base
+        if not include_dismissed:
+            qs = qs.filter(dismissed_at__isnull=True)
+        qs = qs.select_related('organization', 'booking').order_by('-created_at')
         results = qs[:50]
         return Response({
-            'count': total,
+            'count': unread_count,
             'results': CustomerNotificationSerializer(results, many=True).data,
         })
 
@@ -1720,6 +1798,17 @@ class CustomerNotificationDismissAPIView(APIView):
         note.dismissed_at = timezone.now()
         note.save(update_fields=['dismissed_at'])
         return Response({'detail': 'Dismissed.'})
+
+
+class CustomerNotificationsDismissAllAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        updated = CustomerNotification.objects.filter(
+            customer=request.user,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=timezone.now())
+        return Response({'detail': 'Dismissed.', 'count': updated})
 
 
 class TaskViewSet(viewsets.ModelViewSet):

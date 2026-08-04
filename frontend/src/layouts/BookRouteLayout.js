@@ -18,7 +18,7 @@ import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 import {
   providerAccount,
   providerHome,
-  providerNotifications,
+  providerMessages,
   providerSettings,
   providerShare,
 } from '../utils/providerPaths';
@@ -37,7 +37,7 @@ function BookOwnerShell({ orgSlug, children }) {
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
-        providerNotificationsPath: providerNotifications(orgSlug),
+        providerMessagesPath: providerMessages(orgSlug),
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),

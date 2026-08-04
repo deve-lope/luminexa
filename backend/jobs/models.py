@@ -223,6 +223,7 @@ class CustomerNotification(models.Model):
         BOOKING_DECLINED = 'booking_declined', 'Booking declined'
         BOOKING_CANCELLED = 'booking_cancelled', 'Booking cancelled'
         BOOKING_RESCHEDULED = 'booking_rescheduled', 'Booking rescheduled'
+        BOOKING_TIME_CHANGE = 'booking_time_change', 'Provider proposed a new time'
         BOOKING_COMPLETED = 'booking_completed', 'Booking completed'
         INVOICE_READY = 'invoice_ready', 'Invoice ready'
         PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
@@ -549,6 +550,28 @@ class Booking(models.Model):
         help_text='[{id, question, answer}] questions the provider asks before/with the quote.',
     )
     quoted_at = models.DateTimeField(null=True, blank=True)
+    prior_start_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Previous start when the provider proposed a new time (awaiting customer accept).',
+    )
+    prior_end_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Previous end when the provider proposed a new time.',
+    )
+    prior_availability_slot = models.ForeignKey(
+        AvailabilitySlot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text='Previous slot before a provider-proposed time change.',
+    )
+    awaiting_customer_acceptance = models.BooleanField(
+        default=False,
+        help_text='True when the provider proposed a new time (and/or quote) and the customer must accept.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

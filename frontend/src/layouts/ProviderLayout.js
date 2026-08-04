@@ -16,6 +16,7 @@ import {
   providerAccount,
   providerAbout,
   providerAnalytics,
+  providerMessages,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -105,13 +106,12 @@ function ProviderShell() {
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
-        providerNotificationsPath: providerNotifications(orgSlug),
+        providerMessagesPath: providerMessages(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
-        notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount]
+    [logout, navigate, orgSlug, user?.can_access_django_admin]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -129,6 +129,12 @@ function ProviderShell() {
     const base = `/provider/${orgSlug}`;
     if (location.pathname.startsWith(`${base}/analytics`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Analytics' };
+    }
+    if (location.pathname.startsWith(`${base}/messages`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Messages' };
+    }
+    if (location.pathname.startsWith(`${base}/notifications/all`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'All updates' };
     }
     if (location.pathname.startsWith(`${base}/notifications`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Notifications' };

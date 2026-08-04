@@ -667,3 +667,53 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(found['capacity'], 2)
         self.assertEqual(found['occupied_count'], 1)
         self.assertEqual(found['remaining_capacity'], 1)
+
+    def test_provider_time_change_requires_customer_accept(self):
+        new_start = timezone.now() + timedelta(days=5)
+        new_end = new_start + timedelta(hours=1)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=new_start,
+            end_at=new_end,
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            service_address='12 Main St',
+        )
+        old_start = booking.start_at
+
+        self._auth(self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': new_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.availability_slot_id, new_slot.id)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.prior_start_at, old_start)
+
+        self._auth(self.customer)
+        accept = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept-time-change/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(accept.status_code, 200, getattr(accept, 'data', accept.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertFalse(booking.awaiting_customer_acceptance)
+        self.assertIsNone(booking.prior_start_at)

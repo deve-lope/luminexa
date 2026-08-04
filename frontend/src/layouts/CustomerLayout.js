@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import CustomerInvoicePaymentPrompt from '../components/customer/CustomerInvoicePaymentPrompt';
-import { IconBell } from '../components/icons/NavIcons';
+import CustomerNotificationBell from '../components/customer/CustomerNotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { CUSTOMER_TABS, buildCustomerMenuItems } from '../config/navigation';
 import { jobsAPI } from '../utils/api';
-import { customerNotifications } from '../utils/customerPaths';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
+import { NOTIFICATIONS_CHANGED_EVENT } from '../utils/customerNotifications';
 
 export default function CustomerLayout({ children }) {
   const { isAuthenticated, loading, user, memberships, logout } = useAuth();
@@ -36,8 +36,8 @@ export default function CustomerLayout({ children }) {
   }, [location.pathname]);
 
   const backNav = useMemo(
-    () => resolveCustomerBack(location.pathname),
-    [location.pathname]
+    () => resolveCustomerBack(location.pathname, location.search),
+    [location.pathname, location.search]
   );
 
   const loadNotificationCount = useCallback(() => {
@@ -52,7 +52,12 @@ export default function CustomerLayout({ children }) {
     if (!isAuthenticated || !isCustomerAppRoute) return undefined;
     loadNotificationCount();
     const id = window.setInterval(loadNotificationCount, 60000);
-    return () => window.clearInterval(id);
+    const onChanged = () => loadNotificationCount();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    };
   }, [isAuthenticated, isCustomerAppRoute, loadNotificationCount, location.pathname]);
 
   const { eyebrow, title } = useMemo(() => {
@@ -71,6 +76,12 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/find')) {
       return { eyebrow: 'Explore', title: 'Book a service' };
     }
+    if (location.pathname.endsWith('/customer/categories')) {
+      return { eyebrow: 'Browse', title: 'All categories' };
+    }
+    if (/^\/customer\/bookings\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Bookings', title: 'Appointment' };
+    }
     if (location.pathname.endsWith('/customer/bookings')) {
       return { eyebrow: 'Bookings', title: 'Upcoming' };
     }
@@ -78,7 +89,7 @@ export default function CustomerLayout({ children }) {
       return { eyebrow: 'Messages', title: 'Conversations' };
     }
     if (location.pathname.endsWith('/customer/notifications')) {
-      return { eyebrow: 'Updates', title: 'Notifications' };
+      return { eyebrow: 'Updates', title: 'All notifications' };
     }
     if (location.pathname.endsWith('/customer/history')) {
       return { eyebrow: 'History', title: 'Past activity' };
@@ -115,22 +126,10 @@ export default function CustomerLayout({ children }) {
 
   const headerActions = useMemo(
     () => (
-      <Link
-        to={customerNotifications()}
-        className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-sm transition hover:bg-white"
-        aria-label={
-          notificationCount > 0
-            ? `Notifications, ${notificationCount} unread`
-            : 'Notifications'
-        }
-      >
-        <IconBell className="h-5 w-5" />
-        {notificationCount > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-1 text-[10px] font-bold leading-none text-white">
-            {notificationCount > 9 ? '9+' : notificationCount}
-          </span>
-        )}
-      </Link>
+      <CustomerNotificationBell
+        unreadCount={notificationCount}
+        onCountChange={setNotificationCount}
+      />
     ),
     [notificationCount]
   );

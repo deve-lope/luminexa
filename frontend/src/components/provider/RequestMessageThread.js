@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import parseApiError from '../../utils/parseApiError';
 
 function formatMessageTime(iso) {
@@ -56,9 +57,9 @@ function ConversationSheet({
 
   if (!open) return null;
 
-  return (
+  const sheet = (
     <div
-      className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/40 sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/40 sm:justify-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Conversation with ${peerName || 'the other party'}`}
@@ -120,6 +121,8 @@ function ConversationSheet({
       </div>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }
 
 export default function RequestMessageThread({
@@ -148,25 +151,39 @@ export default function RequestMessageThread({
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const refresh = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await loadMessages();
       setMessages(Array.isArray(res.data) ? res.data : []);
       setLoaded(true);
     } catch (e) {
-      setError(parseApiError(e));
+      if (!silent) setError(parseApiError(e));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [loadMessages]);
+
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   useEffect(() => {
     if (open && !loaded) {
       refresh();
     }
   }, [open, loaded, refresh]);
+
+  // While chatting, poll often so the other person's messages appear quickly.
+  useEffect(() => {
+    if (!open) return undefined;
+    const id = window.setInterval(() => {
+      refreshRef.current({ silent: true });
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
