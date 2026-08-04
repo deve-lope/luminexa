@@ -174,6 +174,12 @@ class Organization(models.Model):
         help_text='free | pro_monthly | pro_yearly',
     )
     subscription_current_period_end = models.DateTimeField(null=True, blank=True)
+    subscription_source = models.CharField(
+        max_length=16,
+        blank=True,
+        default='none',
+        help_text='none | stripe | promo — how Pro access was granted',
+    )
     # QuickBooks Online (one-way push of customers / invoices / payments)
     qbo_realm_id = models.CharField(max_length=64, blank=True, default='')
     qbo_access_token = models.TextField(blank=True, default='')
@@ -413,3 +419,98 @@ class StaffInvitation(models.Model):
 
     def __str__(self):
         return f'{self.email} → {self.organization.slug}'
+
+
+class PromoCode(models.Model):
+    """Shared (or limited) redeemable code that grants complimentary Pro for N weeks."""
+
+    code = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text='Stored uppercase. Providers enter case-insensitively.',
+    )
+    grant_weeks = models.PositiveIntegerField(
+        help_text='Weeks of Pro access granted on each successful redemption.',
+    )
+    valid_from = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='If set, code cannot be redeemed before this time.',
+    )
+    valid_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='If set, code cannot be redeemed after this time.',
+    )
+    max_redemptions = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Optional cap on total redemptions. Blank = unlimited.',
+    )
+    is_active = models.BooleanField(default=True)
+    note = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Internal memo for admins.',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promo_codes_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if self.code:
+            self.code = self.code.strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+    @property
+    def redemption_count(self):
+        return self.redemptions.count()
+
+
+class PromoRedemption(models.Model):
+    """One redemption of a promo code by an organization."""
+
+    promo_code = models.ForeignKey(
+        PromoCode,
+        on_delete=models.CASCADE,
+        related_name='redemptions',
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='promo_redemptions',
+    )
+    redeemed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promo_redemptions',
+    )
+    granted_until = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['promo_code', 'organization'],
+                name='uniq_promo_redemption_per_org',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.promo_code_id} → {self.organization_id}'

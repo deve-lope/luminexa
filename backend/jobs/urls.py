@@ -63,6 +63,10 @@ urlpatterns = [
         stripe_views.BillingPortalAPIView.as_view(),
     ),
     path(
+        'organizations/<slug:slug>/billing/redeem-promo/',
+        stripe_views.RedeemPromoCodeAPIView.as_view(),
+    ),
+    path(
         'organizations/<slug:slug>/billing/sync-checkout/',
         stripe_views.SyncCheckoutSessionAPIView.as_view(),
     ),

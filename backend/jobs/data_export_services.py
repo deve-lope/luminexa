@@ -41,6 +41,65 @@ from .models import (
 )
 
 
+MIGRATION_README = """\
+Luminexa business data export — quick start
+==========================================
+
+This download is a full snapshot of your business data for backup or migration.
+It is not a one-click import into another booking app. Use it to recreate your
+customers, catalog, schedule, and history wherever you go next.
+
+What you get
+------------
+- organization — business profile, booking settings, service area
+- locations — branches / service pins and radii
+- services / categories — your catalog (prices, duration, fulfillment)
+- customers — people who booked with you (name, email, phone, address, notes)
+- bookings — appointments, quotes, addresses, notes, status history
+- messages — conversation threads on bookings and custom requests
+- inquiries — custom service requests that were not catalog bookings
+- invoices / job_costs — billing and your internal job costing
+- schedule_hours / unavailable_blocks — weekly hours and time off
+- reviews / tasks / staff — ratings, to-dos, and team roster
+- gallery — image URLs (images stay on Luminexa hosting; save copies if needed)
+
+Formats
+-------
+- JSON — one file; best for developers or technical imports
+- CSV (ZIP) — open each .csv in Excel or Google Sheets
+- Excel — one workbook with a sheet per data type (start with the README sheet)
+
+Suggested migration steps
+-------------------------
+1. Keep a secure copy of this export (password-protect if you store it long-term).
+2. Open customers and import contacts into your new CRM / phone / email tool.
+3. Recreate services and weekly hours in your new booking system from the catalog
+   and schedule files.
+4. Use bookings and invoices as a historical archive (most tools cannot import
+   Luminexa bookings 1:1).
+5. After you confirm everything you need is here, cancel Luminexa from Billing
+   if you are leaving.
+
+Privacy
+-------
+Customer contact details are included because they booked with your business.
+You are responsible for handling this data securely and in line with privacy laws.
+Do not email the raw export unless the recipient is trusted.
+
+Not included (by design)
+------------------------
+- Login codes and passwords
+- Stripe / QuickBooks credentials
+- Platform notification inbox items
+
+Questions? Contact Luminexa support from your account settings.
+"""
+
+
+def migration_readme_text() -> str:
+    return MIGRATION_README.strip() + '\n'
+
+
 def collect_organization_data(organization: Organization) -> dict[str, Any]:
     """
     Gather all exportable data for an organization.
@@ -382,6 +441,7 @@ def collect_organization_data(organization: Organization) -> dict[str, Any]:
     return {
         'export_date': export_date.isoformat(),
         'export_version': '1.0',
+        'migration_guide': migration_readme_text(),
         'organization': org_data,
         'locations': locations,
         'gallery': gallery,
@@ -428,11 +488,13 @@ def export_as_csv_zip(data: dict[str, Any]) -> bytes:
     zip_buffer = io.BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('README.txt', migration_readme_text())
+
         # Organization (single row)
         org_csv = io.StringIO()
         org_writer = csv.DictWriter(org_csv, fieldnames=data['organization'].keys())
         org_writer.writeheader()
-        org_writer.writerow(data['organization'])
+        org_writer.writerow(_flat_row(data['organization']))
         zf.writestr('organization.csv', org_csv.getvalue())
         
         # Locations
@@ -619,7 +681,13 @@ def export_as_excel(data: dict[str, Any]) -> bytes:
     
     wb = Workbook()
     wb.remove(wb.active)  # Remove default sheet
-    
+
+    # README first so openers see migration guidance immediately
+    readme_ws = wb.create_sheet('README', 0)
+    readme_ws.column_dimensions['A'].width = 100
+    for line in migration_readme_text().splitlines():
+        readme_ws.append([line])
+
     def add_sheet(name: str, rows: list[dict], wb: Workbook):
         if not rows:
             return
@@ -634,7 +702,7 @@ def export_as_excel(data: dict[str, Any]) -> bytes:
         # Auto-size columns (approximate)
         for idx, col in enumerate(headers, 1):
             ws.column_dimensions[get_column_letter(idx)].width = min(50, max(12, len(col) + 2))
-    
+
     # Add sheets
     add_sheet('Organization', [data['organization']], wb)
     add_sheet('Locations', data['locations'], wb)

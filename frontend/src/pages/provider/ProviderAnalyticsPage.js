@@ -270,6 +270,29 @@ export default function ProviderAnalyticsPage() {
             {dataExportBusy ? 'Exporting…' : 'Download Excel'}
           </button>
         </div>
+        <details className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <summary className="cursor-pointer font-semibold text-slate-800">
+            What’s in this export & how to migrate
+          </summary>
+          <div className="mt-2 space-y-2 leading-relaxed">
+            <p>
+              This is a backup / migration snapshot — not a one-click import into another booking
+              app. Each download also includes a short README (JSON field, ZIP <code>README.txt</code>,
+              or Excel README sheet).
+            </p>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>Save a secure copy of the file.</li>
+              <li>Import <strong>customers</strong> into your contacts / CRM.</li>
+              <li>Recreate <strong>services</strong> and <strong>weekly hours</strong> in your new tool.</li>
+              <li>Keep <strong>bookings</strong> and <strong>invoices</strong> as your history archive.</li>
+              <li>When ready, cancel from Billing if you are leaving Luminexa.</li>
+            </ol>
+            <p>
+              Customer contact details are included. Handle the file securely — you are responsible
+              for that data after download.
+            </p>
+          </div>
+        </details>
         <p className="mt-2 text-xs text-slate-500">
           <span className="font-semibold">Pro subscription required.</span> Export is owner-only.
         </p>

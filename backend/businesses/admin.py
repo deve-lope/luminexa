@@ -7,6 +7,8 @@ from .models import (
     OrganizationLocation,
     OrganizationMembership,
     PostalGeocode,
+    PromoCode,
+    PromoRedemption,
     StaffInvitation,
 )
 
@@ -38,9 +40,10 @@ class OrganizationLocationInline(admin.TabularInline):
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'slug', 'service_postal_code', 'service_city', 'service_state',
-        'service_latitude', 'service_longitude', 'is_active', 'profile_public',
+        'name', 'slug', 'subscription_status', 'subscription_source',
+        'subscription_current_period_end', 'is_active', 'profile_public',
     )
+    list_filter = ('subscription_status', 'subscription_source', 'is_active')
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'slug')
     filter_horizontal = ('business_types',)
@@ -73,3 +76,43 @@ class OrganizationMembershipAdmin(admin.ModelAdmin):
 class StaffInvitationAdmin(admin.ModelAdmin):
     list_display = ('email', 'organization', 'accepted_at', 'created_at')
     search_fields = ('email', 'organization__slug')
+
+
+class PromoRedemptionInline(admin.TabularInline):
+    model = PromoRedemption
+    extra = 0
+    can_delete = False
+    readonly_fields = ('organization', 'redeemed_by', 'granted_until', 'created_at')
+    fields = readonly_fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PromoCode)
+class PromoCodeAdmin(admin.ModelAdmin):
+    list_display = (
+        'code', 'grant_weeks', 'valid_from', 'valid_until',
+        'redemption_count_display', 'max_redemptions', 'is_active', 'created_at',
+    )
+    list_filter = ('is_active',)
+    search_fields = ('code', 'note')
+    readonly_fields = ('created_at',)
+    inlines = [PromoRedemptionInline]
+
+    def redemption_count_display(self, obj):
+        return obj.redemption_count
+
+    redemption_count_display.short_description = 'Redemptions'
+
+    def save_model(self, request, obj, form, change):
+        if not change and not obj.created_by_id:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(PromoRedemption)
+class PromoRedemptionAdmin(admin.ModelAdmin):
+    list_display = ('promo_code', 'organization', 'redeemed_by', 'granted_until', 'created_at')
+    search_fields = ('promo_code__code', 'organization__slug', 'redeemed_by__email')
+    readonly_fields = ('promo_code', 'organization', 'redeemed_by', 'granted_until', 'created_at')

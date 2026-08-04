@@ -247,6 +247,8 @@ export const jobsAPI = {
     api.post(`/api/v1/organizations/${orgSlug}/billing/subscribe/`, data),
   openBillingPortal: (orgSlug, data = {}) =>
     api.post(`/api/v1/organizations/${orgSlug}/billing/portal/`, data),
+  redeemPromoCode: (orgSlug, code) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/redeem-promo/`, { code }),
   syncSubscriptionCheckout: (orgSlug, sessionId) =>
     api.post(`/api/v1/organizations/${orgSlug}/billing/sync-checkout/`, {
       session_id: sessionId,

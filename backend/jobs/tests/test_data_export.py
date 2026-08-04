@@ -200,11 +200,14 @@ class OrganizationDataExportTestCase(TestCase):
         data = json.loads(response.content)
 
         for key in (
-            'export_date', 'export_version', 'organization', 'locations', 'staff',
-            'categories', 'services', 'schedule', 'customers', 'bookings',
+            'export_date', 'export_version', 'migration_guide', 'organization', 'locations',
+            'staff', 'categories', 'services', 'schedule', 'customers', 'bookings',
             'invoices', 'job_costs', 'tasks',
         ):
             self.assertIn(key, data)
+
+        self.assertIn('customers', data['migration_guide'].lower())
+        self.assertIn('migration', data['migration_guide'].lower())
 
         self.assertEqual(data['organization']['name'], 'Test Service Co')
         self.assertEqual(data['organization']['slug'], 'test-service')
@@ -255,6 +258,9 @@ class OrganizationDataExportTestCase(TestCase):
 
         with zipfile.ZipFile(BytesIO(response.content), 'r') as zf:
             names = zf.namelist()
+            self.assertIn('README.txt', names)
+            readme = zf.read('README.txt').decode('utf-8')
+            self.assertIn('migration', readme.lower())
             for expected in (
                 'organization.csv', 'customers.csv', 'bookings.csv',
                 'invoices.csv', 'services.csv',
@@ -279,8 +285,13 @@ class OrganizationDataExportTestCase(TestCase):
         from openpyxl import load_workbook
 
         wb = load_workbook(BytesIO(response.content))
+        self.assertEqual(wb.sheetnames[0], 'README')
         for sheet in ('Organization', 'Customers', 'Bookings', 'Invoices', 'Services'):
             self.assertIn(sheet, wb.sheetnames)
+        readme_text = '\n'.join(
+            str(cell.value or '') for row in wb['README'].iter_rows(min_col=1, max_col=1) for cell in row
+        ).lower()
+        self.assertIn('migration', readme_text)
 
         customers_sheet = wb['Customers']
         headers = [cell.value for cell in customers_sheet[1]]

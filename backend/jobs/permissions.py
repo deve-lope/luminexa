@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from businesses.models import Organization, OrganizationMembership
@@ -19,12 +20,27 @@ def is_org_staff(user, organization: Organization) -> bool:
     return bool(m and m.can_manage_schedule)
 
 
+def _promo_grant_still_valid(organization: Organization) -> bool:
+    period_end = getattr(organization, 'subscription_current_period_end', None)
+    if period_end is None:
+        return False
+    return period_end > timezone.now()
+
+
 def org_has_active_subscription(organization: Organization) -> bool:
-    """True when provider ops are allowed (Stripe off, or active/trialing)."""
+    """True when provider ops are allowed (Stripe off, or active/trialing Pro)."""
     if not getattr(settings, 'STRIPE_ENABLED', False):
         return True
     status = (getattr(organization, 'subscription_status', None) or 'none').lower()
-    return status in ('active', 'trialing')
+    if status not in ('active', 'trialing'):
+        return False
+
+    source = (getattr(organization, 'subscription_source', None) or 'none').lower()
+    if source == 'promo':
+        return _promo_grant_still_valid(organization)
+
+    # Stripe (or legacy grants without source): status alone is enough.
+    return True
 
 
 def require_provider_subscription(organization: Organization) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timezone as dt_timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 import stripe
@@ -392,23 +393,40 @@ def create_billing_portal_session(*, org: Organization, return_path: str) -> dic
 
 def apply_subscription_from_stripe(*, org: Organization, subscription) -> Organization:
     status = subscription.get('status') or 'none'
+    now = timezone.now()
+    promo_active = (
+        (org.subscription_source or '') == 'promo'
+        and org.subscription_current_period_end
+        and org.subscription_current_period_end > now
+        and (org.subscription_status or '') in ('active', 'trialing')
+    )
+    # Do not wipe an active complimentary promo when Stripe reports canceled/none.
+    if promo_active and status not in ('active', 'trialing'):
+        if subscription.get('id'):
+            org.stripe_subscription_id = subscription.get('id')
+            org.save(update_fields=['stripe_subscription_id', 'updated_at'])
+        return org
+
     org.stripe_subscription_id = subscription.get('id') or org.stripe_subscription_id
     org.subscription_status = status
     plan = (subscription.get('metadata') or {}).get('plan') or org.subscription_plan or 'pro_monthly'
     if status in ('active', 'trialing'):
         org.subscription_plan = plan if plan.startswith('pro') else 'pro_monthly'
+        org.subscription_source = 'stripe'
     elif status in ('canceled', 'unpaid', 'incomplete_expired'):
         if status == 'canceled':
             org.subscription_plan = 'free'
+            org.subscription_source = 'none'
     period_end = subscription.get('current_period_end')
     if period_end:
         org.subscription_current_period_end = timezone.datetime.fromtimestamp(
-            period_end, tz=timezone.utc,
+            period_end, tz=dt_timezone.utc,
         )
     org.save(update_fields=[
         'stripe_subscription_id',
         'subscription_status',
         'subscription_plan',
+        'subscription_source',
         'subscription_current_period_end',
         'updated_at',
     ])
@@ -462,6 +480,7 @@ def billing_summary(org: Organization) -> dict:
             payouts['detail'] = 'Could not load Stripe balance.'
 
     from . import quickbooks_services
+    from .permissions import org_has_active_subscription
 
     return {
         'stripe_configured': stripe_configured(),
@@ -473,7 +492,9 @@ def billing_summary(org: Organization) -> dict:
         'subscription': {
             'status': org.subscription_status or 'none',
             'plan': org.subscription_plan or 'free',
+            'source': getattr(org, 'subscription_source', None) or 'none',
             'current_period_end': org.subscription_current_period_end,
+            'active': org_has_active_subscription(org),
             'has_customer': bool(org.stripe_customer_id),
             'trial_days': int(getattr(settings, 'STRIPE_TRIAL_DAYS', 0) or 0),
             'prices_configured': {

@@ -102,6 +102,21 @@ class BillingPortalAPIView(APIView):
         return Response(result)
 
 
+class RedeemPromoCodeAPIView(APIView):
+    """Owner redeems a complimentary Pro promo code."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        from . import promo_services
+
+        org = _org_for_owner(request.user, slug)
+        code = request.data.get('code') or ''
+        promo_services.redeem_promo_code(org=org, user=request.user, code=code)
+        org.refresh_from_db()
+        return Response(stripe_services.billing_summary(org))
+
+
 class SyncCheckoutSessionAPIView(APIView):
     """Owner syncs subscription status after Checkout redirect (before webhook arrives)."""
 

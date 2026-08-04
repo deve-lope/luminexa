@@ -34,13 +34,9 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_subscription_active(self, obj):
-        from django.conf import settings
+        from jobs.permissions import org_has_active_subscription
 
-        # No Stripe keys → do not paywall local/dev installs.
-        if not getattr(settings, 'STRIPE_ENABLED', False):
-            return True
-        status = (obj.organization.subscription_status or 'none').lower()
-        return status in ('active', 'trialing')
+        return org_has_active_subscription(obj.organization)
 
 
 class BusinessTypeSerializer(serializers.ModelSerializer):

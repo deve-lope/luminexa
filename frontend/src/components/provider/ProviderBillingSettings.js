@@ -23,6 +23,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoBusy, setPromoBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -87,6 +89,32 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
     } catch (e) {
       setError(parseApiError(e) || 'Stripe request failed.');
       setBusy(false);
+    }
+  };
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) {
+      setError('Enter a promo code.');
+      return;
+    }
+    setPromoBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await jobsAPI.redeemPromoCode(orgSlug, promoCode.trim());
+      setBilling(res.data);
+      setPromoCode('');
+      const end = res.data?.subscription?.current_period_end;
+      setMessage(
+        end
+          ? `Promo applied — Pro access until ${new Date(end).toLocaleDateString()}.`
+          : 'Promo applied.'
+      );
+      await refreshSession?.();
+    } catch (e) {
+      setError(parseApiError(e) || 'Could not apply promo code.');
+    } finally {
+      setPromoBusy(false);
     }
   };
 
@@ -284,16 +312,41 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
         <p className="text-sm text-slate-600">
           Status: {statusCopy(sub.status)}
           {sub.plan && sub.plan !== 'free' ? ` · ${sub.plan.replace('_', ' ')}` : ''}
-          {sub.current_period_end
-            ? ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
-            : ''}
+          {sub.source === 'promo' && sub.current_period_end
+            ? ` · Promo Pro until ${new Date(sub.current_period_end).toLocaleDateString()}`
+            : sub.current_period_end
+              ? ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
+              : ''}
           {sub.trial_days > 0 && (!sub.status || sub.status === 'none' || sub.status === 'canceled')
             ? ` · ${sub.trial_days}-day free trial`
             : ''}
         </p>
+        {isOwner && (
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs font-semibold text-slate-700">Have a promo code?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                placeholder="e.g. LAUNCH4W"
+                autoCapitalize="characters"
+                className="min-h-[44px] min-w-[10rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+              />
+              <button
+                type="button"
+                disabled={promoBusy || busy}
+                onClick={applyPromo}
+                className="min-h-[44px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 disabled:opacity-60"
+              >
+                {promoBusy ? 'Applying…' : 'Apply code'}
+              </button>
+            </div>
+          </div>
+        )}
         {isOwner && configured && (
           <div className="flex flex-wrap gap-2">
-            {(!sub.status || sub.status === 'none' || sub.status === 'canceled') &&
+            {(!sub.status || sub.status === 'none' || sub.status === 'canceled' || sub.source === 'promo') &&
               sub.prices_configured?.pro_monthly && (
                 <button
                   type="button"
@@ -309,10 +362,14 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
                   }
                   className="min-h-[44px] rounded-xl bg-luminexa-accent px-4 text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  {sub.trial_days > 0 ? 'Start free trial' : 'Subscribe monthly'}
+                  {sub.source === 'promo'
+                    ? 'Upgrade to paid monthly'
+                    : sub.trial_days > 0
+                      ? 'Start free trial'
+                      : 'Subscribe monthly'}
                 </button>
               )}
-            {(!sub.status || sub.status === 'none' || sub.status === 'canceled') &&
+            {(!sub.status || sub.status === 'none' || sub.status === 'canceled' || sub.source === 'promo') &&
               sub.prices_configured?.pro_yearly && (
                 <button
                   type="button"
@@ -328,7 +385,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
                   }
                   className="min-h-[44px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 disabled:opacity-60"
                 >
-                  Subscribe yearly
+                  {sub.source === 'promo' ? 'Upgrade to paid yearly' : 'Subscribe yearly'}
                 </button>
               )}
             {sub.has_customer && (
