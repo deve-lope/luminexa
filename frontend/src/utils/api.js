@@ -319,6 +319,11 @@ export const jobsAPI = {
       params: { organization: organizationSlug, period },
       responseType: 'blob',
     }),
+  downloadOrganizationDataExport: (organizationSlug, format = 'json') =>
+    api.get(`/api/v1/organizations/${organizationSlug}/data-export/`, {
+      params: { export_format: format },
+      responseType: 'blob',
+    }),
   patchOrganization: (orgSlug, data) => api.patch(`/api/v1/organizations/${orgSlug}/`, data),
   getOrganization: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/`),
   getWeeklySchedule: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/weekly-schedule/`),

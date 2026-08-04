@@ -114,6 +114,7 @@ export default function ProviderAnalyticsPage() {
   const [error, setError] = useState(null);
   const [chartMode, setChartMode] = useState('income');
   const [exportBusy, setExportBusy] = useState(false);
+  const [dataExportBusy, setDataExportBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -146,6 +147,38 @@ export default function ProviderAnalyticsPage() {
       setError(parseApiError(e) || 'Could not download export.');
     } finally {
       setExportBusy(false);
+    }
+  };
+
+  const downloadDataExport = async (format) => {
+    setDataExportBusy(true);
+    setError(null);
+    try {
+      const res = await jobsAPI.downloadOrganizationDataExport(orgSlug, format);
+      const contentType = format === 'json' 
+        ? 'application/json' 
+        : format === 'csv' 
+        ? 'application/zip' 
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const blob = new Blob([res.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = format === 'csv' ? 'zip' : format === 'excel' ? 'xlsx' : 'json';
+      a.download = `${orgSlug}-export-${new Date().toISOString().split('T')[0]}.${ext}`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      const errMsg = parseApiError(e);
+      if (errMsg?.includes('Pro subscription')) {
+        setError('Pro subscription required to export business data.');
+      } else if (errMsg?.includes('owner')) {
+        setError('Only the organization owner can export business data.');
+      } else {
+        setError(errMsg || 'Could not download export.');
+      }
+    } finally {
+      setDataExportBusy(false);
     }
   };
 
@@ -204,6 +237,43 @@ export default function ProviderAnalyticsPage() {
           {exportBusy ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
+
+      <section className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
+        <h2 className="text-sm font-semibold text-slate-900">Export All Business Data</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Download your complete business data for migration or backup. Includes bookings, customers,
+          invoices, messages, services, schedule, and more.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('json')}
+            className="min-h-[40px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download JSON'}
+          </button>
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('csv')}
+            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download CSV (ZIP)'}
+          </button>
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('excel')}
+            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download Excel'}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          <span className="font-semibold">Pro subscription required.</span> Export is owner-only.
+        </p>
+      </section>
 
       <div
         className="flex gap-1 overflow-x-auto rounded-2xl border border-luminexa-line bg-white p-1 shadow-lx-soft"

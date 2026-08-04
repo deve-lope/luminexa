@@ -28,6 +28,11 @@ urlpatterns = [
     path('provider-dashboard/', dashboard_views.ProviderDashboardAPIView.as_view()),
     path('provider-analytics/', analytics_views.ProviderAnalyticsAPIView.as_view()),
     path('provider-books-export/', analytics_views.ProviderBooksExportAPIView.as_view()),
+    path(
+        'organizations/<slug:slug>/data-export/',
+        analytics_views.OrganizationDataExportAPIView.as_view(),
+        name='organization-data-export',
+    ),
     path('provider-service-requests/', service_request_views.ProviderServiceRequestsAPIView.as_view()),
     path(
         'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/',

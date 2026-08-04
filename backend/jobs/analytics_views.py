@@ -626,3 +626,76 @@ class ProviderBooksExportAPIView(APIView):
             f'attachment; filename="luminexa-books-{org.slug}-{period}.csv"'
         )
         return response
+
+
+class OrganizationDataExportAPIView(APIView):
+    """
+    Complete organization data export for business migration/backup.
+    
+    Supports JSON, CSV (ZIP), and Excel formats. Owner-only, Pro subscription required.
+    """
+
+    permission_classes = [IsAuthenticated]
+    # Allow ?format=json|csv|excel without DRF content-negotiation hijacking it.
+    format_kwarg = None
+
+    def get(self, request, slug):
+        from django.http import HttpResponse
+
+        from businesses.models import OrganizationMembership
+
+        from .data_export_services import (
+            collect_organization_data,
+            export_as_csv_zip,
+            export_as_excel,
+            export_as_json,
+        )
+        from .permissions import require_provider_subscription
+
+        export_format = (
+            request.query_params.get('export_format')
+            or request.query_params.get('fmt')
+            or 'json'
+        ).lower()
+        if export_format not in ('json', 'csv', 'excel'):
+            raise ValidationError({'export_format': 'Must be json, csv, or excel.'})
+
+        org = Organization.objects.filter(slug=slug).first()
+        if not org:
+            raise NotFound('Organization not found.')
+
+        # Owner-only permission
+        membership = OrganizationMembership.objects.filter(
+            user=request.user,
+            organization=org,
+            role=OrganizationMembership.Role.OWNER,
+        ).first()
+        if not membership:
+            raise PermissionDenied('Only the organization owner can export business data.')
+
+        # Active Pro subscription required
+        require_provider_subscription(org)
+        plan = (org.subscription_plan or 'free').lower()
+        if not plan.startswith('pro'):
+            raise PermissionDenied('Pro subscription required to export business data.')
+
+        # Collect all data
+        data = collect_organization_data(org)
+
+        # Export in requested format
+        if export_format == 'json':
+            content = export_as_json(data)
+            content_type = 'application/json'
+            filename = f'{org.slug}-export-{timezone.now().strftime("%Y-%m-%d")}.json'
+        elif export_format == 'csv':
+            content = export_as_csv_zip(data)
+            content_type = 'application/zip'
+            filename = f'{org.slug}-export-{timezone.now().strftime("%Y-%m-%d")}.zip'
+        else:  # excel
+            content = export_as_excel(data)
+            content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            filename = f'{org.slug}-export-{timezone.now().strftime("%Y-%m-%d")}.xlsx'
+
+        response = HttpResponse(content, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
