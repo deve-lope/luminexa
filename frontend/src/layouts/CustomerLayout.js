@@ -10,7 +10,7 @@ import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
-import { NOTIFICATIONS_CHANGED_EVENT } from '../utils/customerNotifications';
+import { NOTIFICATIONS_CHANGED_EVENT, countBookingUpdateNotifications } from '../utils/customerNotifications';
 import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
 
 export default function CustomerLayout({ children }) {
@@ -18,6 +18,7 @@ export default function CustomerLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [notificationCount, setNotificationCount] = useState(0);
+  const [bookingsBadgeCount, setBookingsBadgeCount] = useState(0);
   const [messagesCount, setMessagesCount] = useState(0);
 
   const menuItems = useMemo(
@@ -30,8 +31,12 @@ export default function CustomerLayout({ children }) {
   );
 
   const tabs = useMemo(
-    () => buildCustomerTabs({ messagesBadgeCount: messagesCount }),
-    [messagesCount]
+    () =>
+      buildCustomerTabs({
+        messagesBadgeCount: messagesCount,
+        bookingsBadgeCount,
+      }),
+    [messagesCount, bookingsBadgeCount]
   );
 
   const isCustomerAppRoute =
@@ -52,7 +57,11 @@ export default function CustomerLayout({ children }) {
     if (!isAuthenticated) return;
     jobsAPI
       .listMyNotifications()
-      .then((res) => setNotificationCount(Number(res.data?.count) || 0))
+      .then((res) => {
+        const results = res.data?.results || [];
+        setNotificationCount(Number(res.data?.count) || results.length);
+        setBookingsBadgeCount(countBookingUpdateNotifications(results));
+      })
       .catch(() => {});
   }, [isAuthenticated]);
 

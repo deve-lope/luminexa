@@ -199,6 +199,7 @@ class ProviderNotification(models.Model):
         NEW_CUSTOMER_BOOKING = 'new_customer_booking', 'New customer booking'
         CUSTOMER_CANCELLED_BOOKING = 'customer_cancelled_booking', 'Customer cancelled booking'
         CUSTOMER_RESCHEDULE_REQUEST = 'customer_reschedule_request', 'Customer reschedule request'
+        QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         PAYMENT_RECEIVED = 'payment_received', 'Payment received'
         NEW_MESSAGE = 'new_message', 'New message'
 
@@ -717,6 +718,11 @@ class Invoice(models.Model):
         default='',
         help_text='offline | stripe | …',
     )
+    payment_reminder_count = models.PositiveSmallIntegerField(default=0)
+    last_payment_reminder_at = models.DateTimeField(null=True, blank=True)
+    qbo_invoice_id = models.CharField(max_length=64, blank=True, default='')
+    qbo_payment_id = models.CharField(max_length=64, blank=True, default='')
+    qbo_synced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -725,6 +731,51 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f'{self.number} ({self.status})'
+
+
+class JobCostLine(models.Model):
+    """Internal job cost (not shown on the customer invoice)."""
+
+    class Kind(models.TextChoices):
+        MATERIAL = 'material', 'Material'
+        LABOR = 'labor', 'Labor'
+        EXPENSE = 'expense', 'Expense'
+
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name='cost_lines',
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.EXPENSE)
+    description = models.CharField(max_length=255)
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('1.00'),
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    unit_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_cost_lines_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+
+    @property
+    def total_cost(self) -> Decimal:
+        return (self.quantity * self.unit_cost).quantize(Decimal('0.01'))
+
+    def __str__(self):
+        return f'{self.kind}: {self.description} ({self.total_cost})'
 
 
 class ServiceReview(models.Model):

@@ -251,6 +251,14 @@ export const jobsAPI = {
     api.post(`/api/v1/organizations/${orgSlug}/billing/sync-checkout/`, {
       session_id: sessionId,
     }),
+  createInstantPayout: (orgSlug, data = {}) =>
+    api.post(`/api/v1/organizations/${orgSlug}/billing/instant-payout/`, data),
+  connectQuickBooks: (orgSlug) =>
+    api.post(`/api/v1/organizations/${orgSlug}/accounting/quickbooks/connect/`),
+  disconnectQuickBooks: (orgSlug) =>
+    api.post(`/api/v1/organizations/${orgSlug}/accounting/quickbooks/disconnect/`),
+  syncQuickBooks: (orgSlug) =>
+    api.post(`/api/v1/organizations/${orgSlug}/accounting/quickbooks/sync/`),
   markBookingIncomplete: (id, data = {}) =>
     api.post(`/api/v1/bookings/${id}/incomplete/`, data),
   scheduleReturnVisit: (id, data) =>
@@ -287,13 +295,32 @@ export const jobsAPI = {
     api.delete(`/api/v1/services/${serviceId}/gallery/${imageId}/`),
   listOrgCustomers: (orgSlug, params) =>
     api.get(`/api/v1/organizations/${orgSlug}/customers/`, { params }),
+  getOrgCustomer: (orgSlug, userId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/customers/${userId}/`),
+  patchOrgCustomer: (orgSlug, userId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/customers/${userId}/`, data),
   approveCustomer: (orgSlug, userId) =>
     api.post(`/api/v1/organizations/${orgSlug}/approve-customer/`, { user_id: userId }),
   blockCustomer: (orgSlug, userId) =>
     api.post(`/api/v1/organizations/${orgSlug}/block-customer/`, { user_id: userId }),
   unblockCustomer: (orgSlug, userId) =>
     api.post(`/api/v1/organizations/${orgSlug}/unblock-customer/`, { user_id: userId }),
+  addBookingCost: (bookingId, data) =>
+    api.post(`/api/v1/bookings/${bookingId}/costs/`, data),
+  deleteBookingCost: (bookingId, costId) =>
+    api.delete(`/api/v1/bookings/${bookingId}/costs/${costId}/`),
+  getProviderBooksExportUrl: (organizationSlug, period = 'month') => {
+    const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+    const q = new URLSearchParams({ organization: organizationSlug, period });
+    return `${base}/api/v1/provider-books-export/?${q.toString()}`;
+  },
+  downloadProviderBooksExport: (organizationSlug, period = 'month') =>
+    api.get('/api/v1/provider-books-export/', {
+      params: { organization: organizationSlug, period },
+      responseType: 'blob',
+    }),
   patchOrganization: (orgSlug, data) => api.patch(`/api/v1/organizations/${orgSlug}/`, data),
+  getOrganization: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/`),
   getWeeklySchedule: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/weekly-schedule/`),
   saveWeeklySchedule: (orgSlug, blocks) =>
     api.put(`/api/v1/organizations/${orgSlug}/weekly-schedule/`, blocks),

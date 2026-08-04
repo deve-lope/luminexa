@@ -43,6 +43,8 @@ import ProviderMessagesPage from './pages/provider/ProviderMessagesPage';
 import ProviderAddTaskPage from './pages/provider/ProviderAddTaskPage';
 import ProviderTasksPage from './pages/provider/ProviderTasksPage';
 import ProviderAnalyticsPage from './pages/provider/ProviderAnalyticsPage';
+import ProviderClientsPage from './pages/provider/ProviderClientsPage';
+import ProviderClientDetailPage from './pages/provider/ProviderClientDetailPage';
 import CustomerHomePage from './pages/customer/CustomerHomePage';
 import CustomerFindPage from './pages/customer/CustomerFindPage';
 import CustomerCategoriesPage from './pages/customer/CustomerCategoriesPage';
@@ -179,6 +181,8 @@ function AppRoutes() {
           <Route path="share" element={<Navigate to="my-page" replace />} />
           <Route path="services" element={<ProviderServicesPage />} />
           <Route path="analytics" element={<ProviderAnalyticsPage />} />
+          <Route path="clients" element={<ProviderClientsPage />} />
+          <Route path="clients/:userId" element={<ProviderClientDetailPage />} />
         </Route>
         <Route
           path="/customer"

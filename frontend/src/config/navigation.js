@@ -21,11 +21,19 @@ export function buildProviderTabs(
   ];
 }
 
-export function buildCustomerTabs({ messagesBadgeCount = 0 } = {}) {
+export function buildCustomerTabs({
+  messagesBadgeCount = 0,
+  bookingsBadgeCount = 0,
+} = {}) {
   return [
     { id: 'home', label: 'Home', to: '/customer', end: true },
     { id: 'book', label: 'Book', to: '/customer/find' },
-    { id: 'bookings', label: 'Bookings', to: '/customer/bookings' },
+    {
+      id: 'bookings',
+      label: 'Bookings',
+      to: '/customer/bookings',
+      badgeCount: bookingsBadgeCount > 0 ? bookingsBadgeCount : undefined,
+    },
     {
       id: 'messages',
       label: 'Messages',
@@ -85,6 +93,9 @@ export function buildProviderMenuItems({
   providerAccountPath,
   providerSharePath,
   providerAnalyticsPath,
+  providerClientsPath,
+  providerNotificationsPath,
+  notificationsBadgeCount = 0,
   isStaff,
   adminUrl,
 }) {
@@ -96,9 +107,26 @@ export function buildProviderMenuItems({
   if (providerAnalyticsPath) {
     items.push({
       id: 'analytics',
-      label: 'Analytics',
+      label: 'Analytics & books',
       to: providerAnalyticsPath,
       iconId: 'analytics',
+    });
+  }
+  if (providerClientsPath) {
+    items.push({
+      id: 'clients',
+      label: 'Clients',
+      to: providerClientsPath,
+      iconId: 'account',
+    });
+  }
+  if (providerNotificationsPath) {
+    items.push({
+      id: 'notifications',
+      label: 'Notifications',
+      to: providerNotificationsPath,
+      iconId: 'bell',
+      badgeCount: notificationsBadgeCount > 0 ? notificationsBadgeCount : undefined,
     });
   }
   if (providerAccountPath) {

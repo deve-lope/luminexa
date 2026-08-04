@@ -17,6 +17,7 @@ from .models import (
     CustomerNotification,
     CustomerServiceInquiry,
     Invoice,
+    JobCostLine,
     ProviderNotification,
     Service,
     ServiceCategory,
@@ -123,6 +124,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
             'business_type_ids',
+            'default_labor_rate',
+            'invoice_followup_enabled',
+            'invoice_followup_days',
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
@@ -676,6 +680,21 @@ class BookingStatusEventSerializer(serializers.ModelSerializer):
         return humanize_activity_note(obj.note)
 
 
+class JobCostLineSerializer(serializers.ModelSerializer):
+    total_cost = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JobCostLine
+        fields = (
+            'id', 'kind', 'description', 'quantity', 'unit_cost', 'total_cost',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'total_cost', 'created_at', 'updated_at')
+
+    def get_total_cost(self, obj):
+        return str(obj.total_cost)
+
+
 class BookingDetailSerializer(serializers.ModelSerializer):
     """Full booking payload for provider schedule detail views."""
 
@@ -711,6 +730,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     quote_questions = serializers.JSONField(read_only=True)
     quoted_at = serializers.DateTimeField(read_only=True, allow_null=True)
     requires_quote = serializers.SerializerMethodField()
+    cost_lines = JobCostLineSerializer(many=True, read_only=True)
+    profit = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -727,6 +748,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+            'cost_lines', 'profit',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
@@ -738,6 +760,10 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         from .booking_services import booking_requires_quote
 
         return booking_requires_quote(obj.organization, obj.service)
+
+    def get_profit(self, obj):
+        from .job_costing_services import booking_profit_summary
+        return booking_profit_summary(obj)
 
     def get_job_location(self, obj):
         addr = (obj.service_address or '').strip()
@@ -830,6 +856,8 @@ class BookingSerializer(serializers.ModelSerializer):
     )
     quote_answers = serializers.JSONField(required=False, write_only=True)
     requires_quote = serializers.SerializerMethodField()
+    cost_lines = JobCostLineSerializer(many=True, read_only=True)
+    profit = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -847,6 +875,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at', 'quote_answers',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+            'cost_lines', 'profit',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -861,6 +890,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
             'quote_questions', 'quoted_at',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
+            'cost_lines', 'profit',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -878,6 +908,17 @@ class BookingSerializer(serializers.ModelSerializer):
         from .booking_services import booking_requires_quote
 
         return booking_requires_quote(obj.organization, obj.service)
+
+    def get_profit(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return None
+        from .permissions import is_org_staff
+        if not is_org_staff(user, obj.organization):
+            return None
+        from .job_costing_services import booking_profit_summary
+        return booking_profit_summary(obj)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -1140,6 +1181,9 @@ class OrgCustomerSerializer(serializers.Serializer):
     customer_status = serializers.CharField(allow_blank=True)
     cancel_count = serializers.IntegerField(required=False, default=0)
     no_show_count = serializers.IntegerField(required=False, default=0)
+    provider_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    outstanding_balance = serializers.CharField(required=False, allow_null=True)
+    completed_bookings = serializers.IntegerField(required=False, default=0)
 
 
 class TaskSerializer(serializers.ModelSerializer):

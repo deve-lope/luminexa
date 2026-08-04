@@ -238,4 +238,14 @@ def mark_invoice_paid(invoice: Invoice, *, staff_user=None) -> Invoice:
     if not invoice.paid_at:
         invoice.paid_at = timezone.now()
     invoice.save(update_fields=['status', 'paid_at', 'updated_at'])
+    try:
+        from . import quickbooks_services
+        org = invoice.booking.organization
+        if quickbooks_services.qbo_enabled() and org.qbo_realm_id:
+            quickbooks_services.sync_invoice_to_qbo(invoice)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'QBO auto-sync failed for invoice %s', invoice.pk,
+        )
     return invoice

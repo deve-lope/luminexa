@@ -8,12 +8,25 @@ import {
 
 export const PROVIDER_NOTIFICATIONS_CHANGED_EVENT = 'luminexa:provider-notifications-changed';
 
-const BOOKING_ACTION_KINDS = new Set([
+/** Booking/request/payment alerts — cleared when that booking is opened. */
+export const BOOKING_ACTION_KINDS = new Set([
   'new_customer_booking',
   'customer_cancelled_booking',
   'customer_reschedule_request',
+  'quote_accepted',
   'payment_received',
 ]);
+
+export function isProviderBookingUpdateNotification(notification) {
+  return BOOKING_ACTION_KINDS.has(notification?.kind);
+}
+
+/** Count undismissed booking-update alerts (for Requests tab badge). */
+export function countBookingActionNotifications(notifications) {
+  return (notifications || []).filter(
+    (n) => isProviderBookingUpdateNotification(n) && !n.dismissed_at && !n.is_read,
+  ).length;
+}
 
 /**
  * Where a provider in-app alert should navigate on click.
@@ -56,5 +69,32 @@ export async function dismissProviderNotificationQuietly(orgSlug, notificationId
     emitProviderNotificationsChanged();
   } catch {
     /* still allow the user to open the destination */
+  }
+}
+
+/**
+ * Clear undismissed booking-update alerts for this booking.
+ * Prefer GET booking (backend dismiss); this is a client fallback.
+ * Does not clear new_message.
+ */
+export async function dismissProviderNotificationsForBooking(orgSlug, bookingId) {
+  if (!orgSlug || !bookingId) return;
+  try {
+    const res = await jobsAPI.listProviderNotifications(orgSlug);
+    const related = (res.data?.results || []).filter(
+      (n) =>
+        String(n.booking_id) === String(bookingId) &&
+        isProviderBookingUpdateNotification(n),
+    );
+    if (!related.length) {
+      emitProviderNotificationsChanged();
+      return;
+    }
+    await Promise.all(
+      related.map((n) => jobsAPI.dismissNotification(orgSlug, n.id).catch(() => {})),
+    );
+    emitProviderNotificationsChanged();
+  } catch {
+    /* non-blocking */
   }
 }

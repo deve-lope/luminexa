@@ -16,6 +16,7 @@ import {
   providerAccount,
   providerAbout,
   providerAnalytics,
+  providerClients,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -33,7 +34,10 @@ import {
   requestAlertKey,
 } from '../utils/providerRequestBadge';
 import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
-import { PROVIDER_NOTIFICATIONS_CHANGED_EVENT } from '../utils/providerNotifications';
+import {
+  countBookingActionNotifications,
+  PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
+} from '../utils/providerNotifications';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
@@ -43,6 +47,7 @@ function ProviderShell() {
   const { orgSlug, activeOrg } = useProviderOrg();
   const [alertCount, setAlertCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [bookingNotifCount, setBookingNotifCount] = useState(0);
   const [messagesCount, setMessagesCount] = useState(0);
 
   const onRequestsTab = useMemo(() => {
@@ -76,6 +81,7 @@ function ProviderShell() {
           setAlertCount(countUnseenRequests(orgSlug, pendingKeys));
         }
         setNotificationCount(onNotificationsPage ? 0 : notifications.length);
+        setBookingNotifCount(countBookingActionNotifications(notifications));
 
         const payment = notifications.find((n) => n.kind === 'payment_received');
         if (payment) {
@@ -127,10 +133,11 @@ function ProviderShell() {
   const tabs = useMemo(
     () =>
       buildProviderTabs(orgSlug, {
-        requestsBadgeCount: alertCount,
+        // Unseen pending work + unread booking-update alerts (Messages-style).
+        requestsBadgeCount: Math.max(alertCount, bookingNotifCount),
         messagesBadgeCount: messagesCount,
       }),
-    [orgSlug, alertCount, messagesCount]
+    [orgSlug, alertCount, bookingNotifCount, messagesCount]
   );
   const menuItems = useMemo(
     () =>
@@ -142,10 +149,13 @@ function ProviderShell() {
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
+        providerClientsPath: providerClients(orgSlug),
+        providerNotificationsPath: providerNotifications(orgSlug),
+        notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin]
+    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -162,7 +172,13 @@ function ProviderShell() {
   const { eyebrow, title } = useMemo(() => {
     const base = `/provider/${orgSlug}`;
     if (location.pathname.startsWith(`${base}/analytics`)) {
-      return { eyebrow: activeOrg?.organization_name, title: 'Analytics' };
+      return { eyebrow: activeOrg?.organization_name, title: 'Analytics & books' };
+    }
+    if (location.pathname.match(/\/clients\/\d+/)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Client' };
+    }
+    if (location.pathname.startsWith(`${base}/clients`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Clients' };
     }
     if (location.pathname.startsWith(`${base}/messages`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Messages' };

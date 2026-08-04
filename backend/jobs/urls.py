@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import analytics_views, dashboard_views, public_views, service_request_views, stripe_views, views
+from . import quickbooks_views
 
 router = DefaultRouter()
 router.register(r'organizations', views.OrganizationViewSet, basename='organization')
@@ -26,6 +27,7 @@ urlpatterns = [
     ),
     path('provider-dashboard/', dashboard_views.ProviderDashboardAPIView.as_view()),
     path('provider-analytics/', analytics_views.ProviderAnalyticsAPIView.as_view()),
+    path('provider-books-export/', analytics_views.ProviderBooksExportAPIView.as_view()),
     path('provider-service-requests/', service_request_views.ProviderServiceRequestsAPIView.as_view()),
     path(
         'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/',
@@ -58,6 +60,26 @@ urlpatterns = [
     path(
         'organizations/<slug:slug>/billing/sync-checkout/',
         stripe_views.SyncCheckoutSessionAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/billing/instant-payout/',
+        stripe_views.InstantPayoutAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/accounting/quickbooks/connect/',
+        quickbooks_views.QuickBooksConnectAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/accounting/quickbooks/disconnect/',
+        quickbooks_views.QuickBooksDisconnectAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/accounting/quickbooks/sync/',
+        quickbooks_views.QuickBooksSyncAPIView.as_view(),
+    ),
+    path(
+        'accounting/quickbooks/callback/',
+        quickbooks_views.QuickBooksCallbackAPIView.as_view(),
     ),
     path(
         'bookings/<int:pk>/invoice/pay/',

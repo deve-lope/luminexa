@@ -160,6 +160,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'service_city', 'service_state', 'service_postal_code', 'service_address',
             'service_latitude', 'service_longitude', 'service_radius_miles',
             'business_types',
+            'default_labor_rate',
+            'invoice_followup_enabled',
+            'invoice_followup_days',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:
@@ -617,10 +620,82 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 'customer_status': m.customer_status,
                 'cancel_count': cancel_counts.get(m.user_id, 0),
                 'no_show_count': no_show_counts.get(m.user_id, 0),
+                'provider_notes': m.provider_notes or '',
             }
             for m in memberships
         ]
         return Response(OrgCustomerSerializer(data, many=True).data)
+
+    @action(
+        detail=True,
+        methods=['get', 'patch'],
+        url_path=r'customers/(?P<user_id>[^/.]+)',
+    )
+    def customer_detail(self, request, slug=None, user_id=None):
+        """Clients lite: profile, notes, balance, recent bookings."""
+        from django.db.models import Sum
+
+        from .models import Booking, Invoice
+
+        org = self.get_object()
+        require_staff_ops(request.user, org)
+        membership = OrganizationMembership.objects.filter(
+            organization=org,
+            user_id=user_id,
+            role=OrganizationMembership.Role.CUSTOMER,
+        ).select_related('user').first()
+        if not membership:
+            raise ValidationError({'detail': 'Customer not found.'})
+
+        if request.method == 'PATCH':
+            notes = request.data.get('provider_notes')
+            if notes is None:
+                raise ValidationError({'provider_notes': 'Required.'})
+            membership.provider_notes = str(notes)[:5000]
+            membership.save(update_fields=['provider_notes'])
+
+        outstanding = (
+            Invoice.objects.filter(
+                booking__organization=org,
+                booking__customer_id=membership.user_id,
+                status=Invoice.Status.ISSUED,
+            ).aggregate(total=Sum('amount'))['total']
+            or 0
+        )
+        completed = Booking.objects.filter(
+            organization=org,
+            customer_id=membership.user_id,
+            status=Booking.Status.COMPLETED,
+        ).count()
+        recent = (
+            Booking.objects.filter(organization=org, customer_id=membership.user_id)
+            .select_related('service', 'invoice')
+            .order_by('-start_at')[:20]
+        )
+        return Response({
+            'id': membership.user_id,
+            'email': membership.user.email,
+            'full_name': membership.user.full_name,
+            'phone': membership.user.phone or '',
+            'membership_id': membership.id,
+            'customer_status': membership.customer_status,
+            'provider_notes': membership.provider_notes or '',
+            'outstanding_balance': str(outstanding),
+            'completed_bookings': completed,
+            'recent_bookings': [
+                {
+                    'id': b.id,
+                    'status': b.status,
+                    'start_at': b.start_at,
+                    'service_name': b.service.name if b.service_id else '',
+                    'invoice_status': getattr(getattr(b, 'invoice', None), 'status', None),
+                    'invoice_amount': (
+                        str(b.invoice.amount) if getattr(b, 'invoice', None) else None
+                    ),
+                }
+                for b in recent
+            ],
+        })
 
     @action(detail=True, methods=['post'], url_path='approve-customer')
     def approve_customer(self, request, slug=None):
@@ -1054,8 +1129,17 @@ class BookingViewSet(viewsets.ModelViewSet):
         if status_filter:
             qs = qs.filter(status=status_filter)
         if self.action in ('retrieve', 'list'):
-            qs = qs.prefetch_related('status_events__actor', 'return_visits')
+            qs = qs.prefetch_related('status_events__actor', 'return_visits', 'cost_lines')
         return qs.distinct().order_by('-start_at')
+
+    def retrieve(self, request, *args, **kwargs):
+        """Return booking detail and clear related booking-update notifications."""
+        from .notifications import dismiss_booking_update_notifications
+
+        booking = self.get_object()
+        dismiss_booking_update_notifications(booking=booking, user=request.user)
+        serializer = self.get_serializer(booking)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         if request.data.get('customer') is not None:
@@ -1253,8 +1337,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             old_status=old,
             new_status=booking.status,
         )
-        from .notifications import notify_booking_accepted
-        notify_booking_accepted(booking)
+        from .notifications import notify_quote_accepted
+
+        notify_quote_accepted(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='accept-time-change')
@@ -1712,6 +1797,54 @@ class BookingViewSet(viewsets.ModelViewSet):
             ServiceRequestMessageSerializer(message, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['get', 'post'], url_path='costs')
+    def costs(self, request, pk=None):
+        """List or add internal job cost lines (staff only)."""
+        from .job_costing_services import booking_profit_summary, create_cost_line
+        from .serializers import JobCostLineSerializer
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        if request.method == 'GET':
+            lines = booking.cost_lines.all()
+            return Response({
+                'cost_lines': JobCostLineSerializer(lines, many=True).data,
+                'profit': booking_profit_summary(booking),
+                'default_labor_rate': (
+                    str(booking.organization.default_labor_rate)
+                    if booking.organization.default_labor_rate is not None
+                    else None
+                ),
+            })
+        line = create_cost_line(booking, staff_user=request.user, data=request.data)
+        return Response(
+            {
+                'cost_line': JobCostLineSerializer(line).data,
+                'profit': booking_profit_summary(booking),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'costs/(?P<cost_id>[^/.]+)',
+    )
+    def cost_delete(self, request, pk=None, cost_id=None):
+        from .job_costing_services import booking_profit_summary
+        from .models import JobCostLine
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        line = JobCostLine.objects.filter(booking=booking, pk=cost_id).first()
+        if not line:
+            raise ValidationError({'detail': 'Cost line not found.'})
+        line.delete()
+        return Response({
+            'detail': 'Deleted.',
+            'profit': booking_profit_summary(booking),
+        })
 
     @action(detail=True, methods=['get'], url_path='ical')
     def ical(self, request, pk=None):

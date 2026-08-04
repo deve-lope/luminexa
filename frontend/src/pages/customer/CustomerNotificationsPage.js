@@ -5,6 +5,7 @@ import { formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import {
+  NOTIFICATIONS_CHANGED_EVENT,
   dismissAllNotifications,
   dismissNotificationQuietly,
   emitNotificationsChanged,
@@ -31,7 +32,12 @@ export default function CustomerNotificationsPage() {
   useEffect(() => {
     load();
     const id = window.setInterval(load, 60000);
-    return () => window.clearInterval(id);
+    const onChanged = () => load();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    };
   }, [load]);
 
   const unread = useMemo(

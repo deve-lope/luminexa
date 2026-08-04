@@ -5,7 +5,12 @@ import { jobsAPI } from '../../utils/api';
 import { publicServicesCatalog, serviceDetail } from '../../utils/customerPaths';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
-import { formatServiceMeta, hoursFromMinutes, minutesFromHours } from '../../utils/serviceDisplay';
+import {
+  formatDurationLabel,
+  formatServiceMeta,
+  hoursFromMinutes,
+  minutesFromHours,
+} from '../../utils/serviceDisplay';
 import {
   hasFinishedProviderSetupWizard,
   isProviderWizardStepDone,
@@ -102,21 +107,26 @@ const emptyBulkDefaults = (category = '') => ({
   fulfillment_kind: 'mobile',
 });
 
-function CategoryTile({ label, count, selected, onClick }) {
+function FilterChip({ label, count, selected, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-[100px] flex-col justify-between rounded-xl border p-4 text-left shadow-sm transition ${
+      aria-pressed={selected}
+      className={`inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-semibold transition ${
         selected
-          ? 'border-luminexa-accent bg-violet-50 ring-2 ring-luminexa-accent/30'
-          : 'border-slate-200 bg-white hover:border-luminexa-accent/40 hover:shadow-md'
+          ? 'border-teal-700 bg-teal-700 text-white shadow-sm'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50/50'
       }`}
     >
-      <h3 className="font-semibold text-slate-900">{label}</h3>
-      <p className="mt-2 text-xs font-medium text-luminexa-accent">
-        {count === 1 ? '1 service' : `${count} services`}
-      </p>
+      <span>{label}</span>
+      <span
+        className={`rounded-lg px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+          selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+        }`}
+      >
+        {count}
+      </span>
     </button>
   );
 }
@@ -143,9 +153,9 @@ function ServiceDetailForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-luminexa-accent/10"
+      className="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-lx-soft ring-1 ring-teal-600/10"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/50 px-4 py-3 sm:px-5">
         <div>
           <h4 className="text-sm font-semibold text-slate-900">
             {editingServiceId ? 'Edit service details' : 'New service'}
@@ -485,9 +495,9 @@ function BulkAddServicesForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-luminexa-accent/10"
+      className="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-lx-soft ring-1 ring-teal-600/10"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/50 px-4 py-3 sm:px-5">
         <div>
           <h4 className="text-sm font-semibold text-slate-900">Add services</h4>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -752,80 +762,139 @@ function BulkAddServicesForm({
   );
 }
 
-function ServiceTile({ service, editing, detailsOpen, onDetails, onHide, onShow, orgSlug }) {
+function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug }) {
   const meta = formatServiceMeta(service, undefined, { forceShowPrice: true });
   const hidden = service.is_active === false;
   const needsDetails = serviceNeedsDetails(service);
+  const duration = formatDurationLabel(service.duration_minutes);
+  const locationLabel = service.fulfillment_kind === 'shop' ? 'In-shop' : 'Mobile';
+  const description = (service.description || '').trim();
+  const priceLabel = meta ? meta.split(' · ')[0] : null;
 
   return (
-    <div
-      className={`flex min-h-[120px] flex-col justify-between rounded-xl border p-4 shadow-sm ${
+    <article
+      className={`overflow-hidden rounded-2xl border bg-white shadow-lx-soft transition ${
         detailsOpen
-          ? 'border-luminexa-accent ring-2 ring-luminexa-accent/20'
+          ? 'border-teal-600 ring-2 ring-teal-600/15'
           : hidden
-            ? 'border-dashed border-slate-200 bg-slate-50'
-            : 'border-slate-200 bg-white'
+            ? 'border-dashed border-slate-200 bg-slate-50/80'
+            : 'border-luminexa-line hover:border-teal-200'
       }`}
     >
-      <div>
-        <h3 className="font-semibold text-slate-900">{service.name}</h3>
-        {service.rating_summary?.count > 0 && (
-          <div className="mt-1">
-            <ServiceRatingSummary summary={service.rating_summary} compact />
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-bold tracking-tight text-slate-900">{service.name}</h3>
+              {hidden && (
+                <span className="rounded-lg bg-slate-200/80 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  Hidden
+                </span>
+              )}
+              {needsDetails && !hidden && (
+                <span className="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200/80">
+                  Needs details
+                </span>
+              )}
+            </div>
+            {service.rating_summary?.count > 0 && (
+              <div className="mt-1.5">
+                <ServiceRatingSummary summary={service.rating_summary} compact />
+              </div>
+            )}
+            {description ? (
+              <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-slate-600">
+                {description}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm italic text-slate-400">No description yet</p>
+            )}
           </div>
-        )}
-        {meta && <p className="mt-2 text-xs font-medium text-slate-700">{meta}</p>}
-        {orgSlug && !hidden && (
-          <Link
-            to={serviceDetail(orgSlug, service.id)}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-luminexa-accent transition hover:gap-1.5"
-          >
-            Show full details
-            <span aria-hidden="true">→</span>
-          </Link>
-        )}
-        {hidden && (
-          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-            Hidden from customers
-          </span>
-        )}
+          {priceLabel && (
+            <p className="shrink-0 text-right text-sm font-bold tabular-nums text-slate-900">
+              {priceLabel}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {duration && <span className="rounded-lg bg-slate-100 px-2 py-1">{duration}</span>}
+          <span className="rounded-lg bg-slate-100 px-2 py-1">{locationLabel}</span>
+          {service.pricing_type === 'range' ||
+          service.pricing_type === 'average' ||
+          service.pricing_type === 'quote' ? (
+            <span className="rounded-lg bg-teal-50 px-2 py-1 text-teal-800">Quote</span>
+          ) : (
+            <span className="rounded-lg bg-slate-100 px-2 py-1">Fixed</span>
+          )}
+        </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
         <button
           type="button"
           onClick={() => onDetails(service)}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+          className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition ${
             detailsOpen
-              ? 'lx-toggle-active'
+              ? 'bg-teal-700 text-white'
               : needsDetails
-                ? 'border border-violet-200 bg-violet-50 text-luminexa-accent hover:bg-violet-100'
-                : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-teal-700 text-white hover:bg-teal-800'
+                : 'border border-slate-200 bg-white text-slate-800 hover:border-teal-300'
           }`}
         >
-          {needsDetails && !detailsOpen && (
-            <span className="h-1.5 w-1.5 rounded-full bg-luminexa-accent" aria-hidden="true" />
-          )}
-          {detailsOpen ? 'Close details' : needsDetails ? 'Add details' : 'Edit details'}
+          {detailsOpen ? 'Close' : needsDetails ? 'Complete details' : 'Edit'}
         </button>
-        {editing &&
-          (hidden ? (
-            <button
-              type="button"
-              onClick={() => onShow(service)}
-              className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
-            >
-              Show
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onHide(service)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-50"
-            >
-              Hide
-            </button>
-          ))}
+        {orgSlug && !hidden && (
+          <Link
+            to={serviceDetail(orgSlug, service.id)}
+            className="inline-flex min-h-[40px] items-center rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:border-teal-300"
+          >
+            Preview
+          </Link>
+        )}
+        {hidden ? (
+          <button
+            type="button"
+            onClick={() => onShow(service)}
+            className="inline-flex min-h-[40px] items-center rounded-xl border border-emerald-200 bg-white px-3.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+          >
+            Show on catalog
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onHide(service)}
+            className="ml-auto inline-flex min-h-[40px] items-center rounded-xl border border-transparent px-3.5 text-sm font-semibold text-slate-500 transition hover:border-slate-200 hover:bg-white"
+          >
+            Hide
+          </button>
+        )}
       </div>
+    </article>
+  );
+}
+
+function ServicesSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading services">
+      <div className="flex gap-2 overflow-hidden">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-10 w-28 shrink-0 animate-pulse rounded-xl bg-slate-200/80" />
+        ))}
+      </div>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="animate-pulse rounded-2xl border border-slate-100 bg-white p-5">
+          <div className="flex justify-between gap-3">
+            <div className="h-5 w-40 rounded-lg bg-slate-200/80" />
+            <div className="h-5 w-16 rounded-lg bg-slate-200/80" />
+          </div>
+          <div className="mt-3 h-4 w-full max-w-md rounded-lg bg-slate-100" />
+          <div className="mt-4 flex gap-2">
+            <div className="h-7 w-16 rounded-lg bg-slate-100" />
+            <div className="h-7 w-16 rounded-lg bg-slate-100" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -843,7 +912,6 @@ export default function ProviderServicesPage({ embedded = false }) {
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(embedded);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [serviceDraft, setServiceDraft] = useState(emptyServiceDraft);
   const [bulkDefaults, setBulkDefaults] = useState(() => emptyBulkDefaults());
@@ -978,7 +1046,6 @@ export default function ProviderServicesPage({ embedded = false }) {
   };
 
   const startAddService = () => {
-    setEditing(true);
     setEditingServiceId(null);
     setExpandedServiceId('new');
     setShowServiceForm(true);
@@ -1229,76 +1296,96 @@ export default function ProviderServicesPage({ embedded = false }) {
       )}
 
       {!embedded && (
-        <section className="lx-card">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Service catalog</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Add services customers can book. Use Edit to manage categories or hide items.
+        <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 max-w-xl">
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">Services</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                What customers can book from your catalog. Edit details anytime — hide items you
+                don&apos;t want shown.
               </p>
               {publicCatalogPath && (
                 <Link
                   to={publicCatalogPath}
-                  className="mt-2 inline-block text-sm font-medium text-luminexa-accent"
+                  className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 transition hover:text-teal-900"
                 >
-                  Preview customer catalog →
+                  Preview customer catalog
+                  <span aria-hidden="true">→</span>
                 </Link>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={startAddService}
-                className="min-h-[44px] shrink-0 rounded-xl bg-luminexa-accent px-4 text-sm font-medium text-white"
-              >
-                + Add services
-              </button>
-              {!editing ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
+            <button
+              type="button"
+              onClick={startAddService}
+              className="min-h-[44px] shrink-0 rounded-xl bg-teal-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800"
+            >
+              + Add services
+            </button>
+          </div>
+          {(message || error) && (
+            <div className="mt-4 space-y-2">
+              {message && (
+                <p
+                  role="status"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
                 >
-                  Edit
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(false);
-                    resetServiceForm();
-                  }}
-                  className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
+                  {message}
+                </p>
+              )}
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
                 >
-                  Done
-                </button>
+                  {error}
+                </p>
               )}
             </div>
-          </div>
+          )}
         </section>
       )}
 
+      {embedded && (message || error) && (
+        <div className="space-y-2">
+          {message && (
+            <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              {message}
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <ServicesSkeleton />
       ) : (
         <>
           <section>
-            <div className="mb-3">
-              <h3 className="text-sm font-semibold uppercase text-slate-500">Categories</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Pick a category when you add a service. New categories are added by Luminexa admins.
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Filter by category</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Categories come from Luminexa. Pick one when you add a service.
+                </p>
+              </div>
+              <p className="text-xs font-medium tabular-nums text-slate-500">
+                {allActiveCount} live{hiddenServices.length > 0 ? ` · ${hiddenServices.length} hidden` : ''}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <CategoryTile
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+              <FilterChip
                 label="All"
                 count={allActiveCount}
                 selected={selectedCategoryId === null}
                 onClick={() => setSelectedCategoryId(null)}
               />
               {categoryTiles.map((cat) => (
-                <CategoryTile
+                <FilterChip
                   key={cat.id}
                   label={cat.name}
                   count={cat.count}
@@ -1307,7 +1394,7 @@ export default function ProviderServicesPage({ embedded = false }) {
                 />
               ))}
               {uncategorizedCount > 0 && (
-                <CategoryTile
+                <FilterChip
                   label="Uncategorized"
                   count={uncategorizedCount}
                   selected={selectedCategoryId === 'uncategorized'}
@@ -1315,48 +1402,46 @@ export default function ProviderServicesPage({ embedded = false }) {
                 />
               )}
             </div>
-
-            {!editing && categoryTiles.length === 0 && allActiveCount === 0 && (
-              <p className="mt-3 text-sm text-slate-500">
-                No services yet. Use <strong>+ Add services</strong> and choose a category from the
-                dropdown.
-              </p>
-            )}
           </section>
 
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase text-slate-500">{selectedCategoryLabel}</h3>
-              <button
-                type="button"
-                onClick={startAddService}
-                className="text-sm font-medium text-luminexa-accent"
-              >
-                + Add services
-              </button>
+              <h3 className="text-base font-bold tracking-tight text-slate-900">
+                {selectedCategoryLabel}
+              </h3>
+              {visibleServices.length > 0 && (
+                <button
+                  type="button"
+                  onClick={startAddService}
+                  className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+                >
+                  + Add more
+                </button>
+              )}
             </div>
 
             {showServiceForm && expandedServiceId === 'new' && (
-              <BulkAddServicesForm
-                bulkDefaults={bulkDefaults}
-                setBulkDefaults={setBulkDefaults}
-                bulkRows={bulkRows}
-                setBulkRows={setBulkRows}
-                activeCategories={activeCategories}
-                savingService={savingService}
-                onSubmit={saveBulkServices}
-                onCancel={resetServiceForm}
-              />
+              <div className="mb-4">
+                <BulkAddServicesForm
+                  bulkDefaults={bulkDefaults}
+                  setBulkDefaults={setBulkDefaults}
+                  bulkRows={bulkRows}
+                  setBulkRows={setBulkRows}
+                  activeCategories={activeCategories}
+                  savingService={savingService}
+                  onSubmit={saveBulkServices}
+                  onCancel={resetServiceForm}
+                />
+              </div>
             )}
 
             {visibleServices.length > 0 ? (
-              <div className="mt-3 space-y-4">
+              <div className="space-y-3">
                 {visibleServices.map((svc) => (
                   <div key={svc.id} className="space-y-2">
                     <ServiceTile
                       service={svc}
                       orgSlug={orgSlug}
-                      editing={editing}
                       detailsOpen={expandedServiceId === svc.id && showServiceForm}
                       onDetails={toggleServiceDetails}
                       onHide={(s) => toggleServicePublic(s, false)}
@@ -1377,32 +1462,39 @@ export default function ProviderServicesPage({ embedded = false }) {
                 ))}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center">
-                <p className="text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 px-6 py-12 text-center">
+                <p className="text-base font-semibold text-slate-900">
+                  {selectedCategoryId ? 'Nothing in this category yet' : 'No services yet'}
+                </p>
+                <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
                   {selectedCategoryId
-                    ? 'No services in this category yet.'
-                    : 'No services yet.'}
+                    ? 'Add a service here, or switch to All to see your full catalog.'
+                    : 'Add what you offer — name, price or quote, and duration. Customers book from this list.'}
                 </p>
                 <button
                   type="button"
                   onClick={startAddService}
-                  className="mt-4 min-h-[44px] rounded-xl bg-luminexa-accent px-5 text-sm font-semibold text-white"
+                  className="mt-5 min-h-[44px] rounded-xl bg-teal-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800"
                 >
                   + Add services
                 </button>
               </div>
             )}
 
-            {editing && hiddenServices.length > 0 && (
-              <div className="mt-6 border-t border-slate-100 pt-4">
-                <p className="text-xs font-medium uppercase text-slate-500">Hidden services</p>
-                <div className="mt-3 space-y-4">
+            {hiddenServices.length > 0 && (
+              <div className="mt-8 border-t border-slate-100 pt-6">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Hidden from customers</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Still in your account — restore anytime with Show on catalog.
+                  </p>
+                </div>
+                <div className="space-y-3">
                   {hiddenServices.map((svc) => (
                     <div key={svc.id} className="space-y-2">
                       <ServiceTile
                         service={svc}
                         orgSlug={orgSlug}
-                        editing
                         detailsOpen={expandedServiceId === svc.id && showServiceForm}
                         onDetails={toggleServiceDetails}
                         onHide={() => {}}
@@ -1427,9 +1519,6 @@ export default function ProviderServicesPage({ embedded = false }) {
           </section>
         </>
       )}
-
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {showSetupContinue && (
         <div className="sticky bottom-20 z-30 rounded-2xl border border-teal-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-4">

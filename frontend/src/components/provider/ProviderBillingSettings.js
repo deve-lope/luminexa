@@ -64,6 +64,15 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
       url.searchParams.delete('session_id');
       window.history.replaceState({}, '', url.pathname + url.search);
     }
+    const qbo = params.get('qbo');
+    if (qbo) {
+      if (qbo === '1') setMessage('QuickBooks connected.');
+      else setError('QuickBooks connection failed. Try again from Settings.');
+      load();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('qbo');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
   }, [load, refreshSession, orgSlug, isOwner]);
 
   const redirectTo = async (fn) => {
@@ -102,8 +111,53 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
     ? String(feePercent)
     : feePercent.toFixed(1).replace(/\.0$/, '');
   const connect = billing.connect || {};
+  const payouts = billing.payouts || {};
+  const qbo = billing.quickbooks || {};
   const sub = billing.subscription || {};
   const configured = billing.stripe_configured;
+  const instantDollars = ((payouts.instant_available_cents || 0) / 100).toFixed(2);
+  const currency = (payouts.currency || 'cad').toUpperCase();
+
+  const runInstantPayout = async () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await jobsAPI.createInstantPayout(orgSlug, {});
+      setBilling(res.data.billing || billing);
+      setMessage(
+        `Instant payout started for $${(res.data.amount_cents / 100).toFixed(2)} ${currency}.`
+      );
+      await load();
+    } catch (e) {
+      setError(parseApiError(e) || 'Instant payout failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runQbo = async (fn, okMsg) => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fn();
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
+      if (res.data?.billing) setBilling(res.data.billing);
+      else await load();
+      if (okMsg) setMessage(okMsg);
+      if (res.data?.synced != null) {
+        setMessage(`Synced ${res.data.synced} invoice(s) to QuickBooks${res.data.errors ? ` (${res.data.errors} failed)` : ''}.`);
+      }
+    } catch (e) {
+      setError(parseApiError(e) || 'QuickBooks request failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section className="lx-card space-y-6">
@@ -158,6 +212,68 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
               >
                 Stripe dashboard
               </button>
+            )}
+            {connect.payouts_enabled && (
+              <button
+                type="button"
+                disabled={busy || !payouts.instant_supported}
+                onClick={runInstantPayout}
+                className="min-h-[44px] rounded-xl bg-white px-4 text-sm font-semibold text-teal-800 ring-1 ring-teal-200 disabled:opacity-60"
+                title={payouts.detail || ''}
+              >
+                {payouts.instant_supported
+                  ? `Cash out now ($${instantDollars} ${currency})`
+                  : 'Instant payout unavailable'}
+              </button>
+            )}
+          </div>
+        )}
+        {connect.payouts_enabled && (
+          <p className="text-xs text-slate-500">{payouts.detail}</p>
+        )}
+      </div>
+
+      <div className="space-y-3 border-t border-slate-100 pt-5">
+        <h3 className="text-sm font-semibold text-slate-900">QuickBooks Online</h3>
+        <p className="text-sm text-slate-600">
+          {qbo.connected
+            ? 'Connected — Luminexa pushes customers, invoices, and payments when jobs are paid.'
+            : qbo.enabled
+              ? 'Connect QuickBooks to push paid invoices for your accountant.'
+              : 'Not configured on this server (add QuickBooks app credentials to env).'}
+        </p>
+        {isOwner && qbo.enabled && (
+          <div className="flex flex-wrap gap-2">
+            {!qbo.connected ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runQbo(() => jobsAPI.connectQuickBooks(orgSlug))}
+                className="min-h-[44px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Connect QuickBooks
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => runQbo(() => jobsAPI.syncQuickBooks(orgSlug))}
+                  className="min-h-[44px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  Sync invoices now
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    runQbo(() => jobsAPI.disconnectQuickBooks(orgSlug), 'QuickBooks disconnected.')
+                  }
+                  className="min-h-[44px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 disabled:opacity-60"
+                >
+                  Disconnect
+                </button>
+              </>
             )}
           </div>
         )}

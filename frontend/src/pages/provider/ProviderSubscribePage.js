@@ -36,7 +36,8 @@ export default function ProviderSubscribePage() {
         <h1 className="text-2xl font-bold text-slate-900">Start your Luminexa Pro trial</h1>
         <p className="mt-2 text-sm text-slate-600">
           {activeOrg?.organization_name || 'Your business'} needs an active Pro plan to use the
-          provider dashboard. Customers always use Luminexa for free.
+          provider dashboard — including analytics, job profit, invoice follow-ups, and books
+          export. Customers always use Luminexa for free.
         </p>
         <p className="mt-2 text-sm text-slate-600">
           Start with a free trial — no card required. Add a payment method later before the trial

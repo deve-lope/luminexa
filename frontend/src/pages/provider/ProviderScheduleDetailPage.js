@@ -7,12 +7,17 @@ import RescheduleBookingModal from '../../components/booking/RescheduleBookingMo
 import IncompleteReturnVisitModal from '../../components/booking/IncompleteReturnVisitModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
 import InvoicePanel from '../../components/booking/InvoicePanel';
+import JobCostPanel from '../../components/booking/JobCostPanel';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
+import {
+  dismissProviderNotificationsForBooking,
+  emitProviderNotificationsChanged,
+} from '../../utils/providerNotifications';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
@@ -79,6 +84,8 @@ export default function ProviderScheduleDetailPage() {
       let res;
       if (kind === 'booking') {
         res = await jobsAPI.getBooking(id);
+        // Backend dismisses booking-update alerts on retrieve; refresh bell/home/tab.
+        emitProviderNotificationsChanged();
       } else if (kind === 'slot') {
         res = await jobsAPI.getSlot(id);
         setData(res.data);
@@ -124,6 +131,17 @@ export default function ProviderScheduleDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (kind !== 'booking' || !id || !orgSlug) return undefined;
+    let cancelled = false;
+    dismissProviderNotificationsForBooking(orgSlug, id).then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, id, orgSlug]);
 
   const currency = useMemo(
     () => moneyFormatter(data?.currency || data?.invoice?.currency || 'CAD'),
@@ -235,6 +253,29 @@ export default function ProviderScheduleDetailPage() {
                 invoice={data.invoice}
                 bookingId={data.id}
                 providerName={data.invoice.provider_name || data.organization_name}
+              />
+            </div>
+          )}
+          {kind === 'booking' && (
+            <div className="mt-4">
+              <JobCostPanel
+                bookingId={data.id}
+                currency={data.currency || data.invoice?.currency || 'CAD'}
+                initialLines={data.cost_lines || []}
+                initialProfit={data.profit}
+                onChanged={(payload) => {
+                  if (payload?.profit) {
+                    setData((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            profit: payload.profit,
+                            cost_lines: payload.cost_lines || prev.cost_lines,
+                          }
+                        : prev
+                    );
+                  }
+                }}
               />
             </div>
           )}

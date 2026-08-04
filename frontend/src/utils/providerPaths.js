@@ -60,6 +60,14 @@ export function providerAnalytics(orgSlug) {
   return `/provider/${orgSlug}/analytics`;
 }
 
+export function providerClients(orgSlug) {
+  return `/provider/${orgSlug}/clients`;
+}
+
+export function providerClientDetail(orgSlug, userId) {
+  return `/provider/${orgSlug}/clients/${userId}`;
+}
+
 export function providerTasks(orgSlug, filter) {
   const base = `/provider/${orgSlug}/tasks`;
   if (filter === 'open' || filter === 'done' || filter === 'all') {

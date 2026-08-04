@@ -14,6 +14,7 @@ import { bookingStatusLabel } from '../../utils/customerBookings';
 import { formatWhen } from '../../utils/datetime';
 import { customerBookingDetail, customerBookings, customerCategories, customerFind, customerNotifications } from '../../utils/customerPaths';
 import {
+  NOTIFICATIONS_CHANGED_EVENT,
   dismissAllNotifications,
   dismissNotificationQuietly,
   emitNotificationsChanged,
@@ -126,6 +127,9 @@ export default function CustomerHomePage() {
 
   useEffect(() => {
     loadNotifications();
+    const onChanged = () => loadNotifications();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
   }, [loadNotifications]);
 
   const dismissNotification = async (id) => {

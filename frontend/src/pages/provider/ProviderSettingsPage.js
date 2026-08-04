@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderBillingSettings from '../../components/provider/ProviderBillingSettings';
+import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
@@ -169,6 +170,8 @@ export default function ProviderSettingsPage() {
         organizationName={activeOrg?.organization_name}
         isOwner={isOwner}
       />
+
+      <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} />
 
       <ProviderBillingSettings orgSlug={orgSlug} isOwner={isOwner} />
 

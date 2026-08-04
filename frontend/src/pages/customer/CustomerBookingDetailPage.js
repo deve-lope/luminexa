@@ -12,7 +12,10 @@ import {
   isUntouchedBookingRequest,
 } from '../../utils/customerBookings';
 import { customerBookings } from '../../utils/customerPaths';
-import { dismissNotificationsForBooking } from '../../utils/customerNotifications';
+import {
+  dismissNotificationsForBooking,
+  emitNotificationsChanged,
+} from '../../utils/customerNotifications';
 
 export default function CustomerBookingDetailPage() {
   const { bookingId } = useParams();
@@ -31,7 +34,11 @@ export default function CustomerBookingDetailPage() {
     setError(null);
     jobsAPI
       .getBooking(bookingId)
-      .then((res) => setBooking(res.data))
+      .then((res) => {
+        setBooking(res.data);
+        // Backend dismisses booking-update alerts on retrieve; refresh bell/home/tab.
+        emitNotificationsChanged();
+      })
       .catch((err) => {
         setBooking(null);
         setError(parseApiError(err, 'Could not load this booking.'));
@@ -46,6 +53,7 @@ export default function CustomerBookingDetailPage() {
   useEffect(() => {
     if (!bookingId) return undefined;
     let cancelled = false;
+    // Client fallback if retrieve dismiss was missed (older API / race).
     dismissNotificationsForBooking(bookingId).then(() => {
       if (cancelled) return;
     });

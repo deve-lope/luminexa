@@ -373,10 +373,18 @@ def _top_customers(org, start, end, limit=5):
 
 
 def _summary_block(org, start, end):
+    from .job_costing_services import (
+        org_costs_in_range,
+        org_platform_fees_in_range,
+    )
+
     completed = _completed_qs(org, start, end)
     gigs = completed.count()
     hours = _hours_for_bookings(completed)
     income = _income_paid(org, start, end)
+    costs = org_costs_in_range(org, start, end)
+    platform_fees = org_platform_fees_in_range(org, start, end)
+    profit = (income - costs - platform_fees).quantize(Decimal('0.01'))
     unique, recurring, recurring_rate = _customer_stats(completed)
     conversion = _conversion_stats(org, start, end)
     rating = _rating_summary(org, start, end)
@@ -385,11 +393,23 @@ def _summary_block(org, start, end):
         organization=org,
         status=Booking.Status.NEEDS_RETURN,
     ).count()
+    quoted_value = (
+        Booking.objects.filter(
+            organization=org,
+            status=Booking.Status.QUOTED,
+            quote_amount__isnull=False,
+        ).aggregate(total=Sum('quote_amount'))['total']
+        or Decimal('0.00')
+    )
 
     return {
         'gigs_completed': gigs,
         'income_collected': _as_money(income),
         'income_outstanding': _as_money(_income_outstanding(org)),
+        'job_costs': _as_money(costs),
+        'platform_fees': _as_money(platform_fees),
+        'profit': _as_money(profit),
+        'quoted_pipeline': _as_money(quoted_value),
         'hours_spent': hours,
         'unique_customers': unique,
         'recurring_customers': recurring,
@@ -399,6 +419,46 @@ def _summary_block(org, start, end):
         'avg_rating': rating['average'],
         'review_count': rating['count'],
         **conversion,
+    }
+
+
+def _ar_aging(org):
+    """Unpaid issued invoices bucketed by days since issue."""
+    now = timezone.now()
+    buckets = {
+        'current': Decimal('0.00'),
+        'days_1_30': Decimal('0.00'),
+        'days_31_60': Decimal('0.00'),
+        'days_60_plus': Decimal('0.00'),
+        'count': 0,
+    }
+    for inv in Invoice.objects.filter(
+        booking__organization=org,
+        status=Invoice.Status.ISSUED,
+    ).only('amount', 'issued_at'):
+        buckets['count'] += 1
+        amount = inv.amount or Decimal('0.00')
+        days = (now - inv.issued_at).days if inv.issued_at else 0
+        if days <= 0:
+            buckets['current'] += amount
+        elif days <= 30:
+            buckets['days_1_30'] += amount
+        elif days <= 60:
+            buckets['days_31_60'] += amount
+        else:
+            buckets['days_60_plus'] += amount
+    return {
+        'current': _as_money(buckets['current']),
+        'days_1_30': _as_money(buckets['days_1_30']),
+        'days_31_60': _as_money(buckets['days_31_60']),
+        'days_60_plus': _as_money(buckets['days_60_plus']),
+        'count': buckets['count'],
+        'total': _as_money(
+            buckets['current']
+            + buckets['days_1_30']
+            + buckets['days_31_60']
+            + buckets['days_60_plus']
+        ),
     }
 
 
@@ -452,6 +512,7 @@ class ProviderAnalyticsAPIView(APIView):
                 'income_collected': _pct_change(summary['income_collected'], previous['income_collected']),
                 'hours_spent': _pct_change(summary['hours_spent'], previous['hours_spent']),
                 'unique_customers': _pct_change(summary['unique_customers'], previous['unique_customers']),
+                'profit': _pct_change(summary['profit'], previous['profit']),
             }
 
         # Prefer currency from a recent invoice; default CAD
@@ -479,7 +540,89 @@ class ProviderAnalyticsAPIView(APIView):
             'previous': previous,
             'compare': compare,
             'totals': totals,
+            'ar_aging': _ar_aging(org),
             'series': _build_series(org, period, start, end, tz),
             'by_service': _by_service(org, start, end),
             'top_customers': _top_customers(org, start, end),
         })
+
+
+class ProviderBooksExportAPIView(APIView):
+    """CSV export of invoices, payments, and job costs for the period."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import csv
+        from io import StringIO
+
+        from django.http import HttpResponse
+
+        from .models import JobCostLine
+        from .permissions import require_provider_subscription
+
+        slug = request.query_params.get('organization')
+        if not slug:
+            raise ValidationError({'organization': "Query parameter 'organization' (slug) is required."})
+        period = (request.query_params.get('period') or 'month').lower()
+        if period not in VALID_PERIODS:
+            raise ValidationError({'period': 'Must be week, month, year, or all.'})
+
+        org = Organization.objects.filter(slug=slug).first()
+        if not org:
+            raise NotFound('Organization not found.')
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+        require_provider_subscription(org)
+
+        now = timezone.now()
+        tz = org.get_timezone()
+        start, end = _period_bounds(period, now, tz)
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(['section', 'date', 'reference', 'customer', 'description', 'amount', 'status', 'kind'])
+
+        invoices = Invoice.objects.filter(booking__organization=org).select_related(
+            'booking', 'booking__customer', 'booking__service',
+        )
+        if start is not None:
+            invoices = invoices.filter(issued_at__gte=start)
+        if end is not None:
+            invoices = invoices.filter(issued_at__lt=end)
+        for inv in invoices.order_by('issued_at'):
+            writer.writerow([
+                'invoice',
+                inv.issued_at.isoformat() if inv.issued_at else '',
+                inv.number,
+                inv.booking.customer.full_name or inv.booking.customer.email,
+                inv.description or (inv.booking.service.name if inv.booking.service_id else ''),
+                str(inv.amount),
+                inv.status,
+                inv.payment_method or '',
+            ])
+
+        costs = JobCostLine.objects.filter(booking__organization=org).select_related(
+            'booking', 'booking__customer', 'booking__service',
+        )
+        if start is not None:
+            costs = costs.filter(booking__start_at__gte=start)
+        if end is not None:
+            costs = costs.filter(booking__start_at__lt=end)
+        for line in costs.order_by('booking__start_at', 'id'):
+            writer.writerow([
+                'cost',
+                line.booking.start_at.isoformat() if line.booking.start_at else '',
+                f'BK-{line.booking_id:05d}',
+                line.booking.customer.full_name or line.booking.customer.email,
+                line.description,
+                str(line.total_cost),
+                '',
+                line.kind,
+            ])
+
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = (
+            f'attachment; filename="luminexa-books-{org.slug}-{period}.csv"'
+        )
+        return response

@@ -13,6 +13,10 @@ import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
+import {
+  dismissProviderNotificationsForBooking,
+  emitProviderNotificationsChanged,
+} from '../../utils/providerNotifications';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 
@@ -50,6 +54,8 @@ export default function ProviderRequestDetailPage() {
       if (kind === 'booking') {
         const res = await jobsAPI.getBooking(id);
         setData(res.data);
+        // Backend dismisses booking-update alerts on retrieve; refresh bell/home/tab.
+        emitProviderNotificationsChanged();
       } else if (kind === 'inquiry') {
         const res = await jobsAPI.getServiceInquiry(orgSlug, id);
         setData(res.data);
@@ -66,6 +72,17 @@ export default function ProviderRequestDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (kind !== 'booking' || !id || !orgSlug) return undefined;
+    let cancelled = false;
+    dismissProviderNotificationsForBooking(orgSlug, id).then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, id, orgSlug]);
 
   const title = useMemo(() => {
     if (!data) return 'Request';

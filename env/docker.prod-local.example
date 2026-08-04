@@ -74,6 +74,12 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # STRIPE_PRICE_PRO_MONTHLY=price_...
 # STRIPE_PRICE_PRO_YEARLY=price_...
 # STRIPE_TRIAL_DAYS=30
+# QuickBooks Online (optional). Redirect URI must match Intuit app settings:
+#   {PUBLIC_APP_URL or PUBLIC_API_URL}/api/v1/accounting/quickbooks/callback/
+# QUICKBOOKS_CLIENT_ID=
+# QUICKBOOKS_CLIENT_SECRET=
+# QUICKBOOKS_ENVIRONMENT=sandbox
+# QUICKBOOKS_REDIRECT_URI=
 # Webhook URL: https://YOUR_API_HOST/api/v1/webhooks/stripe/
 # Events: checkout.session.completed, customer.subscription.*, account.updated,
 #         payment_intent.succeeded

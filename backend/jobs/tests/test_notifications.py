@@ -428,3 +428,209 @@ class BookingNotificationTests(TestCase):
         self.assertEqual(res.status_code, 200)
         provider_note.refresh_from_db()
         self.assertIsNotNone(provider_note.dismissed_at)
+
+    def test_opening_booking_detail_dismisses_related_booking_update_notifications(self):
+        """GET booking detail clears booking-update alerts for that booking only."""
+        from jobs.models import CustomerNotification, ProviderNotification
+        from jobs.notifications import create_customer_notification
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        other_booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at + timedelta(days=1),
+            end_at=self.slot.end_at + timedelta(days=1),
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        time_change = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+            title='New time proposed',
+            message='Provider suggested a new time',
+            organization=self.org,
+            booking=booking,
+        )
+        quote_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+            title='Quote ready',
+            message='Review your quote',
+            organization=self.org,
+            booking=booking,
+        )
+        message_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            title='New message',
+            message='Keep until messages open',
+            organization=self.org,
+            booking=booking,
+            link_path='/customer/messages',
+        )
+        other_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_CANCELLED,
+            title='Other booking',
+            message='Keep me',
+            organization=self.org,
+            booking=other_booking,
+        )
+        provider_booking_note = ProviderNotification.objects.create(
+            organization=self.org,
+            booking=booking,
+            kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
+            message='New booking request for Oil change.',
+            link_path=f'/provider/{self.org.slug}/requests/booking/{booking.id}',
+        )
+        provider_message_note = ProviderNotification.objects.create(
+            organization=self.org,
+            booking=booking,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            message='Customer messaged about Oil change.',
+            link_path=f'/provider/{self.org.slug}/messages?booking={booking.id}',
+        )
+        other_provider_note = ProviderNotification.objects.create(
+            organization=self.org,
+            booking=other_booking,
+            kind=ProviderNotification.Kind.CUSTOMER_RESCHEDULE_REQUEST,
+            message='Other booking reschedule',
+            link_path=f'/provider/{self.org.slug}/requests/booking/{other_booking.id}',
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.get(
+            f'/api/v1/bookings/{booking.id}/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        time_change.refresh_from_db()
+        quote_note.refresh_from_db()
+        message_note.refresh_from_db()
+        other_note.refresh_from_db()
+        provider_booking_note.refresh_from_db()
+        self.assertIsNotNone(time_change.dismissed_at)
+        self.assertIsNotNone(quote_note.dismissed_at)
+        self.assertIsNone(message_note.dismissed_at)
+        self.assertIsNone(other_note.dismissed_at)
+        self.assertIsNone(provider_booking_note.dismissed_at)
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.get(
+            f'/api/v1/bookings/{booking.id}/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        provider_booking_note.refresh_from_db()
+        provider_message_note.refresh_from_db()
+        other_provider_note.refresh_from_db()
+        self.assertIsNotNone(provider_booking_note.dismissed_at)
+        self.assertIsNone(provider_message_note.dismissed_at)
+        self.assertIsNone(other_provider_note.dismissed_at)
+
+    def test_accept_quote_notifies_provider_and_customer(self):
+        from django.core import mail
+
+        from jobs.models import CustomerNotification, ProviderNotification
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.QUOTED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            quote_amount='85.00',
+            quote_message='Includes parts',
+        )
+        self.slot.status = AvailabilitySlot.Status.PENDING
+        self.slot.save(update_fields=['status'])
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept-quote/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['status'], Booking.Status.CONFIRMED)
+
+        provider_note = ProviderNotification.objects.filter(
+            organization=self.org,
+            booking=booking,
+            kind=ProviderNotification.Kind.QUOTE_ACCEPTED,
+        ).first()
+        self.assertIsNotNone(provider_note)
+        self.assertIn('accepted', provider_note.message.lower())
+        self.assertEqual(
+            provider_note.link_path,
+            f'/provider/{self.org.slug}/requests/booking/{booking.id}',
+        )
+
+        customer_note = CustomerNotification.objects.filter(
+            customer=self.customer,
+            booking=booking,
+            kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        ).first()
+        self.assertIsNotNone(customer_note)
+        self.assertIn('Quote accepted', customer_note.title)
+
+        subjects = [m.subject for m in mail.outbox]
+        self.assertTrue(
+            any('Quote accepted' in s for s in subjects),
+            subjects,
+        )
+        self.assertTrue(
+            any('Booking confirmed' in s for s in subjects),
+            subjects,
+        )
+
+    def test_opening_booking_dismisses_quote_accepted_provider_notification(self):
+        from jobs.models import ProviderNotification
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            quote_amount='85.00',
+        )
+        note = ProviderNotification.objects.create(
+            organization=self.org,
+            booking=booking,
+            kind=ProviderNotification.Kind.QUOTE_ACCEPTED,
+            message='Customer accepted $85.00 for Oil change.',
+            link_path=f'/provider/{self.org.slug}/requests/booking/{booking.id}',
+        )
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.get(
+            f'/api/v1/bookings/{booking.id}/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        note.refresh_from_db()
+        self.assertIsNotNone(note.dismissed_at)
+

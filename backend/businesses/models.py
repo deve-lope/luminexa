@@ -174,6 +174,29 @@ class Organization(models.Model):
         help_text='free | pro_monthly | pro_yearly',
     )
     subscription_current_period_end = models.DateTimeField(null=True, blank=True)
+    # QuickBooks Online (one-way push of customers / invoices / payments)
+    qbo_realm_id = models.CharField(max_length=64, blank=True, default='')
+    qbo_access_token = models.TextField(blank=True, default='')
+    qbo_refresh_token = models.TextField(blank=True, default='')
+    qbo_token_expires_at = models.DateTimeField(null=True, blank=True)
+    qbo_connected_at = models.DateTimeField(null=True, blank=True)
+    # Provider books / cash collection
+    default_labor_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Default hourly labor rate for job costing (optional).',
+    )
+    invoice_followup_enabled = models.BooleanField(
+        default=True,
+        help_text='Email customers automatic reminders for unpaid invoices.',
+    )
+    invoice_followup_days = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Days after issue to send payment reminders, e.g. [3, 7, 14]. Empty uses defaults.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -312,6 +335,17 @@ class OrganizationMembership(models.Model):
         choices=CustomerStatus.choices,
         blank=True,
         default='',
+    )
+    provider_notes = models.TextField(
+        blank=True,
+        default='',
+        help_text='Internal notes about this customer (staff only).',
+    )
+    qbo_customer_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text='QuickBooks Online Customer Id when synced.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

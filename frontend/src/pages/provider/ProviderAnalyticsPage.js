@@ -113,6 +113,7 @@ export default function ProviderAnalyticsPage() {
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
   const [chartMode, setChartMode] = useState('income');
+  const [exportBusy, setExportBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -128,6 +129,25 @@ export default function ProviderAnalyticsPage() {
       setFetching(false);
     }
   }, [orgSlug, period]);
+
+  const downloadBooks = async () => {
+    setExportBusy(true);
+    setError(null);
+    try {
+      const res = await jobsAPI.downloadProviderBooksExport(orgSlug, period);
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `luminexa-books-${orgSlug}-${period}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(parseApiError(e) || 'Could not download export.');
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -169,6 +189,21 @@ export default function ProviderAnalyticsPage() {
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-slate-600">
+          Cash, profit, and receivables for your business. Add costs on each job for accurate
+          margins.
+        </p>
+        <button
+          type="button"
+          disabled={exportBusy}
+          onClick={downloadBooks}
+          className="min-h-[40px] shrink-0 rounded-xl bg-white px-3 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 disabled:opacity-60"
+        >
+          {exportBusy ? 'Exporting…' : 'Export CSV'}
+        </button>
+      </div>
 
       <div
         className="flex gap-1 overflow-x-auto rounded-2xl border border-luminexa-line bg-white p-1 shadow-lx-soft"
@@ -214,6 +249,12 @@ export default function ProviderAnalyticsPage() {
           delta={compare.income_collected}
         />
         <StatCard
+          label="Job profit"
+          value={formatMoney(summary.profit, currency)}
+          hint={`Costs ${formatMoney(summary.job_costs, currency)} · fees ${formatMoney(summary.platform_fees, currency)}`}
+          delta={compare.profit}
+        />
+        <StatCard
           label="Hours spent"
           value={formatHours(summary.hours_spent)}
           hint={`All time: ${formatHours(totals.hours_spent)}`}
@@ -225,7 +266,36 @@ export default function ProviderAnalyticsPage() {
           hint={`${summary.recurring_customers ?? 0} recurring (${summary.recurring_rate ?? 0}%)`}
           delta={compare.unique_customers}
         />
+        <StatCard
+          label="Open quotes"
+          value={formatMoney(summary.quoted_pipeline, currency)}
+          hint="Quoted, not yet accepted"
+        />
       </section>
+
+      {data.ar_aging && (
+        <section className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
+          <h2 className="lx-section-title">Accounts receivable</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Unpaid invoices by age ({data.ar_aging.count} open)
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ['Current', data.ar_aging.current],
+              ['1–30 days', data.ar_aging.days_1_30],
+              ['31–60 days', data.ar_aging.days_31_60],
+              ['60+ days', data.ar_aging.days_60_plus],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase text-slate-400">{label}</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">
+                  {formatMoney(value, currency)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard

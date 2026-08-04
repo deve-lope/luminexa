@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -9,6 +10,10 @@ from businesses.models import Organization, OrganizationMembership
 from jobs.models import AvailabilitySlot, Booking, CustomerServiceInquiry, Service, ServiceRequestMessage
 
 
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    SECURE_SSL_REDIRECT=False,
+)
 class CustomerConversationsAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -167,6 +172,10 @@ class CustomerConversationsAPITests(TestCase):
         self.assertEqual(list_after.data['unread_count'], 0)
 
 
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    SECURE_SSL_REDIRECT=False,
+)
 class ProviderConversationsAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -228,6 +237,7 @@ class ProviderConversationsAPITests(TestCase):
     def test_customer_message_creates_provider_notification_and_unread(self):
         from jobs.models import ProviderNotification
 
+        mail.outbox.clear()
         self.client.force_authenticate(user=self.customer)
         res = self.client.post(
             f'/api/v1/bookings/{self.booking.id}/messages/',
@@ -236,6 +246,9 @@ class ProviderConversationsAPITests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(res.status_code, 201, res.data)
+
+        # Customer→provider chat: in-app only (no email spam).
+        self.assertEqual(len(mail.outbox), 0)
 
         note = ProviderNotification.objects.filter(
             organization=self.org,
@@ -275,6 +288,7 @@ class ProviderConversationsAPITests(TestCase):
     def test_provider_message_creates_customer_notification(self):
         from jobs.models import CustomerNotification
 
+        mail.outbox.clear()
         self.client.force_authenticate(user=self.owner)
         res = self.client.post(
             f'/api/v1/bookings/{self.booking.id}/messages/',
@@ -290,6 +304,11 @@ class ProviderConversationsAPITests(TestCase):
         ).first()
         self.assertIsNotNone(note)
         self.assertEqual(note.link_path, '/customer/messages')
+
+        # Provider→customer still emails.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.customer.email])
+        self.assertIn('New message', mail.outbox[0].subject)
 
         self.client.force_authenticate(user=self.customer)
         inbox = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')

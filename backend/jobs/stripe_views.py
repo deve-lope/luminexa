@@ -115,6 +115,20 @@ class SyncCheckoutSessionAPIView(APIView):
         return Response(stripe_services.billing_summary(org))
 
 
+class InstantPayoutAPIView(APIView):
+    """Owner cashes out Connect Instant Payout balance."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        org = _org_for_owner(request.user, slug)
+        amount = request.data.get('amount_cents')
+        amount_cents = int(amount) if amount is not None and str(amount).strip() != '' else None
+        result = stripe_services.create_instant_payout(org, amount_cents=amount_cents)
+        summary = stripe_services.billing_summary(org)
+        return Response({**result, 'billing': summary})
+
+
 class InvoicePayCheckoutAPIView(APIView):
     """Customer starts Stripe Checkout to pay an issued invoice."""
 

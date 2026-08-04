@@ -23,7 +23,7 @@ from jobs.stripe_services import mark_invoice_paid_from_stripe
 User = get_user_model()
 
 
-@override_settings(STRIPE_SECRET_KEY='', STRIPE_ENABLED=False)
+@override_settings(STRIPE_SECRET_KEY='', STRIPE_ENABLED=False, SECURE_SSL_REDIRECT=False)
 class StripeNotConfiguredTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -94,8 +94,27 @@ class StripeNotConfiguredTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertFalse(res.data['stripe_configured'])
         self.assertEqual(res.data['platform_fee_percent'], 0.5)
+        self.assertIn('payouts', res.data)
+        self.assertIn('quickbooks', res.data)
+        self.assertFalse(res.data['quickbooks']['enabled'])
 
-    def test_connect_onboard_requires_stripe(self):
+    def test_instant_payout_requires_stripe(self):
+        self.client.force_authenticate(self.owner)
+        res = self.client.post(
+            '/api/v1/organizations/stripe-org/billing/instant-payout/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data.get('code'), 'stripe_not_configured')
+
+    def test_quickbooks_connect_requires_config(self):
+        self.client.force_authenticate(self.owner)
+        res = self.client.post(
+            '/api/v1/organizations/stripe-org/accounting/quickbooks/connect/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data.get('code'), 'quickbooks_not_configured')
         self.client.force_authenticate(self.owner)
         res = self.client.post(
             '/api/v1/organizations/stripe-org/billing/connect/onboard/',

@@ -32,3 +32,11 @@ def sync_all_recurring_slots():
 def send_upcoming_booking_reminders():
     """Send 24h-before reminder emails for confirmed bookings."""
     return send_booking_reminders_for_window()
+
+
+@shared_task
+def send_unpaid_invoice_payment_reminders():
+    """Send email follow-ups for unpaid issued invoices."""
+    from .notifications import send_unpaid_invoice_followups
+
+    return send_unpaid_invoice_followups()

@@ -213,6 +213,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_upcoming_booking_reminders',
         'schedule': 3600.0,
     },
+    'invoice-payment-reminders-hourly': {
+        'task': 'jobs.tasks.send_unpaid_invoice_payment_reminders',
+        'schedule': 3600.0,
+    },
 }
 
 # ── Stripe (Connect marketplace + Billing subscriptions) ───────────────────
@@ -229,6 +233,15 @@ STRIPE_PRICE_PRO_YEARLY = config('STRIPE_PRICE_PRO_YEARLY', default='')
 # Free trial for provider Pro subscriptions (days). 0 = no trial from the API.
 STRIPE_TRIAL_DAYS = config('STRIPE_TRIAL_DAYS', default=30, cast=int)
 STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)
+
+# ── QuickBooks Online (optional accounting sync) ───────────────────────────
+QUICKBOOKS_CLIENT_ID = config('QUICKBOOKS_CLIENT_ID', default='')
+QUICKBOOKS_CLIENT_SECRET = config('QUICKBOOKS_CLIENT_SECRET', default='')
+QUICKBOOKS_REDIRECT_URI = config('QUICKBOOKS_REDIRECT_URI', default='')
+QUICKBOOKS_ENVIRONMENT = config('QUICKBOOKS_ENVIRONMENT', default='sandbox')
+# Optional absolute API origin for OAuth redirect (defaults to PUBLIC_APP_URL + /api/…)
+PUBLIC_API_URL = config('PUBLIC_API_URL', default='')
+QUICKBOOKS_ENABLED = bool(QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET)
 
 # ── Production HTTPS / browser hardening (only when DEBUG=False) ───────────
 if not DEBUG:

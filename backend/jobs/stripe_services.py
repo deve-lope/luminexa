@@ -441,17 +441,35 @@ def sync_subscription_checkout_session(*, org: Organization, session_id: str) ->
 
 
 def billing_summary(org: Organization) -> dict:
+    connect = {
+        'account_id': org.stripe_account_id or None,
+        'charges_enabled': org.stripe_charges_enabled,
+        'payouts_enabled': org.stripe_payouts_enabled,
+        'details_submitted': org.stripe_details_submitted,
+        'can_accept_cards': org_can_accept_card_payments(org),
+    }
+    payouts = {
+        'instant_available_cents': 0,
+        'available_cents': 0,
+        'currency': 'cad',
+        'instant_supported': False,
+        'detail': '',
+    }
+    if org.stripe_account_id and stripe_configured():
+        try:
+            payouts = connect_payout_balance(org)
+        except Exception:
+            payouts['detail'] = 'Could not load Stripe balance.'
+
+    from . import quickbooks_services
+
     return {
         'stripe_configured': stripe_configured(),
         'publishable_key': getattr(settings, 'STRIPE_PUBLISHABLE_KEY', '') or '',
         'platform_fee_percent': float(platform_fee_percent()),
-        'connect': {
-            'account_id': org.stripe_account_id or None,
-            'charges_enabled': org.stripe_charges_enabled,
-            'payouts_enabled': org.stripe_payouts_enabled,
-            'details_submitted': org.stripe_details_submitted,
-            'can_accept_cards': org_can_accept_card_payments(org),
-        },
+        'connect': connect,
+        'payouts': payouts,
+        'quickbooks': quickbooks_services.qbo_status(org),
         'subscription': {
             'status': org.subscription_status or 'none',
             'plan': org.subscription_plan or 'free',
@@ -463,4 +481,92 @@ def billing_summary(org: Organization) -> dict:
                 'pro_yearly': bool(getattr(settings, 'STRIPE_PRICE_PRO_YEARLY', '')),
             },
         },
+    }
+
+
+def connect_payout_balance(org: Organization) -> dict:
+    """Available and Instant Payout balances for a Connect account."""
+    require_stripe()
+    if not org.stripe_account_id:
+        raise ValidationError({'detail': 'Connect account not set up.', 'code': 'connect_missing'})
+    try:
+        balance = stripe.Balance.retrieve(stripe_account=org.stripe_account_id)
+    except stripe.error.StripeError as exc:
+        _raise_stripe_error(exc)
+
+    def _sum_buckets(entries):
+        total = 0
+        currency = 'cad'
+        for row in entries or []:
+            total += int(row.get('amount') or 0)
+            currency = (row.get('currency') or currency).lower()
+        return total, currency
+
+    available_cents, currency = _sum_buckets(balance.get('available'))
+    instant_cents, inst_currency = _sum_buckets(balance.get('instant_available'))
+    if instant_cents:
+        currency = inst_currency or currency
+
+    return {
+        'instant_available_cents': instant_cents,
+        'available_cents': available_cents,
+        'currency': currency,
+        'instant_supported': instant_cents > 0,
+        'detail': (
+            'Instant payout available.'
+            if instant_cents > 0
+            else (
+                'No Instant Payout balance right now. Funds may still be pending, '
+                'or Instant Payouts may not be enabled for this Stripe account/country.'
+            )
+        ),
+    }
+
+
+def create_instant_payout(org: Organization, *, amount_cents: int | None = None) -> dict:
+    """
+    Pay out Connect balance with method=instant.
+    Stripe eligibility varies by country/account; errors are surfaced as ValidationError.
+    """
+    require_stripe()
+    if not org.stripe_account_id:
+        raise ValidationError({'detail': 'Connect account not set up.', 'code': 'connect_missing'})
+    if not org.stripe_payouts_enabled:
+        raise ValidationError({
+            'detail': 'Payouts are not enabled on this Stripe account yet.',
+            'code': 'payouts_disabled',
+        })
+
+    bal = connect_payout_balance(org)
+    instant = int(bal['instant_available_cents'] or 0)
+    currency = bal['currency'] or 'cad'
+    if instant <= 0:
+        raise ValidationError({
+            'detail': bal.get('detail') or 'No Instant Payout balance available.',
+            'code': 'instant_unavailable',
+        })
+    amount = int(amount_cents) if amount_cents is not None else instant
+    if amount <= 0:
+        raise ValidationError({'amount': 'Amount must be greater than zero.'})
+    if amount > instant:
+        raise ValidationError({
+            'amount': f'Maximum Instant Payout is {instant / 100:.2f} {currency.upper()}.',
+        })
+
+    try:
+        payout = stripe.Payout.create(
+            amount=amount,
+            currency=currency,
+            method='instant',
+            stripe_account=org.stripe_account_id,
+        )
+    except stripe.error.StripeError as exc:
+        _raise_stripe_error(exc)
+
+    return {
+        'payout_id': payout.id,
+        'amount_cents': amount,
+        'currency': currency,
+        'status': payout.get('status') or '',
+        'arrival_date': payout.get('arrival_date'),
     }

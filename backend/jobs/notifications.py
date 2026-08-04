@@ -86,6 +86,53 @@ def _booking_detail_lines(booking, *, include_address=False):
     return lines
 
 
+# Cleared when the customer opens that booking's detail (not new_message).
+CUSTOMER_BOOKING_UPDATE_KINDS = (
+    CustomerNotification.Kind.BOOKING_CONFIRMED,
+    CustomerNotification.Kind.BOOKING_DECLINED,
+    CustomerNotification.Kind.BOOKING_CANCELLED,
+    CustomerNotification.Kind.BOOKING_RESCHEDULED,
+    CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+    CustomerNotification.Kind.BOOKING_COMPLETED,
+    CustomerNotification.Kind.INVOICE_READY,
+    CustomerNotification.Kind.PAYMENT_CONFIRMED,
+)
+
+# Cleared when provider staff open that booking's request/schedule detail.
+PROVIDER_BOOKING_UPDATE_KINDS = (
+    ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
+    ProviderNotification.Kind.CUSTOMER_CANCELLED_BOOKING,
+    ProviderNotification.Kind.CUSTOMER_RESCHEDULE_REQUEST,
+    ProviderNotification.Kind.QUOTE_ACCEPTED,
+    ProviderNotification.Kind.PAYMENT_RECEIVED,
+)
+
+
+def dismiss_booking_update_notifications(*, booking, user):
+    """Mark booking-related in-app alerts read when the user opens that booking.
+
+    Mirrors mark_booking_messages_read for new_message: viewing the booking
+    clears only that booking's update alerts (not other bookings, not messages).
+    """
+    from .permissions import is_org_staff
+
+    now = timezone.now()
+    if booking.customer_id == user.id:
+        CustomerNotification.objects.filter(
+            customer_id=booking.customer_id,
+            booking=booking,
+            kind__in=CUSTOMER_BOOKING_UPDATE_KINDS,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+    elif is_org_staff(user, booking.organization):
+        ProviderNotification.objects.filter(
+            organization_id=booking.organization_id,
+            booking=booking,
+            kind__in=PROVIDER_BOOKING_UPDATE_KINDS,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+
+
 def create_customer_notification(
     *,
     customer,
@@ -244,6 +291,47 @@ def notify_booking_accepted(booking):
         message=(
             f'{booking.organization.name} approved your request for {service_name} '
             f'on {_format_when(booking.start_at)}.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+    )
+    send_booking_email('booking_confirmed', booking)
+
+
+def create_provider_quote_accepted_notification(booking):
+    """In-app alert when a customer accepts a quote."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    customer_name = _customer_label(booking)
+    amount = booking.quote_amount
+    amount_txt = f'${amount}' if amount is not None else 'your quote'
+    org = booking.organization
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.QUOTE_ACCEPTED,
+        message=(
+            f'{customer_name} accepted {amount_txt} for {service_name} '
+            f'on {_format_when(booking.start_at)}. '
+            'The booking is confirmed — open Service requests to review.'
+        ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
+    )
+
+
+def notify_quote_accepted(booking):
+    """Notify both sides after the customer accepts a quote (booking confirmed)."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    amount = booking.quote_amount
+    amount_txt = f'${amount}' if amount is not None else 'the quote'
+    create_provider_quote_accepted_notification(booking)
+    send_booking_email('quote_accepted', booking)
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Quote accepted — {booking.organization.name}',
+        message=(
+            f'You accepted {amount_txt} for {service_name} on '
+            f'{_format_when(booking.start_at)}. Your booking is confirmed.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -477,6 +565,18 @@ def send_booking_email(event, booking):
             'Open your bookings to accept the quote and confirm, or decline if it does not work.',
             f'View bookings: {bookings_url}',
         ])
+    elif event == 'quote_accepted':
+        amount = booking.quote_amount
+        amount_txt = f'${amount}' if amount is not None else 'your quote'
+        recipients = _provider_staff_emails(org)
+        subject = f'Quote accepted — {service_name}'
+        body_lines = [
+            f'{_customer_label(booking)} accepted {amount_txt} for {service_name}.',
+            'The booking is now confirmed.',
+            *_booking_detail_lines(booking, include_address=True),
+            '',
+            f'Open in Luminexa: {provider_url}',
+        ]
     elif event == 'booking_reschedule_requested':
         recipients = _provider_staff_emails(org)
         subject = f'Reschedule request — {service_name}'
@@ -718,4 +818,69 @@ def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
         booking.reminder_sent_at = now
         booking.save(update_fields=['reminder_sent_at'])
         sent += 1
+    return sent
+
+
+DEFAULT_INVOICE_FOLLOWUP_DAYS = (3, 7, 14)
+
+
+def send_unpaid_invoice_followups():
+    """Email payment reminders for unpaid invoices based on org cadence settings."""
+    from datetime import timedelta
+
+    from businesses.models import Organization
+
+    from .models import Invoice
+
+    now = timezone.now()
+    sent = 0
+    orgs = Organization.objects.filter(is_active=True, invoice_followup_enabled=True)
+    for org in orgs:
+        days_list = org.invoice_followup_days or list(DEFAULT_INVOICE_FOLLOWUP_DAYS)
+        try:
+            days_list = sorted({int(d) for d in days_list if int(d) > 0})
+        except (TypeError, ValueError):
+            days_list = list(DEFAULT_INVOICE_FOLLOWUP_DAYS)
+        if not days_list:
+            continue
+        max_reminders = len(days_list)
+        invoices = (
+            Invoice.objects.filter(
+                booking__organization=org,
+                status=Invoice.Status.ISSUED,
+                payment_reminder_count__lt=max_reminders,
+            )
+            .select_related('booking', 'booking__customer', 'booking__service', 'booking__organization')
+        )
+        for inv in invoices:
+            next_idx = inv.payment_reminder_count
+            if next_idx >= len(days_list):
+                continue
+            due_after = timedelta(days=days_list[next_idx])
+            if inv.issued_at + due_after > now:
+                continue
+            if inv.last_payment_reminder_at and inv.last_payment_reminder_at > now - timedelta(hours=20):
+                continue
+            customer_email = inv.booking.customer.email
+            if not customer_email:
+                continue
+            service_name = inv.booking.service.name if inv.booking.service_id else 'Service'
+            from django.conf import settings as dj_settings
+            base = (getattr(dj_settings, 'PUBLIC_APP_URL', None) or 'http://localhost:3000').rstrip('/')
+            bookings_url = f'{base}/customer/bookings'
+            _send_to(
+                customer_email,
+                f'Payment reminder — invoice {inv.number} from {org.name}',
+                [
+                    f'This is a friendly reminder that invoice {inv.number} for {service_name} '
+                    f'({inv.amount} {inv.currency}) is still unpaid.',
+                    f'Business: {org.name}',
+                    '',
+                    f'View and pay in Luminexa: {bookings_url}',
+                ],
+            )
+            inv.payment_reminder_count = next_idx + 1
+            inv.last_payment_reminder_at = now
+            inv.save(update_fields=['payment_reminder_count', 'last_payment_reminder_at', 'updated_at'])
+            sent += 1
     return sent

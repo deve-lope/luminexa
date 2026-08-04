@@ -346,12 +346,15 @@ def list_provider_conversation_summaries(organization):
 
 
 def _notify_new_message(message, *, create_in_app=True):
-    """Email the other party about a new message; optionally create an in-app alert."""
+    """Notify the other party about a new message.
+
+    Provider→customer: email + optional in-app CustomerNotification.
+    Customer→provider: in-app ProviderNotification only (no email — chat spam).
+    """
     from .models import CustomerNotification, ProviderNotification
     from .notifications import (
         _send_to,
         _public_app_url,
-        _provider_staff_emails,
         create_customer_notification,
         provider_messages_link_path,
     )
@@ -366,7 +369,6 @@ def _notify_new_message(message, *, create_in_app=True):
         ref = f'BK-{booking.pk:05d}'
         subject = f'New message about {service_name} ({ref}) — {org.name}'
         messages_path = provider_messages_link_path(org.slug, booking_id=booking.pk)
-        thread_url = f'{_public_app_url()}{messages_path}'
 
         sender_is_staff = is_org_staff(sender, org)
         if sender_is_staff:
@@ -393,20 +395,7 @@ def _notify_new_message(message, *, create_in_app=True):
                     link_path='/customer/messages',
                 )
         else:
-            # Notify provider staff
-            staff_emails = _provider_staff_emails(org)
-            if staff_emails:
-                customer_name = booking.customer.full_name or booking.customer.email
-                _send_to(
-                    staff_emails,
-                    subject,
-                    [
-                        f'{customer_name} sent a message about {service_name} ({ref}).',
-                        f'"{message.body}"',
-                        '',
-                        f'Reply at: {thread_url}',
-                    ],
-                )
+            # In-app only for customer→provider chat (email was too noisy).
             if create_in_app:
                 customer_name = booking.customer.full_name or booking.customer.email
                 ProviderNotification.objects.create(
@@ -429,7 +418,6 @@ def _notify_new_message(message, *, create_in_app=True):
         ref = f'SR-{inquiry.pk:05d}'
         subject = f'New message about {service_label} ({ref}) — {org.name}'
         messages_path = provider_messages_link_path(org.slug, inquiry_id=inquiry.pk)
-        thread_url = f'{_public_app_url()}{messages_path}'
 
         sender_is_staff = is_org_staff(sender, org)
         if sender_is_staff:
@@ -455,19 +443,7 @@ def _notify_new_message(message, *, create_in_app=True):
                     link_path='/customer/messages',
                 )
         else:
-            staff_emails = _provider_staff_emails(org)
-            if staff_emails:
-                customer_name = inquiry.customer.full_name or inquiry.customer.email
-                _send_to(
-                    staff_emails,
-                    subject,
-                    [
-                        f'{customer_name} sent a message about {service_label} ({ref}).',
-                        f'"{message.body}"',
-                        '',
-                        f'Reply at: {thread_url}',
-                    ],
-                )
+            # In-app only for customer→provider chat (email was too noisy).
             if create_in_app:
                 customer_name = inquiry.customer.full_name or inquiry.customer.email
                 ProviderNotification.objects.create(
