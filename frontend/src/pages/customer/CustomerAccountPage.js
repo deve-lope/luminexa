@@ -5,6 +5,7 @@ import ServiceLocationInput, {
   validateServiceLocationValue,
 } from '../../components/customer/ServiceLocationInput';
 import ProviderSubscriptionCard from '../../components/provider/ProviderSubscriptionCard';
+import ProviderBusinessAddressCard from '../../components/provider/ProviderBusinessAddressCard';
 import PasswordInput from '../../components/ui/PasswordInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -415,6 +416,7 @@ export default function CustomerAccountPage({ variant = 'customer', orgSlug = nu
   return (
     <div className="space-y-4">
       {!isCustomerAccount && orgSlug && <ProviderSubscriptionCard orgSlug={orgSlug} />}
+      {!isCustomerAccount && orgSlug && <ProviderBusinessAddressCard orgSlug={orgSlug} />}
 
       <section
         className={
