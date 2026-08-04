@@ -1,7 +1,43 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User
+from .models import ProviderDeletionFeedback, User
+
+
+@admin.register(ProviderDeletionFeedback)
+class ProviderDeletionFeedbackAdmin(admin.ModelAdmin):
+    list_display = (
+        'created_at',
+        'reason',
+        'had_active_subscription',
+        'subscription_status',
+        'organization_slug',
+        'was_owner',
+        'channel',
+    )
+    list_filter = ('reason', 'had_active_subscription', 'channel', 'was_owner')
+    search_fields = ('organization_slug', 'organization_name', 'detail', 'user_id_snapshot')
+    readonly_fields = (
+        'reason',
+        'detail',
+        'channel',
+        'user_id_snapshot',
+        'was_owner',
+        'had_active_subscription',
+        'subscription_status',
+        'subscription_plan',
+        'subscription_source',
+        'organization_slug',
+        'organization_name',
+        'created_at',
+    )
+    ordering = ('-created_at',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(User)

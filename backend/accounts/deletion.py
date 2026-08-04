@@ -13,10 +13,13 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import ValidationError
 
-from .models import LoginCode, User
+from .models import LoginCode, ProviderDeletionFeedback, User
 
 logger = logging.getLogger(__name__)
+
+PROVIDER_DELETION_REASONS = {c.value for c in ProviderDeletionFeedback.Reason}
 
 
 def _deactivate_owned_organizations(user: User) -> None:
@@ -38,6 +41,112 @@ def _deactivate_owned_organizations(user: User) -> None:
         Organization.objects.filter(id__in=list(owned_org_ids)).update(
             is_active=False, profile_public=False
         )
+
+
+def user_is_provider(user: User) -> bool:
+    try:
+        from businesses.models import OrganizationMembership
+    except Exception:
+        return False
+    return OrganizationMembership.objects.filter(
+        user=user,
+        role__in=(
+            OrganizationMembership.Role.OWNER,
+            OrganizationMembership.Role.STAFF,
+        ),
+    ).exists()
+
+
+def _provider_subscription_snapshot(user: User) -> dict:
+    """Pick the most relevant owned org for churn context."""
+    try:
+        from businesses.models import OrganizationMembership
+        from jobs.permissions import org_has_active_subscription
+    except Exception:
+        return {
+            'was_owner': False,
+            'had_active_subscription': False,
+            'subscription_status': '',
+            'subscription_plan': '',
+            'subscription_source': '',
+            'organization_slug': '',
+            'organization_name': '',
+        }
+
+    memberships = list(
+        OrganizationMembership.objects.filter(user=user)
+        .select_related('organization')
+        .order_by('-role', 'id')
+    )
+    owner = next(
+        (m for m in memberships if m.role == OrganizationMembership.Role.OWNER),
+        None,
+    )
+    staff = next(
+        (m for m in memberships if m.role == OrganizationMembership.Role.STAFF),
+        None,
+    )
+    m = owner or staff
+    if not m:
+        return {
+            'was_owner': False,
+            'had_active_subscription': False,
+            'subscription_status': '',
+            'subscription_plan': '',
+            'subscription_source': '',
+            'organization_slug': '',
+            'organization_name': '',
+        }
+    org = m.organization
+    return {
+        'was_owner': m.role == OrganizationMembership.Role.OWNER,
+        'had_active_subscription': org_has_active_subscription(org),
+        'subscription_status': (org.subscription_status or '')[:32],
+        'subscription_plan': (org.subscription_plan or '')[:32],
+        'subscription_source': (getattr(org, 'subscription_source', None) or '')[:32],
+        'organization_slug': (org.slug or '')[:120],
+        'organization_name': (org.name or '')[:255],
+    }
+
+
+def record_provider_deletion_feedback(
+    *,
+    user: User,
+    reason: str,
+    detail: str = '',
+    channel: str = ProviderDeletionFeedback.Channel.IN_APP,
+) -> ProviderDeletionFeedback | None:
+    """Persist churn reason for providers. No-op for customers. Raises if provider omits reason."""
+    if not user_is_provider(user):
+        return None
+
+    reason = (reason or '').strip()
+    if reason not in PROVIDER_DELETION_REASONS:
+        raise ValidationError(
+            {
+                'deletion_reason': (
+                    'Please tell us why you’re leaving / not renewing so we can improve Luminexa.'
+                )
+            }
+        )
+
+    detail = (detail or '').strip()[:2000]
+    if reason == ProviderDeletionFeedback.Reason.OTHER and not detail:
+        raise ValidationError(
+            {'deletion_detail': 'Please add a short note when selecting Other.'}
+        )
+
+    if channel not in {c.value for c in ProviderDeletionFeedback.Channel}:
+        channel = ProviderDeletionFeedback.Channel.IN_APP
+
+    snap = _provider_subscription_snapshot(user)
+    return ProviderDeletionFeedback.objects.create(
+        reason=reason,
+        detail=detail,
+        channel=channel,
+        user_id_snapshot=user.pk,
+        **snap,
+    )
 
 
 @transaction.atomic

@@ -11,6 +11,7 @@ from businesses.models import Organization, OrganizationMembership
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     PUBLIC_APP_URL='http://localhost:3000',
+    SECURE_SSL_REDIRECT=False,
 )
 class AccountDeletionTests(TestCase):
     def setUp(self):
@@ -69,8 +70,63 @@ class AccountDeletionTests(TestCase):
         user.refresh_from_db()
         self.assertIsNone(user.deleted_at)
 
-    def test_authenticated_delete_endpoint_deletes(self):
-        user = self._make_user()
+    def test_provider_delete_requires_reason(self):
+        user = self._make_user('owner@example.com')
+        org = Organization.objects.create(
+            name='My Biz',
+            slug='my-biz',
+            subscription_status='trialing',
+            subscription_plan='pro_monthly',
+        )
+        OrganizationMembership.objects.create(
+            organization=org, user=user, role=OrganizationMembership.Role.OWNER
+        )
+        self.client.force_authenticate(user=user)
+        res = self.client.post(
+            '/accounts/api/account/delete/', {'confirm': True}, format='json'
+        )
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertIn('deletion_reason', res.data)
+        user.refresh_from_db()
+        self.assertIsNone(user.deleted_at)
+
+    def test_provider_delete_records_feedback(self):
+        from accounts.models import ProviderDeletionFeedback
+
+        user = self._make_user('churn@example.com')
+        org = Organization.objects.create(
+            name='Churn Co',
+            slug='churn-co',
+            subscription_status='active',
+            subscription_plan='pro_monthly',
+            subscription_source='stripe',
+        )
+        OrganizationMembership.objects.create(
+            organization=org, user=user, role=OrganizationMembership.Role.OWNER
+        )
+        self.client.force_authenticate(user=user)
+        res = self.client.post(
+            '/accounts/api/account/delete/',
+            {
+                'confirm': True,
+                'deletion_reason': 'too_expensive',
+                'deletion_detail': 'Would renew at half price',
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        user.refresh_from_db()
+        self.assertIsNotNone(user.deleted_at)
+        fb = ProviderDeletionFeedback.objects.get(user_id_snapshot=user.pk)
+        self.assertEqual(fb.reason, 'too_expensive')
+        self.assertEqual(fb.detail, 'Would renew at half price')
+        self.assertEqual(fb.organization_slug, 'churn-co')
+        self.assertTrue(fb.was_owner)
+        self.assertTrue(fb.had_active_subscription)
+        self.assertEqual(fb.channel, 'in_app')
+
+    def test_customer_delete_still_works_without_reason(self):
+        user = self._make_user('customer@example.com')
         self.client.force_authenticate(user=user)
         res = self.client.post(
             '/accounts/api/account/delete/', {'confirm': True}, format='json'

@@ -108,3 +108,54 @@ class LoginCode(models.Model):
 
     def __str__(self):
         return f'LoginCode<{self.email}>'
+
+
+class ProviderDeletionFeedback(models.Model):
+    """Why a service provider left / did not renew — kept after account anonymization."""
+
+    class Reason(models.TextChoices):
+        TOO_EXPENSIVE = 'too_expensive', 'Too expensive / not worth the price'
+        NOT_ENOUGH_CUSTOMERS = 'not_enough_customers', 'Not enough customers or bookings'
+        SWITCHING_TOOL = 'switching_tool', 'Switching to another tool'
+        BUSINESS_CLOSED = 'business_closed', 'Business closed or pausing'
+        MISSING_FEATURES = 'missing_features', 'Missing features I need'
+        HARD_TO_USE = 'hard_to_use', 'Too hard to use'
+        DIDNT_NEED_PRO = 'didnt_need_pro', 'Didn’t need Pro / trial was enough'
+        TEMPORARY = 'temporary', 'Temporary — may come back'
+        OTHER = 'other', 'Other'
+
+    class Channel(models.TextChoices):
+        IN_APP = 'in_app', 'In-app account page'
+        PUBLIC_LINK = 'public_link', 'Public deletion link'
+
+    reason = models.CharField(max_length=40, choices=Reason.choices)
+    detail = models.TextField(blank=True, default='', max_length=2000)
+    channel = models.CharField(
+        max_length=20,
+        choices=Channel.choices,
+        default=Channel.IN_APP,
+    )
+
+    # Snapshots — no email / phone; survive anonymization
+    user_id_snapshot = models.PositiveIntegerField(
+        help_text='User pk at deletion time (row may later be anonymized).',
+    )
+    was_owner = models.BooleanField(default=False)
+    had_active_subscription = models.BooleanField(default=False)
+    subscription_status = models.CharField(max_length=32, blank=True, default='')
+    subscription_plan = models.CharField(max_length=32, blank=True, default='')
+    subscription_source = models.CharField(max_length=32, blank=True, default='')
+    organization_slug = models.CharField(max_length=120, blank=True, default='')
+    organization_name = models.CharField(max_length=255, blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['reason']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_reason_display()} · {self.organization_slug or self.user_id_snapshot}'

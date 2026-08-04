@@ -117,7 +117,8 @@ export const userAPI = {
   verifyEmailOtp: (data) => api.post('/accounts/api/verify-email/otp/', data),
   resendVerification: (email) => api.post('/accounts/api/resend-verification/', { email }),
   changePassword: (data) => api.post('/accounts/api/change-password/', data),
-  deleteAccount: () => api.post('/accounts/api/account/delete/', { confirm: true }),
+  deleteAccount: (data = {}) =>
+    api.post('/accounts/api/account/delete/', { confirm: true, ...data }),
   requestAccountDeletion: (email) =>
     api.post('/accounts/api/account/delete/request/', { email }),
   confirmAccountDeletion: (data) => api.post('/accounts/api/account/delete/confirm/', data),

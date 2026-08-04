@@ -9,6 +9,7 @@ import PasswordInput from '../../components/ui/PasswordInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { userAPI } from '../../utils/api';
+import { PROVIDER_DELETION_REASONS } from '../../utils/providerDeletionReasons';
 
 const inputClass =
   'w-full min-h-[48px] rounded-xl border border-slate-200 px-3 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20';
@@ -160,12 +161,16 @@ function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
 
 function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
   const [confirmText, setConfirmText] = useState('');
+  const [deletionReason, setDeletionReason] = useState('');
+  const [deletionDetail, setDeletionDetail] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setConfirmText('');
+    setDeletionReason('');
+    setDeletionDetail('');
     setError(null);
     setBusy(false);
   }, [open]);
@@ -173,6 +178,11 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
   if (!open) return null;
 
   const canDelete = confirmText.trim().toUpperCase() === 'DELETE';
+  const reasonOk = !isProvider || Boolean(deletionReason);
+  const otherOk =
+    !isProvider ||
+    deletionReason !== 'other' ||
+    Boolean(deletionDetail.trim());
 
   const submit = async (e) => {
     e.preventDefault();
@@ -180,13 +190,30 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
       setError('Type DELETE to confirm.');
       return;
     }
+    if (isProvider && !deletionReason) {
+      setError('Please select a reason so we can improve Luminexa.');
+      return;
+    }
+    if (isProvider && deletionReason === 'other' && !deletionDetail.trim()) {
+      setError('Please add a short note when selecting Other.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await userAPI.deleteAccount();
+      const payload = isProvider
+        ? { deletion_reason: deletionReason, deletion_detail: deletionDetail.trim() }
+        : {};
+      await userAPI.deleteAccount(payload);
       await onDeleted();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not delete your account. Please try again.');
+      const d = err.response?.data;
+      setError(
+        d?.deletion_reason?.[0] ||
+          d?.deletion_detail?.[0] ||
+          d?.detail ||
+          'Could not delete your account. Please try again.'
+      );
       setBusy(false);
     }
   };
@@ -209,6 +236,49 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
         </p>
         <p className="mt-2 text-sm font-medium text-slate-800">This cannot be undone.</p>
         <form onSubmit={submit} className="mt-4 space-y-3">
+          {isProvider && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-slate-700">
+                Why are you leaving / not renewing Pro?
+              </legend>
+              <p className="text-xs text-slate-500">
+                Your answer helps us improve Luminexa. Personal details are removed; this reason is
+                kept anonymously.
+              </p>
+              <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-2">
+                {PROVIDER_DELETION_REASONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-800 hover:bg-white"
+                  >
+                    <input
+                      type="radio"
+                      name="deletion-reason"
+                      value={opt.value}
+                      checked={deletionReason === opt.value}
+                      onChange={() => setDeletionReason(opt.value)}
+                      className="mt-1"
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div>
+                <label htmlFor="deletion-detail" className="mb-1 block text-xs font-medium text-slate-600">
+                  Anything else? {deletionReason === 'other' ? '(required)' : '(optional)'}
+                </label>
+                <textarea
+                  id="deletion-detail"
+                  rows={2}
+                  value={deletionDetail}
+                  onChange={(e) => setDeletionDetail(e.target.value)}
+                  maxLength={2000}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                  placeholder="What would have made you renew?"
+                />
+              </div>
+            </fieldset>
+          )}
           <div>
             <label htmlFor="delete-confirm" className="mb-1 block text-sm font-medium text-slate-700">
               Type <span className="font-bold">DELETE</span> to confirm
@@ -234,7 +304,7 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
             </button>
             <button
               type="submit"
-              disabled={busy || !canDelete}
+              disabled={busy || !canDelete || !reasonOk || !otherOk}
               className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-red-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
             >
               {busy ? 'Deleting…' : 'Delete account'}

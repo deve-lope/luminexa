@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
 
 from .auth_cookies import clear_auth_cookie, set_auth_cookie
-from .deletion import anonymize_user
+from .deletion import anonymize_user, record_provider_deletion_feedback
 from .emails import (
     send_account_deletion_email,
     send_email_verification_otp,
@@ -434,6 +434,12 @@ class DeleteAccountAPIView(APIView):
         if request.data.get('confirm') is not True:
             raise ValidationError({'confirm': 'Confirmation is required to delete your account.'})
         user = request.user
+        record_provider_deletion_feedback(
+            user=user,
+            reason=request.data.get('deletion_reason', ''),
+            detail=request.data.get('deletion_detail', ''),
+            channel='in_app',
+        )
         anonymize_user(user)
         Token.objects.filter(user=user).delete()
         response = Response({'detail': 'Your account has been deleted.'})
@@ -485,6 +491,12 @@ class DeleteAccountConfirmAPIView(APIView):
             return Response({'detail': 'This account has already been deleted.'})
         if not account_deletion_token.check_token(user, token):
             raise ValidationError({'detail': 'This deletion link is invalid or has expired.'})
+        record_provider_deletion_feedback(
+            user=user,
+            reason=request.data.get('deletion_reason', ''),
+            detail=request.data.get('deletion_detail', ''),
+            channel='public_link',
+        )
         anonymize_user(user)
         return Response({'detail': 'Your account has been deleted.'})
 

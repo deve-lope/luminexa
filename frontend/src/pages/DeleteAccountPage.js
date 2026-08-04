@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { userAPI } from '../utils/api';
+import { isProviderMember } from '../utils/postLoginRoute';
+import { PROVIDER_DELETION_REASONS } from '../utils/providerDeletionReasons';
 
 const CONTACT = 'support@luminex-a.com';
 const APP_URL = 'https://app.luminex-a.com';
@@ -46,27 +48,104 @@ function WhatHappens() {
   );
 }
 
+function ProviderExitFeedback({ reason, setReason, detail, setDetail }) {
+  return (
+    <fieldset className="mt-4 space-y-2">
+      <legend className="text-sm font-medium text-slate-700">
+        Why are you leaving / not renewing Pro?
+      </legend>
+      <p className="text-xs text-slate-500">
+        Required for business accounts. Helps us improve Luminexa — kept without your personal
+        details.
+      </p>
+      <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-2">
+        {PROVIDER_DELETION_REASONS.map((opt) => (
+          <label
+            key={opt.value}
+            className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-800 hover:bg-white"
+          >
+            <input
+              type="radio"
+              name="deletion-reason"
+              value={opt.value}
+              checked={reason === opt.value}
+              onChange={() => setReason(opt.value)}
+              className="mt-1"
+            />
+            <span>{opt.label}</span>
+          </label>
+        ))}
+      </div>
+      <label htmlFor="pub-deletion-detail" className="mb-1 block text-xs font-medium text-slate-600">
+        Anything else? {reason === 'other' ? '(required)' : '(optional)'}
+      </label>
+      <textarea
+        id="pub-deletion-detail"
+        rows={2}
+        value={detail}
+        onChange={(e) => setDetail(e.target.value)}
+        maxLength={2000}
+        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+        placeholder="What would have made you renew?"
+      />
+    </fieldset>
+  );
+}
+
 export default function DeleteAccountPage() {
   const [params] = useSearchParams();
   const uid = params.get('uid');
   const token = params.get('token');
-  const { isAuthenticated, logout, loading } = useAuth();
+  const { isAuthenticated, logout, loading, memberships } = useAuth();
   const navigate = useNavigate();
+  const isProvider = isProviderMember(memberships);
 
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null); // 'requested' | 'deleted'
   const [confirmText, setConfirmText] = useState('');
+  const [deletionReason, setDeletionReason] = useState('');
+  const [deletionDetail, setDeletionDetail] = useState('');
 
   // Mode 1: confirming from an emailed link.
   const confirmMode = Boolean(uid && token);
+  // Email-link deletes may be providers; collect reason whenever confirming.
+  const needsExitFeedback = confirmMode || (!loading && isAuthenticated && isProvider);
+
+  const parseDeleteError = (err) => {
+    const d = err.response?.data;
+    return (
+      d?.deletion_reason?.[0] ||
+      d?.deletion_detail?.[0] ||
+      d?.detail ||
+      'Could not delete your account. Please try again.'
+    );
+  };
+
+  const feedbackPayload = needsExitFeedback
+    ? { deletion_reason: deletionReason, deletion_detail: deletionDetail.trim() }
+    : {};
+
+  const validateFeedback = () => {
+    if (!needsExitFeedback) return true;
+    if (!deletionReason) {
+      setError('Please select a reason so we can improve Luminexa.');
+      return false;
+    }
+    if (deletionReason === 'other' && !deletionDetail.trim()) {
+      setError('Please add a short note when selecting Other.');
+      return false;
+    }
+    return true;
+  };
 
   const runConfirm = async () => {
+    if (!validateFeedback()) return;
     setBusy(true);
     setError(null);
     try {
-      const { data } = await userAPI.confirmAccountDeletion({ uid, token });
+      await userAPI.confirmAccountDeletion({ uid, token, ...feedbackPayload });
       setDone('deleted');
       if (isAuthenticated) {
         try {
@@ -75,9 +154,8 @@ export default function DeleteAccountPage() {
           /* ignore */
         }
       }
-      return data;
     } catch (err) {
-      setError(err.response?.data?.detail || 'This deletion link is invalid or has expired.');
+      setError(parseDeleteError(err) || 'This deletion link is invalid or has expired.');
     } finally {
       setBusy(false);
     }
@@ -89,10 +167,11 @@ export default function DeleteAccountPage() {
       setError('Type DELETE to confirm.');
       return;
     }
+    if (!validateFeedback()) return;
     setBusy(true);
     setError(null);
     try {
-      await userAPI.deleteAccount();
+      await userAPI.deleteAccount(feedbackPayload);
       setDone('deleted');
       try {
         await logout();
@@ -100,7 +179,7 @@ export default function DeleteAccountPage() {
         /* ignore */
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not delete your account. Please try again.');
+      setError(parseDeleteError(err));
     } finally {
       setBusy(false);
     }
@@ -172,9 +251,15 @@ export default function DeleteAccountPage() {
         <div className="mt-6 rounded-2xl border border-red-100 bg-white p-5">
           <h2 className="text-base font-bold text-slate-900">Confirm account deletion</h2>
           <p className="mt-1 text-sm text-slate-600">
-            You followed a deletion link. Click below to permanently delete your account. This
+            You followed a deletion link. Confirm below to permanently delete your account. This
             can&apos;t be undone.
           </p>
+          <ProviderExitFeedback
+            reason={deletionReason}
+            setReason={setDeletionReason}
+            detail={deletionDetail}
+            setDetail={setDeletionDetail}
+          />
           <button
             type="button"
             onClick={runConfirm}
@@ -190,6 +275,14 @@ export default function DeleteAccountPage() {
           <p className="mt-1 text-sm text-slate-600">
             Type <span className="font-bold">DELETE</span> to permanently delete your account now.
           </p>
+          {needsExitFeedback && (
+            <ProviderExitFeedback
+              reason={deletionReason}
+              setReason={setDeletionReason}
+              detail={deletionDetail}
+              setDetail={setDeletionDetail}
+            />
+          )}
           <input
             type="text"
             autoComplete="off"
