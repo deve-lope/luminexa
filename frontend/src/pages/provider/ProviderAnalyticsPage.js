@@ -238,66 +238,6 @@ export default function ProviderAnalyticsPage() {
         </button>
       </div>
 
-      <section className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
-        <h2 className="text-sm font-semibold text-slate-900">Export All Business Data</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Download your complete business data for migration or backup. Includes bookings, customers,
-          invoices, messages, services, schedule, and more.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={dataExportBusy}
-            onClick={() => downloadDataExport('json')}
-            className="min-h-[40px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60"
-          >
-            {dataExportBusy ? 'Exporting…' : 'Download JSON'}
-          </button>
-          <button
-            type="button"
-            disabled={dataExportBusy}
-            onClick={() => downloadDataExport('csv')}
-            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {dataExportBusy ? 'Exporting…' : 'Download CSV (ZIP)'}
-          </button>
-          <button
-            type="button"
-            disabled={dataExportBusy}
-            onClick={() => downloadDataExport('excel')}
-            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {dataExportBusy ? 'Exporting…' : 'Download Excel'}
-          </button>
-        </div>
-        <details className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          <summary className="cursor-pointer font-semibold text-slate-800">
-            What’s in this export & how to migrate
-          </summary>
-          <div className="mt-2 space-y-2 leading-relaxed">
-            <p>
-              This is a backup / migration snapshot — not a one-click import into another booking
-              app. Each download also includes a short README (JSON field, ZIP <code>README.txt</code>,
-              or Excel README sheet).
-            </p>
-            <ol className="list-decimal space-y-1 pl-4">
-              <li>Save a secure copy of the file.</li>
-              <li>Import <strong>customers</strong> into your contacts / CRM.</li>
-              <li>Recreate <strong>services</strong> and <strong>weekly hours</strong> in your new tool.</li>
-              <li>Keep <strong>bookings</strong> and <strong>invoices</strong> as your history archive.</li>
-              <li>When ready, cancel from Billing if you are leaving Luminexa.</li>
-            </ol>
-            <p>
-              Customer contact details are included. Handle the file securely — you are responsible
-              for that data after download.
-            </p>
-          </div>
-        </details>
-        <p className="mt-2 text-xs text-slate-500">
-          <span className="font-semibold">Pro subscription required.</span> Export is owner-only.
-        </p>
-      </section>
-
       <div
         className="flex gap-1 overflow-x-auto rounded-2xl border border-luminexa-line bg-white p-1 shadow-lx-soft"
         role="tablist"
@@ -494,6 +434,66 @@ export default function ProviderAnalyticsPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
+        <h2 className="text-sm font-semibold text-slate-900">Export All Business Data</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Download your complete business data for migration or backup. Includes bookings, customers,
+          invoices, messages, services, schedule, and more.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('json')}
+            className="min-h-[40px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download JSON'}
+          </button>
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('csv')}
+            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download CSV (ZIP)'}
+          </button>
+          <button
+            type="button"
+            disabled={dataExportBusy}
+            onClick={() => downloadDataExport('excel')}
+            className="min-h-[40px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {dataExportBusy ? 'Exporting…' : 'Download Excel'}
+          </button>
+        </div>
+        <details className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <summary className="cursor-pointer font-semibold text-slate-800">
+            What’s in this export & how to migrate
+          </summary>
+          <div className="mt-2 space-y-2 leading-relaxed">
+            <p>
+              This is a backup / migration snapshot — not a one-click import into another booking
+              app. Each download also includes a short README (JSON field, ZIP <code>README.txt</code>,
+              or Excel README sheet).
+            </p>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>Save a secure copy of the file.</li>
+              <li>Import <strong>customers</strong> into your contacts / CRM.</li>
+              <li>Recreate <strong>services</strong> and <strong>weekly hours</strong> in your new tool.</li>
+              <li>Keep <strong>bookings</strong> and <strong>invoices</strong> as your history archive.</li>
+              <li>When ready, cancel from Billing if you are leaving Luminexa.</li>
+            </ol>
+            <p>
+              Customer contact details are included. Handle the file securely — you are responsible
+              for that data after download.
+            </p>
+          </div>
+        </details>
+        <p className="mt-2 text-xs text-slate-500">
+          <span className="font-semibold">Pro subscription required.</span> Export is owner-only.
+        </p>
       </section>
 
       {fetching && (

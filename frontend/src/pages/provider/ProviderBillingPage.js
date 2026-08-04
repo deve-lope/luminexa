@@ -17,7 +17,7 @@ export default function ProviderBillingPage() {
   );
 
   return (
-    <div className="mx-auto max-w-lg space-y-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4">
       <div>
         <p className="text-xs font-medium text-slate-500">
           <Link to={providerAccount(orgSlug)} className="text-luminexa-accent hover:underline">
