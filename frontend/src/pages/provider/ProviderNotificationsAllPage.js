@@ -5,23 +5,12 @@ import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
+import { providerNotifications } from '../../utils/providerPaths';
 import {
-  providerNotifications,
-  providerRequests,
-  providerSchedule,
-} from '../../utils/providerPaths';
-
-function notificationDestination(orgSlug, n) {
-  if (
-    n.kind === 'new_customer_booking' ||
-    n.kind === 'customer_cancelled_booking' ||
-    n.kind === 'customer_reschedule_request' ||
-    n.kind === 'payment_received'
-  ) {
-    return providerRequests(orgSlug);
-  }
-  return providerSchedule(orgSlug);
-}
+  dismissProviderNotificationQuietly,
+  emitProviderNotificationsChanged,
+  providerNotificationDestination,
+} from '../../utils/providerNotifications';
 
 export default function ProviderNotificationsAllPage() {
   const { orgSlug } = useProviderOrg();
@@ -52,25 +41,21 @@ export default function ProviderNotificationsAllPage() {
   );
 
   const markRead = async (id) => {
-    try {
-      await jobsAPI.dismissNotification(orgSlug, id);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id
-            ? { ...n, is_read: true, dismissed_at: n.dismissed_at || new Date().toISOString() }
-            : n,
-        ),
-      );
-    } catch {
-      /* still navigate */
-    }
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === id
+          ? { ...n, is_read: true, dismissed_at: n.dismissed_at || new Date().toISOString() }
+          : n,
+      ),
+    );
+    await dismissProviderNotificationQuietly(orgSlug, id);
   };
 
   const openNotification = async (n) => {
     if (!n.is_read && !n.dismissed_at) {
       await markRead(n.id);
     }
-    navigate(notificationDestination(orgSlug, n));
+    navigate(providerNotificationDestination(orgSlug, n));
   };
 
   const markAllRead = async () => {
@@ -85,6 +70,7 @@ export default function ProviderNotificationsAllPage() {
           dismissed_at: n.dismissed_at || new Date().toISOString(),
         })),
       );
+      emitProviderNotificationsChanged();
       showToast('All updates marked as read.', 'success');
     } catch {
       showToast('Could not mark updates as read.', 'error');

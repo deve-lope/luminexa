@@ -1,0 +1,60 @@
+import { jobsAPI } from './api';
+import {
+  providerMessages,
+  providerRequestDetail,
+  providerRequests,
+  providerSchedule,
+} from './providerPaths';
+
+export const PROVIDER_NOTIFICATIONS_CHANGED_EVENT = 'luminexa:provider-notifications-changed';
+
+const BOOKING_ACTION_KINDS = new Set([
+  'new_customer_booking',
+  'customer_cancelled_booking',
+  'customer_reschedule_request',
+  'payment_received',
+]);
+
+/**
+ * Where a provider in-app alert should navigate on click.
+ * Prefer link_path from the API; fall back by kind for older rows.
+ */
+export function providerNotificationDestination(orgSlug, n) {
+  if (n?.link_path) return n.link_path;
+
+  if (n?.kind === 'new_message') {
+    if (n.booking_id) return `${providerMessages(orgSlug)}?booking=${n.booking_id}`;
+    if (n.inquiry_id) return `${providerMessages(orgSlug)}?inquiry=${n.inquiry_id}`;
+    return providerMessages(orgSlug);
+  }
+
+  if (BOOKING_ACTION_KINDS.has(n?.kind)) {
+    if (n.booking_id) return providerRequestDetail(orgSlug, 'booking', n.booking_id);
+    return providerRequests(orgSlug);
+  }
+
+  return providerSchedule(orgSlug);
+}
+
+/** Short CTA label for Today / alert cards. */
+export function providerNotificationCtaLabel(n) {
+  if (n?.kind === 'new_message') return 'Open messages';
+  if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';
+  return 'Open schedule';
+}
+
+export function emitProviderNotificationsChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(PROVIDER_NOTIFICATIONS_CHANGED_EVENT));
+}
+
+/** Dismiss one alert; ignore failures so navigation can continue. */
+export async function dismissProviderNotificationQuietly(orgSlug, notificationId) {
+  if (!orgSlug || !notificationId) return;
+  try {
+    await jobsAPI.dismissNotification(orgSlug, notificationId);
+    emitProviderNotificationsChanged();
+  } catch {
+    /* still allow the user to open the destination */
+  }
+}

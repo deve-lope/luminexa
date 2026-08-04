@@ -1,16 +1,14 @@
 from django.db.models import Q
 from django.utils import timezone
-from django.utils.formats import date_format
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from .models import Booking, CustomerServiceInquiry, ServiceRequestMessage
+from .datetime_display import format_booking_when
+from .models import ServiceRequestMessage
 from .permissions import is_org_staff
 
 
 def _format_when(dt):
-    if not dt:
-        return ''
-    return date_format(timezone.localtime(dt), 'DATETIME_FORMAT')
+    return format_booking_when(dt)
 
 
 def booking_approval_message_body(booking):
@@ -94,6 +92,93 @@ def _preview_body(body, *, max_len=140):
     return f'{text[: max_len - 1].rstrip()}…'
 
 
+def _thread_has_unread(*, last_message, viewer_is_customer, customer_id, read_at):
+    """Unread when the latest message is from the other party after the viewer last opened the thread."""
+    if not last_message or not last_message.sender_id:
+        return False
+    if viewer_is_customer:
+        from_other = last_message.sender_id != customer_id
+    else:
+        from_other = last_message.sender_id == customer_id
+    if not from_other:
+        return False
+    if read_at is None:
+        return True
+    return last_message.created_at > read_at
+
+
+def mark_booking_messages_read(*, booking, user):
+    """Record that user opened the booking thread (customer or provider staff)."""
+    now = timezone.now()
+    if booking.customer_id == user.id:
+        booking.customer_messages_read_at = now
+        booking.save(update_fields=['customer_messages_read_at', 'updated_at'])
+        _dismiss_booking_new_message_notifications(booking=booking, for_customer=True)
+    elif is_org_staff(user, booking.organization):
+        booking.provider_messages_read_at = now
+        booking.save(update_fields=['provider_messages_read_at', 'updated_at'])
+        _dismiss_booking_new_message_notifications(booking=booking, for_provider=True)
+
+
+def mark_inquiry_messages_read(*, inquiry, user):
+    """Record that user opened the inquiry thread (customer or provider staff)."""
+    now = timezone.now()
+    if inquiry.customer_id == user.id:
+        inquiry.customer_messages_read_at = now
+        inquiry.save(update_fields=['customer_messages_read_at'])
+        _dismiss_inquiry_new_message_notifications(inquiry=inquiry, for_customer=True)
+    elif is_org_staff(user, inquiry.organization):
+        inquiry.provider_messages_read_at = now
+        inquiry.save(update_fields=['provider_messages_read_at'])
+        _dismiss_inquiry_new_message_notifications(inquiry=inquiry, for_provider=True)
+
+
+def _dismiss_booking_new_message_notifications(*, booking, for_customer=False, for_provider=False):
+    """Clear in-app new_message alerts for this booking thread only."""
+    from .models import CustomerNotification, ProviderNotification
+
+    now = timezone.now()
+    if for_customer:
+        CustomerNotification.objects.filter(
+            customer_id=booking.customer_id,
+            booking=booking,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+    if for_provider:
+        ProviderNotification.objects.filter(
+            organization_id=booking.organization_id,
+            booking=booking,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+
+
+def _dismiss_inquiry_new_message_notifications(*, inquiry, for_customer=False, for_provider=False):
+    """Clear in-app new_message alerts for this inquiry thread only."""
+    from .models import CustomerNotification, ProviderNotification
+
+    now = timezone.now()
+    if for_customer:
+        CustomerNotification.objects.filter(
+            customer_id=inquiry.customer_id,
+            inquiry=inquiry,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+    if for_provider:
+        ProviderNotification.objects.filter(
+            organization_id=inquiry.organization_id,
+            inquiry=inquiry,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        ).update(dismissed_at=now)
+
+def count_unread_summaries(summaries):
+    """Number of conversation threads with an unread latest message for the viewer."""
+    return sum(1 for s in summaries if s.get('has_unread'))
+
+
 def list_customer_conversation_summaries(user):
     """Booking + inquiry threads for the customer inbox, newest activity first."""
     messages = (
@@ -134,6 +219,12 @@ def list_customer_conversation_summaries(user):
                 'last_message_preview': _preview_body(msg.body),
                 'last_message_at': msg.created_at,
                 'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+                'has_unread': _thread_has_unread(
+                    last_message=msg,
+                    viewer_is_customer=True,
+                    customer_id=booking.customer_id,
+                    read_at=booking.customer_messages_read_at,
+                ),
             })
         elif msg.inquiry_id:
             key = ('inquiry', msg.inquiry_id)
@@ -158,6 +249,12 @@ def list_customer_conversation_summaries(user):
                 'last_message_preview': _preview_body(msg.body),
                 'last_message_at': msg.created_at,
                 'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+                'has_unread': _thread_has_unread(
+                    last_message=msg,
+                    viewer_is_customer=True,
+                    customer_id=inquiry.customer_id,
+                    read_at=inquiry.customer_messages_read_at,
+                ),
             })
     return summaries
 
@@ -206,6 +303,12 @@ def list_provider_conversation_summaries(organization):
                 'last_message_preview': _preview_body(msg.body),
                 'last_message_at': msg.created_at,
                 'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+                'has_unread': _thread_has_unread(
+                    last_message=msg,
+                    viewer_is_customer=False,
+                    customer_id=booking.customer_id,
+                    read_at=booking.provider_messages_read_at,
+                ),
             })
         elif msg.inquiry_id:
             key = ('inquiry', msg.inquiry_id)
@@ -232,15 +335,29 @@ def list_provider_conversation_summaries(organization):
                 'last_message_preview': _preview_body(msg.body),
                 'last_message_at': msg.created_at,
                 'last_sender_name': msg.sender.full_name if msg.sender_id else '',
+                'has_unread': _thread_has_unread(
+                    last_message=msg,
+                    viewer_is_customer=False,
+                    customer_id=inquiry.customer_id,
+                    read_at=inquiry.provider_messages_read_at,
+                ),
             })
     return summaries
 
 
-def _notify_new_message(message):
-    """Email the other party about a new message (non-blocking — failures are logged)."""
-    from .notifications import _send_to, _public_app_url, _provider_staff_emails
+def _notify_new_message(message, *, create_in_app=True):
+    """Email the other party about a new message; optionally create an in-app alert."""
+    from .models import CustomerNotification, ProviderNotification
+    from .notifications import (
+        _send_to,
+        _public_app_url,
+        _provider_staff_emails,
+        create_customer_notification,
+        provider_messages_link_path,
+    )
 
     sender = message.sender
+    preview = _preview_body(message.body, max_len=120)
 
     if message.booking_id:
         booking = message.booking
@@ -248,7 +365,8 @@ def _notify_new_message(message):
         service_name = booking.service.name if booking.service_id else 'your booking'
         ref = f'BK-{booking.pk:05d}'
         subject = f'New message about {service_name} ({ref}) — {org.name}'
-        thread_url = f'{_public_app_url()}/provider/{org.slug}/requests/booking/{booking.pk}'
+        messages_path = provider_messages_link_path(org.slug, booking_id=booking.pk)
+        thread_url = f'{_public_app_url()}{messages_path}'
 
         sender_is_staff = is_org_staff(sender, org)
         if sender_is_staff:
@@ -261,8 +379,18 @@ def _notify_new_message(message):
                         f'{org.name} sent you a message about {service_name}.',
                         f'"{message.body}"',
                         '',
-                        f'Reply at: {thread_url}',
+                        f'Reply at: {_public_app_url()}/customer/messages',
                     ],
+                )
+            if create_in_app:
+                create_customer_notification(
+                    customer=booking.customer,
+                    kind=CustomerNotification.Kind.NEW_MESSAGE,
+                    title=f'New message — {org.name}',
+                    message=f'{org.name}: {preview}',
+                    organization=org,
+                    booking=booking,
+                    link_path='/customer/messages',
                 )
         else:
             # Notify provider staff
@@ -279,6 +407,18 @@ def _notify_new_message(message):
                         f'Reply at: {thread_url}',
                     ],
                 )
+            if create_in_app:
+                customer_name = booking.customer.full_name or booking.customer.email
+                ProviderNotification.objects.create(
+                    organization=org,
+                    booking=booking,
+                    kind=ProviderNotification.Kind.NEW_MESSAGE,
+                    message=(
+                        f'{customer_name} sent a message about {service_name} ({ref}). '
+                        'Open Messages to reply.'
+                    ),
+                    link_path=messages_path,
+                )
 
     elif message.inquiry_id:
         inquiry = message.inquiry
@@ -288,7 +428,8 @@ def _notify_new_message(message):
         )
         ref = f'SR-{inquiry.pk:05d}'
         subject = f'New message about {service_label} ({ref}) — {org.name}'
-        thread_url = f'{_public_app_url()}/provider/{org.slug}/requests/inquiry/{inquiry.pk}'
+        messages_path = provider_messages_link_path(org.slug, inquiry_id=inquiry.pk)
+        thread_url = f'{_public_app_url()}{messages_path}'
 
         sender_is_staff = is_org_staff(sender, org)
         if sender_is_staff:
@@ -300,8 +441,18 @@ def _notify_new_message(message):
                         f'{org.name} sent you a message about {service_label}.',
                         f'"{message.body}"',
                         '',
-                        f'Reply at: {thread_url}',
+                        f'Reply at: {_public_app_url()}/customer/messages',
                     ],
+                )
+            if create_in_app:
+                create_customer_notification(
+                    customer=inquiry.customer,
+                    kind=CustomerNotification.Kind.NEW_MESSAGE,
+                    title=f'New message — {org.name}',
+                    message=f'{org.name}: {preview}',
+                    organization=org,
+                    inquiry=inquiry,
+                    link_path='/customer/messages',
                 )
         else:
             staff_emails = _provider_staff_emails(org)
@@ -317,27 +468,42 @@ def _notify_new_message(message):
                         f'Reply at: {thread_url}',
                     ],
                 )
+            if create_in_app:
+                customer_name = inquiry.customer.full_name or inquiry.customer.email
+                ProviderNotification.objects.create(
+                    organization=org,
+                    inquiry=inquiry,
+                    kind=ProviderNotification.Kind.NEW_MESSAGE,
+                    message=(
+                        f'{customer_name} sent a message about {service_label} ({ref}). '
+                        'Open Messages to reply.'
+                    ),
+                    link_path=messages_path,
+                )
 
 
-def post_booking_message(*, booking, sender, body):
+def post_booking_message(*, booking, sender, body, create_in_app=True):
     if not can_access_booking_messages(sender, booking):
         raise PermissionDenied('You cannot message on this booking.')
     text = (body or '').strip()
     if len(text) < 1:
         raise ValidationError({'body': 'Message cannot be empty.'})
     msg = ServiceRequestMessage.objects.create(booking=booking, sender=sender, body=text)
-    _notify_new_message(msg)
+    # Sender has seen the thread through their own send.
+    mark_booking_messages_read(booking=booking, user=sender)
+    _notify_new_message(msg, create_in_app=create_in_app)
     return msg
 
 
-def post_inquiry_message(*, inquiry, sender, body):
+def post_inquiry_message(*, inquiry, sender, body, create_in_app=True):
     if not can_access_inquiry_messages(sender, inquiry):
         raise PermissionDenied('You cannot message on this request.')
     text = (body or '').strip()
     if len(text) < 1:
         raise ValidationError({'body': 'Message cannot be empty.'})
     msg = ServiceRequestMessage.objects.create(inquiry=inquiry, sender=sender, body=text)
-    _notify_new_message(msg)
+    mark_inquiry_messages_read(inquiry=inquiry, user=sender)
+    _notify_new_message(msg, create_in_app=create_in_app)
     return msg
 
 
@@ -347,6 +513,7 @@ def post_booking_approval_message(*, booking, sender):
         booking=booking,
         sender=sender,
         body=booking_approval_message_body(booking),
+        create_in_app=False,  # BOOKING_CONFIRMED notification already covers this
     )
 
 
@@ -381,4 +548,5 @@ def post_inquiry_approval_message(*, inquiry, sender):
         inquiry=inquiry,
         sender=sender,
         body=inquiry_approval_message_body(inquiry),
+        create_in_app=False,
     )

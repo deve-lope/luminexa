@@ -681,23 +681,14 @@ export default function CustomerBookServicePage() {
                 </p>
               )}
 
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={submittingId != null}
-                  onClick={() => promptBookingConfirm(selectedSlot)}
-                  className="lx-btn-primary min-h-[48px] w-full disabled:opacity-60"
-                >
-                  {primaryBookingLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSlot(null)}
-                  className="lx-btn-ghost min-h-[44px] w-full"
-                >
-                  Change time
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={submittingId != null}
+                onClick={() => promptBookingConfirm(selectedSlot)}
+                className="lx-btn-primary min-h-[48px] w-full disabled:opacity-60"
+              >
+                {primaryBookingLabel}
+              </button>
             </section>
           )}
         </>

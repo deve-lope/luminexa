@@ -3,10 +3,10 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMessage, send_mail
 from django.utils import timezone
-from django.utils.formats import date_format
 
 from businesses.models import Organization
 
+from .datetime_display import format_booking_when
 from .models import CustomerNotification, ProviderNotification, Service
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,21 @@ def provider_booking_detail_url(org_slug, booking_id):
     return f'{_public_app_url()}/provider/{org_slug}/schedule/booking/{booking_id}'
 
 
+def provider_request_link_path(org_slug, booking_id):
+    """In-app path to the request detail where staff can approve / act."""
+    return f'/provider/{org_slug}/requests/booking/{booking_id}'
+
+
+def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None):
+    """In-app Messages inbox, optionally deep-linked to a conversation."""
+    base = f'/provider/{org_slug}/messages'
+    if booking_id:
+        return f'{base}?booking={booking_id}'
+    if inquiry_id:
+        return f'{base}?inquiry={inquiry_id}'
+    return base
+
+
 def customer_bookings_url():
     return f'{_public_app_url()}/customer/bookings'
 
@@ -29,9 +44,7 @@ def customer_history_url():
 
 
 def _format_when(dt):
-    if not dt:
-        return ''
-    return date_format(timezone.localtime(dt), 'DATETIME_FORMAT')
+    return format_booking_when(dt)
 
 
 def _provider_staff_emails(org):
@@ -81,6 +94,7 @@ def create_customer_notification(
     message,
     organization=None,
     booking=None,
+    inquiry=None,
     link_path='',
 ):
     """Create an in-app customer alert (shown after login on Home)."""
@@ -90,6 +104,7 @@ def create_customer_notification(
         customer=customer,
         organization=organization,
         booking=booking,
+        inquiry=inquiry,
         kind=kind,
         title=title[:200],
         message=message[:500],
@@ -127,13 +142,16 @@ def create_provider_booking_notification(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
     customer_name = _customer_label(booking)
     action = 'booked' if booking.status == booking.Status.CONFIRMED else 'requested'
+    org = booking.organization
     ProviderNotification.objects.create(
-        organization=booking.organization,
+        organization=org,
+        booking=booking,
         kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
         message=(
             f'{customer_name} {action} {service_name} for {_format_when(booking.start_at)}. '
             'Open Service requests to review or manage it.'
         ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
     )
 
 
@@ -141,14 +159,17 @@ def create_provider_customer_cancel_notification(booking):
     """In-app alert when a customer cancels a booking."""
     service_name = booking.service.name if booking.service_id else 'Service'
     customer_name = _customer_label(booking)
+    org = booking.organization
     ProviderNotification.objects.create(
-        organization=booking.organization,
+        organization=org,
+        booking=booking,
         kind=ProviderNotification.Kind.CUSTOMER_CANCELLED_BOOKING,
         message=(
             f'{customer_name} cancelled {service_name} '
             f'(was {_format_when(booking.start_at)}). '
             'Open Service requests if you need to follow up.'
         ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
     )
 
 
@@ -156,14 +177,17 @@ def create_provider_customer_reschedule_notification(booking):
     """In-app alert when a customer asks to reschedule."""
     service_name = booking.service.name if booking.service_id else 'Service'
     customer_name = _customer_label(booking)
+    org = booking.organization
     ProviderNotification.objects.create(
-        organization=booking.organization,
+        organization=org,
+        booking=booking,
         kind=ProviderNotification.Kind.CUSTOMER_RESCHEDULE_REQUEST,
         message=(
             f'{customer_name} asked to reschedule {service_name} '
             f'to {_format_when(booking.start_at)}. '
             'Open Service requests to review or approve.'
         ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
     )
 
 
@@ -371,13 +395,18 @@ def notify_invoice_paid(invoice):
         },
     )
     customer_name = _customer_label(booking)
+    org = booking.organization
     ProviderNotification.objects.get_or_create(
-        organization=booking.organization,
+        organization=org,
+        booking=booking,
         kind=ProviderNotification.Kind.PAYMENT_RECEIVED,
-        message=(
-            f'Payment received: {customer_name} paid {amount} '
-            f'for invoice {invoice.number}.'
-        ),
+        defaults={
+            'message': (
+                f'Payment received: {customer_name} paid {amount} '
+                f'for invoice {invoice.number}.'
+            ),
+            'link_path': provider_request_link_path(org.slug, booking.pk),
+        },
     )
 
 

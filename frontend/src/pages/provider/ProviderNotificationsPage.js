@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
@@ -7,8 +7,12 @@ import {
   providerNotificationsAll,
   providerRequestDetail,
   providerRequests,
-  providerSchedule,
 } from '../../utils/providerPaths';
+import {
+  PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
+  dismissProviderNotificationQuietly,
+  providerNotificationDestination,
+} from '../../utils/providerNotifications';
 import parseApiError from '../../utils/parseApiError';
 
 function sortKey(item) {
@@ -18,6 +22,7 @@ function sortKey(item) {
 
 export default function ProviderNotificationsPage() {
   const { orgSlug } = useProviderOrg();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,6 +41,12 @@ export default function ProviderNotificationsPage() {
     load();
     const id = window.setInterval(load, 60000);
     return () => window.clearInterval(id);
+  }, [load]);
+
+  useEffect(() => {
+    const onChanged = () => load();
+    window.addEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
   }, [load]);
 
   const pendingItems = useMemo(() => {
@@ -60,6 +71,19 @@ export default function ProviderNotificationsPage() {
   }, [data]);
 
   const notifications = data?.notifications || [];
+
+  const openNotification = async (n) => {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: (prev.notifications || []).filter((x) => x.id !== n.id),
+          }
+        : prev,
+    );
+    await dismissProviderNotificationQuietly(orgSlug, n.id);
+    navigate(providerNotificationDestination(orgSlug, n));
+  };
 
   if (loading && !data) {
     return <p className="py-12 text-center text-slate-500">Loading…</p>;
@@ -134,25 +158,20 @@ export default function ProviderNotificationsPage() {
           <p className="mt-2 text-sm text-slate-500">No new alerts. Show all for earlier updates.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {notifications.slice(0, 5).map((n) => {
-              const toRequests =
-                n.kind === 'new_customer_booking' ||
-                n.kind === 'customer_cancelled_booking' ||
-                n.kind === 'customer_reschedule_request';
-              return (
-                <li key={n.id}>
-                  <Link
-                    to={toRequests ? providerRequests(orgSlug) : providerSchedule(orgSlug)}
-                    className="block rounded-xl border border-violet-100 bg-violet-50/70 p-3 text-sm text-violet-950"
-                  >
-                    <p className="font-semibold">{n.message}</p>
-                    {n.created_at && (
-                      <p className="mt-1 text-xs text-violet-800/70">{formatWhen(n.created_at)}</p>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
+            {notifications.slice(0, 5).map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => openNotification(n)}
+                  className="block w-full rounded-xl border border-violet-100 bg-violet-50/70 p-3 text-left text-sm text-violet-950"
+                >
+                  <p className="font-semibold">{n.message}</p>
+                  {n.created_at && (
+                    <p className="mt-1 text-xs text-violet-800/70">{formatWhen(n.created_at)}</p>
+                  )}
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </section>

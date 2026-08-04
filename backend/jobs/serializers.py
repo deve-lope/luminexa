@@ -235,10 +235,15 @@ class WeeklyScheduleBlockSerializer(serializers.ModelSerializer):
 
 class ProviderNotificationSerializer(serializers.ModelSerializer):
     is_read = serializers.SerializerMethodField()
+    booking_id = serializers.IntegerField(source='booking.id', read_only=True, allow_null=True)
+    inquiry_id = serializers.IntegerField(source='inquiry.id', read_only=True, allow_null=True)
 
     class Meta:
         model = ProviderNotification
-        fields = ('id', 'kind', 'message', 'week_start', 'created_at', 'dismissed_at', 'is_read')
+        fields = (
+            'id', 'kind', 'message', 'link_path', 'booking_id', 'inquiry_id',
+            'week_start', 'created_at', 'dismissed_at', 'is_read',
+        )
         read_only_fields = fields
 
     def get_is_read(self, obj):
@@ -250,13 +255,14 @@ class CustomerNotificationSerializer(serializers.ModelSerializer):
         source='organization.name', read_only=True, allow_null=True,
     )
     booking_id = serializers.IntegerField(source='booking.id', read_only=True, allow_null=True)
+    inquiry_id = serializers.IntegerField(source='inquiry.id', read_only=True, allow_null=True)
     is_read = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerNotification
         fields = (
             'id', 'kind', 'title', 'message', 'link_path',
-            'organization_name', 'booking_id', 'created_at',
+            'organization_name', 'booking_id', 'inquiry_id', 'created_at',
             'dismissed_at', 'is_read',
         )
         read_only_fields = fields
@@ -356,6 +362,7 @@ class CustomerConversationSummarySerializer(serializers.Serializer):
     last_message_at = serializers.DateTimeField()
     last_sender_name = serializers.CharField(allow_blank=True)
     customer_name = serializers.CharField(required=False, allow_blank=True, default='')
+    has_unread = serializers.BooleanField(required=False, default=False)
 
 
 class ProviderServiceRequestListSerializer(serializers.Serializer):
@@ -650,6 +657,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 
 class BookingStatusEventSerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField()
+    note = serializers.SerializerMethodField()
 
     class Meta:
         model = BookingStatusEvent
@@ -662,6 +670,10 @@ class BookingStatusEventSerializer(serializers.ModelSerializer):
         if not obj.actor_id:
             return 'System'
         return obj.actor.full_name or obj.actor.email
+
+    def get_note(self, obj):
+        from .datetime_display import humanize_activity_note
+        return humanize_activity_note(obj.note)
 
 
 class BookingDetailSerializer(serializers.ModelSerializer):

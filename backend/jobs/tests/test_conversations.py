@@ -141,3 +141,157 @@ class CustomerConversationsAPITests(TestCase):
         self.assertEqual(results[1]['id'], self.booking.id)
         self.assertEqual(results[1]['last_message_preview'], 'Older booking note')
         self.assertEqual(results[1]['reference'], f'BK-{self.booking.pk:05d}')
+        self.assertTrue(results[1]['has_unread'])
+        self.assertFalse(results[0]['has_unread'])
+        self.assertEqual(res.data['unread_count'], 1)
+
+    def test_opening_messages_marks_customer_thread_read(self):
+        ServiceRequestMessage.objects.create(
+            booking=self.booking,
+            sender=self.owner,
+            body='Hello from the shop',
+        )
+        self.client.force_authenticate(user=self.customer)
+        list_before = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
+        self.assertTrue(list_before.data['results'][0]['has_unread'])
+        self.assertEqual(list_before.data['unread_count'], 1)
+
+        open_res = self.client.get(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(open_res.status_code, 200)
+
+        list_after = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
+        self.assertFalse(list_after.data['results'][0]['has_unread'])
+        self.assertEqual(list_after.data['unread_count'], 0)
+
+
+class ProviderConversationsAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            email='owner-pconv@test.local',
+            password='password123',
+            full_name='Owner',
+            phone='5552000001',
+            public_ref='cus9201',
+        )
+        self.customer = User.objects.create_user(
+            email='customer-pconv@test.local',
+            password='password123',
+            full_name='Customer',
+            phone='5552000002',
+            public_ref='cus9202',
+        )
+        self.org = Organization.objects.create(
+            name='Prov Conv Co',
+            slug='prov-conv-co',
+            booking_policy=Organization.BookingPolicy.APPROVAL,
+            profile_public=True,
+            is_active=True,
+            public_ref='pro9201',
+            subscription_status='active',
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=self.owner,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        self.service = Service.objects.create(
+            organization=self.org,
+            name='Tune up',
+            duration_minutes=60,
+            base_price='90.00',
+            is_active=True,
+        )
+        start = timezone.now() + timedelta(days=2)
+        end = start + timedelta(hours=1)
+        self.slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=start,
+            end_at=end,
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        self.booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=start,
+            end_at=end,
+            status=Booking.Status.CONFIRMED,
+            service_address='456 Oak St',
+        )
+
+    def test_customer_message_creates_provider_notification_and_unread(self):
+        from jobs.models import ProviderNotification
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'Can you arrive earlier?'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+
+        note = ProviderNotification.objects.filter(
+            organization=self.org,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+        ).first()
+        self.assertIsNotNone(note)
+        self.assertIn('Customer', note.message)
+        self.assertEqual(note.booking_id, self.booking.id)
+        self.assertEqual(
+            note.link_path,
+            f'/provider/{self.org.slug}/messages?booking={self.booking.id}',
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        inbox = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/conversations/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(inbox.status_code, 200)
+        self.assertEqual(inbox.data['count'], 1)
+        self.assertEqual(inbox.data['unread_count'], 1)
+        self.assertTrue(inbox.data['results'][0]['has_unread'])
+
+        open_res = self.client.get(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(open_res.status_code, 200)
+
+        inbox_after = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/conversations/',
+            HTTP_HOST='localhost',
+        )
+        self.assertFalse(inbox_after.data['results'][0]['has_unread'])
+        self.assertEqual(inbox_after.data['unread_count'], 0)
+
+    def test_provider_message_creates_customer_notification(self):
+        from jobs.models import CustomerNotification
+
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'We will be there at 9.'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+
+        note = CustomerNotification.objects.filter(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+        ).first()
+        self.assertIsNotNone(note)
+        self.assertEqual(note.link_path, '/customer/messages')
+
+        self.client.force_authenticate(user=self.customer)
+        inbox = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
+        self.assertTrue(inbox.data['results'][0]['has_unread'])
+        self.assertEqual(inbox.data['unread_count'], 1)

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import TaskListItem from '../../components/tasks/TaskListItem';
 import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
@@ -14,6 +14,13 @@ import {
   providerShare,
   providerTasks,
 } from '../../utils/providerPaths';
+import {
+  PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
+  dismissProviderNotificationQuietly,
+  emitProviderNotificationsChanged,
+  providerNotificationCtaLabel,
+  providerNotificationDestination,
+} from '../../utils/providerNotifications';
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import { parseApiError } from '../../utils/taskDisplay';
@@ -32,6 +39,7 @@ function jobAccent(status) {
 
 export default function ProviderTodayPage() {
   const { orgSlug } = useProviderOrg();
+  const navigate = useNavigate();
   const { memberships } = useAuth();
   const isOwner = useMemo(
     () => memberships?.some((m) => m.organization_slug === orgSlug && m.role === 'owner'),
@@ -81,6 +89,12 @@ export default function ProviderTodayPage() {
     return () => window.clearInterval(intervalId);
   }, [orgSlug, load]);
 
+  useEffect(() => {
+    const onChanged = () => load();
+    window.addEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
+  }, [load]);
+
   const { openTasks, doneTasks } = useMemo(() => {
     const list = dashboard?.tasks || [];
     const open = list.filter((t) => !t.is_done);
@@ -127,13 +141,32 @@ export default function ProviderTodayPage() {
     }
   };
 
+  const removeNotificationLocally = (id) => {
+    setDashboard((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: (prev.notifications || []).filter((n) => n.id !== id),
+          }
+        : prev,
+    );
+  };
+
   const dismissNotification = async (id) => {
+    removeNotificationLocally(id);
     try {
       await jobsAPI.dismissNotification(orgSlug, id);
-      load();
+      emitProviderNotificationsChanged();
     } catch {
       setError('Could not dismiss notification.');
+      load();
     }
+  };
+
+  const openNotification = async (n) => {
+    removeNotificationLocally(n.id);
+    await dismissProviderNotificationQuietly(orgSlug, n.id);
+    navigate(providerNotificationDestination(orgSlug, n));
   };
 
   const greeting = () => {
@@ -266,31 +299,26 @@ export default function ProviderTodayPage() {
         </div>
       )}
 
-      {(dashboard.notifications || []).map((n) => {
-        const toRequests =
-          n.kind === 'new_customer_booking' ||
-          n.kind === 'customer_cancelled_booking' ||
-          n.kind === 'customer_reschedule_request';
-        return (
+      {(dashboard.notifications || []).map((n) => (
         <div
           key={n.id}
           className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm"
         >
-          <div>
+          <button
+            type="button"
+            onClick={() => openNotification(n)}
+            className="min-w-0 flex-1 text-left"
+          >
             <p className="font-medium text-amber-900">{n.message}</p>
-            <Link
-              to={toRequests ? providerRequests(orgSlug) : providerSchedule(orgSlug)}
-              className="mt-1 inline-block text-luminexa-accent"
-            >
-              {toRequests ? 'Open requests' : 'Open schedule'}
-            </Link>
-          </div>
+            <span className="mt-1 inline-block text-luminexa-accent">
+              {providerNotificationCtaLabel(n)}
+            </span>
+          </button>
           <button type="button" onClick={() => dismissNotification(n.id)} className="text-xs text-amber-800">
             Dismiss
           </button>
         </div>
-        );
-      })}
+      ))}
 
       {(() => {
         const pendingCount =

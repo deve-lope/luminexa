@@ -231,6 +231,13 @@ class BookingNotificationTests(TestCase):
         ).first()
         self.assertIsNotNone(note)
         self.assertIn('reschedule', note.message.lower())
+        self.assertEqual(note.booking_id, booking.id)
+        self.assertEqual(
+            note.link_path,
+            f'/provider/{self.org.slug}/requests/booking/{booking.id}',
+        )
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
 
     def test_provider_cancel_emails_customer(self):
         from django.core import mail
@@ -268,3 +275,156 @@ class BookingNotificationTests(TestCase):
         msg = ServiceRequestMessage.objects.filter(booking=booking).first()
         self.assertIsNotNone(msg)
         self.assertIn('cancelled', msg.body.lower())
+
+    def test_opening_booking_thread_dismisses_related_new_message_notifications(self):
+        """Reading a conversation clears new_message alerts for that booking only."""
+        from jobs.models import CustomerNotification, ProviderNotification
+        from jobs.notifications import create_customer_notification
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        other_booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at + timedelta(days=1),
+            end_at=self.slot.end_at + timedelta(days=1),
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        customer_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            title='New message — Test Co',
+            message='Hello from provider',
+            organization=self.org,
+            booking=booking,
+            link_path='/customer/messages',
+        )
+        other_customer_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            title='Other thread',
+            message='Keep me',
+            organization=self.org,
+            booking=other_booking,
+            link_path='/customer/messages',
+        )
+        booking_confirmed = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+            title='Confirmed',
+            message='Keep me too',
+            organization=self.org,
+            booking=booking,
+        )
+        provider_note = ProviderNotification.objects.create(
+            organization=self.org,
+            booking=booking,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            message='Customer messaged about Oil change.',
+            link_path=f'/provider/{self.org.slug}/messages?booking={booking.id}',
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.get(
+            f'/api/v1/bookings/{booking.id}/messages/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        customer_note.refresh_from_db()
+        other_customer_note.refresh_from_db()
+        booking_confirmed.refresh_from_db()
+        provider_note.refresh_from_db()
+        self.assertIsNotNone(customer_note.dismissed_at)
+        self.assertIsNone(other_customer_note.dismissed_at)
+        self.assertIsNone(booking_confirmed.dismissed_at)
+        self.assertIsNone(provider_note.dismissed_at)
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.get(
+            f'/api/v1/bookings/{booking.id}/messages/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        provider_note.refresh_from_db()
+        self.assertIsNotNone(provider_note.dismissed_at)
+
+    def test_opening_inquiry_thread_dismisses_related_new_message_notifications(self):
+        from jobs.models import CustomerNotification, CustomerServiceInquiry, ProviderNotification
+        from jobs.notifications import create_customer_notification
+
+        inquiry = CustomerServiceInquiry.objects.create(
+            organization=self.org,
+            customer=self.customer,
+            service_label='Custom work',
+            message='Need a quote',
+            status=CustomerServiceInquiry.Status.ACTIVE,
+        )
+        other_inquiry = CustomerServiceInquiry.objects.create(
+            organization=self.org,
+            customer=self.customer,
+            service_label='Other work',
+            message='Separate request',
+            status=CustomerServiceInquiry.Status.ACTIVE,
+        )
+        customer_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            title='New message — Test Co',
+            message='Reply on your request',
+            organization=self.org,
+            inquiry=inquiry,
+            link_path='/customer/messages',
+        )
+        other_note = create_customer_notification(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.NEW_MESSAGE,
+            title='Other inquiry',
+            message='Keep me',
+            organization=self.org,
+            inquiry=other_inquiry,
+            link_path='/customer/messages',
+        )
+        provider_note = ProviderNotification.objects.create(
+            organization=self.org,
+            inquiry=inquiry,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            message='Customer messaged about Custom work.',
+            link_path=f'/provider/{self.org.slug}/messages?inquiry={inquiry.id}',
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiries/{inquiry.id}/messages/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        customer_note.refresh_from_db()
+        other_note.refresh_from_db()
+        provider_note.refresh_from_db()
+        self.assertIsNotNone(customer_note.dismissed_at)
+        self.assertIsNone(other_note.dismissed_at)
+        self.assertIsNone(provider_note.dismissed_at)
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiries/{inquiry.id}/messages/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        provider_note.refresh_from_db()
+        self.assertIsNotNone(provider_note.dismissed_at)

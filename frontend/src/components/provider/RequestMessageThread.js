@@ -1,15 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import parseApiError from '../../utils/parseApiError';
-
-function formatMessageTime(iso) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+import { formatWhen } from '../../utils/datetime';
 
 function MessageBubble({ msg }) {
   return (
@@ -26,7 +18,7 @@ function MessageBubble({ msg }) {
         )}
         <p className="whitespace-pre-wrap break-words">{msg.body}</p>
         <p className={`mt-1 text-[10px] ${msg.is_mine ? 'text-white/70' : 'text-slate-400'}`}>
-          {formatMessageTime(msg.created_at)}
+          {formatWhen(msg.created_at)}
         </p>
       </div>
     </div>

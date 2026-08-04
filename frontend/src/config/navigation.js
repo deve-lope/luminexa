@@ -1,4 +1,7 @@
-export function buildProviderTabs(orgSlug, { requestsBadgeCount = 0 } = {}) {
+export function buildProviderTabs(
+  orgSlug,
+  { requestsBadgeCount = 0, messagesBadgeCount = 0 } = {},
+) {
   const base = `/provider/${orgSlug}`;
   return [
     { id: 'today', label: 'Home', to: base, end: true },
@@ -9,15 +12,31 @@ export function buildProviderTabs(orgSlug, { requestsBadgeCount = 0 } = {}) {
       to: `${base}/requests`,
       badgeCount: requestsBadgeCount > 0 ? requestsBadgeCount : undefined,
     },
+    {
+      id: 'messages',
+      label: 'Messages',
+      to: `${base}/messages`,
+      badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
+    },
   ];
 }
 
-export const CUSTOMER_TABS = [
-  { id: 'home', label: 'Home', to: '/customer', end: true },
-  { id: 'book', label: 'Book', to: '/customer/find' },
-  { id: 'bookings', label: 'Bookings', to: '/customer/bookings' },
-  { id: 'messages', label: 'Messages', to: '/customer/messages' },
-];
+export function buildCustomerTabs({ messagesBadgeCount = 0 } = {}) {
+  return [
+    { id: 'home', label: 'Home', to: '/customer', end: true },
+    { id: 'book', label: 'Book', to: '/customer/find' },
+    { id: 'bookings', label: 'Bookings', to: '/customer/bookings' },
+    {
+      id: 'messages',
+      label: 'Messages',
+      to: '/customer/messages',
+      badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
+    },
+  ];
+}
+
+/** @deprecated Prefer buildCustomerTabs — kept for any static imports */
+export const CUSTOMER_TABS = buildCustomerTabs();
 
 /** Guest / public booking pages (/book/:slug) */
 export const PUBLIC_BOOK_TABS = [
@@ -65,13 +84,14 @@ export function buildProviderMenuItems({
   providerSettingsPath,
   providerAccountPath,
   providerSharePath,
-  providerMessagesPath,
   providerAnalyticsPath,
   isStaff,
   adminUrl,
 }) {
   const items = [];
 
+  // Messages lives in primary tabs (desktop sidebar + mobile bottom bar) — do not
+  // duplicate it here or the PC sidebar shows Messages twice.
   items.push({ id: 'section-business', divider: true, label: 'Business' });
   if (providerAnalyticsPath) {
     items.push({
@@ -79,14 +99,6 @@ export function buildProviderMenuItems({
       label: 'Analytics',
       to: providerAnalyticsPath,
       iconId: 'analytics',
-    });
-  }
-  if (providerMessagesPath) {
-    items.push({
-      id: 'messages',
-      label: 'Messages',
-      to: providerMessagesPath,
-      iconId: 'messages',
     });
   }
   if (providerAccountPath) {
@@ -123,7 +135,7 @@ export function buildProviderMenuItems({
   return items;
 }
 
-export function buildCustomerMenuItems({ logout }) {
+export function buildCustomerMenuItems({ logout, messagesBadgeCount = 0 } = {}) {
   const items = [];
 
   items.push({ id: 'section-more', divider: true, label: 'More' });
@@ -138,6 +150,7 @@ export function buildCustomerMenuItems({ logout }) {
     label: 'Messages',
     to: '/customer/messages',
     iconId: 'messages',
+    badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
   });
   items.push({ id: 'history', label: 'History', to: '/customer/history' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });

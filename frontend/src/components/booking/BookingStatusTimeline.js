@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatWhen } from '../../utils/datetime';
+import { formatWhen, humanizeActivityNote } from '../../utils/datetime';
 
 const ACTION_LABELS = {
   created: 'Booking created',
@@ -30,7 +30,9 @@ export default function BookingStatusTimeline({ events }) {
           <p className="text-xs text-slate-500">
             {ev.actor_name} · {formatWhen(ev.created_at)}
           </p>
-          {ev.note && <p className="mt-0.5 text-xs text-slate-600">{ev.note}</p>}
+          {ev.note && (
+            <p className="mt-0.5 text-xs text-slate-600">{humanizeActivityNote(ev.note)}</p>
+          )}
         </li>
       ))}
     </ol>

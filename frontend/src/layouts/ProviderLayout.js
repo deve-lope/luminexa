@@ -16,7 +16,6 @@ import {
   providerAccount,
   providerAbout,
   providerAnalytics,
-  providerMessages,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -33,6 +32,8 @@ import {
   markPendingRequestsSeen,
   requestAlertKey,
 } from '../utils/providerRequestBadge';
+import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
+import { PROVIDER_NOTIFICATIONS_CHANGED_EVENT } from '../utils/providerNotifications';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
@@ -42,6 +43,7 @@ function ProviderShell() {
   const { orgSlug, activeOrg } = useProviderOrg();
   const [alertCount, setAlertCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [messagesCount, setMessagesCount] = useState(0);
 
   const onRequestsTab = useMemo(() => {
     if (!orgSlug) return false;
@@ -87,15 +89,48 @@ function ProviderShell() {
       .catch(() => {});
   }, [orgSlug, showToast, onRequestsTab, onNotificationsPage]);
 
+  const loadMessagesCount = useCallback(() => {
+    if (!orgSlug) return;
+    jobsAPI
+      .listProviderConversations(orgSlug)
+      .then((res) => setMessagesCount(Number(res.data?.unread_count) || 0))
+      .catch(() => {});
+  }, [orgSlug]);
+
   useEffect(() => {
     loadAlerts();
     const id = window.setInterval(loadAlerts, 60000);
-    return () => window.clearInterval(id);
+    const onChanged = () => loadAlerts();
+    window.addEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
+    };
   }, [loadAlerts]);
 
+  useEffect(() => {
+    loadMessagesCount();
+    const id = window.setInterval(loadMessagesCount, 30000);
+    const onChanged = () => loadMessagesCount();
+    const onFocus = () => loadMessagesCount();
+    window.addEventListener(MESSAGES_CHANGED_EVENT, onChanged);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(MESSAGES_CHANGED_EVENT, onChanged);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [loadMessagesCount, location.pathname]);
+
   const tabs = useMemo(
-    () => buildProviderTabs(orgSlug, { requestsBadgeCount: alertCount }),
-    [orgSlug, alertCount]
+    () =>
+      buildProviderTabs(orgSlug, {
+        requestsBadgeCount: alertCount,
+        messagesBadgeCount: messagesCount,
+      }),
+    [orgSlug, alertCount, messagesCount]
   );
   const menuItems = useMemo(
     () =>
@@ -106,7 +141,6 @@ function ProviderShell() {
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
-        providerMessagesPath: providerMessages(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),

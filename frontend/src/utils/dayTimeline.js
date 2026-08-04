@@ -1,4 +1,5 @@
 /** Python weekday on WeeklyScheduleBlock: 0=Mon … 6=Sun */
+import { formatTime } from './datetime';
 import { slotLocalDayKey } from './slotCalendar';
 
 export function jsDateToModelWeekday(date) {
@@ -152,10 +153,7 @@ export function buildDayTimeline(dayKey, { slots = [], unavailable = [], weeklyB
   const markers = sorted.map((ms) => ({
     ms,
     leftPct: ((ms - startMs) / span) * 100,
-    label: new Date(ms).toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    }),
+    label: formatTime(new Date(ms).toISOString()),
   }));
 
   return { segments, bounds: { startMs, endMs }, markers };

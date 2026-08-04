@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
+import { emitNotificationsChanged } from '../../utils/customerNotifications';
+import { emitMessagesChanged } from '../../utils/messageBadge';
 import parseApiError from '../../utils/parseApiError';
 
 function conversationKey(item) {
@@ -18,7 +20,10 @@ export default function CustomerMessagesPage() {
     setLoading(true);
     jobsAPI
       .listMyConversations()
-      .then((res) => setConversations(res.data?.results || []))
+      .then((res) => {
+        setConversations(res.data?.results || []);
+        emitMessagesChanged();
+      })
       .catch((e) => setError(parseApiError(e)))
       .finally(() => setLoading(false));
   }, []);
@@ -26,6 +31,29 @@ export default function CustomerMessagesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const openConversation = (item) => {
+    setSelected(item);
+    setConversations((prev) =>
+      prev.map((c) =>
+        conversationKey(c) === conversationKey(item) ? { ...c, has_unread: false } : c,
+      ),
+    );
+  };
+
+  const loadMessagesAndRefreshBadge = async () => {
+    const res =
+      selected.kind === 'inquiry'
+        ? await jobsAPI.listInquiryMessages(
+            selected.organization_slug || selected.organization_public_ref,
+            selected.id,
+          )
+        : await jobsAPI.listBookingMessages(selected.id);
+    emitMessagesChanged();
+    // Backend dismisses related new_message alerts on mark-read; refresh the bell.
+    emitNotificationsChanged();
+    return res;
+  };
 
   if (loading && conversations.length === 0) {
     return <p className="py-12 text-center text-slate-500">Loading…</p>;
@@ -38,7 +66,8 @@ export default function CustomerMessagesPage() {
       )}
 
       <p className="text-sm text-slate-600">
-        Messages with providers about your bookings and custom service requests.
+        Messages with providers about your bookings and custom service requests. Unread threads are
+        shown in bold.
       </p>
 
       {conversations.length === 0 ? (
@@ -52,22 +81,41 @@ export default function CustomerMessagesPage() {
         <ul className="space-y-2">
           {conversations.map((item) => {
             const active = selected && conversationKey(selected) === conversationKey(item);
+            const unread = Boolean(item.has_unread);
             return (
               <li key={conversationKey(item)}>
                 <button
                   type="button"
-                  onClick={() => setSelected(item)}
+                  onClick={() => openConversation(item)}
                   className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                     active
                       ? 'border-teal-300 bg-teal-50/80 ring-1 ring-teal-200'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      : unread
+                        ? 'border-teal-100 bg-teal-50/70 hover:border-teal-200'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">{item.subject}</p>
-                      <p className="truncate text-sm text-slate-600">{item.organization_name}</p>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-700">
+                      <p
+                        className={`truncate text-slate-900 ${
+                          unread ? 'font-bold' : 'font-semibold'
+                        }`}
+                      >
+                        {item.subject}
+                      </p>
+                      <p
+                        className={`truncate text-sm ${
+                          unread ? 'font-semibold text-slate-800' : 'text-slate-600'
+                        }`}
+                      >
+                        {item.organization_name}
+                      </p>
+                      <p
+                        className={`mt-1 line-clamp-2 text-sm ${
+                          unread ? 'font-semibold text-slate-900' : 'text-slate-700'
+                        }`}
+                      >
                         {item.last_sender_name
                           ? `${item.last_sender_name}: ${item.last_message_preview}`
                           : item.last_message_preview}
@@ -78,7 +126,11 @@ export default function CustomerMessagesPage() {
                         {item.kind === 'inquiry' ? 'Request' : 'Booking'}
                       </span>
                       {item.last_message_at && (
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p
+                          className={`mt-2 text-xs ${
+                            unread ? 'font-semibold text-slate-700' : 'text-slate-500'
+                          }`}
+                        >
                           {formatWhen(item.last_message_at)}
                         </p>
                       )}
@@ -101,14 +153,7 @@ export default function CustomerMessagesPage() {
             setSelected(null);
             load();
           }}
-          loadMessages={() =>
-            selected.kind === 'inquiry'
-              ? jobsAPI.listInquiryMessages(
-                  selected.organization_slug || selected.organization_public_ref,
-                  selected.id,
-                )
-              : jobsAPI.listBookingMessages(selected.id)
-          }
+          loadMessages={loadMessagesAndRefreshBadge}
           sendMessage={(body) =>
             selected.kind === 'inquiry'
               ? jobsAPI.sendInquiryMessage(

@@ -4,26 +4,34 @@ import AppShell from '../components/layout/AppShell';
 import CustomerInvoicePaymentPrompt from '../components/customer/CustomerInvoicePaymentPrompt';
 import CustomerNotificationBell from '../components/customer/CustomerNotificationBell';
 import { useAuth } from '../contexts/AuthContext';
-import { CUSTOMER_TABS, buildCustomerMenuItems } from '../config/navigation';
+import { buildCustomerTabs, buildCustomerMenuItems } from '../config/navigation';
 import { jobsAPI } from '../utils/api';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
 import { NOTIFICATIONS_CHANGED_EVENT } from '../utils/customerNotifications';
+import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
 
 export default function CustomerLayout({ children }) {
   const { isAuthenticated, loading, user, memberships, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [notificationCount, setNotificationCount] = useState(0);
+  const [messagesCount, setMessagesCount] = useState(0);
 
   const menuItems = useMemo(
     () =>
       buildCustomerMenuItems({
         logout: () => logout().then(() => navigate('/')),
+        messagesBadgeCount: messagesCount,
       }),
-    [logout, navigate]
+    [logout, navigate, messagesCount]
+  );
+
+  const tabs = useMemo(
+    () => buildCustomerTabs({ messagesBadgeCount: messagesCount }),
+    [messagesCount]
   );
 
   const isCustomerAppRoute =
@@ -48,6 +56,14 @@ export default function CustomerLayout({ children }) {
       .catch(() => {});
   }, [isAuthenticated]);
 
+  const loadMessagesCount = useCallback(() => {
+    if (!isAuthenticated) return;
+    jobsAPI
+      .listMyConversations()
+      .then((res) => setMessagesCount(Number(res.data?.unread_count) || 0))
+      .catch(() => {});
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!isAuthenticated || !isCustomerAppRoute) return undefined;
     loadNotificationCount();
@@ -59,6 +75,23 @@ export default function CustomerLayout({ children }) {
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
     };
   }, [isAuthenticated, isCustomerAppRoute, loadNotificationCount, location.pathname]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isCustomerAppRoute) return undefined;
+    loadMessagesCount();
+    const id = window.setInterval(loadMessagesCount, 30000);
+    const onChanged = () => loadMessagesCount();
+    const onFocus = () => loadMessagesCount();
+    window.addEventListener(MESSAGES_CHANGED_EVENT, onChanged);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(MESSAGES_CHANGED_EVENT, onChanged);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [isAuthenticated, isCustomerAppRoute, loadMessagesCount, location.pathname]);
 
   const { eyebrow, title } = useMemo(() => {
     if (/^\/book\/[^/]+\/services$/.test(location.pathname)) {
@@ -92,7 +125,7 @@ export default function CustomerLayout({ children }) {
       return { eyebrow: 'Updates', title: 'All notifications' };
     }
     if (location.pathname.endsWith('/customer/history')) {
-      return { eyebrow: 'History', title: 'Past activity' };
+      return { eyebrow: 'Bookings', title: 'History' };
     }
     if (location.pathname.endsWith('/services')) {
       return { eyebrow: 'Explore', title: 'Find a service' };
@@ -162,7 +195,7 @@ export default function CustomerLayout({ children }) {
         brand="Luminexa"
         eyebrow={eyebrow}
         title={title}
-        tabs={CUSTOMER_TABS}
+        tabs={tabs}
         menuItems={menuItems}
         menuTitle="Menu"
         showBack={!isCustomerHome && Boolean(backNav?.to)}

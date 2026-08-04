@@ -200,12 +200,28 @@ class ProviderNotification(models.Model):
         CUSTOMER_CANCELLED_BOOKING = 'customer_cancelled_booking', 'Customer cancelled booking'
         CUSTOMER_RESCHEDULE_REQUEST = 'customer_reschedule_request', 'Customer reschedule request'
         PAYMENT_RECEIVED = 'payment_received', 'Payment received'
+        NEW_MESSAGE = 'new_message', 'New message'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
     )
+    booking = models.ForeignKey(
+        'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='provider_notifications',
+    )
+    inquiry = models.ForeignKey(
+        'CustomerServiceInquiry',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='provider_notifications',
+    )
     kind = models.CharField(max_length=40, choices=Kind.choices)
     message = models.CharField(max_length=500)
+    link_path = models.CharField(max_length=300, blank=True, default='')
     week_start = models.DateField(null=True, blank=True)
     dismissed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -227,6 +243,7 @@ class CustomerNotification(models.Model):
         BOOKING_COMPLETED = 'booking_completed', 'Booking completed'
         INVOICE_READY = 'invoice_ready', 'Invoice ready'
         PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
+        NEW_MESSAGE = 'new_message', 'New message'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -242,6 +259,13 @@ class CustomerNotification(models.Model):
     )
     booking = models.ForeignKey(
         'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='customer_notifications',
+    )
+    inquiry = models.ForeignKey(
+        'CustomerServiceInquiry',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -304,6 +328,16 @@ class CustomerServiceInquiry(models.Model):
         default=Status.PENDING,
     )
     dismissed_at = models.DateTimeField(null=True, blank=True)
+    customer_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer last opened this inquiry conversation.',
+    )
+    provider_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When provider staff last opened this inquiry conversation.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -571,6 +605,16 @@ class Booking(models.Model):
     awaiting_customer_acceptance = models.BooleanField(
         default=False,
         help_text='True when the provider proposed a new time (and/or quote) and the customer must accept.',
+    )
+    customer_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer last opened this booking conversation.',
+    )
+    provider_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When provider staff last opened this booking conversation.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

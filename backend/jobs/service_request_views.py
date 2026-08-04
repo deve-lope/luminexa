@@ -203,8 +203,11 @@ class ServiceInquiryMessagesAPIView(APIView):
         return inquiry
 
     def get(self, request, slug, inquiry_id):
+        from .message_services import mark_inquiry_messages_read
+
         inquiry = self._get_inquiry(slug, inquiry_id, request.user)
         messages = list_inquiry_messages(inquiry)
+        mark_inquiry_messages_read(inquiry=inquiry, user=request.user)
         return Response(
             ServiceRequestMessageSerializer(
                 messages, many=True, context={'request': request},

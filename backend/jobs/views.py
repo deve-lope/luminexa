@@ -33,8 +33,10 @@ from .booking_services import (
     provider_book_customer,
     start_booking,
 )
+from .datetime_display import format_booking_when
 from .message_services import (
     can_access_booking_messages,
+    count_unread_summaries,
     list_booking_messages,
     list_customer_conversation_summaries,
     list_provider_conversation_summaries,
@@ -376,6 +378,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         summaries = list_provider_conversation_summaries(org)
         return Response({
             'count': len(summaries),
+            'unread_count': count_unread_summaries(summaries),
             'results': CustomerConversationSummarySerializer(summaries, many=True).data,
         })
 
@@ -1487,14 +1490,21 @@ class BookingViewSet(viewsets.ModelViewSet):
         if not slot:
             raise ValidationError({'slot_id': 'Slot not found.'})
         old_status = booking.status
+        prior_when = format_booking_when(booking.start_at)
         reschedule_booking(booking, new_slot=slot, by_user=request.user)
+        new_when = format_booking_when(booking.start_at)
+        note = (
+            f'New time: {new_when} (was {prior_when})'
+            if prior_when and prior_when != new_when
+            else f'New time: {new_when}'
+        )
         log_booking_status_change(
             booking,
             actor=request.user,
             action=BookingStatusEvent.Action.RESCHEDULED,
             old_status=old_status,
             new_status=booking.status,
-            note=f'New time: {booking.start_at.isoformat()}',
+            note=note,
         )
         from .notifications import (
             create_provider_customer_reschedule_notification,
@@ -1658,11 +1668,14 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get', 'post'], url_path='messages')
     def messages(self, request, pk=None):
+        from .message_services import mark_booking_messages_read
+
         booking = self.get_object()
         if not can_access_booking_messages(request.user, booking):
             raise PermissionDenied('You cannot view messages on this booking.')
         if request.method == 'GET':
             messages = list_booking_messages(booking)
+            mark_booking_messages_read(booking=booking, user=request.user)
             return Response(
                 ServiceRequestMessageSerializer(
                     messages, many=True, context={'request': request},
@@ -1759,7 +1772,11 @@ class CustomerConversationsAPIView(APIView):
     def get(self, request):
         summaries = list_customer_conversation_summaries(request.user)
         data = CustomerConversationSummarySerializer(summaries, many=True).data
-        return Response({'count': len(data), 'results': data})
+        return Response({
+            'count': len(data),
+            'unread_count': count_unread_summaries(summaries),
+            'results': data,
+        })
 
 
 class CustomerNotificationsAPIView(APIView):

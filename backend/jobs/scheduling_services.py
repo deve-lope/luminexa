@@ -183,6 +183,7 @@ def ensure_flexi_slot_alert(organization) -> ProviderNotification | None:
             f'No open slots for the week of {label}. '
             'Customers cannot book until you add availability on Schedule.'
         ),
+        link_path=f'/provider/{organization.slug}/schedule',
     )
 
 
