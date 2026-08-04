@@ -277,7 +277,7 @@ export default function RegisterBusinessPage() {
                   selectedSlugs={selectedSlugs}
                   onSelectionChange={setSelectedSlugs}
                   variant="light"
-                  allowCreate
+                  allowCreate={false}
                 />
               </section>
 

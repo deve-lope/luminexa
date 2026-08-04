@@ -13,37 +13,62 @@ import {
   providerSetupPath,
 } from '../../utils/profileSetup';
 
-const CATEGORY_PRESETS = ['Automobile', 'House work', 'Beauty & wellness', 'Outdoor & garden'];
-
 const INPUT_CLASS =
   'w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-luminexa-accent focus:outline-none focus:ring-2 focus:ring-luminexa-accent/20';
 const LABEL_CLASS = 'mb-1 block text-xs font-medium text-slate-600';
 
-function FieldToggle({ checked, onChange, label, description }) {
+function FieldToggle({ checked, onChange, label, description, info }) {
+  const [showInfo, setShowInfo] = useState(false);
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-luminexa-accent/40"
-    >
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-slate-800">{label}</span>
-        {description && <span className="mt-0.5 block text-xs text-slate-500">{description}</span>}
-      </span>
-      <span
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
-          checked ? 'bg-luminexa-accent' : 'bg-slate-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-            checked ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </span>
-    </button>
+    <div className="space-y-2">
+      <div className="flex items-stretch gap-2">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          onClick={() => onChange(!checked)}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-luminexa-accent/40"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-slate-800">{label}</span>
+            {description && (
+              <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+            )}
+          </span>
+          <span
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+              checked ? 'bg-luminexa-accent' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                checked ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
+        </button>
+        {info && (
+          <button
+            type="button"
+            aria-label="More about this setting"
+            aria-expanded={showInfo}
+            onClick={() => setShowInfo((v) => !v)}
+            className={`flex h-auto w-10 shrink-0 items-center justify-center rounded-lg border text-sm font-semibold transition ${
+              showInfo
+                ? 'border-luminexa-accent bg-violet-50 text-luminexa-accent'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            i
+          </button>
+        )}
+      </div>
+      {info && showInfo && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
+          {info}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -195,6 +220,11 @@ function ServiceDetailForm({
                 </option>
               ))}
             </select>
+            {activeCategories.length === 0 && (
+              <p className="mt-1 text-xs text-slate-500">
+                Categories are managed by Luminexa. Refresh this page if the list is empty.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="svc-pricing" className={LABEL_CLASS}>
@@ -402,7 +432,8 @@ function ServiceDetailForm({
             checked={serviceDraft.allow_request}
             onChange={(val) => setServiceDraft((d) => ({ ...d, allow_request: val }))}
             label="Allow “Request service” from customers"
-            description="Let customers request this service directly from your page."
+            description="Customers can ask for this job without picking a time first."
+            info="Use this when you want to talk first, then set the appointment yourself. The customer sends a request; you consult them and choose a time. Calendar booking can still be available for people who prefer to book a slot."
           />
         </div>
 
@@ -597,6 +628,8 @@ function BulkAddServicesForm({
             checked={bulkDefaults.allow_request}
             onChange={(val) => setBulkDefaults((d) => ({ ...d, allow_request: val }))}
             label="Allow “Request service” from customers"
+            description="Customers can ask without picking a time first."
+            info="Use this when you want to talk first, then set the appointment yourself. The customer sends a request; you consult them and choose a time. Calendar booking can still be available for people who prefer to book a slot."
           />
         </div>
 
@@ -812,9 +845,6 @@ export default function ProviderServicesPage({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(embedded);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const [showAddCategory, setShowAddCategory] = useState(false);
-  const [categoryName, setCategoryName] = useState('');
-  const [savingCategory, setSavingCategory] = useState(false);
   const [serviceDraft, setServiceDraft] = useState(emptyServiceDraft);
   const [bulkDefaults, setBulkDefaults] = useState(() => emptyBulkDefaults());
   const [bulkRows, setBulkRows] = useState(() => [
@@ -867,10 +897,12 @@ export default function ProviderServicesPage({ embedded = false }) {
 
   const categoryTiles = useMemo(() => {
     const activeServices = services.filter((s) => s.is_active !== false);
-    return activeCategories.map((cat) => ({
-      ...cat,
-      count: activeServices.filter((s) => s.category === cat.id).length,
-    }));
+    return activeCategories
+      .map((cat) => ({
+        ...cat,
+        count: activeServices.filter((s) => s.category === cat.id).length,
+      }))
+      .filter((cat) => cat.count > 0);
   }, [activeCategories, services]);
 
   const allActiveCount = useMemo(
@@ -900,29 +932,6 @@ export default function ProviderServicesPage({ embedded = false }) {
     () => services.filter((s) => s.is_active === false),
     [services]
   );
-
-  const addCategory = async (name) => {
-    const trimmed = (name || categoryName).trim();
-    if (!orgSlug || !orgId || trimmed.length < 2) return;
-    setSavingCategory(true);
-    setError(null);
-    try {
-      await jobsAPI.createServiceCategory({
-        organization: orgId,
-        name: trimmed,
-        sort_order: categories.length,
-      });
-      setCategoryName('');
-      setShowAddCategory(false);
-      setMessage(`Category "${trimmed}" added.`);
-      await load();
-    } catch (err) {
-      const d = err.response?.data;
-      setError(d?.name?.[0] || d?.detail || 'Could not add category.');
-    } finally {
-      setSavingCategory(false);
-    }
-  };
 
   const openServiceDraft = (svc) => {
     setEditingServiceId(svc?.id ?? null);
@@ -1257,7 +1266,6 @@ export default function ProviderServicesPage({ embedded = false }) {
                   type="button"
                   onClick={() => {
                     setEditing(false);
-                    setShowAddCategory(false);
                     resetServiceForm();
                   }}
                   className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700"
@@ -1275,58 +1283,12 @@ export default function ProviderServicesPage({ embedded = false }) {
       ) : (
         <>
           <section>
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-3">
               <h3 className="text-sm font-semibold uppercase text-slate-500">Categories</h3>
-              {editing && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddCategory((v) => !v)}
-                  className="text-sm font-medium text-luminexa-accent"
-                >
-                  {showAddCategory ? 'Cancel' : '+ Add category'}
-                </button>
-              )}
+              <p className="mt-1 text-xs text-slate-500">
+                Pick a category when you add a service. New categories are added by Luminexa admins.
+              </p>
             </div>
-
-            {editing && showAddCategory && (
-              <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/50 p-4">
-                <p className="text-sm font-medium text-slate-800">New category</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {CATEGORY_PRESETS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      disabled={savingCategory || activeCategories.some((c) => c.name === preset)}
-                      onClick={() => addCategory(preset)}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-40"
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-                <form
-                  className="mt-3 flex gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    addCategory();
-                  }}
-                >
-                  <input
-                    value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
-                    placeholder="Custom category name"
-                    className="min-h-[44px] flex-1 rounded-lg border border-slate-200 px-3 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={savingCategory}
-                    className="min-h-[44px] shrink-0 rounded-lg bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-60"
-                  >
-                    Add
-                  </button>
-                </form>
-              </div>
-            )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <CategoryTile
@@ -1346,7 +1308,7 @@ export default function ProviderServicesPage({ embedded = false }) {
               ))}
               {uncategorizedCount > 0 && (
                 <CategoryTile
-                  label="Other"
+                  label="Uncategorized"
                   count={uncategorizedCount}
                   selected={selectedCategoryId === 'uncategorized'}
                   onClick={() => setSelectedCategoryId('uncategorized')}
@@ -1356,8 +1318,8 @@ export default function ProviderServicesPage({ embedded = false }) {
 
             {!editing && categoryTiles.length === 0 && allActiveCount === 0 && (
               <p className="mt-3 text-sm text-slate-500">
-                No categories yet. Use <strong>+ Add services</strong> or <strong>Edit</strong> to get
-                started.
+                No services yet. Use <strong>+ Add services</strong> and choose a category from the
+                dropdown.
               </p>
             )}
           </section>

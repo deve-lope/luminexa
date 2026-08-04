@@ -51,11 +51,17 @@ export default function ProviderSchedulePage() {
     setLoading(true);
     setError(null);
     try {
+      // Visible month only — recurring shops can have thousands of slots across the range.
+      const monthStart = new Date(calYear, calMonth - 1, 1);
+      const monthEnd = new Date(calYear, calMonth, 0);
+      const from = formatLocalDateKey(monthStart);
+      const until = formatLocalDateKey(monthEnd);
+
       const [svcRes, custRes, slotRes, pendingCustRes, blockedCustRes, unavailRes, schedRes] =
         await Promise.all([
           jobsAPI.listServices({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug),
-          jobsAPI.listSlots({ organization: orgSlug }),
+          jobsAPI.listSlots({ organization: orgSlug, from, until }),
           jobsAPI.listOrgCustomers(orgSlug, { status: 'pending' }),
           jobsAPI.listOrgCustomers(orgSlug, { status: 'blocked' }),
           jobsAPI.listUnavailableBlocks({ organization: orgSlug }),
@@ -65,23 +71,44 @@ export default function ProviderSchedulePage() {
       setServices(svcList);
       setCustomers(custRes.data || []);
       const slotPayload = slotRes.data;
-      setSlots(slotPayload?.slots ?? (Array.isArray(slotPayload) ? slotPayload : []));
+      let loadedSlots = slotPayload?.slots ?? (Array.isArray(slotPayload) ? slotPayload : []);
+      if (!Array.isArray(loadedSlots)) loadedSlots = [];
+
+      const mode = schedRes.data?.scheduling_mode || 'flexi';
+      const blocks = schedRes.data?.weekly_blocks || [];
+      setWeeklyBlocks(blocks);
+      setSchedulingMode(mode);
+
+      const hasOpenInMonth = loadedSlots.some(
+        (s) => s.status === 'open' && new Date(s.start_at) > new Date()
+      );
+      if (mode === 'recurring' && blocks.length > 0 && svcList.length > 0 && !hasOpenInMonth) {
+        try {
+          await jobsAPI.syncRecurringSlots(orgSlug);
+          const refreshed = await jobsAPI.listSlots({ organization: orgSlug, from, until });
+          const refreshedPayload = refreshed.data;
+          loadedSlots =
+            refreshedPayload?.slots ?? (Array.isArray(refreshedPayload) ? refreshedPayload : []);
+          if (!Array.isArray(loadedSlots)) loadedSlots = [];
+        } catch {
+          // Sync may be queued; keep whatever we already have.
+        }
+      }
+
+      setSlots(loadedSlots);
       const unavailPayload = unavailRes.data;
       setUnavailable(
         Array.isArray(unavailPayload) ? unavailPayload : unavailPayload?.results || []
       );
-      setWeeklyBlocks(schedRes.data?.weekly_blocks || []);
       setPendingCustomers(pendingCustRes.data || []);
       setBlockedCustomers(blockedCustRes.data || []);
-      const ctx = await jobsAPI.getBookingContext(orgSlug);
-      setSchedulingMode(ctx.data?.scheduling_mode || 'flexi');
       if (svcList.length && !slotService) setSlotService(String(svcList[0].id));
     } catch (e) {
       setError(parseApiError(e));
     } finally {
       setLoading(false);
     }
-  }, [orgSlug, activeOrg]);
+  }, [orgSlug, activeOrg, calYear, calMonth]);
 
   useEffect(() => {
     if (!services.length || slotService) return;
@@ -92,30 +119,43 @@ export default function ProviderSchedulePage() {
     load();
   }, [load]);
 
-  const firstFutureDayInMonth = useCallback((y, m) => {
+  const firstOpenOrFutureDayInMonth = useCallback((y, m, openDaysMap) => {
+    const prefix = `${y}-${String(m).padStart(2, '0')}`;
+    const openKeys = Object.keys(openDaysMap || {})
+      .filter((k) => k.startsWith(prefix) && (openDaysMap[k]?.open_count || 0) > 0)
+      .sort();
+    if (openKeys.length) return openKeys[0];
     const t = new Date();
     t.setHours(0, 0, 0, 0);
     const daysInMonth = new Date(y, m, 0).getDate();
     for (let d = 1; d <= daysInMonth; d += 1) {
       const cellDate = new Date(y, m - 1, d);
-      if (cellDate >= t) {
-        return formatLocalDateKey(cellDate);
-      }
+      if (cellDate >= t) return formatLocalDateKey(cellDate);
     }
     return null;
   }, []);
-
-  useEffect(() => {
-    if (loading || selectedDay) return;
-    const key = firstFutureDayInMonth(calYear, calMonth);
-    if (key) setSelectedDay(key);
-  }, [loading, selectedDay, calYear, calMonth, firstFutureDayInMonth]);
 
   const openSlots = useMemo(
     () => slots.filter((s) => s.status === 'open' && new Date(s.start_at) > new Date()),
     [slots]
   );
   const openSlotDays = useMemo(() => buildOpenSlotDays(openSlots), [openSlots]);
+
+  useEffect(() => {
+    if (loading) return;
+    const prefix = `${calYear}-${String(calMonth).padStart(2, '0')}`;
+    const preferred = firstOpenOrFutureDayInMonth(calYear, calMonth, openSlotDays);
+    if (!preferred) return;
+    const selectionInMonth = selectedDay && selectedDay.startsWith(prefix);
+    const selectionHasOpen = selectionInMonth && (openSlotDays[selectedDay]?.open_count || 0) > 0;
+    const monthHasOpen = Object.keys(openSlotDays).some(
+      (k) => k.startsWith(prefix) && (openSlotDays[k]?.open_count || 0) > 0
+    );
+    if (!selectionInMonth || (monthHasOpen && !selectionHasOpen)) {
+      setSelectedDay(preferred);
+    }
+  }, [loading, calYear, calMonth, openSlotDays, selectedDay, firstOpenOrFutureDayInMonth]);
+
   const daySlotsAll = useMemo(
     () =>
       selectedDay
@@ -143,7 +183,7 @@ export default function ProviderSchedulePage() {
     }
     setCalMonth(m);
     setCalYear(y);
-    setSelectedDay(firstFutureDayInMonth(y, m));
+    setSelectedDay(null);
     resetAddFlow();
   };
 
@@ -422,6 +462,13 @@ export default function ProviderSchedulePage() {
         {selectedDay && (
           <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900 ring-1 ring-violet-100">
             Selected: {dayLabel}
+            {schedulingMode === 'recurring' &&
+              (openSlotDays[selectedDay]?.open_count || 0) === 0 && (
+                <span className="mt-1 block text-xs font-normal text-violet-800">
+                  No open bookable times left on this day (past hours are skipped). Try a later
+                  day with a green mark on the calendar.
+                </span>
+              )}
           </p>
         )}
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
-import { providerScheduleDetail } from '../../utils/providerPaths';
+import { providerRequestDetail, providerScheduleDetail } from '../../utils/providerPaths';
 import { buildDayTimeline, TIMELINE_COLORS, TIMELINE_LABELS } from '../../utils/dayTimeline';
 import {
   ADD_MODE_META,
@@ -15,19 +15,18 @@ import {
 } from '../../utils/timelineInteraction';
 import { formatTime } from '../../utils/datetime';
 
-function segmentDetailPath(seg, orgSlug) {
+function bookingNavPath(seg, orgSlug) {
   if (!orgSlug) return null;
-  if (seg.type === 'unavailable' && seg.block?.id) {
-    return providerScheduleDetail(orgSlug, 'block', seg.block.id);
+  if (seg.type !== 'booked' && seg.type !== 'pending') return null;
+  const slot = seg.slot;
+  if (!slot?.booking_id) return null;
+  // Confirmed / in-progress style jobs → schedule booking detail ("jobs" view).
+  // Quote / request-style pending → requests detail when status suggests it.
+  const status = (slot.booking_status || '').toLowerCase();
+  if (status === 'requested' || status === 'quoted') {
+    return providerRequestDetail(orgSlug, 'booking', slot.booking_id);
   }
-  if (!seg.slot?.id) return null;
-  if (seg.slot.booking_id && (seg.type === 'booked' || seg.type === 'pending')) {
-    return providerScheduleDetail(orgSlug, 'booking', seg.slot.booking_id);
-  }
-  if (seg.type === 'open' || seg.type === 'booked' || seg.type === 'pending') {
-    return providerScheduleDetail(orgSlug, 'slot', seg.slot.id);
-  }
-  return null;
+  return providerScheduleDetail(orgSlug, 'booking', slot.booking_id);
 }
 
 export default function InteractiveDayTimeline({
@@ -46,6 +45,7 @@ export default function InteractiveDayTimeline({
   const [hoverMs, setHoverMs] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [rangeError, setRangeError] = useState(null);
+  const [selection, setSelection] = useState(null);
   const dragAnchorRef = useRef(null);
   const resizeEdgeRef = useRef(null);
 
@@ -61,6 +61,10 @@ export default function InteractiveDayTimeline({
   const { startMs: boundStart, endMs: boundEnd } = bounds;
 
   const modeMeta = addMode ? ADD_MODE_META[addMode] : null;
+
+  useEffect(() => {
+    setSelection(null);
+  }, [dayKey]);
 
   const updateFromPointer = useCallback(
     (clientX, anchorMs, edge) => {
@@ -158,6 +162,38 @@ export default function InteractiveDayTimeline({
     setHoverMs(pointerToMs(eventClientX(e), rect, boundStart, boundEnd));
   };
 
+  const handleSegmentClick = (seg) => {
+    if (addMode) return;
+    if (seg.type === 'off_hours' || seg.type === 'idle') {
+      setSelection(null);
+      return;
+    }
+    if (seg.type === 'booked' || seg.type === 'pending') {
+      const path = bookingNavPath(seg, orgSlug);
+      if (path) {
+        setSelection(null);
+        navigate(path);
+      }
+      return;
+    }
+    if (seg.type === 'unavailable') {
+      setSelection({
+        kind: 'unavailable',
+        startMs: seg.startMs,
+        endMs: seg.endMs,
+        note: seg.block?.note || '',
+      });
+      return;
+    }
+    if (seg.type === 'open') {
+      setSelection({
+        kind: 'open',
+        startMs: seg.startMs,
+        endMs: seg.endMs,
+      });
+    }
+  };
+
   const draftLeft = draftRange ? msToPercent(draftRange.startMs, boundStart, boundEnd) : 0;
   const draftWidth = draftRange
     ? msToPercent(draftRange.endMs, boundStart, boundEnd) - draftLeft
@@ -189,24 +225,31 @@ export default function InteractiveDayTimeline({
       >
         <div className="absolute inset-0 flex overflow-hidden rounded-[10px]">
           {segments.map((seg, i) => {
-            const path = segmentDetailPath(seg, orgSlug);
-            const clickable = Boolean(path) && !addMode;
+            const interactive =
+              !addMode &&
+              (seg.type === 'open' ||
+                seg.type === 'unavailable' ||
+                seg.type === 'booked' ||
+                seg.type === 'pending');
             return (
               <div
                 key={`${seg.startMs}-${i}`}
                 style={{ width: `${seg.widthPct}%` }}
                 className={`h-full shrink-0 border-r border-white/20 last:border-r-0 ${TIMELINE_COLORS[seg.type]} ${
-                  addMode ? 'pointer-events-none' : clickable ? 'cursor-pointer' : ''
+                  addMode ? 'pointer-events-none' : interactive ? 'cursor-pointer' : ''
                 }`}
                 onClick={(e) => {
-                  if (addMode) return;
                   e.stopPropagation();
-                  if (path) navigate(path);
+                  handleSegmentClick(seg);
                 }}
                 onMouseEnter={() => {
                   if (!addMode) setHoverMs((seg.startMs + seg.endMs) / 2);
                 }}
-                title={!addMode ? `${TIMELINE_LABELS[seg.type]} · ${formatMsRange(seg.startMs, seg.endMs)}` : undefined}
+                title={
+                  !addMode
+                    ? `${TIMELINE_LABELS[seg.type]} · ${formatMsRange(seg.startMs, seg.endMs)}`
+                    : undefined
+                }
               />
             );
           })}
@@ -291,7 +334,7 @@ export default function InteractiveDayTimeline({
             Drag to draw · pull edges to resize
           </span>
         ) : (
-          <span className="text-slate-400">Use + Add above</span>
+          <span className="text-slate-400">Tap a colored block for details</span>
         )}
       </div>
 
@@ -309,6 +352,54 @@ export default function InteractiveDayTimeline({
         >
           Clear selection on timeline
         </button>
+      )}
+
+      {selection?.kind === 'open' && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-emerald-950">Slots open</p>
+              <p className="mt-1 text-sm text-emerald-900">
+                {formatMsRange(selection.startMs, selection.endMs)}
+              </p>
+              <p className="mt-1 text-xs text-emerald-800">
+                Customers can book this time from your public page.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="text-xs font-medium text-emerald-800 underline"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selection?.kind === 'unavailable' && (
+        <div className="rounded-xl border border-slate-300 bg-slate-100 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Unavailable</p>
+              <p className="mt-1 text-sm text-slate-700">
+                {formatMsRange(selection.startMs, selection.endMs)}
+              </p>
+              {selection.note ? (
+                <p className="mt-1 text-xs text-slate-600">{selection.note}</p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-600">This time is blocked for bookings.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="text-xs font-medium text-slate-600 underline"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

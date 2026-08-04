@@ -571,12 +571,27 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 
     def _can_see_customer_pii(self, obj):
         """Only org staff may see booking customer details on slots."""
+        # Cache per-org — list endpoints serialize hundreds of slots.
+        cache = self.context.setdefault('_slot_pii_org_cache', {})
+        org_id = obj.organization_id
+        if org_id in cache:
+            return cache[org_id]
+
+        staff_ids = self.context.get('staff_org_ids')
+        if staff_ids is not None:
+            allowed = org_id in staff_ids
+            cache[org_id] = allowed
+            return allowed
+
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
         if not user or not user.is_authenticated:
+            cache[org_id] = False
             return False
         from .permissions import is_org_staff
-        return is_org_staff(user, obj.organization)
+        allowed = is_org_staff(user, obj.organization)
+        cache[org_id] = allowed
+        return allowed
 
     def get_customer_name(self, obj):
         if not self._can_see_customer_pii(obj):

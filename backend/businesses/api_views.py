@@ -49,7 +49,13 @@ def _unique_business_type_slug(name: str) -> str:
 @permission_classes([AllowAny])
 def business_types_list_api(request):
     if request.method == 'POST':
-        # Registration lets providers add a custom type when the catalog has no fit.
+        # Only platform staff/admins may add browse categories.
+        user = request.user
+        if not user or not user.is_authenticated or not (user.is_staff or user.is_superuser):
+            return Response(
+                {'detail': 'Only Luminexa admins can add categories.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         throttle = BusinessTypeWriteThrottle()
         if not throttle.allow_request(request, business_types_list_api):
             from rest_framework.exceptions import Throttled

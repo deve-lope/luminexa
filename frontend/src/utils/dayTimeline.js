@@ -72,7 +72,14 @@ function typeAt(ms, { slots, unavailable, workingWindows }) {
     if (inWindow(ms, st, en)) return 'unavailable';
   }
   const inWorking = (workingWindows || []).some((w) => inWindow(ms, w.startMs, w.endMs));
-  return inWorking ? 'idle' : 'off_hours';
+  if (inWorking) {
+    // Weekly open hours should read green on the provider timeline for times that
+    // are still ahead — matching what customers can book. Gray "Free" looked like
+    // "not open" even when Mon–Sat hours were set and bookable.
+    if (ms >= Date.now()) return 'open';
+    return 'idle';
+  }
+  return 'off_hours';
 }
 
 /**
@@ -115,11 +122,16 @@ export function buildDayTimeline(dayKey, { slots = [], unavailable = [], weeklyB
       prev.endMs = t1;
       prev.widthPct = ((prev.endMs - prev.startMs) / span) * 100;
     } else {
-      const slot = daySlots.find((s) => {
+      const overlappingSlots = daySlots.filter((s) => {
         const st = new Date(s.start_at).getTime();
         const en = new Date(s.end_at).getTime();
         return overlaps(t0, t1, st, en) && (s.status === 'open' || s.status === 'booked' || s.status === 'pending');
       });
+      // Prefer a booked/pending slot for deep-links; otherwise keep all open peers.
+      const slot =
+        overlappingSlots.find((s) => s.status === 'booked' || s.status === 'pending') ||
+        overlappingSlots[0] ||
+        null;
       const block = dayUnavailable.find((u) => {
         const st = new Date(u.start_at).getTime();
         const en = new Date(u.end_at).getTime();
@@ -131,6 +143,7 @@ export function buildDayTimeline(dayKey, { slots = [], unavailable = [], weeklyB
         endMs: t1,
         widthPct: ((t1 - t0) / span) * 100,
         slot: type === 'open' || type === 'booked' || type === 'pending' ? slot : null,
+        slots: type === 'open' || type === 'booked' || type === 'pending' ? overlappingSlots : [],
         block: type === 'unavailable' ? block : null,
       });
     }
@@ -162,7 +175,7 @@ export const TIMELINE_LABELS = {
   pending: 'Pending',
   open: 'Available',
   unavailable: 'Unavailable',
-  idle: 'Free',
+  idle: 'Past hours',
   off_hours: 'Off hours',
 };
 

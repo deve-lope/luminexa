@@ -719,6 +719,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
 class ServiceCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceCategorySerializer
+    http_method_names = ['get', 'head', 'options']  # Platform admin manages catalog via BusinessType
 
     def get_permissions(self):
         from rest_framework.permissions import IsAuthenticated
@@ -730,21 +731,26 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
         )
         slug = self.request.query_params.get('organization')
         if slug:
+            org = Organization.objects.filter(slug=slug).first()
+            if org and is_org_member(self.request.user, org):
+                from .catalog import ensure_org_categories_from_business_types
+                ensure_org_categories_from_business_types(org)
             qs = qs.filter(organization__slug=slug)
-        return qs.distinct().order_by('sort_order', 'name')
+        return qs.filter(is_active=True).distinct().order_by('sort_order', 'name')
 
-    def perform_create(self, serializer):
-        org = serializer.validated_data['organization']
-        require_staff_ops(self.request.user, org)
-        serializer.save()
+    def create(self, request, *args, **kwargs):
+        raise PermissionDenied(
+            'Categories are managed by Luminexa admins. Choose from the existing list.'
+        )
 
-    def perform_update(self, serializer):
-        require_staff_ops(self.request.user, serializer.instance.organization)
-        serializer.save()
+    def update(self, request, *args, **kwargs):
+        raise PermissionDenied('Categories are managed by Luminexa admins.')
 
-    def perform_destroy(self, instance):
-        require_staff_ops(self.request.user, instance.organization)
-        instance.delete()
+    def partial_update(self, request, *args, **kwargs):
+        raise PermissionDenied('Categories are managed by Luminexa admins.')
+
+    def destroy(self, request, *args, **kwargs):
+        raise PermissionDenied('Categories are managed by Luminexa admins.')
 
 
 class ServiceViewSet(viewsets.ModelViewSet):
@@ -832,6 +838,15 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
         from rest_framework.permissions import IsAuthenticated
         return [IsAuthenticated()]
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        user = self.request.user
+        if user and user.is_authenticated:
+            ctx['staff_org_ids'] = set(_staff_organization_ids(user))
+        else:
+            ctx['staff_org_ids'] = set()
+        return ctx
+
     def get_queryset(self):
         user = self.request.user
         staff_ids = list(_staff_organization_ids(user))
@@ -868,6 +883,35 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
                 status=AvailabilitySlot.Status.OPEN,
                 start_at__gte=earliest_customer_bookable_at(),
             )
+
+        # Optional window so provider schedule does not download months of slots at once.
+        from django.utils.dateparse import parse_datetime, parse_date
+        from datetime import datetime, time as dt_time
+        from django.utils import timezone as dj_tz
+
+        start_param = self.request.query_params.get('from') or self.request.query_params.get('start')
+        end_param = self.request.query_params.get('until') or self.request.query_params.get('end')
+        if start_param:
+            start_dt = parse_datetime(start_param)
+            if start_dt is None:
+                d = parse_date(start_param)
+                if d:
+                    start_dt = datetime.combine(d, dt_time.min)
+            if start_dt is not None:
+                if dj_tz.is_naive(start_dt):
+                    start_dt = dj_tz.make_aware(start_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__gte=start_dt)
+        if end_param:
+            end_dt = parse_datetime(end_param)
+            if end_dt is None:
+                d = parse_date(end_param)
+                if d:
+                    end_dt = datetime.combine(d, dt_time.max)
+            if end_dt is not None:
+                if dj_tz.is_naive(end_dt):
+                    end_dt = dj_tz.make_aware(end_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__lte=end_dt)
+
         return qs.distinct().order_by('start_at')
 
     def list(self, request, *args, **kwargs):

@@ -14,6 +14,7 @@ import BookingStatusTimeline from '../../components/booking/BookingStatusTimelin
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
+import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
@@ -33,6 +34,7 @@ export default function ProviderScheduleDetailPage() {
   const navigate = useNavigate();
   useProviderOrg();
   const [data, setData] = useState(null);
+  const [siblingSlots, setSiblingSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -79,6 +81,32 @@ export default function ProviderScheduleDetailPage() {
         res = await jobsAPI.getBooking(id);
       } else if (kind === 'slot') {
         res = await jobsAPI.getSlot(id);
+        setData(res.data);
+        // Same clock time often has one open slot per service — show them all.
+        if (res.data?.start_at && orgSlug) {
+          try {
+            const dayKey = formatLocalDateKey(new Date(res.data.start_at));
+            const listRes = await jobsAPI.listSlots({
+              organization: orgSlug,
+              from: dayKey,
+              until: dayKey,
+            });
+            const all = listRes.data?.slots ?? (Array.isArray(listRes.data) ? listRes.data : []);
+            const startMs = new Date(res.data.start_at).getTime();
+            setSiblingSlots(
+              (Array.isArray(all) ? all : []).filter(
+                (s) =>
+                  s.status === 'open' &&
+                  new Date(s.start_at).getTime() === startMs
+              )
+            );
+          } catch {
+            setSiblingSlots([]);
+          }
+        } else {
+          setSiblingSlots([]);
+        }
+        return;
       } else if (kind === 'block') {
         res = await jobsAPI.getUnavailableBlock(id);
       } else {
@@ -91,7 +119,7 @@ export default function ProviderScheduleDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [kind, id]);
+  }, [kind, id, orgSlug]);
 
   useEffect(() => {
     load();
@@ -518,11 +546,18 @@ export default function ProviderScheduleDetailPage() {
     const occupied = Number(data.occupied_count) || 0;
     const remaining = Number(data.remaining_capacity);
     const spotsLeft = Number.isFinite(remaining) ? remaining : Math.max(0, capacity - occupied);
+    const openPeers = siblingSlots.length
+      ? siblingSlots
+      : data.status === 'open'
+        ? [data]
+        : [];
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white shadow-lg">
           <p className="text-sm text-emerald-100 capitalize">{data.status}</p>
-          <h1 className="mt-1 text-2xl font-bold">{data.service_name}</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            {hasBooking ? data.service_name : 'Open time'}
+          </h1>
           <p className="mt-2 text-white/90">{formatWhen(data.start_at)}</p>
           {capacity > 1 && (
             <p className="mt-2 text-sm text-emerald-50">
@@ -566,10 +601,23 @@ export default function ProviderScheduleDetailPage() {
         ) : (
           <section className="rounded-xl bg-white p-5 shadow-sm">
             <p className="text-slate-600">
-              {capacity > 1
-                ? `Open slot — up to ${capacity} customers can book this time.`
-                : 'Open slot — no customer booked yet.'}
+              Customers can book any of these services at this time. Each service has its own open
+              slot under the hood.
             </p>
+            <ul className="mt-4 space-y-2">
+              {openPeers.map((s) => (
+                <li
+                  key={s.id}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    String(s.id) === String(data.id)
+                      ? 'border-emerald-300 bg-emerald-50 font-medium text-emerald-950'
+                      : 'border-slate-200 text-slate-800'
+                  }`}
+                >
+                  {s.service_name || data.service_name || 'Service'}
+                </li>
+              ))}
+            </ul>
           </section>
         )}
       </div>
