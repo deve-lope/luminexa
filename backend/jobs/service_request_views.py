@@ -31,7 +31,10 @@ def _booking_bucket(status):
         Booking.Status.NEEDS_RETURN,
     ):
         return 'active'
-    return 'done'
+    if status == Booking.Status.COMPLETED:
+        return 'done'
+    # Cancelled / declined — only visible under All
+    return 'other'
 
 
 def _inquiry_bucket(status):
@@ -39,7 +42,10 @@ def _inquiry_bucket(status):
         return 'pending'
     if status == CustomerServiceInquiry.Status.ACTIVE:
         return 'active'
-    return 'done'
+    if status == CustomerServiceInquiry.Status.COMPLETED:
+        return 'done'
+    # Declined — only visible under All
+    return 'other'
 
 
 class ProviderServiceRequestsAPIView(APIView):

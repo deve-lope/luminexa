@@ -47,7 +47,7 @@ export function requestFilterLabel(filter) {
     all: 'All',
     pending: 'Pending',
     active: 'Jobs',
-    done: 'Done',
+    done: 'Completed',
   };
   return labels[filter] || filter;
 }

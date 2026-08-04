@@ -93,7 +93,9 @@ export default function ProviderRequestsPage() {
               ? 'When customers book or send a custom request, it will show up here.'
               : filter === 'active'
                 ? 'Approved jobs will show up here.'
-                : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
+                : filter === 'done'
+                  ? 'Completed jobs will show up here.'
+                  : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
           </p>
         </div>
       )}
