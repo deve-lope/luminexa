@@ -52,6 +52,10 @@ export function providerAccount(orgSlug) {
   return `/provider/${orgSlug}/account`;
 }
 
+export function providerBilling(orgSlug) {
+  return `/provider/${orgSlug}/billing`;
+}
+
 export function providerAbout(orgSlug) {
   return `/provider/${orgSlug}/about`;
 }

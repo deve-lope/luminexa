@@ -74,23 +74,23 @@ class QuickBooksCallbackAPIView(APIView):
         org = Organization.objects.filter(pk=org_id).first() if org_id else None
 
         base = (getattr(settings, 'PUBLIC_APP_URL', None) or 'http://localhost:3000').rstrip('/')
-        settings_path = (
-            f'{base}/provider/{org.slug}/settings' if org else f'{base}/'
+        billing_path = (
+            f'{base}/provider/{org.slug}/billing' if org else f'{base}/'
         )
 
         if error:
-            return HttpResponseRedirect(f'{settings_path}?qbo=error')
+            return HttpResponseRedirect(f'{billing_path}?qbo=error')
         if not code or not realm_id or not org:
-            return HttpResponseRedirect(f'{settings_path}?qbo=invalid')
+            return HttpResponseRedirect(f'{billing_path}?qbo=invalid')
 
         try:
             quickbooks_services.exchange_code_for_tokens(
                 org=org, code=code, realm_id=realm_id,
             )
         except Exception:
-            return HttpResponseRedirect(f'{settings_path}?qbo=token_error')
+            return HttpResponseRedirect(f'{billing_path}?qbo=token_error')
 
-        return HttpResponseRedirect(f'{settings_path}?qbo=1')
+        return HttpResponseRedirect(f'{billing_path}?qbo=1')
 
 
 class QuickBooksDisconnectAPIView(APIView):

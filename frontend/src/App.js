@@ -37,6 +37,8 @@ import ProviderRequestsPage from './pages/provider/ProviderRequestsPage';
 import ProviderRequestDetailPage from './pages/provider/ProviderRequestDetailPage';
 import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 import ProviderSubscribePage from './pages/provider/ProviderSubscribePage';
+import ProviderAccountPage from './pages/provider/ProviderAccountPage';
+import ProviderBillingPage from './pages/provider/ProviderBillingPage';
 import ProviderNotificationsPage from './pages/provider/ProviderNotificationsPage';
 import ProviderNotificationsAllPage from './pages/provider/ProviderNotificationsAllPage';
 import ProviderMessagesPage from './pages/provider/ProviderMessagesPage';
@@ -175,7 +177,8 @@ function AppRoutes() {
           <Route path="notifications/all" element={<ProviderNotificationsAllPage />} />
           <Route path="settings" element={<ProviderSettingsPage />} />
           <Route path="subscribe" element={<ProviderSubscribePage />} />
-          <Route path="account" element={<CustomerAccountPage variant="provider" />} />
+          <Route path="account" element={<ProviderAccountPage />} />
+          <Route path="billing" element={<ProviderBillingPage />} />
           <Route path="about" element={<AboutPage embedded />} />
           <Route path="my-page" element={<ProviderSharePage />} />
           <Route path="share" element={<Navigate to="my-page" replace />} />

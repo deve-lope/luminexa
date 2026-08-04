@@ -49,7 +49,11 @@ export default function ProviderSubscribePage() {
           Only the business owner can start the trial. Ask them to subscribe, then refresh.
         </p>
       )}
-      <ProviderBillingSettings orgSlug={orgSlug} isOwner={isOwner} />
+      <ProviderBillingSettings
+        orgSlug={orgSlug}
+        isOwner={isOwner}
+        returnPath={`/provider/${orgSlug}/subscribe`}
+      />
     </div>
   );
 }

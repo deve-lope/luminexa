@@ -210,6 +210,9 @@ function ProviderShell() {
     if (location.pathname.startsWith(`${base}/account`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My account' };
     }
+    if (location.pathname.startsWith(`${base}/billing`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Billing' };
+    }
     if (location.pathname.startsWith(`${base}/about`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'About Luminexa' };
     }

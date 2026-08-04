@@ -8,6 +8,15 @@ export function orgHasActiveSubscription(membership) {
   return status === 'active' || status === 'trialing';
 }
 
+/** Whole days remaining until period end (0 if ending today; null if unknown). */
+export function subscriptionDaysRemaining(periodEnd) {
+  if (!periodEnd) return null;
+  const end = new Date(periodEnd);
+  if (Number.isNaN(end.getTime())) return null;
+  const ms = end.getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+}
+
 /** Paths providers may use before / without an active Pro subscription. */
 export function isProviderSubscriptionExemptPath(pathname, orgSlug) {
   if (!orgSlug) return false;
@@ -17,6 +26,7 @@ export function isProviderSubscriptionExemptPath(pathname, orgSlug) {
     `${base}/subscribe`,
     `${base}/settings`,
     `${base}/account`,
+    `${base}/billing`,
     `${base}/about`,
     `${base}/setup`,
   ];

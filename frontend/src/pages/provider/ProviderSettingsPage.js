@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
-import ProviderBillingSettings from '../../components/provider/ProviderBillingSettings';
 import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
@@ -172,8 +171,6 @@ export default function ProviderSettingsPage() {
       />
 
       <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} />
-
-      <ProviderBillingSettings orgSlug={orgSlug} isOwner={isOwner} />
 
       <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} />
 

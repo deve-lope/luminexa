@@ -16,7 +16,7 @@ function statusCopy(status) {
  * Stripe Connect (customer card payouts) + provider Pro subscription.
  * Owner-only actions; staff can view status.
  */
-export default function ProviderBillingSettings({ orgSlug, isOwner }) {
+export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }) {
   const { refreshSession } = useAuth();
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +25,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
   const [message, setMessage] = useState(null);
   const [promoCode, setPromoCode] = useState('');
   const [promoBusy, setPromoBusy] = useState(false);
+  const stripeReturnPath = returnPath || `/provider/${orgSlug}/billing`;
+  const subscribeSuccessPath = returnPath || `/provider/${orgSlug}/subscribe`;
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -69,7 +71,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
     const qbo = params.get('qbo');
     if (qbo) {
       if (qbo === '1') setMessage('QuickBooks connected.');
-      else setError('QuickBooks connection failed. Try again from Settings.');
+      else setError('QuickBooks connection failed. Try again from Billing.');
       load();
       const url = new URL(window.location.href);
       url.searchParams.delete('qbo');
@@ -223,7 +225,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
               onClick={() =>
                 redirectTo(() =>
                   jobsAPI.startConnectOnboarding(orgSlug, {
-                    return_path: `/provider/${orgSlug}/settings`,
+                    return_path: stripeReturnPath,
                   })
                 )
               }
@@ -355,8 +357,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
                     redirectTo(() =>
                       jobsAPI.startSubscription(orgSlug, {
                         plan: 'pro_monthly',
-                        success_path: `/provider/${orgSlug}/subscribe`,
-                        cancel_path: `/provider/${orgSlug}/subscribe`,
+                        success_path: subscribeSuccessPath,
+                        cancel_path: subscribeSuccessPath,
                       })
                     )
                   }
@@ -378,8 +380,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
                     redirectTo(() =>
                       jobsAPI.startSubscription(orgSlug, {
                         plan: 'pro_yearly',
-                        success_path: `/provider/${orgSlug}/subscribe`,
-                        cancel_path: `/provider/${orgSlug}/subscribe`,
+                        success_path: subscribeSuccessPath,
+                        cancel_path: subscribeSuccessPath,
                       })
                     )
                   }
@@ -395,13 +397,13 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
                 onClick={() =>
                   redirectTo(() =>
                     jobsAPI.openBillingPortal(orgSlug, {
-                      return_path: `/provider/${orgSlug}/settings`,
+                      return_path: stripeReturnPath,
                     })
                   )
                 }
                 className="min-h-[44px] rounded-xl bg-white px-4 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 disabled:opacity-60"
               >
-                Manage billing
+                Open Stripe billing portal
               </button>
             )}
             {!sub.prices_configured?.pro_monthly && !sub.prices_configured?.pro_yearly && (

@@ -4,6 +4,7 @@ import ServiceLocationInput, {
   formatServiceAddressDisplay,
   validateServiceLocationValue,
 } from '../../components/customer/ServiceLocationInput';
+import ProviderSubscriptionCard from '../../components/provider/ProviderSubscriptionCard';
 import PasswordInput from '../../components/ui/PasswordInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -245,7 +246,7 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
   );
 }
 
-export default function CustomerAccountPage({ variant = 'customer' }) {
+export default function CustomerAccountPage({ variant = 'customer', orgSlug = null }) {
   const isCustomerAccount = variant === 'customer';
   const { user, setUserFromProfile, logout } = useAuth();
   const { showToast } = useToast();
@@ -343,6 +344,8 @@ export default function CustomerAccountPage({ variant = 'customer' }) {
 
   return (
     <div className="space-y-4">
+      {!isCustomerAccount && orgSlug && <ProviderSubscriptionCard orgSlug={orgSlug} />}
+
       <section
         className={
           isCustomerAccount

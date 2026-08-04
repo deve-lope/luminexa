@@ -46,7 +46,7 @@ def _redirect_uri() -> str:
     if explicit:
         return explicit
     base = (getattr(settings, 'PUBLIC_APP_URL', None) or 'http://localhost:3000').rstrip('/')
-    # SPA catches /settings?qbo=…; API callback is under /api/v1/
+    # SPA catches /billing?qbo=…; API callback is under /api/v1/
     api_public = (getattr(settings, 'PUBLIC_API_URL', None) or '').rstrip('/')
     if api_public:
         return f'{api_public}/api/v1/accounting/quickbooks/callback/'

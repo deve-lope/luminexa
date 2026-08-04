@@ -91,6 +91,7 @@ export function resolveProviderBack(pathname, orgSlug) {
   if (path === `${base}/services`) return { to: base };
   if (path === `${base}/settings`) return { to: base };
   if (path === `${base}/account`) return { to: base };
+  if (path === `${base}/billing`) return { to: `${base}/account` };
   if (path === `${base}/about`) return { to: base };
   if (path === `${base}/analytics`) return { to: base };
 

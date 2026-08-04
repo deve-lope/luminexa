@@ -53,7 +53,7 @@ class ConnectOnboardingAPIView(APIView):
 
     def post(self, request, slug):
         org = _org_for_owner(request.user, slug)
-        return_path = request.data.get('return_path') or f'/provider/{org.slug}/settings'
+        return_path = request.data.get('return_path') or f'/provider/{org.slug}/billing'
         url = stripe_services.create_connect_onboarding_link(
             org,
             owner_email=request.user.email or '',
@@ -84,8 +84,8 @@ class SubscriptionCheckoutAPIView(APIView):
             owner_email=request.user.email or '',
             owner_name=request.user.full_name or '',
             plan=plan,
-            success_path=request.data.get('success_path') or f'/provider/{org.slug}/settings',
-            cancel_path=request.data.get('cancel_path') or f'/provider/{org.slug}/settings',
+            success_path=request.data.get('success_path') or f'/provider/{org.slug}/billing',
+            cancel_path=request.data.get('cancel_path') or f'/provider/{org.slug}/billing',
         )
         return Response(result)
 
@@ -97,7 +97,7 @@ class BillingPortalAPIView(APIView):
         org = _org_for_owner(request.user, slug)
         result = stripe_services.create_billing_portal_session(
             org=org,
-            return_path=request.data.get('return_path') or f'/provider/{org.slug}/settings',
+            return_path=request.data.get('return_path') or f'/provider/{org.slug}/billing',
         )
         return Response(result)
 
