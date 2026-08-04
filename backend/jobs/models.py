@@ -37,6 +37,8 @@ class Service(models.Model):
     class PricingType(models.TextChoices):
         FIXED = 'fixed', 'Fixed price'
         RANGE = 'range', 'Price range'
+        AVERAGE = 'average', 'Typical / average price'
+        # Legacy: treat like average for quote + display when base_price is set.
         QUOTE = 'quote', 'Quote on request'
 
     class FulfillmentKind(models.TextChoices):
@@ -104,6 +106,15 @@ class Service(models.Model):
     def __str__(self):
         return f'{self.organization.slug}: {self.name}'
 
+    @classmethod
+    def pricing_requires_quote(cls, pricing_type):
+        """Non-fixed catalog prices always go through quote-before-confirm."""
+        return pricing_type in (
+            cls.PricingType.RANGE,
+            cls.PricingType.AVERAGE,
+            cls.PricingType.QUOTE,
+        )
+
     def clean(self):
         if self.pricing_type == self.PricingType.RANGE:
             if self.price_max is None:
@@ -112,6 +123,19 @@ class Service(models.Model):
                 raise ValidationError({'price_max': 'Maximum must be at least the minimum price.'})
         elif self.price_max is not None and self.pricing_type != self.PricingType.RANGE:
             self.price_max = None
+
+        if self.pricing_type == self.PricingType.AVERAGE:
+            if self.base_price is None or self.base_price <= 0:
+                raise ValidationError({
+                    'base_price': 'Enter a typical price so customers see an estimate.',
+                })
+        if self.pricing_type in (
+            self.PricingType.RANGE,
+            self.PricingType.AVERAGE,
+            self.PricingType.QUOTE,
+        ):
+            # Customers should see an indicative price whenever a quote is required.
+            self.show_price = True
 
     def save(self, *args, **kwargs):
         if self.pricing_type != self.PricingType.RANGE:

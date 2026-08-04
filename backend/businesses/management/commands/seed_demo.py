@@ -11,18 +11,106 @@ from jobs.scheduling_services import sync_recurring_slots
 
 DEFAULT_BUSINESS_TYPES = (
     # slug, name, description, icon, sort_order, location_kind
-    ('plumbing', 'Plumbing', 'Pipes, leaks, and fixtures', '🔧', 10, 'mobile'),
-    ('electrical', 'Electrical', 'Wiring and electrical work', '⚡', 20, 'mobile'),
-    ('hvac', 'HVAC', 'Heating and cooling', '❄️', 30, 'mobile'),
-    ('cleaning', 'Cleaning', 'Home and office cleaning', '🧹', 40, 'mobile'),
-    ('car-wash', 'Car wash', 'Wash, detail, and mobile car care', '🚗', 50, 'mobile'),
-    ('salon-studio', 'Salon / studio', 'Fixed-location beauty or wellness studio', '💇', 55, 'office'),
-    ('pet-grooming', 'Pet grooming', 'Grooming and pet care at home or salon', '🐾', 60, 'mobile'),
-    ('landscaping', 'Landscaping', 'Lawns and outdoor care', '🌿', 70, 'mobile'),
-    ('handyman', 'Handyman', 'General repairs and small jobs', '🛠️', 80, 'mobile'),
-    ('painting', 'Painting', 'Interior and exterior painting', '🎨', 90, 'mobile'),
-    ('other', 'Other', 'Something else — or add a custom type below', '✨', 999, 'mobile'),
+    (
+        'auto-vehicles',
+        'Auto & vehicles',
+        'Wash, detailing, tires, jump starts, and mobile auto care',
+        '🚗',
+        10,
+        'mobile',
+    ),
+    (
+        'yard-outdoors',
+        'Yard & outdoors',
+        'Mowing, leaf cleanup, snow, hedges, and garden care',
+        '🌿',
+        20,
+        'mobile',
+    ),
+    (
+        'home-cleaning',
+        'Home cleaning',
+        'House cleaning, deep cleans, windows, and move-out cleans',
+        '🧹',
+        30,
+        'mobile',
+    ),
+    (
+        'handyman-repairs',
+        'Handyman & repairs',
+        'Mounting, assembly, minor fixes, and small home jobs',
+        '🛠️',
+        40,
+        'mobile',
+    ),
+    (
+        'electrical',
+        'Electrical',
+        'Outlets, fixtures, fans, and electrical troubleshooting',
+        '⚡',
+        50,
+        'mobile',
+    ),
+    (
+        'plumbing',
+        'Plumbing',
+        'Faucets, toilets, clogs, and minor leaks',
+        '🔧',
+        60,
+        'mobile',
+    ),
+    (
+        'moving-help',
+        'Moving & heavy help',
+        'Load/unload, furniture moves, and junk haul',
+        '📦',
+        70,
+        'mobile',
+    ),
+    (
+        'painting',
+        'Painting',
+        'Interior and exterior painting and touch-ups',
+        '🎨',
+        80,
+        'mobile',
+    ),
+    (
+        'pet-care',
+        'Pet care',
+        'Walking, sitting, and basic grooming',
+        '🐾',
+        90,
+        'mobile',
+    ),
+    (
+        'personal-beauty',
+        'Personal / beauty',
+        'Hair, nails, barber, and wellness (often studio-based)',
+        '💇',
+        100,
+        'office',
+    ),
+    (
+        'other',
+        'Other',
+        'Something else — or add a custom type below',
+        '✨',
+        999,
+        'mobile',
+    ),
 )
+
+# Old seeded slugs → new catalog (org M2M remount + deactivate legacy types).
+LEGACY_BUSINESS_TYPE_REMAP = {
+    'car-wash': 'auto-vehicles',
+    'landscaping': 'yard-outdoors',
+    'cleaning': 'home-cleaning',
+    'handyman': 'handyman-repairs',
+    'hvac': 'handyman-repairs',
+    'pet-grooming': 'pet-care',
+    'salon-studio': 'personal-beauty',
+}
 
 
 class Command(BaseCommand):
@@ -53,7 +141,9 @@ class Command(BaseCommand):
 
     def _ensure_business_types(self):
         types = {}
+        keep_slugs = set()
         for slug, name, description, icon, sort_order, location_kind in DEFAULT_BUSINESS_TYPES:
+            keep_slugs.add(slug)
             bt, created = BusinessType.objects.get_or_create(
                 slug=slug,
                 defaults={
@@ -65,10 +155,43 @@ class Command(BaseCommand):
                     'is_active': True,
                 },
             )
-            if not created and bt.location_kind != location_kind:
+            updates = []
+            if bt.name != name:
+                bt.name = name
+                updates.append('name')
+            if bt.description != description:
+                bt.description = description
+                updates.append('description')
+            if bt.icon != icon:
+                bt.icon = icon
+                updates.append('icon')
+            if bt.sort_order != sort_order:
+                bt.sort_order = sort_order
+                updates.append('sort_order')
+            if bt.location_kind != location_kind:
                 bt.location_kind = location_kind
-                bt.save(update_fields=['location_kind'])
+                updates.append('location_kind')
+            if not bt.is_active:
+                bt.is_active = True
+                updates.append('is_active')
+            if updates:
+                bt.save(update_fields=updates)
             types[slug] = bt
+
+        # Remount orgs from legacy type slugs onto the new catalog.
+        for old_slug, new_slug in LEGACY_BUSINESS_TYPE_REMAP.items():
+            old = BusinessType.objects.filter(slug=old_slug).first()
+            new = types.get(new_slug)
+            if not old or not new:
+                continue
+            for org in Organization.objects.filter(business_types=old):
+                org.business_types.add(new)
+                org.business_types.remove(old)
+
+        # Deactivate anything not in the current catalog (keeps history, hides from browse).
+        BusinessType.objects.exclude(slug__in=keep_slugs).filter(is_active=True).update(
+            is_active=False
+        )
         return types
 
     def handle(self, *args, **options):
@@ -103,7 +226,7 @@ class Command(BaseCommand):
         org.service_city = org.service_city or 'Austin'
         org.service_state = org.service_state or 'TX'
         org.service_postal_code = org.service_postal_code or '78701'
-        org.business_types.set([business_types['cleaning']])
+        org.business_types.set([business_types['home-cleaning']])
         from datetime import date as date_cls
         org.scheduling_mode = Organization.SchedulingMode.RECURRING
         org.schedule_valid_from = date_cls.today()

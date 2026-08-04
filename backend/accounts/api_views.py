@@ -113,15 +113,18 @@ class LoginStartAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
+        # Always HTTP 200 — avoid 404 account enumeration. Unknown emails get
+        # auth_method=none so the SPA can offer register without confirming existence via status code.
         if not user or not user.is_active:
-            return Response(
-                {
-                    'detail': 'No account found for that email.',
-                    'code': 'account_not_found',
-                    'email': email,
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({
+                'auth_method': 'none',
+                'email': email,
+                'detail': (
+                    'We could not start sign-in for this email. '
+                    'Create an account below, or try a different address.'
+                ),
+                'code': 'no_login',
+            })
         if user_uses_password_login(user):
             return Response({
                 'auth_method': 'password',
@@ -145,15 +148,13 @@ class LoginOtpRequestAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
+        # Uniform success-shaped response for unknown emails (no OTP sent).
         if not user or not user.is_active:
-            return Response(
-                {
-                    'detail': 'No account found for that email.',
-                    'code': 'account_not_found',
-                    'email': email,
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({
+                'detail': 'If an account exists for this email, we sent a sign-in code.',
+                'email': email,
+                'auth_method': 'otp',
+            })
         if user_uses_password_login(user):
             return Response({
                 'detail': 'This account uses a password.',
@@ -307,9 +308,12 @@ class PasswordResetRequestAPIView(APIView):
         if user and user_uses_password_login(user):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
+            from .admin_2fa import user_is_admin_account
+
+            otp_q = '&requires_otp=1' if user_is_admin_account(user) else ''
             reset_url = (
                 f'{settings.PUBLIC_APP_URL.rstrip("/")}/reset-password'
-                f'?uid={uid}&token={token}'
+                f'?uid={uid}&token={token}{otp_q}'
             )
             send_password_reset_email(user, reset_url)
         return Response({
@@ -327,6 +331,7 @@ class PasswordResetConfirmAPIView(APIView):
         uid = serializer.validated_data['uid']
         token = serializer.validated_data['token']
         password = serializer.validated_data['password']
+        otp = serializer.validated_data.get('otp') or ''
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=user_id)
@@ -336,6 +341,21 @@ class PasswordResetConfirmAPIView(APIView):
             raise ValidationError({'detail': 'Invalid or expired reset link.'})
         if not user_uses_password_login(user):
             raise ValidationError({'detail': 'Customer accounts do not use a password.'})
+
+        from .admin_2fa import user_is_admin_account, verify_admin_totp
+
+        if user_is_admin_account(user):
+            if not (otp or '').strip():
+                raise ValidationError({
+                    'otp': 'Admin accounts require a Google Authenticator code (or backup token).',
+                    'code': 'admin_otp_required',
+                })
+            if not verify_admin_totp(user, otp):
+                raise ValidationError({
+                    'otp': 'Invalid authenticator code.',
+                    'code': 'admin_otp_invalid',
+                })
+
         user.set_password(password)
         # Completing reset proves mailbox access — mark verified if not already.
         update_fields = ['password']

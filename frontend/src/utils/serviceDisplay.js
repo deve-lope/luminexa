@@ -65,22 +65,35 @@ export function formatDurationLabel(mins) {
   return `${h} hours`;
 }
 
-/** Human-readable price for catalog cards (fixed, range, or quote). */
+/** Human-readable price for catalog cards (fixed, range, average, or legacy quote). */
 export function formatServicePrice(service, currency, options = {}) {
   const { forceShowPrice = false } = options;
   if (!forceShowPrice && service?.show_price === false) return null;
 
   const type = service?.pricing_type || 'fixed';
-  if (type === 'quote') return 'Quote on request';
-
   const fmt = formatterFor(currency ?? service);
   const min = formatAmount(service?.base_price, fmt);
   const max = formatAmount(service?.price_max, fmt);
 
   if (type === 'range' && min && max) return `${min} – ${max}`;
+  if (type === 'range' && min) return `From ${min}`;
+  if (type === 'average' && min) return `About ${min}`;
+  if (type === 'quote') {
+    if (min && Number(service?.base_price) > 0) return `About ${min}`;
+    return 'Quote on request';
+  }
   if (min) return min;
   if (type === 'range' && max) return `Up to ${max}`;
   return null;
+}
+
+/** Non-fixed catalog prices always use quote-before-confirm. */
+export function serviceRequiresQuote(serviceOrType) {
+  const type =
+    typeof serviceOrType === 'string'
+      ? serviceOrType
+      : serviceOrType?.pricing_type;
+  return type === 'range' || type === 'average' || type === 'quote';
 }
 
 /** Duration + optional price for public service cards. */

@@ -13,7 +13,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
-import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter } from '../../utils/serviceDisplay';
+import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -81,7 +81,9 @@ export default function ProviderRequestDetailPage() {
   const isQuotePolicy = data?.booking_policy === 'quote';
   const needsQuote =
     kind === 'booking' &&
-    (data?.requires_quote || isQuotePolicy || data?.service_pricing_type === 'quote') &&
+    (data?.requires_quote ||
+      isQuotePolicy ||
+      serviceRequiresQuote(data?.service_pricing_type)) &&
     (status === 'requested' || status === 'quoted');
 
   useEffect(() => {

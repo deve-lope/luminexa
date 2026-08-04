@@ -228,18 +228,20 @@ def notify_booking_quoted(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
     amount = booking.quote_amount
     amount_txt = f'${amount}' if amount is not None else 'a price'
+    when = _format_when(booking.start_at)
     create_customer_notification(
         customer=booking.customer,
         kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
         title=f'Quote ready — {booking.organization.name}',
         message=(
-            f'{booking.organization.name} sent a quote of {amount_txt} for {service_name} '
-            f'on {_format_when(booking.start_at)}. Review and accept it in your bookings.'
+            f'{booking.organization.name} quoted {amount_txt} for {service_name} on {when}. '
+            f'Open Bookings to accept or decline.'
         ),
         organization=booking.organization,
         booking=booking,
+        link_path='/customer/bookings',
     )
-    send_booking_email('booking_requested', booking)
+    send_booking_email('booking_quoted', booking)
 
 
 def notify_booking_declined(booking):
@@ -405,6 +407,24 @@ def send_booking_email(event, booking):
                     f'View bookings: {bookings_url}',
                 ],
             )
+    elif event == 'booking_quoted':
+        amount = booking.quote_amount
+        amount_txt = f'${amount}' if amount is not None else 'a price'
+        msg = (booking.quote_message or '').strip()
+        recipients = [booking.customer.email] if booking.customer.email else []
+        subject = f'Your quote from {org.name} is ready'
+        body_lines = [
+            f'{org.name} sent a quote for {service_name}.',
+            f'Quoted price: {amount_txt}',
+            f'Appointment: {when}',
+        ]
+        if msg:
+            body_lines.extend(['', 'Note from the business:', msg])
+        body_lines.extend([
+            '',
+            'Open your bookings to accept the quote and confirm, or decline if it does not work.',
+            f'View bookings: {bookings_url}',
+        ])
     elif event == 'booking_reschedule_requested':
         recipients = _provider_staff_emails(org)
         subject = f'Reschedule request — {service_name}'

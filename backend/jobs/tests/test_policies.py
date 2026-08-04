@@ -23,10 +23,13 @@ class BookingPolicyTests(TestCase):
         end = start + timedelta(hours=1)
         self.slot_kwargs = dict(start_at=start, end_at=end)
 
-    def _org(self, policy):
+    def _org(self, policy, slug=None):
         org = Organization.objects.create(
-            name='Policy Co', slug=f'policy-{policy}', booking_policy=policy,
-            profile_public=True, is_active=True,
+            name='Policy Co',
+            slug=slug or f'policy-{policy}',
+            booking_policy=policy,
+            profile_public=True,
+            is_active=True,
         )
         OrganizationMembership.objects.create(
             organization=org, user=self.owner, role=OrganizationMembership.Role.OWNER,
@@ -102,6 +105,7 @@ class BookingPolicyTests(TestCase):
         """Fixed org policy + quote-priced service still requires quote; answers at request."""
         org, service, slot = self._org(Organization.BookingPolicy.INSTANT)
         service.pricing_type = Service.PricingType.QUOTE
+        service.base_price = '80.00'
         service.quote_questions = ['How many rooms?', 'Pets on site?']
         service.save()
 
@@ -151,6 +155,47 @@ class BookingPolicyTests(TestCase):
         )
         self.assertEqual(accepted.status_code, 200, accepted.data)
         self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
+
+    def test_range_and_average_pricing_require_quote(self):
+        """Non-fixed catalog prices always use quote-before-confirm."""
+        org, service, slot = self._org(Organization.BookingPolicy.INSTANT)
+        service.pricing_type = Service.PricingType.RANGE
+        service.base_price = '50.00'
+        service.price_max = '90.00'
+        service.save()
+
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        self.assertEqual(create.data['status'], Booking.Status.REQUESTED)
+        self.assertTrue(create.data['requires_quote'])
+
+        org2, service2, slot2 = self._org(Organization.BookingPolicy.INSTANT, slug='policy-instant-avg')
+        service2.pricing_type = Service.PricingType.AVERAGE
+        service2.base_price = '75.00'
+        service2.save()
+
+        create2 = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot2.id,
+                'service': service2.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create2.status_code, 201, create2.data)
+        self.assertTrue(create2.data['requires_quote'])
 
     def test_quote_policy_send_and_accept(self):
         org, service, slot = self._org(Organization.BookingPolicy.QUOTE)

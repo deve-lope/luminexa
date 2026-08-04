@@ -433,6 +433,8 @@ class ProviderAnalyticsAPIView(APIView):
             raise NotFound('Organization not found.')
         if not is_org_staff(request.user, org):
             raise PermissionDenied('You must be staff of this organization to view analytics.')
+        from .permissions import require_provider_subscription
+        require_provider_subscription(org)
 
         now = timezone.now()
         tz = org.get_timezone()

@@ -67,6 +67,7 @@ export function buildProviderMenuItems({
   providerSharePath,
   providerNotificationsPath,
   providerAnalyticsPath,
+  notificationsBadgeCount = 0,
   isStaff,
   adminUrl,
 }) {
@@ -98,7 +99,13 @@ export function buildProviderMenuItems({
     });
   }
   if (providerNotificationsPath) {
-    items.push({ id: 'notifications', label: 'Notifications', to: providerNotificationsPath });
+    items.push({
+      id: 'notifications',
+      label: 'Notifications',
+      to: providerNotificationsPath,
+      iconId: 'notifications',
+      badgeCount: notificationsBadgeCount > 0 ? notificationsBadgeCount : undefined,
+    });
   }
   if (providerSharePath) {
     items.push({ id: 'my-page', label: 'My page', to: providerSharePath });

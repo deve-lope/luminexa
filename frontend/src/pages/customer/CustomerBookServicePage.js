@@ -20,7 +20,7 @@ import {
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { serviceDetail, customerBookings } from '../../utils/customerPaths';
-import { formatServiceMeta, formatFulfillmentDescription, isShopService } from '../../utils/serviceDisplay';
+import { formatServiceMeta, formatFulfillmentDescription, isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
@@ -155,7 +155,7 @@ export default function CustomerBookServicePage() {
   const bookingCtx = calendar?.booking;
   const requiresQuote =
     Boolean(bookingCtx?.requires_quote) ||
-    service?.pricing_type === 'quote' ||
+    serviceRequiresQuote(service) ||
     bookingPolicy === 'quote';
   const quoteQuestionList = useMemo(() => {
     const fromCtx = bookingCtx?.service_quote_questions;
@@ -333,7 +333,7 @@ export default function CustomerBookServicePage() {
         const successMessage = instant
           ? 'Your appointment is confirmed.'
           : quote
-            ? 'Your time request was sent. The provider will send a quote for you to accept.'
+            ? 'Your time request was sent. Watch Bookings for a quote you can accept or decline.'
             : 'Your booking request was sent to the provider for approval.';
         const successDetail = `${selectedDayLabel} · ${formatTimeRange(slot.start_at, slot.end_at)}`;
         const toastMessage = instant
@@ -344,7 +344,7 @@ export default function CustomerBookServicePage() {
           instant
             ? `Booking confirmed for ${successDetail}.`
             : quote
-              ? `Request sent for ${successDetail}. Await a quote from the provider.`
+              ? `Request sent for ${successDetail}. You'll get a quote to review in Bookings.`
               : `Request sent for ${successDetail}. The provider will confirm your appointment.`
         );
         showToast(toastMessage, 'success');

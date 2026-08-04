@@ -10,7 +10,7 @@ Related: `.cursor/rules/booking-capacity.mdc`, `location-search.mdc`, `provider-
 
 ### What it means
 
-`Organization.concurrent_capacity` (default **1**, PositiveInteger, typically clamped 1–50 in UI) is how many people can work **at the same time**. Each open availability slot can accept that many simultaneous bookings.
+`Organization.concurrent_capacity` (default **1**, PositiveInteger, typically clamped 1–50 in UI) is how many customer jobs can overlap **at the same time**. Each open availability slot can accept that many simultaneous bookings.
 
 Applies to both:
 
@@ -32,7 +32,7 @@ There is **no** separate per-slot capacity column. Slot capacity is always deriv
 
 ### Settings location
 
-- Business signup: “People working at the same time” (`RegisterBusinessPage.js`)
+- Business signup: “Jobs at the same time” (`RegisterBusinessPage.js`)
 - Provider Settings → booking policy: same label (`BookingPolicySettings.js` → PATCH `concurrent_capacity`)
 
 ### Customer calendar vs provider timeline (1 of 2 seats filled)
@@ -128,7 +128,7 @@ Copy should make the tradeoff clear: separate account = independent discovery/bo
 
 ## Quick “shipped truths” checklist for agents
 
-1. Capacity default 1; UI label “People working at the same time”; FK not OneToOne; OPEN while remaining > 0.
+1. Capacity default 1; UI label “Jobs at the same time”; FK not OneToOne; OPEN while remaining > 0.
 2. Dual radius in `location.py`; lat/lng preferred; postal for ungeocoded.
 3. Multi-location any-branch match; primary sync; 2nd-location choice UX.
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.

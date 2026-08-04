@@ -12,6 +12,7 @@ from businesses.models import BusinessType, OrganizationMembership
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     PUBLIC_APP_URL='http://localhost:3000',
+    SECURE_SSL_REDIRECT=False,
 )
 class EmailVerificationTests(TestCase):
     def setUp(self):
@@ -117,8 +118,9 @@ class EmailVerificationTests(TestCase):
             format='json',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(missing.status_code, 404, missing.data)
-        self.assertEqual(missing.data['code'], 'account_not_found')
+        self.assertEqual(missing.status_code, 200, missing.data)
+        self.assertEqual(missing.data['auth_method'], 'none')
+        self.assertEqual(missing.data['code'], 'no_login')
         self.assertEqual(len(mail.outbox), 1)  # still no OTP for unknown email
 
         login_ok = self.client.post(

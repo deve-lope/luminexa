@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import OrgSwitcher from '../components/provider/OrgSwitcher';
+import { IconBell } from '../components/icons/NavIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgContext';
@@ -26,6 +27,11 @@ import {
   isProviderSubscriptionExemptPath,
   orgHasActiveSubscription,
 } from '../utils/providerSubscription';
+import {
+  countUnseenRequests,
+  markPendingRequestsSeen,
+  requestAlertKey,
+} from '../utils/providerRequestBadge';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
@@ -34,17 +40,40 @@ function ProviderShell() {
   const location = useLocation();
   const { orgSlug, activeOrg } = useProviderOrg();
   const [alertCount, setAlertCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  const onRequestsTab = useMemo(() => {
+    if (!orgSlug) return false;
+    const base = `/provider/${orgSlug}/requests`;
+    return location.pathname === base || location.pathname.startsWith(`${base}/`);
+  }, [location.pathname, orgSlug]);
+
+  const onNotificationsPage = useMemo(() => {
+    if (!orgSlug) return false;
+    return location.pathname.startsWith(`/provider/${orgSlug}/notifications`);
+  }, [location.pathname, orgSlug]);
 
   const loadAlerts = useCallback(() => {
     if (!orgSlug) return;
     jobsAPI
       .getProviderDashboard(orgSlug)
       .then((res) => {
-        const stats = res.data?.stats || {};
-        const pending = stats.pending_requests_count || 0;
-        const inquiries = stats.customer_inquiries_count || 0;
+        const pendingRequests = res.data?.pending_requests || [];
+        const inquiries = res.data?.customer_inquiries || [];
         const notifications = res.data?.notifications || [];
-        setAlertCount(pending + inquiries + notifications.length);
+        const pendingKeys = [
+          ...pendingRequests.map((r) => requestAlertKey('booking', r.id)),
+          ...inquiries.map((i) => requestAlertKey('inquiry', i.id)),
+        ];
+
+        if (onRequestsTab) {
+          markPendingRequestsSeen(orgSlug, pendingKeys);
+          setAlertCount(0);
+        } else {
+          setAlertCount(countUnseenRequests(orgSlug, pendingKeys));
+        }
+        setNotificationCount(onNotificationsPage ? 0 : notifications.length);
+
         const payment = notifications.find((n) => n.kind === 'payment_received');
         if (payment) {
           const seenKey = `luminexa.seenProviderPayment.${payment.id}`;
@@ -55,7 +84,7 @@ function ProviderShell() {
         }
       })
       .catch(() => {});
-  }, [orgSlug, showToast]);
+  }, [orgSlug, showToast, onRequestsTab, onNotificationsPage]);
 
   useEffect(() => {
     loadAlerts();
@@ -78,10 +107,11 @@ function ProviderShell() {
         providerSharePath: providerShare(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
+        notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin]
+    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -148,6 +178,28 @@ function ProviderShell() {
     };
   }, [location.pathname, activeOrg, orgSlug]);
 
+  const headerActions = useMemo(
+    () => (
+      <Link
+        to={providerNotifications(orgSlug)}
+        className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-sm transition hover:bg-white"
+        aria-label={
+          notificationCount > 0
+            ? `Notifications, ${notificationCount} unread`
+            : 'Notifications'
+        }
+      >
+        <IconBell className="h-5 w-5" aria-hidden="true" />
+        {notificationCount > 0 && (
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+            {notificationCount > 9 ? '9+' : notificationCount}
+          </span>
+        )}
+      </Link>
+    ),
+    [orgSlug, notificationCount]
+  );
+
   if (needsOnboarding(user) && !location.pathname.includes('/setup')) {
     const path = getOnboardingPath(user, memberships, `${location.pathname}${location.search}`);
     if (path) return <Navigate to={path} replace />;
@@ -169,6 +221,7 @@ function ProviderShell() {
       eyebrow={eyebrow}
       title={title}
       headerExtra={<OrgSwitcher />}
+      headerActions={headerActions}
       tabs={tabs}
       menuItems={menuItems}
       menuTitle="Provider menu"

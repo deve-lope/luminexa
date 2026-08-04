@@ -100,6 +100,8 @@ function serviceNeedsDetails(service) {
   const hasDescription = Boolean(service.description?.trim());
   const hasPricing =
     service.pricing_type === 'quote' ||
+    service.pricing_type === 'average' ||
+    service.pricing_type === 'range' ||
     (service.base_price != null && Number(service.base_price) > 0);
   return !hasDescription || !hasPricing;
 }
@@ -200,98 +202,68 @@ function ServiceDetailForm({
             </label>
             <select
               id="svc-pricing"
-              value={serviceDraft.pricing_type}
-              onChange={(e) => setServiceDraft((d) => ({ ...d, pricing_type: e.target.value }))}
+              value={
+                serviceDraft.pricing_type === 'quote' ? 'average' : serviceDraft.pricing_type
+              }
+              onChange={(e) =>
+                setServiceDraft((d) => ({
+                  ...d,
+                  pricing_type: e.target.value,
+                  show_price: e.target.value === 'fixed' ? d.show_price : true,
+                }))
+              }
               className={INPUT_CLASS}
             >
               <option value="fixed">Fixed price</option>
-              <option value="range">Price range</option>
-              <option value="quote">Quote on request</option>
+              <option value="range">Price range (quote before confirm)</option>
+              <option value="average">Typical price (quote before confirm)</option>
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Fixed uses your booking rules. Range and typical always send a quote for the customer
+              to accept — customers still see the estimate you enter.
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {serviceDraft.pricing_type !== 'quote' && (
-            <>
-              <div>
-                <label htmlFor="svc-price" className={LABEL_CLASS}>
-                  {serviceDraft.pricing_type === 'range' ? 'From ($)' : 'Rate ($)'}
-                </label>
-                <input
-                  id="svc-price"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={serviceDraft.base_price}
-                  onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
-                  className={INPUT_CLASS}
-                />
-              </div>
-              {serviceDraft.pricing_type === 'range' && (
-                <div>
-                  <label htmlFor="svc-price-max" className={LABEL_CLASS}>
-                    To ($)
-                  </label>
-                  <input
-                    id="svc-price-max"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={serviceDraft.price_max}
-                    onChange={(e) => setServiceDraft((d) => ({ ...d, price_max: e.target.value }))}
-                    className={INPUT_CLASS}
-                  />
-                </div>
-              )}
-            </>
-          )}
-          {serviceDraft.pricing_type === 'quote' && (
-            <div className="col-span-2 space-y-2">
-              <p className={LABEL_CLASS}>Quote questions (asked when customer requests)</p>
-              <p className="text-xs text-slate-500">
-                Prefill questions so customers answer up front — less back-and-forth before you price.
-              </p>
-              {(serviceDraft.quote_questions || ['']).map((q, idx) => (
-                <div key={`qq-${idx}`} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={q}
-                    placeholder={`Question ${idx + 1}`}
-                    onChange={(e) => {
-                      const next = [...(serviceDraft.quote_questions || [''])];
-                      next[idx] = e.target.value;
-                      setServiceDraft((d) => ({ ...d, quote_questions: next }));
-                    }}
-                    className={INPUT_CLASS}
-                  />
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-lg border border-slate-200 px-2 text-sm text-slate-600"
-                    onClick={() => {
-                      const next = (serviceDraft.quote_questions || ['']).filter((_, i) => i !== idx);
-                      setServiceDraft((d) => ({
-                        ...d,
-                        quote_questions: next.length ? next : [''],
-                      }));
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-sm font-medium text-luminexa-accent"
-                onClick={() =>
-                  setServiceDraft((d) => ({
-                    ...d,
-                    quote_questions: [...(d.quote_questions || []), ''],
-                  }))
-                }
-              >
-                + Add question
-              </button>
+          <div>
+            <label htmlFor="svc-price" className={LABEL_CLASS}>
+              {serviceDraft.pricing_type === 'range'
+                ? 'From ($)'
+                : serviceDraft.pricing_type === 'average' || serviceDraft.pricing_type === 'quote'
+                  ? 'Typical price ($)'
+                  : 'Rate ($)'}
+            </label>
+            <input
+              id="svc-price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={serviceDraft.base_price}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
+              className={INPUT_CLASS}
+              required={
+                serviceDraft.pricing_type === 'average' ||
+                serviceDraft.pricing_type === 'range' ||
+                serviceDraft.pricing_type === 'quote'
+              }
+            />
+          </div>
+          {(serviceDraft.pricing_type === 'range') && (
+            <div>
+              <label htmlFor="svc-price-max" className={LABEL_CLASS}>
+                To ($)
+              </label>
+              <input
+                id="svc-price-max"
+                type="number"
+                min={0}
+                step="0.01"
+                value={serviceDraft.price_max}
+                onChange={(e) => setServiceDraft((d) => ({ ...d, price_max: e.target.value }))}
+                className={INPUT_CLASS}
+                required
+              />
             </div>
           )}
           <div>
@@ -309,6 +281,58 @@ function ServiceDetailForm({
             />
           </div>
         </div>
+
+        {(serviceDraft.pricing_type === 'range' ||
+          serviceDraft.pricing_type === 'average' ||
+          serviceDraft.pricing_type === 'quote') && (
+          <div className="space-y-2">
+            <p className={LABEL_CLASS}>Quote questions (asked when customer requests)</p>
+            <p className="text-xs text-slate-500">
+              Prefill questions so customers answer up front — less back-and-forth before you send
+              the final price.
+            </p>
+            {(serviceDraft.quote_questions || ['']).map((q, idx) => (
+              <div key={`qq-${idx}`} className="flex gap-2">
+                <input
+                  type="text"
+                  value={q}
+                  placeholder={`Question ${idx + 1}`}
+                  onChange={(e) => {
+                    const next = [...(serviceDraft.quote_questions || [''])];
+                    next[idx] = e.target.value;
+                    setServiceDraft((d) => ({ ...d, quote_questions: next }));
+                  }}
+                  className={INPUT_CLASS}
+                />
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg border border-slate-200 px-2 text-sm text-slate-600"
+                  onClick={() => {
+                    const next = (serviceDraft.quote_questions || ['']).filter((_, i) => i !== idx);
+                    setServiceDraft((d) => ({
+                      ...d,
+                      quote_questions: next.length ? next : [''],
+                    }));
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-sm font-medium text-luminexa-accent"
+              onClick={() =>
+                setServiceDraft((d) => ({
+                  ...d,
+                  quote_questions: [...(d.quote_questions || []), ''],
+                }))
+              }
+            >
+              + Add question
+            </button>
+          </div>
+        )}
 
         <div className="space-y-2">
           <p className={LABEL_CLASS}>Where is this job done?</p>
@@ -359,12 +383,21 @@ function ServiceDetailForm({
         </div>
 
         <div className="space-y-2">
-          <FieldToggle
-            checked={serviceDraft.show_price}
-            onChange={(val) => setServiceDraft((d) => ({ ...d, show_price: val }))}
-            label="Show price on public page"
-            description="Display this service's price to customers browsing your catalog."
-          />
+          {serviceDraft.pricing_type === 'fixed' && (
+            <FieldToggle
+              checked={serviceDraft.show_price}
+              onChange={(val) => setServiceDraft((d) => ({ ...d, show_price: val }))}
+              label="Show price on public page"
+              description="Display this service's price to customers browsing your catalog."
+            />
+          )}
+          {(serviceDraft.pricing_type === 'range' ||
+            serviceDraft.pricing_type === 'average' ||
+            serviceDraft.pricing_type === 'quote') && (
+            <p className="text-xs text-slate-500">
+              Customers always see your range or typical price for quote services.
+            </p>
+          )}
           <FieldToggle
             checked={serviceDraft.allow_request}
             onChange={(val) => setServiceDraft((d) => ({ ...d, allow_request: val }))}
@@ -473,13 +506,19 @@ function BulkAddServicesForm({
             </label>
             <select
               id="bulk-pricing"
-              value={bulkDefaults.pricing_type}
-              onChange={(e) => setBulkDefaults((d) => ({ ...d, pricing_type: e.target.value }))}
+              value={bulkDefaults.pricing_type === 'quote' ? 'average' : bulkDefaults.pricing_type}
+              onChange={(e) =>
+                setBulkDefaults((d) => ({
+                  ...d,
+                  pricing_type: e.target.value,
+                  show_price: e.target.value === 'fixed' ? d.show_price : true,
+                }))
+              }
               className={INPUT_CLASS}
             >
               <option value="fixed">Fixed price</option>
-              <option value="range">Price range</option>
-              <option value="quote">Quote on request</option>
+              <option value="range">Price range (quote before confirm)</option>
+              <option value="average">Typical price (quote before confirm)</option>
             </select>
           </div>
           <div>
@@ -547,11 +586,13 @@ function BulkAddServicesForm({
         </div>
 
         <div className="space-y-2">
-          <FieldToggle
-            checked={bulkDefaults.show_price}
-            onChange={(val) => setBulkDefaults((d) => ({ ...d, show_price: val }))}
-            label="Show price on public page"
-          />
+          {bulkDefaults.pricing_type === 'fixed' && (
+            <FieldToggle
+              checked={bulkDefaults.show_price}
+              onChange={(val) => setBulkDefaults((d) => ({ ...d, show_price: val }))}
+              label="Show price on public page"
+            />
+          )}
           <FieldToggle
             checked={bulkDefaults.allow_request}
             onChange={(val) => setBulkDefaults((d) => ({ ...d, allow_request: val }))}
@@ -591,11 +632,14 @@ function BulkAddServicesForm({
                     className={INPUT_CLASS}
                   />
                 </div>
-                {bulkDefaults.pricing_type !== 'quote' && (
-                  <>
+                <>
                     <div>
                       <label className={LABEL_CLASS} htmlFor={`bulk-price-${index}`}>
-                        {bulkDefaults.pricing_type === 'range' ? 'From ($)' : 'Rate ($)'}
+                        {bulkDefaults.pricing_type === 'range'
+                          ? 'From ($)'
+                          : bulkDefaults.pricing_type === 'average'
+                            ? 'Typical ($)'
+                            : 'Rate ($)'}
                       </label>
                       <input
                         id={`bulk-price-${index}`}
@@ -626,7 +670,6 @@ function BulkAddServicesForm({
                       </div>
                     )}
                   </>
-                )}
                 <div className="sm:col-span-2">
                   <label className={LABEL_CLASS} htmlFor={`bulk-desc-${index}`}>
                     Description (optional)
@@ -891,8 +934,10 @@ export default function ProviderServicesPage({ embedded = false }) {
             description: svc.description || '',
             category: svc.category ? String(svc.category) : '',
             duration_hours: hoursFromMinutes(svc.duration_minutes ?? 60),
-            pricing_type: svc.pricing_type || 'fixed',
-            base_price: String(svc.base_price ?? '0'),
+            pricing_type: svc.pricing_type === 'quote' ? 'average' : svc.pricing_type || 'fixed',
+            base_price: String(
+              svc.base_price != null && Number(svc.base_price) > 0 ? svc.base_price : ''
+            ),
             price_max: svc.price_max != null ? String(svc.price_max) : '',
             quote_questions:
               Array.isArray(svc.quote_questions) && svc.quote_questions.length
@@ -954,6 +999,25 @@ export default function ProviderServicesPage({ embedded = false }) {
       setError('Service name is required.');
       return;
     }
+    const needsQuote =
+      serviceDraft.pricing_type === 'range' ||
+      serviceDraft.pricing_type === 'average' ||
+      serviceDraft.pricing_type === 'quote';
+    if (needsQuote && !(Number(serviceDraft.base_price) > 0)) {
+      setError(
+        serviceDraft.pricing_type === 'range'
+          ? 'Enter the low end of your price range.'
+          : 'Enter a typical price so customers see an estimate.'
+      );
+      return;
+    }
+    if (
+      serviceDraft.pricing_type === 'range' &&
+      !(Number(serviceDraft.price_max) >= Number(serviceDraft.base_price))
+    ) {
+      setError('Range “To” must be at least the “From” amount.');
+      return;
+    }
     setSavingService(true);
     setError(null);
     const payload = {
@@ -967,11 +1031,10 @@ export default function ProviderServicesPage({ embedded = false }) {
         serviceDraft.pricing_type === 'range' && serviceDraft.price_max
           ? serviceDraft.price_max
           : null,
-      quote_questions:
-        serviceDraft.pricing_type === 'quote'
-          ? (serviceDraft.quote_questions || []).map((q) => q.trim()).filter(Boolean)
-          : [],
-      show_price: serviceDraft.show_price,
+      quote_questions: needsQuote
+        ? (serviceDraft.quote_questions || []).map((q) => q.trim()).filter(Boolean)
+        : [],
+      show_price: needsQuote ? true : serviceDraft.show_price,
       allow_request: serviceDraft.allow_request,
       fulfillment_kind: serviceDraft.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
       is_active: true,
@@ -1029,11 +1092,29 @@ export default function ProviderServicesPage({ embedded = false }) {
         return;
       }
     }
+    if (
+      bulkDefaults.pricing_type === 'average' ||
+      bulkDefaults.pricing_type === 'range'
+    ) {
+      const bad = rows.find((row) => !(Number(row.base_price) > 0));
+      if (bad) {
+        setError(
+          bulkDefaults.pricing_type === 'range'
+            ? `“${bad.name}” needs a From price.`
+            : `“${bad.name}” needs a typical price.`
+        );
+        return;
+      }
+    }
 
     setSavingService(true);
     setError(null);
     const category = bulkDefaults.category ? Number(bulkDefaults.category) : null;
     const duration = minutesFromHours(bulkDefaults.duration_hours);
+    const needsQuote =
+      bulkDefaults.pricing_type === 'range' ||
+      bulkDefaults.pricing_type === 'average' ||
+      bulkDefaults.pricing_type === 'quote';
     let sortBase = services.length;
     let created = 0;
     const failures = [];
@@ -1047,13 +1128,12 @@ export default function ProviderServicesPage({ embedded = false }) {
           category,
           duration_minutes: duration,
           pricing_type: bulkDefaults.pricing_type,
-          base_price:
-            bulkDefaults.pricing_type === 'quote' ? '0' : row.base_price || '0',
+          base_price: row.base_price || '0',
           price_max:
             bulkDefaults.pricing_type === 'range' && row.price_max
               ? row.price_max
               : null,
-          show_price: bulkDefaults.show_price,
+          show_price: needsQuote ? true : bulkDefaults.show_price,
           allow_request: bulkDefaults.allow_request,
           fulfillment_kind: bulkDefaults.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
           is_active: true,
@@ -1065,6 +1145,7 @@ export default function ProviderServicesPage({ embedded = false }) {
         const d = err.response?.data;
         failures.push(
           d?.detail ||
+            d?.base_price?.[0] ||
             d?.price_max?.[0] ||
             d?.name?.[0] ||
             `Could not create “${row.name}”.`

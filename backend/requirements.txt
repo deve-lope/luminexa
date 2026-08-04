@@ -5,3 +5,5 @@ python-decouple==3.8
 Pillow==10.1.0
 whitenoise==6.6.0
 stripe==11.1.1
+django-two-factor-auth[phonenumberslite]==1.18.1
+qrcode==8.2

@@ -31,16 +31,24 @@ export default function DesktopNav({
                 key={tab.id}
                 to={tab.to}
                 end={tab.end}
+                aria-label={
+                  tab.badgeCount > 0
+                    ? `${tab.label}, ${tab.badgeCount} new`
+                    : tab.label
+                }
                 className={({ isActive }) =>
                   `flex min-h-[44px] items-center gap-3 rounded-xl px-3 text-sm font-medium ${
                     isActive ? 'lx-nav-active' : 'lx-nav-idle'
                   }`
                 }
               >
-                {Icon && <Icon className="h-5 w-5 shrink-0" />}
+                {Icon && <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />}
                 <span className="flex-1 truncate">{tab.label}</span>
                 {tab.badgeCount > 0 && (
-                  <span className="shrink-0 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
+                  <span
+                    className="shrink-0 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm"
+                    aria-hidden="true"
+                  >
                     {tab.badgeCount > 9 ? '9+' : tab.badgeCount}
                   </span>
                 )}

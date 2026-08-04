@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from businesses.models import Organization
 
 from .models import Booking, CustomerServiceInquiry, Task
-from .permissions import is_org_staff
+from .permissions import is_org_staff, require_provider_subscription
 from .scheduling_services import get_active_notifications
 from .task_services import refresh_recurring_tasks
 from .serializers import (
@@ -41,6 +41,7 @@ class ProviderDashboardAPIView(APIView):
             raise NotFound('Organization not found.')
         if not is_org_staff(request.user, org):
             raise PermissionDenied('You must be staff of this organization to view the dashboard.')
+        require_provider_subscription(org)
 
         now = timezone.now()
         window_end = now + timedelta(days=HOME_JOB_WINDOW_DAYS)

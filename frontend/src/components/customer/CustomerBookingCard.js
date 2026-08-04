@@ -19,7 +19,7 @@ import {
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 import RequestMessageThread from '../provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
-import { formatJobLocationLabel } from '../../utils/serviceDisplay';
+import { formatJobLocationLabel, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
 import StarRating from '../services/StarRating';
 
@@ -68,9 +68,9 @@ export default function CustomerBookingCard({
 
   let statusHint = null;
   if (isQuoted && !past) {
-    statusHint = 'Review the quote below. You can accept, answer questions, or decline.';
-  } else if (booking.status === 'requested' && (booking.booking_policy === 'quote' || booking.service_pricing_type === 'quote') && !past) {
-    statusHint = 'Waiting for the business to send a quote. You can change the time or cancel.';
+    statusHint = 'Quote ready — review the price below, answer any questions, then accept or decline.';
+  } else if (booking.status === 'requested' && (booking.requires_quote || booking.booking_policy === 'quote' || serviceRequiresQuote(booking.service_pricing_type)) && !past) {
+    statusHint = 'Your request is in. The business will send a quote — you can still change the time or cancel.';
   } else if (isUntouchedBookingRequest(booking) && !past) {
     statusHint =
       'Waiting for the business to respond. You can reschedule to another day or time, or cancel.';

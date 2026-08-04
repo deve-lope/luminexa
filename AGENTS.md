@@ -37,7 +37,7 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 
 ## Shipped product truths (do not reinvent)
 
-1. **`concurrent_capacity`** on Organization (default 1). UI: “People working at the same time”. Slot bookable while `remaining_capacity > 0`. `Booking.availability_slot` is FK (`related_name=bookings`), not OneToOne.
+1. **`concurrent_capacity`** on Organization (default 1). UI: “Jobs at the same time”. Slot bookable while `remaining_capacity > 0`. `Booking.availability_slot` is FK (`related_name=bookings`), not OneToOne.
 2. **Dual-radius search**: visible only if distance ≤ customer `radius_miles` **and** ≤ that location’s `radius_miles`. Core: `organization_distances_within_radius`. Prefer lat/lng; still send postal for ungeocoded matches.
 3. **Multi-location**: `OrganizationLocation`; search matches any active branch; primary syncs to `Organization.service_*`; 2nd+ location settings show separate account vs add on this profile.
 

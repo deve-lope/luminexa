@@ -55,6 +55,17 @@ services:
         condition: service_started
     volumes:
       - luminexa_media:/app/media
+    healthcheck:
+      # Entrypoint runs migrate before the server binds — celery waits on healthy.
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import socket; s=socket.create_connection(('127.0.0.1', 9001), 2); s.close()\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
     restart: unless-stopped
 
   celery-worker:
@@ -76,7 +87,7 @@ services:
       redis:
         condition: service_started
       web:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - luminexa_media:/app/media
     restart: unless-stopped
@@ -100,7 +111,7 @@ services:
       redis:
         condition: service_started
       web:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:

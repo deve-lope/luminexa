@@ -222,10 +222,19 @@ def stripe_webhook(request):
     try:
         if webhook_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-        else:
-            # Local/dev without signing secret — parse only (never use in prod).
+        elif settings.DEBUG:
+            # Local/dev without signing secret only — never allow unsigned in production.
             import json
             event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+        else:
+            logger.error('STRIPE_WEBHOOK_SECRET is required when Stripe is enabled outside DEBUG.')
+            return Response(
+                {
+                    'detail': 'Webhook signing secret is required.',
+                    'code': 'webhook_secret_required',
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
     except ValueError:
         return Response({'detail': 'Invalid payload.'}, status=status.HTTP_400_BAD_REQUEST)
     except stripe.error.SignatureVerificationError:
@@ -262,6 +271,14 @@ def _handle_event(event_type: str, data: dict) -> None:
 def _on_checkout_completed(session: dict) -> None:
     kind = (session.get('metadata') or {}).get('kind')
     if kind == 'invoice_payment' or session.get('mode') == 'payment':
+        # checkout.session.completed can fire before funds clear — only mark paid when paid.
+        if session.get('payment_status') != 'paid':
+            logger.info(
+                'Ignoring invoice checkout %s with payment_status=%s',
+                session.get('id'),
+                session.get('payment_status'),
+            )
+            return
         invoice_id = (session.get('metadata') or {}).get('invoice_id')
         if not invoice_id:
             return

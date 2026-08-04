@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.http import HttpResponseRedirect
 from django.urls import include, path, re_path
+from two_factor.urls import urlpatterns as tf_urls
 
 from luminexa.media_views import serve_media
 
@@ -13,6 +14,7 @@ def api_root_redirect(request):
 
 urlpatterns = [
     path('', api_root_redirect),
+    path('', include(tf_urls)),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('api/v1/', include('businesses.urls')),

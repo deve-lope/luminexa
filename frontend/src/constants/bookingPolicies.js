@@ -17,15 +17,18 @@ export const BOOKING_POLICIES = [
     description:
       'Customer sends a booking request. When you accept it, they become an approved client.',
   },
-  {
-    value: 'quote',
-    label: 'Quote before confirm (all services)',
-    description:
-      'Every booking needs a quote. Prefer setting individual services to “Quote on request” instead when only some jobs need pricing.',
-  },
 ];
 
+/** Shown only if the org is still on the legacy all-services quote policy. */
+export const LEGACY_QUOTE_BOOKING_POLICY = {
+  value: 'quote',
+  label: 'Quote before confirm (legacy — all services)',
+  description:
+    'Every booking needs a quote. Prefer Range or Typical price on each service under Services, then switch to approval or automatic booking here.',
+};
+
 export function policyLabel(value) {
+  if (value === 'quote') return LEGACY_QUOTE_BOOKING_POLICY.label;
   return BOOKING_POLICIES.find((p) => p.value === value)?.label || value;
 }
 

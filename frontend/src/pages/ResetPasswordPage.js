@@ -9,9 +9,13 @@ export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const uid = searchParams.get('uid') || '';
   const token = searchParams.get('token') || '';
+  const requiresOtp =
+    searchParams.get('requires_otp') === '1' || searchParams.get('otp') === '1';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState(null);
+  const [needOtp, setNeedOtp] = useState(requiresOtp);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e) => {
@@ -24,19 +28,34 @@ export default function ResetPasswordPage() {
       setError('Invalid reset link. Request a new one.');
       return;
     }
+    if (needOtp && !otp.trim()) {
+      setError('Enter your Google Authenticator code (required for admin accounts).');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await userAPI.confirmPasswordReset({ uid, token, password });
+      const payload = { uid, token, password };
+      if (otp.trim()) payload.otp = otp.trim();
+      await userAPI.confirmPasswordReset(payload);
       navigate('/login', {
         replace: true,
-        state: { message: 'Password updated. Sign in with your new password.' },
+        state: {
+          message: needOtp
+            ? 'Password updated. Sign in at Admin with your new password and authenticator code.'
+            : 'Password updated. Sign in with your new password.',
+        },
       });
     } catch (err) {
       const d = err.response?.data;
-      setError(
-        d?.detail || d?.password?.[0] || 'Could not reset password. The link may have expired.'
-      );
+      if (d?.code === 'admin_otp_required' || d?.otp) {
+        setNeedOtp(true);
+        setError(d?.otp?.[0] || d?.otp || d?.detail || 'Authenticator code required for admin.');
+      } else {
+        setError(
+          d?.detail || d?.password?.[0] || 'Could not reset password. The link may have expired.'
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -45,7 +64,11 @@ export default function ResetPasswordPage() {
   return (
     <AuthFormShell
       title="Choose a new password"
-      subtitle="Pick a password with at least 8 characters."
+      subtitle={
+        needOtp
+          ? 'Admin reset: new password plus your Google Authenticator code (or backup token).'
+          : 'Pick a password with at least 8 characters.'
+      }
       backTo="/forgot-password"
       footer={
         <Link to="/forgot-password" className="font-semibold text-teal-700 hover:text-teal-800">
@@ -82,6 +105,24 @@ export default function ResetPasswordPage() {
             onChange={(e) => setConfirm(e.target.value)}
           />
         </div>
+        {needOtp && (
+          <div>
+            <label htmlFor="otp" className="mb-1.5 block text-sm font-medium text-slate-700">
+              Google Authenticator code
+            </label>
+            <input
+              id="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required={needOtp}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="6-digit code or backup token"
+              className="lx-input"
+            />
+          </div>
+        )}
         {error && (
           <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

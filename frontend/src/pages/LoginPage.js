@@ -12,8 +12,14 @@ function parseLoginError(err) {
   return parseApiError(err, 'Could not sign in. Try again.');
 }
 
+function isNoLogin(data) {
+  return data?.auth_method === 'none' || data?.code === 'no_login';
+}
+
 function isAccountNotFound(err) {
-  return err?.response?.status === 404 && err?.response?.data?.code === 'account_not_found';
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  return status === 404 || data?.code === 'no_login' || isNoLogin(data);
 }
 
 export default function LoginPage() {
@@ -52,7 +58,7 @@ export default function LoginPage() {
     setStep('email');
     setCode('');
     setPassword('');
-    setError(msg || 'No account found for that email.');
+    setError(msg || 'We could not start sign-in for this email.');
     setInfo('');
   };
 
@@ -66,7 +72,9 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const { data } = await userAPI.loginStart({ email: email.trim() });
-      if (data.auth_method === 'password') {
+      if (isNoLogin(data)) {
+        showAccountMissing(data.detail);
+      } else if (data.auth_method === 'password') {
         setStep('password');
         setInfo(data.detail || 'Enter your business account password.');
       } else {
@@ -74,11 +82,7 @@ export default function LoginPage() {
         setInfo(data.detail || 'We sent a sign-in code to your email.');
       }
     } catch (err) {
-      if (isAccountNotFound(err)) {
-        showAccountMissing(err.response?.data?.detail);
-      } else {
-        setError(parseLoginError(err));
-      }
+      setError(parseLoginError(err));
     } finally {
       setSubmitting(false);
     }
@@ -227,7 +231,7 @@ export default function LoginPage() {
             <p className="font-medium">{error}</p>
             {accountMissing && (
               <div className="mt-3 space-y-2">
-                <p className="text-red-800/80">Create an account to continue:</p>
+                <p className="text-red-800/80">New here? Create an account:</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Link
                     to={`/register${registerQs}`}

@@ -97,7 +97,10 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
     );
   }
 
-  const fee = ((billing.platform_fee_cents || 70) / 100).toFixed(2);
+  const feePercent = Number(billing.platform_fee_percent ?? 0.5);
+  const feeLabel = Number.isInteger(feePercent)
+    ? String(feePercent)
+    : feePercent.toFixed(1).replace(/\.0$/, '');
   const connect = billing.connect || {};
   const sub = billing.subscription || {};
   const configured = billing.stripe_configured;
@@ -107,9 +110,10 @@ export default function ProviderBillingSettings({ orgSlug, isOwner }) {
       <div>
         <h2 className="text-sm font-semibold uppercase text-slate-500">Payments & plan</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Customers use Luminexa for free. Only your business subscribes. Job invoice card payments
-          take a flat ${fee} platform fee (Stripe’s fee is separate). Pro trials start without a
-          card — add one later before the trial ends.
+          Customers use Luminexa for free. Only your business subscribes. On invoice card payments,
+          Luminexa takes a {feeLabel}% platform fee; Stripe’s card processing fee is separate and
+          comes out of the charge as usual. Pro trials start without a card — add one later before
+          the trial ends.
         </p>
       </div>
 

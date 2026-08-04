@@ -35,10 +35,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Before two_factor so accounts/templates override package login UI.
+    'accounts',
+    'django_otp',
+    'django_otp.plugins.otp_static',
+    'django_otp.plugins.otp_totp',
+    'two_factor',
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'accounts',
     'businesses',
     'jobs',
 ]
@@ -51,6 +56,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -67,6 +73,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.public_app_url',
             ],
         },
     },
@@ -123,6 +130,15 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'accounts.User'
+
+# Django admin: password + Google Authenticator–compatible TOTP (django-two-factor-auth).
+LOGIN_URL = 'two_factor:login'
+LOGIN_REDIRECT_URL = '/admin/'
+LOGOUT_REDIRECT_URL = '/admin/'
+TWO_FACTOR_PATCH_ADMIN = True
+# Only authenticator-app tokens (no SMS). Backup tokens available after setup.
+TWO_FACTOR_REMEMBER_COOKIE_AGE = 0  # always require OTP on admin login sessions
+
 
 REST_FRAMEWORK = {
     # Prefer HttpOnly cookie for the SPA; Authorization: Token still works for tests/API clients.
@@ -204,11 +220,25 @@ CELERY_BEAT_SCHEDULE = {
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
-# Flat platform fee per customer→provider job payment (cents). Default $0.70.
-STRIPE_PLATFORM_FEE_CENTS = config('STRIPE_PLATFORM_FEE_CENTS', default=70, cast=int)
+# Luminexa platform fee on customer→provider invoice card payments (percent of charge).
+# Separate from Stripe’s own processing fee. Default 0.5%.
+STRIPE_PLATFORM_FEE_PERCENT = config('STRIPE_PLATFORM_FEE_PERCENT', default=0.5, cast=float)
 # Stripe Price IDs for provider SaaS plans (create in Stripe Dashboard).
 STRIPE_PRICE_PRO_MONTHLY = config('STRIPE_PRICE_PRO_MONTHLY', default='')
 STRIPE_PRICE_PRO_YEARLY = config('STRIPE_PRICE_PRO_YEARLY', default='')
 # Free trial for provider Pro subscriptions (days). 0 = no trial from the API.
 STRIPE_TRIAL_DAYS = config('STRIPE_TRIAL_DAYS', default=30, cast=int)
 STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)
+
+# ── Production HTTPS / browser hardening (only when DEBUG=False) ───────────
+if not DEBUG:
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default='True').lower() == 'true'
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'

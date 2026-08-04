@@ -79,12 +79,15 @@ def line_items_total(line_items: list[dict]) -> Decimal:
 
 
 def default_invoice_amount(booking: Booking) -> Decimal:
-    """Best default pre-tax service fee from the service catalog."""
+    """Best default pre-tax service fee from the accepted quote or catalog."""
+    if booking.quote_amount is not None:
+        return Decimal(booking.quote_amount).quantize(Decimal('0.01'))
     service = booking.service
     if not service:
         return Decimal('0.00')
-    if service.pricing_type == Service.PricingType.QUOTE:
-        return Decimal('0.00')
+    if Service.pricing_requires_quote(service.pricing_type):
+        # Estimate only — final fee should come from the accepted quote when present.
+        return Decimal(service.base_price or 0).quantize(Decimal('0.01'))
     return Decimal(service.base_price or 0).quantize(Decimal('0.01'))
 
 

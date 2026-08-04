@@ -87,8 +87,13 @@ def customer_can_view_calendar(org, customer):
 
 
 def booking_requires_quote(org, service=None):
-    """Quote workflow if the org uses quote policy or this service is quote-priced."""
-    if service is not None and getattr(service, 'pricing_type', None) == Service.PricingType.QUOTE:
+    """
+    Quote before confirm when the service is not fixed-price, or (legacy) the org
+    still uses the all-services quote booking policy.
+    """
+    if service is not None and Service.pricing_requires_quote(
+        getattr(service, 'pricing_type', None)
+    ):
         return True
     return org.booking_policy == Organization.BookingPolicy.QUOTE
 

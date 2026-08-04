@@ -15,7 +15,7 @@ Full detail: `docs/PRODUCT_RULES.md` § Capacity.
 - `Booking.availability_slot` is a **ForeignKey** (`related_name='bookings'`), **not** OneToOne. Migration `jobs.0025` — do not revert to OneToOne.
 - Capacity helpers live on `AvailabilitySlot`: `capacity`, `occupied_count()`, `remaining_capacity()`, `is_bookable()`, `refresh_status()`.
 - `refresh_status()` keeps status **OPEN** while remaining seats > 0 so additional customers can book.
-- Settings UI: signup (`RegisterBusinessPage`) + Provider Settings → **“People working at the same time”** (`BookingPolicySettings.js`). Label must stay that phrase.
+- Settings UI: signup (`RegisterBusinessPage`) + Provider Settings → **“Jobs at the same time”** (`BookingPolicySettings.js`). Label must stay that phrase.
 - Occupying statuses exclude `cancelled` and `completed` only.
 
 ## Do not “simplify”

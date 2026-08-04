@@ -244,11 +244,11 @@ export default function RegisterBusinessPage() {
                     htmlFor="register-concurrent-capacity"
                     className="block text-sm font-semibold text-slate-900"
                   >
-                    People working at the same time
+                    Jobs at the same time
                   </label>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
-                    If two employees can take appointments at once, set this to 2. You can change
-                    this later in settings.
+                    How many jobs can overlap on one time slot. Set to 2 if you can run two
+                    appointments in parallel. You can change this later in settings.
                   </p>
                   <input
                     id="register-concurrent-capacity"

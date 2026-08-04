@@ -27,7 +27,8 @@ export default function CustomerInvoicePaymentPrompt() {
       const res = await jobsAPI.getMyUnpaidInvoice();
       const next = res.data?.invoice ? res.data : null;
       const dismissedId = window.sessionStorage.getItem(DISMISSED_KEY);
-      if (next && String(next.invoice.id) !== dismissedId) {
+      // Cancel flow stores booking id (PENDING_BOOKING_KEY value), not invoice id.
+      if (next && String(next.booking_id) !== dismissedId) {
         setPayment(next);
       } else {
         setPayment(null);

@@ -216,6 +216,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     uid = serializers.CharField()
     token = serializers.CharField()
     password = serializers.CharField(write_only=True, min_length=8)
+    # Required for staff/superuser accounts (Google Authenticator / backup token).
+    otp = serializers.CharField(required=False, allow_blank=True, max_length=16)
 
 
 class EmailVerifySerializer(serializers.Serializer):

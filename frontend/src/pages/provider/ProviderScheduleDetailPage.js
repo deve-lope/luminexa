@@ -13,7 +13,7 @@ import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
 import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
-import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter } from '../../utils/serviceDisplay';
+import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
@@ -274,7 +274,7 @@ export default function ProviderScheduleDetailPage() {
         </section>
 
         {data.status === 'requested' &&
-          !(data.requires_quote || data.booking_policy === 'quote' || data.service_pricing_type === 'quote') && (
+          !(data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
@@ -323,7 +323,7 @@ export default function ProviderScheduleDetailPage() {
         )}
 
         {(data.status === 'requested' || data.status === 'quoted') &&
-          (data.requires_quote || data.booking_policy === 'quote' || data.service_pricing_type === 'quote') && (
+          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
           <Link
             to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
             className="lx-btn-primary flex min-h-[48px] items-center justify-center"

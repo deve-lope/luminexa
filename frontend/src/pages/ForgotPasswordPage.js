@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthFormShell
       title="Reset password"
-      subtitle="Enter the email on your business account and we’ll send a link to choose a new password. Customer accounts use email codes instead — use Sign in."
+      subtitle="Business and admin accounts: we’ll email a reset link. Customers use an email sign-in code instead — use Sign in. Admin resets also require your Google Authenticator code."
       backTo="/login"
       footer={
         <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">

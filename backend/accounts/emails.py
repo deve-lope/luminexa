@@ -116,7 +116,9 @@ def send_password_reset_email(user, reset_url: str) -> bool:
                 f'Hi {user.full_name or "there"},\n\n'
                 'Use the link below to choose a new password. '
                 'If you did not request this, you can ignore this email.\n\n'
-                f'{reset_url}\n'
+                f'{reset_url}\n\n'
+                'If this is an admin account, you will also need your Google Authenticator '
+                'code (or a backup token) to finish the reset.\n'
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],

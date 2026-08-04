@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
@@ -422,6 +424,15 @@ class ServiceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'price_max': 'Maximum must be at least the minimum price.'}
                 )
+            attrs['show_price'] = True
+        elif pricing_type == Service.PricingType.AVERAGE:
+            if base_price is None or Decimal(base_price) <= 0:
+                raise serializers.ValidationError(
+                    {'base_price': 'Enter a typical price so customers see an estimate.'}
+                )
+            attrs['show_price'] = True
+        elif pricing_type == Service.PricingType.QUOTE:
+            attrs['show_price'] = True
         quote_questions = attrs.get(
             'quote_questions',
             getattr(self.instance, 'quote_questions', None),
@@ -442,8 +453,6 @@ class ServiceSerializer(serializers.ModelSerializer):
                 if text:
                     cleaned.append(text)
             attrs['quote_questions'] = cleaned
-            if pricing_type != Service.PricingType.QUOTE:
-                attrs['quote_questions'] = cleaned  # keep templates even if switching later
         category = attrs.get('category', getattr(self.instance, 'category', None))
         org = attrs.get('organization') or getattr(self.instance, 'organization', None)
         if category and org and category.organization_id != org.id:

@@ -76,9 +76,9 @@ class Organization(models.Model):
     concurrent_capacity = models.PositiveIntegerField(
         default=1,
         help_text=(
-            'How many people can work at the same time. '
+            'How many customer jobs can overlap on one time slot. '
             'Each open slot can accept this many simultaneous bookings '
-            '(e.g. 2 employees → 2 customers at the same time).'
+            '(e.g. 2 = two appointments in parallel).'
         ),
     )
     scheduling_mode = models.CharField(

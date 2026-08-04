@@ -29,6 +29,12 @@ export default function AppShell({
 
   return (
     <div className="lx-app-bg">
+      <a
+        href="#main-content"
+        className="absolute left-4 top-4 z-[100] -translate-y-16 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-teal-800 shadow-lg transition focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-teal-600"
+      >
+        Skip to main content
+      </a>
       <DesktopNav
         brand={brand}
         tabs={tabs}
@@ -47,7 +53,7 @@ export default function AppShell({
                 aria-label="Open menu"
                 aria-expanded={menuOpen}
               >
-                <IconMenu className="h-6 w-6" />
+                <IconMenu className="h-6 w-6" aria-hidden="true" />
               </button>
             )}
             {hasHeaderNav && (
@@ -70,7 +76,11 @@ export default function AppShell({
           )}
         </header>
 
-        <main className="lx-container py-5 pb-28 lg:py-6 lg:pb-8">
+        <main
+          id="main-content"
+          className="lx-container py-5 pb-28 lg:py-6 lg:pb-8"
+          tabIndex={-1}
+        >
           <div key={location.pathname} className="page-enter min-w-0">
             {children}
           </div>

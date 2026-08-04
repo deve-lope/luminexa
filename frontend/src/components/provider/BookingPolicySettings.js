@@ -1,13 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BOOKING_POLICIES } from '../../constants/bookingPolicies';
+import {
+  BOOKING_POLICIES,
+  LEGACY_QUOTE_BOOKING_POLICY,
+  policyLabel,
+} from '../../constants/bookingPolicies';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
-import { providerSchedule } from '../../utils/providerPaths';
+import { providerSchedule, providerServices } from '../../utils/providerPaths';
 
 /**
- * Lets the business owner choose booking policy (instant / approval / clients-only / quote),
+ * Lets the business owner choose booking policy (instant / approval / clients-only),
  * and set how close to start customers may cancel confirmed appointments.
+ * Quote-before-confirm is configured per service (range / typical price), not here.
  */
 export default function BookingPolicySettings({
   orgSlug,
@@ -40,6 +45,13 @@ export default function BookingPolicySettings({
       .catch(() => setError('Could not load booking settings.'))
       .finally(() => setLoading(false));
   }, [orgSlug]);
+
+  const policyOptions = useMemo(() => {
+    if (policy === 'quote') {
+      return [...BOOKING_POLICIES, LEGACY_QUOTE_BOOKING_POLICY];
+    }
+    return BOOKING_POLICIES;
+  }, [policy]);
 
   const save = async () => {
     if (!orgSlug || !isOwner) return;
@@ -74,26 +86,35 @@ export default function BookingPolicySettings({
       <h2 className="text-sm font-semibold uppercase text-slate-500">How customers book</h2>
       <p className="mt-1 text-sm text-slate-600">
         Choose whether appointments are confirmed automatically or need your approval.
+        Pricing and quotes are set on each service.
         {organizationName ? ` Applies to ${organizationName}.` : ''}
       </p>
 
-          {!isOwner ? (
+      <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Need a quote for some jobs? On{' '}
+        <Link to={providerServices(orgSlug)} className="font-medium text-luminexa-accent">
+          Services
+        </Link>
+        , choose <strong>Price range</strong> or <strong>Typical price</strong>. Those always
+        quote before confirm. Fixed price uses the booking mode below.
+      </p>
+
+      {!isOwner ? (
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
           Only the business owner can change booking rules. Current mode:{' '}
-          <strong>{BOOKING_POLICIES.find((p) => p.value === policy)?.label || policy}</strong>
+          <strong>{policyLabel(policy)}</strong>
           . Cancel cutoff:{' '}
           <strong>
             {Number(cancelCutoffHours) === 0
               ? 'anytime before start'
               : `${cancelCutoffHours} hours before start`}
           </strong>
-          . People working at once:{' '}
-          <strong>{concurrentCapacity}</strong>.
+          . Jobs at the same time: <strong>{concurrentCapacity}</strong>.
         </p>
       ) : (
         <>
           <ul className="mt-4 space-y-3">
-            {BOOKING_POLICIES.map((opt) => (
+            {policyOptions.map((opt) => (
               <li key={opt.value}>
                 <label className="flex cursor-pointer gap-3 rounded-lg border border-slate-200 p-3 has-[:checked]:border-luminexa-accent has-[:checked]:bg-violet-50">
                   <input
@@ -123,29 +144,14 @@ export default function BookingPolicySettings({
               . Accepting the request confirms the job and approves them as a client.
             </p>
           )}
-          {policy === 'clients_only' && (
-            <p className="mt-3 text-xs text-slate-500">
-              New customers send a booking request on{' '}
-              <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
-                Schedule / Requests
-              </Link>
-              . Accepting the request confirms the job and approves them as a client.
-            </p>
-          )}
-          {policy === 'quote' && (
-            <p className="mt-3 text-xs text-slate-500">
-              Customers request a time. You send a quote (price + optional questions), and can change
-              the time before they accept.
-            </p>
-          )}
 
           <div className="mt-5 border-t border-slate-100 pt-4">
             <label htmlFor="concurrent-capacity" className="block text-sm font-medium text-slate-900">
-              People working at the same time
+              Jobs at the same time
             </label>
             <p className="mt-1 text-sm text-slate-600">
-              How many employees or chairs can take appointments simultaneously. For example, set
-              this to 2 if two people work and both can take bookings for the same time slot.
+              How many customer jobs can overlap on one time slot. Set to 2 if you can run two
+              appointments in parallel (for example two tire changes at once).
             </p>
             <input
               id="concurrent-capacity"

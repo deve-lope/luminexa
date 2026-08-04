@@ -12,7 +12,31 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from businesses.models import Organization
 
 
-PLATFORM_FEE_CENTS = lambda: int(getattr(settings, 'STRIPE_PLATFORM_FEE_CENTS', 70) or 70)
+def platform_fee_percent() -> Decimal:
+    """Luminexa’s share of each invoice card payment (not Stripe’s processing fee)."""
+    raw = getattr(settings, 'STRIPE_PLATFORM_FEE_PERCENT', 0.5)
+    try:
+        value = Decimal(str(raw if raw is not None else 0.5))
+    except Exception:
+        value = Decimal('0.5')
+    if value < 0:
+        return Decimal('0')
+    return value
+
+
+def platform_fee_cents_for_amount(amount_cents: int) -> int:
+    """0.5% (configurable) of the charge, rounded to cents; always < amount."""
+    if amount_cents <= 0:
+        return 0
+    fee = int(
+        (Decimal(amount_cents) * platform_fee_percent() / Decimal('100')).quantize(
+            Decimal('1'),
+            rounding=ROUND_HALF_UP,
+        )
+    )
+    if fee >= amount_cents:
+        return max(0, amount_cents - 1)
+    return fee
 
 
 def stripe_configured() -> bool:
@@ -146,7 +170,7 @@ def create_invoice_checkout_session(
     success_path: str,
     cancel_path: str,
 ) -> dict:
-    """Customer pays an issued invoice; $0.70 platform fee; rest to provider Connect account."""
+    """Customer pays an issued invoice; Luminexa % fee; rest to provider Connect account."""
     require_stripe()
     from jobs.models import Invoice
 
@@ -167,13 +191,21 @@ def create_invoice_checkout_session(
         raise PermissionDenied('Only the customer can pay this invoice.')
 
     amount_cents = amount_to_cents(invoice.amount)
-    fee = PLATFORM_FEE_CENTS()
-    if amount_cents <= fee:
-        raise ValidationError({
-            'detail': f'Amount must be greater than the platform fee (${fee / 100:.2f}).',
-        })
+    fee = platform_fee_cents_for_amount(amount_cents)
 
     currency = (invoice.currency or 'CAD').lower()
+    payment_intent_data = {
+        'transfer_data': {'destination': org.stripe_account_id},
+        'metadata': {
+            'invoice_id': str(invoice.id),
+            'booking_id': str(invoice.booking_id),
+            'organization_id': str(org.id),
+        },
+    }
+    # Luminexa platform fee (percent of charge). Stripe’s card fee is separate.
+    if fee > 0:
+        payment_intent_data['application_fee_amount'] = fee
+
     try:
         session = stripe.checkout.Session.create(
             mode='payment',
@@ -199,15 +231,7 @@ def create_invoice_checkout_session(
                 },
                 'quantity': 1,
             }],
-            payment_intent_data={
-                'application_fee_amount': fee,
-                'transfer_data': {'destination': org.stripe_account_id},
-                'metadata': {
-                    'invoice_id': str(invoice.id),
-                    'booking_id': str(invoice.booking_id),
-                    'organization_id': str(org.id),
-                },
-            },
+            payment_intent_data=payment_intent_data,
             success_url=_app_url_with_query(
                 success_path,
                 'paid=1&session_id={CHECKOUT_SESSION_ID}',
@@ -275,7 +299,9 @@ def mark_invoice_paid_from_stripe(*, invoice, payment_intent_id='', session_id='
         invoice.stripe_checkout_session_id = session_id
         updates.append('stripe_checkout_session_id')
     if invoice.platform_fee_cents is None:
-        invoice.platform_fee_cents = PLATFORM_FEE_CENTS()
+        invoice.platform_fee_cents = platform_fee_cents_for_amount(
+            amount_to_cents(invoice.amount),
+        )
         updates.append('platform_fee_cents')
     invoice.save(update_fields=updates)
     notify_invoice_paid(invoice)
@@ -418,7 +444,7 @@ def billing_summary(org: Organization) -> dict:
     return {
         'stripe_configured': stripe_configured(),
         'publishable_key': getattr(settings, 'STRIPE_PUBLISHABLE_KEY', '') or '',
-        'platform_fee_cents': PLATFORM_FEE_CENTS(),
+        'platform_fee_percent': float(platform_fee_percent()),
         'connect': {
             'account_id': org.stripe_account_id or None,
             'charges_enabled': org.stripe_charges_enabled,

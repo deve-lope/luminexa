@@ -54,7 +54,13 @@ from .models import (
     UnavailableBlock,
     WeeklyScheduleBlock,
 )
-from .permissions import is_org_member, is_org_staff, membership_for
+from .permissions import (
+    is_org_member,
+    is_org_staff,
+    membership_for,
+    require_provider_subscription,
+    require_staff_ops,
+)
 from .scheduling_services import (
     coerce_org_date,
     ensure_flexi_slot_alert,
@@ -356,8 +362,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='sync-recurring-slots')
     def sync_recurring_slots_action(self, request, slug=None):
         org = self.get_object()
-        if not is_org_staff(request.user, org):
-            raise PermissionDenied('Staff only.')
+        require_staff_ops(request.user, org)
         count = sync_recurring_slots(org)
         return Response({'created': count})
 
@@ -389,6 +394,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 PublicGalleryImageSerializer(images, many=True, context={'request': request}).data
             )
 
+        require_provider_subscription(org)
         if org.gallery_images.count() >= OrganizationGalleryImage.MAX_PER_ORGANIZATION:
             raise ValidationError(
                 f'Maximum {OrganizationGalleryImage.MAX_PER_ORGANIZATION} gallery images allowed.'
@@ -419,6 +425,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         m = membership_for(request.user, org)
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can manage gallery images.')
+        require_provider_subscription(org)
         item = org.gallery_images.filter(pk=image_id).first()
         if not item:
             raise ValidationError({'detail': 'Image not found.'})
@@ -505,8 +512,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     )
     def dismiss_service_inquiry(self, request, slug=None, inquiry_id=None):
         org = self.get_object()
-        if not is_org_staff(request.user, org):
-            raise PermissionDenied('Staff only.')
+        require_staff_ops(request.user, org)
         inquiry = CustomerServiceInquiry.objects.filter(
             organization=org, pk=inquiry_id, dismissed_at__isnull=True,
         ).first()
@@ -524,8 +530,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         from .models import BookingStatusEvent
 
         org = self.get_object()
-        if not is_org_staff(request.user, org):
-            raise PermissionDenied('Only staff can list customers.')
+        require_staff_ops(request.user, org)
         status_filter = request.query_params.get('status', 'approved')
         memberships = OrganizationMembership.objects.filter(
             organization=org,
@@ -586,6 +591,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         org = self.get_object()
         if not is_org_staff(request.user, org):
             raise PermissionDenied('Only staff can approve customers.')
+        require_provider_subscription(org)
         user_id = request.data.get('user_id')
         if not user_id:
             raise ValidationError({'user_id': 'Required.'})
@@ -605,6 +611,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         org = self.get_object()
         if not is_org_staff(request.user, org):
             raise PermissionDenied('Only staff can block customers.')
+        require_provider_subscription(org)
         user_id = request.data.get('user_id')
         if not user_id:
             raise ValidationError({'user_id': 'Required.'})
@@ -628,6 +635,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         org = self.get_object()
         if not is_org_staff(request.user, org):
             raise PermissionDenied('Only staff can unblock customers.')
+        require_provider_subscription(org)
         user_id = request.data.get('user_id')
         if not user_id:
             raise ValidationError({'user_id': 'Required.'})
@@ -656,6 +664,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         m = membership_for(request.user, org)
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can invite staff.')
+        require_provider_subscription(org)
         email = (request.data.get('email') or '').strip().lower()
         if not email:
             raise ValidationError({'email': 'Required.'})
@@ -697,8 +706,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         from businesses.models import StaffInvitation
 
         org = self.get_object()
-        if not is_org_staff(request.user, org):
-            raise PermissionDenied('Staff only.')
+        require_staff_ops(request.user, org)
         invites = StaffInvitation.objects.filter(
             organization=org, accepted_at__isnull=True,
         ).order_by('-created_at')
@@ -727,18 +735,15 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
-        if not is_org_staff(self.request.user, org):
-            raise PermissionDenied('Only owners and staff can create categories.')
+        require_staff_ops(self.request.user, org)
         serializer.save()
 
     def perform_update(self, serializer):
-        if not is_org_staff(self.request.user, serializer.instance.organization):
-            raise PermissionDenied('Only owners and staff can update categories.')
+        require_staff_ops(self.request.user, serializer.instance.organization)
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not is_org_staff(self.request.user, instance.organization):
-            raise PermissionDenied('Only owners and staff can delete categories.')
+        require_staff_ops(self.request.user, instance.organization)
         instance.delete()
 
 
@@ -760,25 +765,21 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
-        if not is_org_staff(self.request.user, org):
-            raise PermissionDenied('Only owners and staff can create services.')
+        require_staff_ops(self.request.user, org)
         serializer.save()
 
     def perform_update(self, serializer):
-        if not is_org_staff(self.request.user, serializer.instance.organization):
-            raise PermissionDenied('Only owners and staff can update services.')
+        require_staff_ops(self.request.user, serializer.instance.organization)
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not is_org_staff(self.request.user, instance.organization):
-            raise PermissionDenied('Only owners and staff can delete services.')
+        require_staff_ops(self.request.user, instance.organization)
         instance.delete()
 
     @action(detail=True, methods=['get', 'post'], url_path='gallery')
     def gallery(self, request, pk=None):
         service = self.get_object()
-        if not is_org_staff(request.user, service.organization):
-            raise PermissionDenied('Only owners and staff can manage service images.')
+        require_staff_ops(request.user, service.organization)
 
         if request.method == 'GET':
             from .serializers import PublicServiceGalleryImageSerializer
@@ -815,8 +816,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     )
     def gallery_delete(self, request, pk=None, image_id=None):
         service = self.get_object()
-        if not is_org_staff(request.user, service.organization):
-            raise PermissionDenied('Only owners and staff can manage service images.')
+        require_staff_ops(request.user, service.organization)
         item = service.gallery_images.filter(pk=image_id).first()
         if not item:
             raise ValidationError({'detail': 'Image not found.'})
@@ -889,14 +889,12 @@ class AvailabilitySlotViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
-        if not is_org_staff(self.request.user, org):
-            raise PermissionDenied('Only owners and staff can create open slots.')
+        require_staff_ops(self.request.user, org)
         serializer.save(created_by=self.request.user)
         ensure_flexi_slot_alert(org)
 
     def perform_destroy(self, instance):
-        if not is_org_staff(self.request.user, instance.organization):
-            raise PermissionDenied('Only owners and staff can delete slots.')
+        require_staff_ops(self.request.user, instance.organization)
         if instance.occupied_count() > 0:
             raise ValidationError('Only slots with no active bookings can be deleted.')
         if instance.status != AvailabilitySlot.Status.OPEN:
@@ -933,13 +931,11 @@ class UnavailableBlockViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
-        if not is_org_staff(self.request.user, org):
-            raise PermissionDenied('Only owners and staff can block time.')
+        require_staff_ops(self.request.user, org)
         serializer.save(created_by=self.request.user)
 
     def perform_destroy(self, instance):
-        if not is_org_staff(self.request.user, instance.organization):
-            raise PermissionDenied('Only owners and staff can remove blocks.')
+        require_staff_ops(self.request.user, instance.organization)
         instance.delete()
 
 
@@ -991,8 +987,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
         org = data['organization']
-        if not is_org_staff(request.user, org):
-            raise PermissionDenied('Only staff can book on behalf of customers.')
+        require_staff_ops(request.user, org)
         booking = provider_book_customer(
             org=org,
             service=data['service'],
@@ -1080,8 +1075,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied('Customers can only update customer_notes.')
             serializer.save()
             return
-        if not is_org_staff(user, booking.organization):
-            raise PermissionDenied('Only staff can update this booking.')
+        require_staff_ops(user, booking.organization)
         if new_status == Booking.Status.CONFIRMED and booking.status == Booking.Status.REQUESTED:
             accept_booking_request(booking, user)
             return
@@ -1093,8 +1087,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can accept requests.')
+        require_staff_ops(request.user, booking.organization)
         old = booking.status
         accept_booking_request(booking, request.user)
         log_booking_status_change(
@@ -1113,8 +1106,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .booking_services import send_booking_quote
 
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can send quotes.')
+        require_staff_ops(request.user, booking.organization)
         slot = None
         slot_id = request.data.get('slot_id')
         if slot_id not in (None, ''):
@@ -1173,6 +1165,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         is_customer = booking.customer_id == request.user.id
         if not is_staff and not is_customer:
             raise PermissionDenied('Only staff or the customer can decline this request.')
+        if is_staff:
+            require_provider_subscription(booking.organization)
         if is_customer and booking.status != Booking.Status.QUOTED:
             raise PermissionDenied('You can only decline after a quote is sent.')
         old = booking.status
@@ -1207,8 +1201,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can start bookings.')
+        require_staff_ops(request.user, booking.organization)
         old = booking.status
         start_booking(booking, staff_user=request.user)
         log_booking_status_change(
@@ -1225,8 +1218,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .invoice_services import default_invoice_amount, issue_or_update_invoice
 
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can complete bookings.')
+        require_staff_ops(request.user, booking.organization)
         old = booking.status
         complete_booking(booking, staff_user=request.user)
         log_booking_status_change(
@@ -1300,8 +1292,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
             return Response(InvoiceSerializer(inv, context={'request': request}).data)
 
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can issue invoices.')
+        require_staff_ops(request.user, booking.organization)
         amount = request.data.get('amount')
         subtotal = request.data.get('subtotal')
         service_fee = request.data.get('service_fee')
@@ -1333,8 +1324,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .serializers import InvoiceSerializer
 
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can mark invoices paid.')
+        require_staff_ops(request.user, booking.organization)
         try:
             inv = booking.invoice
         except Invoice.DoesNotExist:
@@ -1400,8 +1390,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='no-show')
     def no_show(self, request, pk=None):
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can mark no-show.')
+        require_staff_ops(request.user, booking.organization)
         old = booking.status
         mark_booking_no_show(booking, staff_user=request.user)
         log_booking_status_change(
@@ -1419,8 +1408,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     def incomplete(self, request, pk=None):
         """Mark in-progress job incomplete; optionally schedule a linked return visit."""
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can mark bookings incomplete.')
+        require_staff_ops(request.user, booking.organization)
         note = (request.data.get('note') or '').strip()
         slot_id = request.data.get('slot_id')
         old = booking.status
@@ -1493,8 +1481,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     def return_visit(self, request, pk=None):
         """Schedule a linked return visit for a needs_return (or in-progress) booking."""
         booking = self.get_object()
-        if not is_org_staff(request.user, booking.organization):
-            raise PermissionDenied('Only staff can schedule return visits.')
+        require_staff_ops(request.user, booking.organization)
         slot_id = request.data.get('slot_id')
         if not slot_id:
             raise ValidationError({'slot_id': 'Required.'})
@@ -1559,6 +1546,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                     messages, many=True, context={'request': request},
                 ).data,
             )
+        if is_org_staff(request.user, booking.organization):
+            require_provider_subscription(booking.organization)
         message = post_booking_message(
             booking=booking,
             sender=request.user,
@@ -1726,16 +1715,13 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
-        if not is_org_staff(self.request.user, org):
-            raise PermissionDenied('Only owners and staff can create tasks.')
+        require_staff_ops(self.request.user, org)
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
-        if not is_org_staff(self.request.user, serializer.instance.organization):
-            raise PermissionDenied('Only owners and staff can update tasks.')
+        require_staff_ops(self.request.user, serializer.instance.organization)
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not is_org_staff(self.request.user, instance.organization):
-            raise PermissionDenied('Only owners and staff can delete tasks.')
+        require_staff_ops(self.request.user, instance.organization)
         instance.delete()

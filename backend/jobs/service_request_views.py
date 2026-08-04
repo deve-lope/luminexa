@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from businesses.models import Organization
 
 from .models import Booking, CustomerServiceInquiry
-from .permissions import is_org_staff
+from .permissions import is_org_staff, require_provider_subscription
 from .serializers import (
     CustomerServiceInquirySerializer,
     ProviderServiceRequestListSerializer,
@@ -56,6 +56,7 @@ class ProviderServiceRequestsAPIView(APIView):
             raise NotFound('Organization not found.')
         if not is_org_staff(request.user, org):
             raise PermissionDenied('You must be staff of this organization.')
+        require_provider_subscription(org)
 
         filter_key = (request.query_params.get('filter') or 'all').lower()
         items = []
@@ -142,6 +143,7 @@ class ProviderServiceInquiryDetailAPIView(APIView):
             raise NotFound('Organization not found.')
         if not is_org_staff(user, org):
             raise PermissionDenied('Staff only.')
+        require_provider_subscription(org)
         inquiry = (
             CustomerServiceInquiry.objects.filter(organization=org, pk=inquiry_id)
             .select_related('customer', 'service', 'organization')
@@ -211,6 +213,9 @@ class ServiceInquiryMessagesAPIView(APIView):
 
     def post(self, request, slug, inquiry_id):
         inquiry = self._get_inquiry(slug, inquiry_id, request.user)
+        from .permissions import is_org_staff, require_provider_subscription
+        if is_org_staff(request.user, inquiry.organization):
+            require_provider_subscription(inquiry.organization)
         message = post_inquiry_message(
             inquiry=inquiry,
             sender=request.user,
