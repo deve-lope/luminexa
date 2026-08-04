@@ -1114,22 +1114,42 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='batch')
     def batch(self, request):
-        """Book multiple services from one provider in a single request."""
+        """Book multiple services from one provider in a single request.
+
+        Combined mode (preferred for multi-select): one start_at + services list;
+        creates sequential bookings covering the sum of durations.
+        """
         ser = BatchBookingSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
         shared_notes = (data.get('customer_notes') or '').strip()
         shared_address = (data.get('service_address') or '').strip()
-        items = []
-        for row in data['bookings']:
-            items.append({
-                'slot': row['slot_id'],
-                'service': row.get('service'),
-                'notes': (row.get('customer_notes') or shared_notes or '').strip(),
-                'service_address': (row.get('service_address') or shared_address or '').strip(),
-                'quote_answers': row.get('quote_answers'),
-            })
-        bookings = customer_request_slots_batch(items=items, customer=request.user)
+
+        if data.get('combined'):
+            from .combined_booking import customer_request_combined_visit
+
+            services = list(data['services'])
+            org = services[0].organization
+            bookings = customer_request_combined_visit(
+                organization=org,
+                services=services,
+                start_at=data['start_at'],
+                customer=request.user,
+                notes=shared_notes,
+                service_address=shared_address,
+            )
+        else:
+            items = []
+            for row in data.get('bookings') or []:
+                items.append({
+                    'slot': row['slot_id'],
+                    'service': row.get('service'),
+                    'notes': (row.get('customer_notes') or shared_notes or '').strip(),
+                    'service_address': (row.get('service_address') or shared_address or '').strip(),
+                    'quote_answers': row.get('quote_answers'),
+                })
+            bookings = customer_request_slots_batch(items=items, customer=request.user)
+
         from .notifications import notify_customer_booking_created
 
         for booking in bookings:

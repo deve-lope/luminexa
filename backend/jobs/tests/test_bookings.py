@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -9,6 +9,7 @@ from businesses.models import Organization, OrganizationMembership
 from jobs.models import AvailabilitySlot, Booking, Invoice, Service, ServiceRequestMessage
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class BookingLifecycleTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -473,6 +474,113 @@ class BookingLifecycleTests(TestCase):
         slot_b.refresh_from_db()
         self.assertEqual(slot_a.status, AvailabilitySlot.Status.PENDING)
         self.assertEqual(slot_b.status, AvailabilitySlot.Status.PENDING)
+
+    def test_customer_combined_visit_books_sum_of_durations(self):
+        """Multi-service checkout: one start time, contiguous window = sum of durations."""
+        oil = Service.objects.create(
+            organization=self.org,
+            name='Oil',
+            duration_minutes=60,
+            base_price='40.00',
+            is_active=True,
+        )
+        tyre = Service.objects.create(
+            organization=self.org,
+            name='Tyres',
+            duration_minutes=120,
+            base_price='80.00',
+            is_active=True,
+        )
+        start = timezone.now() + timedelta(days=4)
+        # Contiguous open coverage for a 3-hour combined window (via abutting 60-min slots).
+        for offset in (0, 60, 120):
+            AvailabilitySlot.objects.create(
+                organization=self.org,
+                service=oil,
+                start_at=start + timedelta(minutes=offset),
+                end_at=start + timedelta(minutes=offset + 60),
+                status=AvailabilitySlot.Status.OPEN,
+            )
+
+        self._auth(self.customer)
+        cal = self.client.get(
+            f'/api/v1/public/providers/{self.org.slug}/combined-calendar/',
+            {
+                'services': f'{oil.id},{tyre.id}',
+                'year': start.year,
+                'month': start.month,
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(cal.status_code, 200, cal.data)
+        self.assertEqual(cal.data['duration_minutes'], 180)
+        self.assertTrue(cal.data['combined'])
+        day_key = timezone.localtime(start).strftime('%Y-%m-%d')
+        day_slots = cal.data['slots_by_day'].get(day_key) or []
+        self.assertTrue(any(s.get('available') for s in day_slots), day_slots)
+
+        res = self.client.post(
+            '/api/v1/bookings/batch/',
+            {
+                'combined': True,
+                'start_at': start.isoformat(),
+                'services': [oil.id, tyre.id],
+                'service_address': 'K1A0B1 Ottawa ON',
+                'customer_notes': 'Do both together',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(len(res.data), 2)
+        bookings = list(Booking.objects.filter(customer=self.customer).order_by('start_at'))
+        # Prefer the two just created (may have others from other tests in same class — filter by services)
+        pair = [b for b in bookings if b.service_id in (oil.id, tyre.id)]
+        self.assertEqual(len(pair), 2)
+        self.assertEqual(pair[0].service_id, oil.id)
+        self.assertEqual(pair[1].service_id, tyre.id)
+        self.assertEqual(pair[0].start_at, start)
+        self.assertEqual(pair[0].end_at, start + timedelta(minutes=60))
+        self.assertEqual(pair[1].start_at, start + timedelta(minutes=60))
+        self.assertEqual(pair[1].end_at, start + timedelta(minutes=180))
+
+    def test_combined_visit_rejects_when_window_too_short(self):
+        short = Service.objects.create(
+            organization=self.org,
+            name='Quick',
+            duration_minutes=60,
+            base_price='20.00',
+            is_active=True,
+        )
+        long = Service.objects.create(
+            organization=self.org,
+            name='Long',
+            duration_minutes=120,
+            base_price='50.00',
+            is_active=True,
+        )
+        start = timezone.now() + timedelta(days=5)
+        # Only 1 hour of open coverage — not enough for 3 hours.
+        AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=short,
+            start_at=start,
+            end_at=start + timedelta(minutes=60),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        self._auth(self.customer)
+        res = self.client.post(
+            '/api/v1/bookings/batch/',
+            {
+                'combined': True,
+                'start_at': start.isoformat(),
+                'services': [short.id, long.id],
+                'service_address': '1 Main',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400, res.data)
 
     def test_concurrent_capacity_allows_two_bookings_same_slot(self):
         self.org.concurrent_capacity = 2

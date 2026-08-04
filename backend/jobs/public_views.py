@@ -65,6 +65,53 @@ class PublicProviderStorefrontAPIView(APIView):
         })
 
 
+def _parse_calendar_month(request):
+    try:
+        year = int(request.query_params.get('year', timezone.localdate().year))
+        month = int(request.query_params.get('month', timezone.localdate().month))
+    except (TypeError, ValueError):
+        return None, None, Response(
+            {'detail': 'Invalid year or month.'}, status=status.HTTP_400_BAD_REQUEST,
+        )
+    if month < 1 or month > 12:
+        return None, None, Response(
+            {'detail': 'Month must be 1–12.'}, status=status.HTTP_400_BAD_REQUEST,
+        )
+    return year, month, None
+
+
+def _ensure_recurring_slots(org, bookable_after):
+    if org.scheduling_mode != Organization.SchedulingMode.RECURRING:
+        return
+    has_future_open = AvailabilitySlot.objects.filter(
+        organization=org,
+        status=AvailabilitySlot.Status.OPEN,
+        start_at__gte=bookable_after,
+    ).exists()
+    if not has_future_open:
+        sync_recurring_slots(org, weeks_ahead=12)
+
+
+def _days_payload(year, month, days_meta):
+    _, last_day = calendar.monthrange(year, month)
+    days = {}
+    for day_num in range(1, last_day + 1):
+        day_key = date(year, month, day_num).isoformat()
+        meta = days_meta.get(day_key)
+        if not meta or meta['total'] == 0:
+            day_status = 'none'
+        elif meta['open'] > 0:
+            day_status = 'available'
+        else:
+            day_status = 'full'
+        days[day_key] = {
+            'status': day_status,
+            'open_count': meta['open'] if meta else 0,
+            'total_count': meta['total'] if meta else 0,
+        }
+    return days
+
+
 class PublicServiceCalendarAPIView(APIView):
     """Month calendar with per-day availability for a service."""
 
@@ -99,23 +146,11 @@ class PublicServiceCalendarAPIView(APIView):
         # Customers need a lead-time buffer; staff can still pick nearer open slots
         # (e.g. return visits / provider reschedule).
         bookable_after = now if is_staff else earliest_customer_bookable_at(now=now)
-        if org.scheduling_mode == Organization.SchedulingMode.RECURRING:
-            has_future_open = AvailabilitySlot.objects.filter(
-                organization=org,
-                status=AvailabilitySlot.Status.OPEN,
-                start_at__gte=bookable_after,
-            ).exists()
-            if not has_future_open:
-                sync_recurring_slots(org, weeks_ahead=12)
+        _ensure_recurring_slots(org, bookable_after)
 
-        try:
-            year = int(request.query_params.get('year', timezone.localdate().year))
-            month = int(request.query_params.get('month', timezone.localdate().month))
-        except (TypeError, ValueError):
-            return Response({'detail': 'Invalid year or month.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if month < 1 or month > 12:
-            return Response({'detail': 'Month must be 1–12.'}, status=status.HTTP_400_BAD_REQUEST)
+        year, month, err = _parse_calendar_month(request)
+        if err:
+            return err
 
         _, last_day = calendar.monthrange(year, month)
         range_start = timezone.make_aware(datetime.combine(date(year, month, 1), time.min))
@@ -160,28 +195,127 @@ class PublicServiceCalendarAPIView(APIView):
             if is_open:
                 days_meta[day_key]['open'] += 1
 
-        days = {}
-        for day_num in range(1, last_day + 1):
-            day_key = date(year, month, day_num).isoformat()
-            meta = days_meta.get(day_key)
-            if not meta or meta['total'] == 0:
-                day_status = 'none'
-            elif meta['open'] > 0:
-                day_status = 'available'
-            else:
-                day_status = 'full'
-            days[day_key] = {
-                'status': day_status,
-                'open_count': meta['open'] if meta else 0,
-                'total_count': meta['total'] if meta else 0,
-            }
-
         return Response({
             'year': year,
             'month': month,
             'service': PublicServiceReadSerializer(service, context={'request': request}).data,
             'booking': booking_policy_meta(org, request.user, service=service),
-            'days': days,
+            'days': _days_payload(year, month, days_meta),
+            'slots_by_day': dict(slots_by_day),
+        })
+
+
+class PublicCombinedCalendarAPIView(APIView):
+    """
+    Month calendar for a combined multi-service visit.
+    Query: services=1,2,3 — shows start times with a contiguous free window of sum(durations).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+        from .combined_booking import (
+            assert_same_fulfillment,
+            candidate_combined_starts,
+            total_duration_minutes,
+        )
+
+        org = _public_organization(slug)
+        if not org:
+            return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not customer_can_view_calendar(org, request.user):
+            return Response(
+                {'detail': 'Connect to this business to view availability.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        raw_ids = request.query_params.get('services') or ''
+        try:
+            service_ids = [
+                int(part.strip())
+                for part in str(raw_ids).split(',')
+                if part.strip()
+            ]
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'Invalid services list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not service_ids:
+            return Response(
+                {'detail': 'Provide services as a comma-separated list of ids.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        services = list(
+            Service.objects.filter(
+                organization=org, is_active=True, id__in=service_ids,
+            ).order_by('sort_order', 'name')
+        )
+        # Preserve client selection order for duration sequencing.
+        by_id = {s.id: s for s in services}
+        ordered = [by_id[i] for i in service_ids if i in by_id]
+        if len(ordered) != len(service_ids):
+            return Response({'detail': 'One or more services were not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            assert_same_fulfillment(ordered)
+            total_minutes = total_duration_minutes(ordered)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        now = timezone.now()
+        bookable_after = earliest_customer_bookable_at(now=now)
+        _ensure_recurring_slots(org, bookable_after)
+
+        year, month, err = _parse_calendar_month(request)
+        if err:
+            return err
+
+        _, last_day = calendar.monthrange(year, month)
+        range_start = timezone.make_aware(datetime.combine(date(year, month, 1), time.min))
+        range_end = timezone.make_aware(
+            datetime.combine(date(year, month, last_day), time.max)
+        )
+
+        candidates = candidate_combined_starts(
+            org, ordered, range_start=range_start, range_end=range_end, now=now,
+        )
+
+        days_meta = {}
+        slots_by_day = defaultdict(list)
+        for row in candidates:
+            day_key = timezone.localtime(row['start_at']).strftime('%Y-%m-%d')
+            is_open = row['available']
+            entry = {
+                'id': row['anchor_slot_id'],
+                'start_at': row['start_at'].isoformat(),
+                'end_at': row['end_at'].isoformat(),
+                'status': AvailabilitySlot.Status.OPEN,
+                'available': is_open,
+                'capacity': row['capacity'],
+                'occupied_count': row['capacity'] - row['remaining_capacity'],
+                'remaining_capacity': row['remaining_capacity'],
+                'combined': True,
+                'duration_minutes': row['duration_minutes'],
+            }
+            slots_by_day[day_key].append(entry)
+            if day_key not in days_meta:
+                days_meta[day_key] = {'total': 0, 'open': 0}
+            days_meta[day_key]['total'] += 1
+            if is_open:
+                days_meta[day_key]['open'] += 1
+
+        ctx = {'request': request}
+        return Response({
+            'year': year,
+            'month': month,
+            'combined': True,
+            'duration_minutes': total_minutes,
+            'services': PublicServiceReadSerializer(ordered, many=True, context=ctx).data,
+            'booking': booking_policy_meta(org, request.user, service=ordered[0]),
+            'days': _days_payload(year, month, days_meta),
             'slots_by_day': dict(slots_by_day),
         })
 

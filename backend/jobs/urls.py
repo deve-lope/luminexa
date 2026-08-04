@@ -88,5 +88,10 @@ urlpatterns = [
         public_views.PublicServiceCalendarAPIView.as_view(),
         name='public-service-calendar',
     ),
+    path(
+        'public/providers/<slug>/combined-calendar/',
+        public_views.PublicCombinedCalendarAPIView.as_view(),
+        name='public-combined-calendar',
+    ),
     path('', include(router.urls)),
 ]

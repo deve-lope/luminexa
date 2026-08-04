@@ -32,6 +32,14 @@ function parseApiError(err) {
     const b = d.bookings;
     return Array.isArray(b) ? b[0] : String(b);
   }
+  if (d?.services) {
+    const s = d.services;
+    return Array.isArray(s) ? s[0] : String(s);
+  }
+  if (d?.start_at) {
+    const s = d.start_at;
+    return Array.isArray(s) ? s[0] : String(s);
+  }
   const first = d && Object.values(d)[0];
   return Array.isArray(first) ? first[0] : first || 'Request failed.';
 }
@@ -44,8 +52,18 @@ function parseServiceIds(raw) {
     .filter((n) => Number.isFinite(n) && n > 0);
 }
 
+function formatDurationMinutes(total) {
+  const n = Number(total) || 0;
+  if (n < 60) return `${n} min`;
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  if (m === 0) return h === 1 ? '1 hr' : `${h} hrs`;
+  return `${h} hr ${m} min`;
+}
+
 /**
- * Book multiple services from one provider: shared location, then a time per service.
+ * Book multiple services from one provider as a single visit:
+ * shared location, one start time covering the combined duration.
  */
 export default function CustomerBookMultipleServicesPage() {
   const { orgSlug, slug, providerKey } = useParams();
@@ -71,8 +89,7 @@ export default function CustomerBookMultipleServicesPage() {
   const [serviceAddress, setServiceAddress] = useState(
     () => (user?.default_service_address || '').trim()
   );
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [slotByServiceId, setSlotByServiceId] = useState({});
+  const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [calendar, setCalendar] = useState(null);
   const [calendarFetching, setCalendarFetching] = useState(false);
@@ -96,6 +113,11 @@ export default function CustomerBookMultipleServicesPage() {
       .filter(Boolean);
   }, [storefront?.services, serviceIds]);
 
+  const totalDurationMinutes = useMemo(() => {
+    if (calendar?.duration_minutes) return Number(calendar.duration_minutes) || 0;
+    return selectedServices.reduce((sum, s) => sum + (Number(s.duration_minutes) || 0), 0);
+  }, [calendar?.duration_minutes, selectedServices]);
+
   const mixedFulfillment =
     selectedServices.some(isShopService) && selectedServices.some(isMobileService);
   const allShop = selectedServices.length > 0 && selectedServices.every(isShopService);
@@ -112,7 +134,6 @@ export default function CustomerBookMultipleServicesPage() {
     selectedServices.find((s) => s.shop_location)?.shop_location ||
     '';
 
-  const activeService = selectedServices[activeIndex] || null;
   const orgName = storefront?.organization?.name || 'this business';
   const backHref = `/customer/provider/${storefront?.organization?.public_ref || businessSlug}`;
 
@@ -142,13 +163,24 @@ export default function CustomerBookMultipleServicesPage() {
   }, [businessSlug]);
 
   const loadCalendar = useCallback(() => {
-    if (!businessSlug || !activeService || !mayLoadCalendar || mustConnect || staffOfOrg) {
+    if (
+      !businessSlug ||
+      selectedServices.length === 0 ||
+      !mayLoadCalendar ||
+      mustConnect ||
+      staffOfOrg ||
+      mixedFulfillment
+    ) {
       setCalendar(null);
       return;
     }
     setCalendarFetching(true);
     businessesAPI
-      .getServiceCalendar(businessSlug, activeService.id, { year, month })
+      .getCombinedCalendar(
+        businessSlug,
+        selectedServices.map((s) => s.id),
+        { year, month }
+      )
       .then((res) => {
         setCalendar(res.data);
         const normalized = normalizeBookingCalendar(res.data);
@@ -161,16 +193,24 @@ export default function CustomerBookMultipleServicesPage() {
       })
       .catch((e) => setError(parseApiError(e)))
       .finally(() => setCalendarFetching(false));
-  }, [businessSlug, activeService, mayLoadCalendar, mustConnect, staffOfOrg, year, month]);
+  }, [
+    businessSlug,
+    selectedServices,
+    mayLoadCalendar,
+    mustConnect,
+    staffOfOrg,
+    mixedFulfillment,
+    year,
+    month,
+  ]);
 
   useEffect(() => {
     loadCalendar();
   }, [loadCalendar]);
 
   useEffect(() => {
-    setSelectedDay(null);
-    setCalendar(null);
-  }, [activeService?.id]);
+    setSelectedSlot(null);
+  }, [selectedDay, year, month]);
 
   const { days: calendarDays, slots_by_day: slotsByDay } = useMemo(
     () => calendarDataForMonth(calendar, year, month),
@@ -181,10 +221,6 @@ export default function CustomerBookMultipleServicesPage() {
     if (!selectedDay) return [];
     return (slotsByDay[selectedDay] || []).filter(isSlotBookableForCustomer);
   }, [slotsByDay, selectedDay]);
-
-  const allSlotsPicked =
-    selectedServices.length > 0 &&
-    selectedServices.every((s) => slotByServiceId[s.id]);
 
   const connect = async () => {
     setConnecting(true);
@@ -197,19 +233,6 @@ export default function CustomerBookMultipleServicesPage() {
     } finally {
       setConnecting(false);
     }
-  };
-
-  const pickSlot = (slot) => {
-    if (!activeService) return;
-    const taken = Object.entries(slotByServiceId).some(
-      ([sid, s]) => Number(sid) !== Number(activeService.id) && s?.id === slot.id
-    );
-    if (taken) {
-      setError('That time is already chosen for another service. Pick a different slot.');
-      return;
-    }
-    setError(null);
-    setSlotByServiceId((prev) => ({ ...prev, [activeService.id]: slot }));
   };
 
   const shiftMonth = (delta) => {
@@ -249,26 +272,22 @@ export default function CustomerBookMultipleServicesPage() {
         return;
       }
     }
-    if (!allSlotsPicked) {
-      setError('Pick a time for each selected service.');
+    if (!selectedSlot?.start_at) {
+      setError('Pick a start time for your visit.');
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
       await jobsAPI.requestBookingsBatch({
+        combined: true,
+        start_at: selectedSlot.start_at,
+        services: selectedServices.map((svc) => svc.id),
         service_address: needsCustomerAddress ? serviceAddress.trim() : '',
         customer_notes: notes.trim(),
-        bookings: selectedServices.map((svc) => ({
-          slot_id: slotByServiceId[svc.id].id,
-          service: svc.id,
-          service_address: isShopService(svc)
-            ? ''
-            : serviceAddress.trim(),
-        })),
       });
       showToast(
-        `${selectedServices.length} booking${selectedServices.length === 1 ? '' : 's'} submitted.`,
+        `${selectedServices.length} service${selectedServices.length === 1 ? '' : 's'} booked together.`,
         'success'
       );
       navigate(customerBookings(), { replace: true });
@@ -303,8 +322,15 @@ export default function CustomerBookMultipleServicesPage() {
     );
   }
 
+  const canBook = !needsContact && !mixedFulfillment && Boolean(selectedSlot);
+  const primaryLabel = submitting
+    ? 'Booking…'
+    : selectedSlot
+      ? 'Book this'
+      : 'Pick a time';
+
   return (
-    <div className="space-y-4 pb-28">
+    <div className="space-y-4 pb-36 lg:pb-8">
       <div>
         <Link
           to={backHref}
@@ -313,10 +339,14 @@ export default function CustomerBookMultipleServicesPage() {
           ← {orgName}
         </Link>
         <h1 className="mt-2 text-xl font-bold text-slate-900">
-          Book {selectedServices.length} services
+          Book {selectedServices.length} services together
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Shared location for the visit, then choose a time for each service.
+          One visit — pick a single start time. Needs about{' '}
+          <span className="font-medium text-slate-800">
+            {formatDurationMinutes(totalDurationMinutes)}
+          </span>{' '}
+          free on the schedule.
         </p>
       </div>
 
@@ -374,11 +404,40 @@ export default function CustomerBookMultipleServicesPage() {
             </section>
           )}
 
+          {!needsContact && !mixedFulfillment && (
+            <section className="lx-card">
+              <h2 className="text-sm font-semibold uppercase text-slate-500">Services</h2>
+              <ul className="mt-3 divide-y divide-slate-100">
+                {selectedServices.map((svc, index) => (
+                  <li key={svc.id} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-900">
+                        {index + 1}. {svc.name}
+                      </span>
+                      {formatServiceMeta(svc) && (
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          {formatServiceMeta(svc)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-slate-600">
+                      {formatDurationMinutes(svc.duration_minutes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-700">
+                Combined visit:{' '}
+                <span className="font-semibold">{formatDurationMinutes(totalDurationMinutes)}</span>
+              </p>
+            </section>
+          )}
+
           {!needsContact && !mixedFulfillment && allShop && (
             <section className="lx-card">
               <h2 className="text-sm font-semibold uppercase text-slate-500">Job location</h2>
               <p className="mt-1 text-sm text-slate-600">
-                These are in-shop services. Come to this address for your appointments.
+                These are in-shop services. Come to this address for your appointment.
               </p>
               <div className="mt-3 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-slate-800">
                 <p className="font-semibold text-slate-900">Come to the shop</p>
@@ -395,7 +454,7 @@ export default function CustomerBookMultipleServicesPage() {
               value={serviceAddress}
               onChange={setServiceAddress}
               label="Job location"
-              hint="Where should the provider come for these jobs?"
+              hint="Where should the provider come for this visit?"
             />
           )}
 
@@ -410,62 +469,17 @@ export default function CustomerBookMultipleServicesPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="lx-input"
-                placeholder="Anything the provider should know for these jobs"
+                placeholder="Anything the provider should know for this visit"
               />
             </section>
           )}
 
           {!needsContact && !mixedFulfillment && (
-            <section className="lx-card">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">Services &amp; times</h2>
-              <ul className="mt-3 space-y-2">
-                {selectedServices.map((svc, index) => {
-                  const slot = slotByServiceId[svc.id];
-                  const isActive = index === activeIndex;
-                  return (
-                    <li key={svc.id}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-3 text-left ${
-                          isActive
-                            ? 'border-luminexa-accent bg-teal-50/50 ring-1 ring-luminexa-accent/20'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      >
-                        <span>
-                          <span className="block text-sm font-semibold text-slate-900">
-                            {index + 1}. {svc.name}
-                          </span>
-                          {formatServiceMeta(svc) && (
-                            <span className="mt-0.5 block text-xs text-slate-500">
-                              {formatServiceMeta(svc)}
-                            </span>
-                          )}
-                          {slot ? (
-                            <span className="mt-1 block text-xs font-medium text-emerald-700">
-                              {formatTimeRange(slot.start_at, slot.end_at)}
-                            </span>
-                          ) : (
-                            <span className="mt-1 block text-xs text-amber-700">Pick a time</span>
-                          )}
-                        </span>
-                        <span className="text-xs font-medium text-luminexa-accent">
-                          {isActive ? 'Selecting…' : slot ? 'Change' : 'Select'}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
-
-          {!needsContact && !mixedFulfillment && activeService && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">
-                Time for {activeService.name}
-              </h2>
+              <h2 className="text-sm font-semibold uppercase text-slate-500">Choose one time</h2>
+              <p className="text-sm text-slate-600">
+                Times below already have a free window long enough for all selected services.
+              </p>
               {calendarFetching && !calendar ? (
                 <p className="text-sm text-slate-500">Loading calendar…</p>
               ) : (
@@ -482,18 +496,25 @@ export default function CustomerBookMultipleServicesPage() {
                   />
                   {selectedDay && (
                     <div className="space-y-2">
-                      <p className="text-sm font-medium text-slate-700">Times on {selectedDay}</p>
+                      <p className="text-sm font-medium text-slate-700">Starts on {selectedDay}</p>
                       {daySlots.length === 0 ? (
-                        <p className="text-sm text-slate-500">No open times this day.</p>
+                        <p className="text-sm text-slate-500">
+                          No {formatDurationMinutes(totalDurationMinutes)} windows this day.
+                        </p>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           {daySlots.map((slot) => {
-                            const picked = slotByServiceId[activeService.id]?.id === slot.id;
+                            const picked =
+                              selectedSlot?.start_at === slot.start_at &&
+                              selectedSlot?.end_at === slot.end_at;
                             return (
                               <button
-                                key={slot.id}
+                                key={`${slot.id}-${slot.start_at}`}
                                 type="button"
-                                onClick={() => pickSlot(slot)}
+                                onClick={() => {
+                                  setError(null);
+                                  setSelectedSlot(slot);
+                                }}
                                 className={`min-h-[44px] rounded-lg px-3 text-sm font-medium ${
                                   picked
                                     ? 'bg-luminexa-accent text-white'
@@ -513,43 +534,25 @@ export default function CustomerBookMultipleServicesPage() {
                   )}
                 </>
               )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={activeIndex === 0}
-                  onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
-                  className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-medium disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  disabled={activeIndex >= selectedServices.length - 1}
-                  onClick={() =>
-                    setActiveIndex((i) => Math.min(selectedServices.length - 1, i + 1))
-                  }
-                  className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-medium disabled:opacity-40"
-                >
-                  Next service
-                </button>
-              </div>
             </section>
           )}
 
           {!needsContact && !mixedFulfillment && (
-            <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+            <div className="sticky bottom-[4.75rem] z-30 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl lg:static lg:border-0 lg:bg-transparent lg:py-0 lg:backdrop-blur-none">
               <button
                 type="button"
-                disabled={submitting || !allSlotsPicked}
+                disabled={submitting || !canBook}
                 onClick={submitAll}
                 className="lx-btn-primary w-full min-h-[52px] rounded-xl disabled:opacity-60"
               >
-                {submitting
-                  ? 'Submitting…'
-                  : allSlotsPicked
-                    ? `Confirm ${selectedServices.length} bookings`
-                    : `Pick times (${Object.keys(slotByServiceId).length}/${selectedServices.length})`}
+                {primaryLabel}
               </button>
+              {selectedSlot && (
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  {formatTimeRange(selectedSlot.start_at, selectedSlot.end_at)} ·{' '}
+                  {selectedServices.length} services
+                </p>
+              )}
             </div>
           )}
         </>

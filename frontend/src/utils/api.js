@@ -159,6 +159,13 @@ export const businessesAPI = {
     api.get(`/api/v1/public/providers/${orgSlug}/services/${serviceId}/calendar/`, {
       params,
     }),
+  getCombinedCalendar: (orgSlug, serviceIds, params) =>
+    api.get(`/api/v1/public/providers/${orgSlug}/combined-calendar/`, {
+      params: {
+        services: Array.isArray(serviceIds) ? serviceIds.join(',') : serviceIds,
+        ...params,
+      },
+    }),
   getServiceDetail: (orgSlug, serviceId) =>
     api.get(`/api/v1/public/providers/${orgSlug}/services/${serviceId}/`),
   submitServiceReview: (orgSlug, serviceId, data) =>

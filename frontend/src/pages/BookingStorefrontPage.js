@@ -418,13 +418,14 @@ export default function BookingStorefrontPage() {
             )}
 
             {canPickService && selectedServiceIds.length > 0 && (
-              <div className="sticky bottom-3 z-20 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg">
+              <div className="sticky bottom-[4.75rem] z-30 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg lg:bottom-3">
                 <p className="text-sm font-medium text-slate-900">
                   {selectedServiceIds.length} service
                   {selectedServiceIds.length === 1 ? '' : 's'} selected
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Book them together — all must be the same type (mobile or in-shop).
+                  Book them in one visit — same type only (mobile or in-shop). Combined duration
+                  needs one free window on the schedule.
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -441,7 +442,7 @@ export default function BookingStorefrontPage() {
                     to={multiCheckoutPath(selectedServiceIds)}
                     className="flex min-h-[44px] flex-[2] items-center justify-center rounded-xl bg-luminexa-accent text-sm font-medium text-white"
                   >
-                    Book selected
+                    Book this
                   </Link>
                 </div>
               </div>

@@ -1020,19 +1020,64 @@ class BatchBookingItemSerializer(serializers.Serializer):
 
 
 class BatchBookingSerializer(serializers.Serializer):
-    bookings = BatchBookingItemSerializer(many=True, min_length=1, max_length=10)
+    """
+    Two modes:
+    - Legacy: bookings=[{slot_id, service}, ...] (one slot per service)
+    - Combined visit: combined=true, start_at, services=[ids] — one contiguous window
+    """
+    bookings = BatchBookingItemSerializer(many=True, required=False, allow_empty=True)
+    combined = serializers.BooleanField(required=False, default=False)
+    start_at = serializers.DateTimeField(required=False)
+    services = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        many=True,
+        required=False,
+    )
     customer_notes = serializers.CharField(required=False, allow_blank=True, default='')
     service_address = serializers.CharField(required=False, allow_blank=True, default='')
 
     def validate_bookings(self, items):
-        if len(items) < 1:
-            raise serializers.ValidationError('Select at least one service to book.')
+        if not items:
+            return items
         slot_ids = [item['slot_id'].id for item in items]
         if len(slot_ids) != len(set(slot_ids)):
             raise serializers.ValidationError(
                 'Each service needs its own time slot. Pick different times.'
             )
         return items
+
+    def validate(self, attrs):
+        combined = bool(attrs.get('combined'))
+        bookings = attrs.get('bookings') or []
+        services = attrs.get('services') or []
+        if combined:
+            if not services:
+                raise serializers.ValidationError({
+                    'services': 'Select at least one service for a combined visit.',
+                })
+            if len(services) > 10:
+                raise serializers.ValidationError({
+                    'services': 'You can book at most 10 services at once.',
+                })
+            if not attrs.get('start_at'):
+                raise serializers.ValidationError({
+                    'start_at': 'Pick a start time for the combined visit.',
+                })
+            org_ids = {s.organization_id for s in services}
+            if len(org_ids) != 1:
+                raise serializers.ValidationError({
+                    'services': 'All services must be from the same business.',
+                })
+        else:
+            if len(bookings) < 1:
+                raise serializers.ValidationError({
+                    'bookings': 'Select at least one service to book.',
+                })
+            if len(bookings) > 10:
+                raise serializers.ValidationError({
+                    'bookings': 'You can book at most 10 services at once.',
+                })
+        return attrs
 
 
 class ProviderBookSerializer(serializers.Serializer):
