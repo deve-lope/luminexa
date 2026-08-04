@@ -202,6 +202,7 @@ class ProviderNotification(models.Model):
         QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         PAYMENT_RECEIVED = 'payment_received', 'Payment received'
         NEW_MESSAGE = 'new_message', 'New message'
+        PROMO_OFFER = 'promo_offer', 'Promo offer'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'

@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>Send an in-app notification with this promo code to the selected businesses.
+Owners will see it in Notifications (and a toast) and can open Billing to redeem.</p>
+
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="action" value="send_promo_offer_notification">
+  <input type="hidden" name="apply" value="1">
+  {% for obj in organizations %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+  {% endfor %}
+
+  <fieldset class="module aligned">
+    <div class="form-row">
+      <label for="id_promo_code"><strong>Promo code</strong></label>
+      <select name="promo_code_id" id="id_promo_code" required>
+        <option value="">———</option>
+        {% for p in promo_codes %}
+          <option value="{{ p.pk }}">{{ p.code }} ({{ p.grant_weeks }} week{{ p.grant_weeks|pluralize }})</option>
+        {% endfor %}
+      </select>
+      <p class="help">Create codes under Businesses → Promo codes first.</p>
+    </div>
+    <div class="form-row">
+      <label for="id_custom_message"><strong>Custom message</strong> (optional)</label>
+      <textarea name="custom_message" id="id_custom_message" rows="3" cols="60"
+        placeholder="Thanks for trying Luminexa — here’s 2 more weeks on us."></textarea>
+      <p class="help">If the code isn’t in the message, we’ll append it automatically.</p>
+    </div>
+  </fieldset>
+
+  <h2>Recipients ({{ organizations|length }})</h2>
+  <ul>
+    {% for org in organizations %}
+      <li>
+        <strong>{{ org.name }}</strong> ({{ org.slug }})
+        — {{ org.subscription_status|default:"none" }}
+        {% if org.subscription_current_period_end %}
+          · ends {{ org.subscription_current_period_end }}
+        {% endif %}
+      </li>
+    {% empty %}
+      <li>No organizations selected.</li>
+    {% endfor %}
+  </ul>
+
+  <div class="submit-row">
+    <input type="submit" value="Send notifications" class="default">
+    <a href="{{ cancel_url }}" class="button cancel-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

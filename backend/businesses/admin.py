@@ -1,4 +1,10 @@
-from django.contrib import admin
+from datetime import timedelta
+
+from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     BusinessType,
@@ -37,17 +43,107 @@ class OrganizationLocationInline(admin.TabularInline):
     )
 
 
+class SubscriptionEndingSoonFilter(admin.SimpleListFilter):
+    title = 'subscription ending'
+    parameter_name = 'sub_ending'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('7', 'Within 7 days'),
+            ('14', 'Within 14 days'),
+            ('30', 'Within 30 days'),
+            ('expired', 'Already ended (period end in past)'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        now = timezone.now()
+        qs = queryset.exclude(subscription_current_period_end__isnull=True)
+        if value == 'expired':
+            return qs.filter(subscription_current_period_end__lt=now)
+        try:
+            days = int(value)
+        except (TypeError, ValueError):
+            return queryset
+        return qs.filter(
+            subscription_current_period_end__gte=now,
+            subscription_current_period_end__lte=now + timedelta(days=days),
+        )
+
+
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = (
         'name', 'slug', 'subscription_status', 'subscription_source',
         'subscription_current_period_end', 'is_active', 'profile_public',
     )
-    list_filter = ('subscription_status', 'subscription_source', 'is_active')
+    list_filter = (
+        SubscriptionEndingSoonFilter,
+        'subscription_status',
+        'subscription_source',
+        'is_active',
+    )
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'slug')
     filter_horizontal = ('business_types',)
     inlines = [OrganizationLocationInline, OrganizationGalleryImageInline]
+    actions = ['send_promo_offer_notification']
+
+    @admin.action(description='Send promo offer notification…')
+    def send_promo_offer_notification(self, request, queryset):
+        from jobs.promo_services import send_promo_offer_notifications
+
+        if 'apply' in request.POST:
+            promo_id = request.POST.get('promo_code_id')
+            custom_message = request.POST.get('custom_message', '')
+            promo = PromoCode.objects.filter(pk=promo_id, is_active=True).first()
+            if not promo:
+                self.message_user(
+                    request,
+                    'Select an active promo code (create one under Promo codes first).',
+                    level=messages.ERROR,
+                )
+                return redirect(reverse('admin:businesses_organization_changelist'))
+
+            created = send_promo_offer_notifications(
+                organizations=queryset,
+                promo=promo,
+                custom_message=custom_message,
+            )
+            skipped = queryset.count() - created
+            self.message_user(
+                request,
+                f'Sent {created} promo notification(s) with code {promo.code}'
+                + (f' ({skipped} skipped — already redeemed).' if skipped else '.'),
+                level=messages.SUCCESS if created else messages.WARNING,
+            )
+            return redirect(reverse('admin:businesses_organization_changelist'))
+
+        promo_codes = PromoCode.objects.filter(is_active=True).order_by('-created_at')
+        if not promo_codes.exists():
+            self.message_user(
+                request,
+                'No active promo codes. Create one under Businesses → Promo codes first.',
+                level=messages.ERROR,
+            )
+            return redirect(reverse('admin:businesses_organization_changelist'))
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Send promo offer notification',
+            'organizations': queryset.order_by('name'),
+            'promo_codes': promo_codes,
+            'action_checkbox_name': ACTION_CHECKBOX_NAME,
+            'cancel_url': reverse('admin:businesses_organization_changelist'),
+            'opts': self.model._meta,
+        }
+        return render(
+            request,
+            'admin/businesses/organization/send_promo_offer.html',
+            context,
+        )
 
 
 @admin.register(OrganizationLocation)

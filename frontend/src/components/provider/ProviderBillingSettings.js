@@ -48,6 +48,10 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const promoFromUrl = (params.get('promo') || '').trim();
+    if (promoFromUrl) {
+      setPromoCode(promoFromUrl.toUpperCase());
+    }
     if (params.get('paid') === '1' || params.get('sub') === '1') {
       setMessage('Stripe updated — refreshing…');
       const sessionId = params.get('session_id');

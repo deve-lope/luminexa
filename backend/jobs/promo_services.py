@@ -88,3 +88,57 @@ def redeem_promo_code(*, org: Organization, user, code: str) -> Organization:
             ])
 
     return org
+
+
+def send_promo_offer_notifications(
+    *,
+    organizations,
+    promo: PromoCode,
+    custom_message: str = '',
+) -> int:
+    """
+    Create in-app promo_offer notifications for each organization.
+
+    Returns the number of notifications created. Skips orgs that already
+    redeemed this code. Message includes the code; link opens Billing with ?promo=.
+    """
+    from jobs.models import ProviderNotification
+
+    orgs = list(organizations)
+    if not orgs or not promo or not promo.is_active:
+        return 0
+
+    already = set(
+        PromoRedemption.objects.filter(
+            promo_code=promo,
+            organization_id__in=[o.pk for o in orgs],
+        ).values_list('organization_id', flat=True)
+    )
+
+    weeks = int(promo.grant_weeks)
+    week_label = '1 week' if weeks == 1 else f'{weeks} weeks'
+    custom = (custom_message or '').strip()
+    if custom:
+        base_msg = custom
+        if promo.code not in base_msg:
+            base_msg = f'{base_msg} Use code {promo.code} for {week_label} of Pro.'
+    else:
+        base_msg = (
+            f'Complimentary Pro offer: use code {promo.code} for {week_label}. '
+            f'Open Billing to redeem.'
+        )
+    message = base_msg[:500]
+
+    created = 0
+    for org in orgs:
+        if org.pk in already:
+            continue
+        link = f'/provider/{org.slug}/billing?promo={promo.code}'
+        ProviderNotification.objects.create(
+            organization=org,
+            kind=ProviderNotification.Kind.PROMO_OFFER,
+            message=message,
+            link_path=link,
+        )
+        created += 1
+    return created

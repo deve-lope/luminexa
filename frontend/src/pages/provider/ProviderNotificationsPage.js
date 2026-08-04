@@ -163,11 +163,21 @@ export default function ProviderNotificationsPage() {
                 <button
                   type="button"
                   onClick={() => openNotification(n)}
-                  className="block w-full rounded-xl border border-violet-100 bg-violet-50/70 p-3 text-left text-sm text-violet-950"
+                  className={`block w-full rounded-xl border p-3 text-left text-sm ${
+                    n.kind === 'promo_offer'
+                      ? 'border-teal-100 bg-teal-50/80 text-teal-950'
+                      : 'border-violet-100 bg-violet-50/70 text-violet-950'
+                  }`}
                 >
                   <p className="font-semibold">{n.message}</p>
                   {n.created_at && (
-                    <p className="mt-1 text-xs text-violet-800/70">{formatWhen(n.created_at)}</p>
+                    <p
+                      className={`mt-1 text-xs ${
+                        n.kind === 'promo_offer' ? 'text-teal-800/70' : 'text-violet-800/70'
+                      }`}
+                    >
+                      {formatWhen(n.created_at)}
+                    </p>
                   )}
                 </button>
               </li>

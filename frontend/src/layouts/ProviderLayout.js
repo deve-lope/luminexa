@@ -91,6 +91,14 @@ function ProviderShell() {
             showToast(payment.message, 'success');
           }
         }
+        const promo = notifications.find((n) => n.kind === 'promo_offer');
+        if (promo) {
+          const seenKey = `luminexa.seenProviderPromo.${promo.id}`;
+          if (!window.sessionStorage.getItem(seenKey)) {
+            window.sessionStorage.setItem(seenKey, '1');
+            showToast(promo.message, 'info');
+          }
+        }
       })
       .catch(() => {});
   }, [orgSlug, showToast, onRequestsTab, onNotificationsPage]);

@@ -165,3 +165,62 @@ class PromoCodeRedeemTests(TestCase):
         self.assertEqual(self.org.subscription_source, 'stripe')
         self.assertEqual(self.org.subscription_status, 'active')
         self.assertTrue(org_has_active_subscription(self.org))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PromoOfferNotificationTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(
+            name='Offer Org',
+            slug='offer-org',
+            subscription_status='trialing',
+            subscription_current_period_end=timezone.now() + timedelta(days=3),
+        )
+        self.other = Organization.objects.create(name='Other Org', slug='other-org')
+        self.promo = PromoCode.objects.create(
+            code='KEEP2W',
+            grant_weeks=2,
+            is_active=True,
+        )
+
+    def test_send_creates_promo_offer_notifications(self):
+        from jobs.models import ProviderNotification
+        from jobs.promo_services import send_promo_offer_notifications
+
+        created = send_promo_offer_notifications(
+            organizations=[self.org, self.other],
+            promo=self.promo,
+        )
+        self.assertEqual(created, 2)
+        notes = ProviderNotification.objects.filter(kind=ProviderNotification.Kind.PROMO_OFFER)
+        self.assertEqual(notes.count(), 2)
+        note = notes.get(organization=self.org)
+        self.assertIn('KEEP2W', note.message)
+        self.assertEqual(note.link_path, '/provider/offer-org/billing?promo=KEEP2W')
+
+    def test_send_skips_already_redeemed(self):
+        from jobs.models import ProviderNotification
+        from jobs.promo_services import send_promo_offer_notifications
+
+        PromoRedemption.objects.create(
+            promo_code=self.promo,
+            organization=self.org,
+            granted_until=timezone.now() + timedelta(weeks=2),
+        )
+        created = send_promo_offer_notifications(
+            organizations=[self.org, self.other],
+            promo=self.promo,
+        )
+        self.assertEqual(created, 1)
+        self.assertFalse(
+            ProviderNotification.objects.filter(
+                organization=self.org,
+                kind=ProviderNotification.Kind.PROMO_OFFER,
+            ).exists()
+        )
+        self.assertTrue(
+            ProviderNotification.objects.filter(
+                organization=self.other,
+                kind=ProviderNotification.Kind.PROMO_OFFER,
+            ).exists()
+        )

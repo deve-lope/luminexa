@@ -302,19 +302,29 @@ export default function ProviderTodayPage() {
       {(dashboard.notifications || []).map((n) => (
         <div
           key={n.id}
-          className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm"
+          className={`flex items-start justify-between gap-3 rounded-xl border p-3 text-sm ${
+            n.kind === 'promo_offer'
+              ? 'border-teal-200 bg-teal-50'
+              : 'border-amber-200 bg-amber-50'
+          }`}
         >
           <button
             type="button"
             onClick={() => openNotification(n)}
             className="min-w-0 flex-1 text-left"
           >
-            <p className="font-medium text-amber-900">{n.message}</p>
+            <p className={`font-medium ${n.kind === 'promo_offer' ? 'text-teal-900' : 'text-amber-900'}`}>
+              {n.message}
+            </p>
             <span className="mt-1 inline-block text-luminexa-accent">
               {providerNotificationCtaLabel(n)}
             </span>
           </button>
-          <button type="button" onClick={() => dismissNotification(n.id)} className="text-xs text-amber-800">
+          <button
+            type="button"
+            onClick={() => dismissNotification(n.id)}
+            className={`text-xs ${n.kind === 'promo_offer' ? 'text-teal-800' : 'text-amber-800'}`}
+          >
             Dismiss
           </button>
         </div>

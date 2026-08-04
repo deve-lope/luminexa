@@ -1,5 +1,6 @@
 import { jobsAPI } from './api';
 import {
+  providerBilling,
   providerMessages,
   providerRequestDetail,
   providerRequests,
@@ -21,6 +22,10 @@ export function isProviderBookingUpdateNotification(notification) {
   return BOOKING_ACTION_KINDS.has(notification?.kind);
 }
 
+export function isPromoOfferNotification(notification) {
+  return notification?.kind === 'promo_offer';
+}
+
 /** Count undismissed booking-update alerts (for Requests tab badge). */
 export function countBookingActionNotifications(notifications) {
   return (notifications || []).filter(
@@ -34,6 +39,10 @@ export function countBookingActionNotifications(notifications) {
  */
 export function providerNotificationDestination(orgSlug, n) {
   if (n?.link_path) return n.link_path;
+
+  if (n?.kind === 'promo_offer') {
+    return providerBilling(orgSlug);
+  }
 
   if (n?.kind === 'new_message') {
     if (n.booking_id) return `${providerMessages(orgSlug)}?booking=${n.booking_id}`;
@@ -51,6 +60,7 @@ export function providerNotificationDestination(orgSlug, n) {
 
 /** Short CTA label for Today / alert cards. */
 export function providerNotificationCtaLabel(n) {
+  if (n?.kind === 'promo_offer') return 'Redeem on Billing';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';
   return 'Open schedule';
