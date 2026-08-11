@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -10,6 +10,7 @@ from jobs.models import AvailabilitySlot, Booking, CustomerServiceInquiry, Servi
 from jobs.scheduling_services import sync_recurring_slots
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class BookingPolicyTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -30,6 +31,8 @@ class BookingPolicyTests(TestCase):
             booking_policy=policy,
             profile_public=True,
             is_active=True,
+            subscription_status='active',
+            subscription_plan='pro_monthly',
         )
         OrganizationMembership.objects.create(
             organization=org, user=self.owner, role=OrganizationMembership.Role.OWNER,
@@ -228,7 +231,6 @@ class BookingPolicyTests(TestCase):
             {
                 'amount': '85.50',
                 'message': 'Includes supplies',
-                'questions': ['How many rooms?', 'Pets on site?'],
             },
             format='json',
             HTTP_HOST='localhost',
@@ -236,21 +238,115 @@ class BookingPolicyTests(TestCase):
         self.assertEqual(quoted.status_code, 200, quoted.data)
         self.assertEqual(quoted.data['status'], Booking.Status.QUOTED)
         self.assertEqual(str(quoted.data['quote_amount']), '85.50')
-        self.assertEqual(len(quoted.data['quote_questions']), 2)
 
         self.client.force_authenticate(user=self.customer)
-        qid = quoted.data['quote_questions'][0]['id']
         accepted = self.client.post(
             f'/api/v1/bookings/{booking_id}/accept-quote/',
-            {'answers': [{'id': qid, 'answer': '3 bedrooms'}]},
+            {},
             format='json',
             HTTP_HOST='localhost',
         )
         self.assertEqual(accepted.status_code, 200, accepted.data)
         self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
-        self.assertEqual(accepted.data['quote_questions'][0]['answer'], '3 bedrooms')
+
+    def test_ask_questions_then_quote(self):
+        """Questions first are not a quote; customer answers, then provider prices."""
+        from jobs.models import CustomerNotification, ProviderNotification
+
+        org, service, slot = self._org(Organization.BookingPolicy.QUOTE)
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        booking_id = create.data['id']
+
+        self.client.force_authenticate(user=self.owner)
+        blocked = self.client.post(
+            f'/api/v1/bookings/{booking_id}/send-quote/',
+            {
+                'amount': '85.50',
+                'questions': ['How many rooms?', 'Pets on site?'],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.data)
+
+        asked = self.client.post(
+            f'/api/v1/bookings/{booking_id}/ask-quote-questions/',
+            {
+                'questions': ['How many rooms?', 'Pets on site?'],
+                'message': 'Need a bit more detail',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(asked.status_code, 200, asked.data)
+        self.assertEqual(asked.data['status'], Booking.Status.REQUESTED)
+        self.assertIsNone(asked.data['quote_amount'])
+        self.assertTrue(asked.data['awaiting_quote_details'])
+        self.assertTrue(
+            CustomerNotification.objects.filter(
+                booking_id=booking_id,
+                kind=CustomerNotification.Kind.QUOTE_DETAILS_REQUESTED,
+            ).exists()
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        qid0 = asked.data['quote_questions'][0]['id']
+        qid1 = asked.data['quote_questions'][1]['id']
+        answered = self.client.post(
+            f'/api/v1/bookings/{booking_id}/answer-quote-questions/',
+            {
+                'answers': [
+                    {'id': qid0, 'answer': '3 bedrooms'},
+                    {'id': qid1, 'answer': 'One dog'},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(answered.status_code, 200, answered.data)
+        self.assertFalse(answered.data['awaiting_quote_details'])
+        self.assertTrue(
+            ProviderNotification.objects.filter(
+                booking_id=booking_id,
+                kind=ProviderNotification.Kind.QUOTE_ANSWERS_RECEIVED,
+            ).exists()
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        quoted = self.client.post(
+            f'/api/v1/bookings/{booking_id}/send-quote/',
+            {'amount': '95.00', 'message': 'Includes supplies'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+        self.assertEqual(quoted.data['status'], Booking.Status.QUOTED)
+        self.assertEqual(str(quoted.data['quote_amount']), '95.00')
+        self.assertEqual(quoted.data['quote_questions'][0]['answer'], '3 bedrooms')
+
+        self.client.force_authenticate(user=self.customer)
+        accepted = self.client.post(
+            f'/api/v1/bookings/{booking_id}/accept-quote/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class ServiceInquiryPermissionTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -260,6 +356,8 @@ class ServiceInquiryPermissionTests(TestCase):
         self.org = Organization.objects.create(
             name='Inq Co', slug='inq-co', booking_policy=Organization.BookingPolicy.INSTANT,
             profile_public=True, is_active=True,
+            subscription_status='active',
+            subscription_plan='pro_monthly',
         )
         self.service = Service.objects.create(
             organization=self.org,

@@ -70,6 +70,7 @@ export default function CustomerBookingCard({
   const canRate = Boolean(booking.can_rate);
   const myReview = booking.my_review;
   const isQuoted = booking.status === 'quoted';
+  const awaitingQuoteDetails = Boolean(booking.awaiting_quote_details);
   const awaitingTimeChange = Boolean(booking.awaiting_customer_acceptance);
   const needsQuote =
     booking.requires_quote ||
@@ -85,8 +86,11 @@ export default function CustomerBookingCard({
       'The business proposed a new time. They still need to send a quote before you can confirm.';
   } else if (awaitingTimeChange && !past) {
     statusHint = 'The business proposed a new appointment time. Accept to lock it in, or decline.';
+  } else if (awaitingQuoteDetails && !past) {
+    statusHint =
+      'Answer the questions below so the business can send you an accurate quote.';
   } else if (isQuoted && !past) {
-    statusHint = 'Quote ready — review the price below, answer any questions, then accept or decline.';
+    statusHint = 'Quote ready — review the price below, then accept or decline.';
   } else if (booking.status === 'requested' && needsQuote && !past) {
     statusHint = 'Your request is in. The business will send a quote — you can still change the time or cancel.';
   } else if (isUntouchedBookingRequest(booking) && !past) {
@@ -115,10 +119,12 @@ export default function CustomerBookingCard({
 
   if (compact) {
     const needsAttention =
-      (!past && (isQuoted || awaitingTimeChange)) ||
+      (!past && (isQuoted || awaitingTimeChange || awaitingQuoteDetails)) ||
       (booking.status === 'completed' && canRate);
     const compactHint = needsAttention
-      ? isQuoted && !past
+      ? awaitingQuoteDetails && !past
+        ? 'Answer questions for your quote — open for details'
+        : isQuoted && !past
         ? 'Quote ready — open for details'
         : awaitingTimeChange && !past
           ? 'Time change proposed — open for details'
@@ -209,6 +215,22 @@ export default function CustomerBookingCard({
     } catch (e) {
       const d = e.response?.data;
       setQuoteError(d?.detail || d?.status?.[0] || 'Could not accept quote.');
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
+  const submitQuoteAnswers = async () => {
+    setQuoteBusy(true);
+    setQuoteError('');
+    try {
+      await jobsAPI.answerBookingQuoteQuestions(booking.id, { answers });
+      onQuoteUpdated?.();
+    } catch (e) {
+      const d = e.response?.data;
+      setQuoteError(
+        d?.answers || d?.detail || d?.status?.[0] || 'Could not send your answers.'
+      );
     } finally {
       setQuoteBusy(false);
     }
@@ -305,7 +327,8 @@ export default function CustomerBookingCard({
       )}
 
       {booking.status === 'requested' &&
-        (booking.quote_questions || []).some((q) => (q.answer || '').trim()) && (
+        (booking.quote_questions || []).some((q) => (q.answer || '').trim()) &&
+        !awaitingQuoteDetails && (
         <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your answers</p>
           <ul className="mt-2 space-y-2 text-sm text-slate-700">
@@ -316,6 +339,53 @@ export default function CustomerBookingCard({
               </li>
             ))}
           </ul>
+          <p className="mt-2 text-xs text-slate-500">
+            The business has your answers and will send a quote next.
+          </p>
+        </div>
+      )}
+
+      {awaitingQuoteDetails && !past && (
+        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/70 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">
+            Answer to get your quote
+          </p>
+          <p className="mt-1 text-sm text-slate-700">
+            {booking.organization_name} needs a few details before they can send an accurate price.
+          </p>
+          {booking.quote_message ? (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{booking.quote_message}</p>
+          ) : null}
+          <div className="mt-3 space-y-2">
+            {(booking.quote_questions || []).map((q, idx) => (
+              <div key={q.id || idx}>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{q.question}</label>
+                <input
+                  value={answers.find((a) => a.id === q.id)?.answer || ''}
+                  onChange={(e) => {
+                    setAnswers((prev) => {
+                      const next = [...prev];
+                      const i = next.findIndex((a) => a.id === q.id);
+                      if (i >= 0) next[i] = { ...next[i], answer: e.target.value };
+                      else next.push({ id: q.id, answer: e.target.value });
+                      return next;
+                    });
+                  }}
+                  className="w-full min-h-[40px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  placeholder="Your answer"
+                />
+              </div>
+            ))}
+          </div>
+          {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
+          <button
+            type="button"
+            disabled={quoteBusy}
+            onClick={submitQuoteAnswers}
+            className="mt-3 min-h-[44px] w-full rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {quoteBusy ? 'Sending…' : 'Submit answers'}
+          </button>
         </div>
       )}
 
@@ -328,28 +398,17 @@ export default function CustomerBookingCard({
           {booking.quote_message ? (
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{booking.quote_message}</p>
           ) : null}
-          {(booking.quote_questions || []).length > 0 && (
-            <div className="mt-3 space-y-2">
-              {booking.quote_questions.map((q, idx) => (
-                <div key={q.id || idx}>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">{q.question}</label>
-                  <input
-                    value={answers.find((a) => a.id === q.id)?.answer || ''}
-                    onChange={(e) => {
-                      setAnswers((prev) => {
-                        const next = [...prev];
-                        const i = next.findIndex((a) => a.id === q.id);
-                        if (i >= 0) next[i] = { ...next[i], answer: e.target.value };
-                        else next.push({ id: q.id, answer: e.target.value });
-                        return next;
-                      });
-                    }}
-                    className="w-full min-h-[40px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    placeholder="Your answer"
-                  />
-                </div>
-              ))}
-            </div>
+          {(booking.quote_questions || []).some((q) => (q.answer || '').trim()) && (
+            <ul className="mt-3 space-y-1 text-sm text-slate-700">
+              {booking.quote_questions.map((q) =>
+                q.answer ? (
+                  <li key={q.id}>
+                    <span className="font-medium">{q.question}</span>
+                    <span className="text-slate-600"> — {q.answer}</span>
+                  </li>
+                ) : null
+              )}
+            </ul>
           )}
           {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -414,7 +473,7 @@ export default function CustomerBookingCard({
       <RequestMessageThread
         compact
         peerName={booking.organization_name}
-        emptyHint="Message the business about this booking."
+        emptyHint="Opens your chat with this business — booking details appear in the thread."
         idleOpenLabel="Message business"
         loadMessages={() => jobsAPI.listBookingMessages(booking.id)}
         sendMessage={(body) => jobsAPI.sendBookingMessage(booking.id, body)}

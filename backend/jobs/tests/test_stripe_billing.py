@@ -132,6 +132,38 @@ class StripeNotConfiguredTests(TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertEqual(res.data.get('code'), 'stripe_not_configured')
 
+    @override_settings(
+        STRIPE_SECRET_KEY='sk_test_fake',
+        STRIPE_PUBLISHABLE_KEY='pk_test_fake',
+        STRIPE_ENABLED=True,
+    )
+    def test_pay_invoice_returns_payment_element_secrets(self):
+        from unittest.mock import MagicMock, patch
+
+        self.org.stripe_account_id = 'acct_test'
+        self.org.stripe_charges_enabled = True
+        self.org.save(update_fields=['stripe_account_id', 'stripe_charges_enabled'])
+        fake_intent = MagicMock()
+        fake_intent.id = 'pi_test_123'
+        fake_intent.client_secret = 'pi_test_123_secret'
+        with patch('jobs.stripe_services.refresh_connect_account', return_value=self.org), patch(
+            'stripe.PaymentIntent.create', return_value=fake_intent
+        ) as create_mock:
+            self.client.force_authenticate(self.customer)
+            res = self.client.post(
+                f'/api/v1/bookings/{self.booking.id}/invoice/pay/',
+                {},
+                format='json',
+                HTTP_HOST='localhost',
+            )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['mode'], 'payment_element')
+        self.assertEqual(res.data['client_secret'], 'pi_test_123_secret')
+        self.assertEqual(res.data['publishable_key'], 'pk_test_fake')
+        self.assertTrue(create_mock.called)
+        self.booking.invoice.refresh_from_db()
+        self.assertEqual(self.booking.invoice.stripe_payment_intent_id, 'pi_test_123')
+
     def test_invoice_serializer_can_pay_online_false(self):
         self.client.force_authenticate(self.customer)
         res = self.client.get(

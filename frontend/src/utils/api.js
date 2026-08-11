@@ -85,9 +85,26 @@ function isPublicPath(pathname) {
   return false;
 }
 
+/** Optional callback for global outage UI (registered by ApiHealthProvider). */
+let apiHealthHandler = null;
+
+export function registerApiHealthHandler(handler) {
+  apiHealthHandler = typeof handler === 'function' ? handler : null;
+  return () => {
+    if (apiHealthHandler === handler) apiHealthHandler = null;
+  };
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (apiHealthHandler) {
+      try {
+        apiHealthHandler(error);
+      } catch {
+        /* ignore health handler failures */
+      }
+    }
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       const { pathname, search } = window.location;
       if (!isPublicPath(pathname)) {
@@ -198,6 +215,10 @@ export const jobsAPI = {
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
   listMyConversations: () => api.get('/api/v1/me/conversations/'),
+  listConversationMessages: (conversationId) =>
+    api.get(`/api/v1/conversations/${conversationId}/messages/`),
+  sendConversationMessage: (conversationId, body) =>
+    api.post(`/api/v1/conversations/${conversationId}/messages/`, { body }),
   listMyNotifications: (params) => api.get('/api/v1/me/notifications/', { params }),
   dismissMyNotification: (notificationId) =>
     api.post(`/api/v1/me/notifications/${notificationId}/dismiss/`),
@@ -224,6 +245,10 @@ export const jobsAPI = {
   requestBookingsBatch: (data) => api.post('/api/v1/bookings/batch/', data),
   acceptBooking: (id) => api.post(`/api/v1/bookings/${id}/accept/`),
   sendBookingQuote: (id, data) => api.post(`/api/v1/bookings/${id}/send-quote/`, data),
+  askBookingQuoteQuestions: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/ask-quote-questions/`, data),
+  answerBookingQuoteQuestions: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/answer-quote-questions/`, data),
   acceptBookingQuote: (id, data = {}) => api.post(`/api/v1/bookings/${id}/accept-quote/`, data),
   acceptBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/accept-time-change/`),
   declineBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/decline-time-change/`),
@@ -236,8 +261,13 @@ export const jobsAPI = {
   markBookingInvoicePaid: (id) => api.post(`/api/v1/bookings/${id}/invoice/mark-paid/`),
   bookingInvoiceDownloadUrl: (id) => `/api/v1/bookings/${id}/invoice/download/`,
   payBookingInvoice: (id, data = {}) => api.post(`/api/v1/bookings/${id}/invoice/pay/`, data),
-  syncBookingInvoicePayment: (id, sessionId) =>
-    api.post(`/api/v1/bookings/${id}/invoice/pay/sync/`, { session_id: sessionId }),
+  syncBookingInvoicePayment: (id, sessionOrPayload) => {
+    const payload =
+      typeof sessionOrPayload === 'string'
+        ? { session_id: sessionOrPayload }
+        : sessionOrPayload || {};
+    return api.post(`/api/v1/bookings/${id}/invoice/pay/sync/`, payload);
+  },
   getMyUnpaidInvoice: () => api.get('/api/v1/me/unpaid-invoice/'),
   getOrgBilling: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/billing/`),
   startConnectOnboarding: (orgSlug, data = {}) =>

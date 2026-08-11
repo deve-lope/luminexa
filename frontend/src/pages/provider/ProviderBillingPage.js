@@ -28,8 +28,8 @@ export default function ProviderBillingPage() {
         </p>
         <h1 className="mt-1 text-xl font-bold text-slate-900">Billing & subscription</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Manage Luminexa Pro, promo codes, customer card payouts, and QuickBooks for{' '}
-          {activeOrg?.organization_name || 'your business'}.
+          Two money flows for {activeOrg?.organization_name || 'your business'}: your Pro plan
+          (you pay Luminexa), and customer invoice payouts (customers pay you).
         </p>
       </div>
       <ProviderBillingSettings

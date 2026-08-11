@@ -203,6 +203,7 @@ class ProviderNotification(models.Model):
         PAYMENT_RECEIVED = 'payment_received', 'Payment received'
         NEW_MESSAGE = 'new_message', 'New message'
         PROMO_OFFER = 'promo_offer', 'Promo offer'
+        QUOTE_ANSWERS_RECEIVED = 'quote_answers_received', 'Quote answers received'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -246,6 +247,7 @@ class CustomerNotification(models.Model):
         INVOICE_READY = 'invoice_ready', 'Invoice ready'
         PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
         NEW_MESSAGE = 'new_message', 'New message'
+        QUOTE_DETAILS_REQUESTED = 'quote_details_requested', 'Quote details requested'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -583,7 +585,7 @@ class Booking(models.Model):
     quote_questions = models.JSONField(
         default=list,
         blank=True,
-        help_text='[{id, question, answer}] questions the provider asks before/with the quote.',
+        help_text='[{id, question, answer}] clarifying questions before / with a quote.',
     )
     quoted_at = models.DateTimeField(null=True, blank=True)
     prior_start_at = models.DateTimeField(
@@ -843,6 +845,8 @@ class BookingStatusEvent(models.Model):
         DECLINED = 'declined', 'Declined'
         CANCELLED = 'cancelled', 'Cancelled'
         QUOTED = 'quoted', 'Quote sent'
+        QUOTE_DETAILS_ASKED = 'quote_details_asked', 'Quote details asked'
+        QUOTE_ANSWERED = 'quote_answered', 'Quote questions answered'
         QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         STARTED = 'started', 'Started'
         COMPLETED = 'completed', 'Completed'
@@ -872,9 +876,64 @@ class BookingStatusEvent(models.Model):
         return f'{self.booking_id} {self.action}'
 
 
-class ServiceRequestMessage(models.Model):
-    """Thread between provider staff and customer on a booking or custom inquiry."""
+class OrgCustomerConversation(models.Model):
+    """One ongoing chat thread between a customer and a provider organization."""
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='customer_conversations',
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='provider_conversations',
+    )
+    customer_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer last opened this conversation.',
+    )
+    provider_messages_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When provider staff last opened this conversation.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'customer'],
+                name='uniq_org_customer_conversation',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['organization', '-updated_at'], name='jobs_orgcus_organiz_7f0c1a_idx'),
+            models.Index(fields=['customer', '-updated_at'], name='jobs_orgcus_custome_4a2e11_idx'),
+        ]
+
+    def __str__(self):
+        return f'Conversation org={self.organization_id} customer={self.customer_id}'
+
+
+class ServiceRequestMessage(models.Model):
+    """Chat message in an org↔customer conversation (optionally tied to a booking/inquiry)."""
+
+    class Kind(models.TextChoices):
+        TEXT = 'text', 'Text'
+        BOOKING_CARD = 'booking_card', 'Booking card'
+        INQUIRY_CARD = 'inquiry_card', 'Inquiry card'
+        SYSTEM = 'system', 'System'
+
+    conversation = models.ForeignKey(
+        OrgCustomerConversation,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='messages',
+    )
     booking = models.ForeignKey(
         Booking,
         on_delete=models.CASCADE,
@@ -894,28 +953,56 @@ class ServiceRequestMessage(models.Model):
         on_delete=models.CASCADE,
         related_name='service_request_messages',
     )
-    body = models.TextField()
+    kind = models.CharField(
+        max_length=20,
+        choices=Kind.choices,
+        default=Kind.TEXT,
+    )
+    body = models.TextField(blank=True)
+    meta = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['created_at']
         constraints = [
             models.CheckConstraint(
-                check=(
-                    models.Q(booking__isnull=False, inquiry__isnull=True)
-                    | models.Q(booking__isnull=True, inquiry__isnull=False)
+                check=~(
+                    models.Q(booking__isnull=False) & models.Q(inquiry__isnull=False)
                 ),
-                name='service_request_message_one_target',
+                name='service_request_message_not_both_targets',
             ),
         ]
 
     def clean(self):
-        has_booking = bool(self.booking_id)
-        has_inquiry = bool(self.inquiry_id)
-        if has_booking == has_inquiry:
-            raise ValidationError('Message must belong to exactly one booking or inquiry.')
+        if self.booking_id and self.inquiry_id:
+            raise ValidationError('Message cannot belong to both a booking and an inquiry.')
+        if not self.conversation_id and not self.booking_id and not self.inquiry_id:
+            raise ValidationError('Message must belong to a conversation, booking, or inquiry.')
 
     def save(self, *args, **kwargs):
+        if not self.conversation_id:
+            if self.booking_id:
+                booking = self.booking
+                if booking is None:
+                    booking = Booking.objects.select_related('organization', 'customer').get(
+                        pk=self.booking_id,
+                    )
+                conv, _ = OrgCustomerConversation.objects.get_or_create(
+                    organization_id=booking.organization_id,
+                    customer_id=booking.customer_id,
+                )
+                self.conversation = conv
+            elif self.inquiry_id:
+                inquiry = self.inquiry
+                if inquiry is None:
+                    inquiry = CustomerServiceInquiry.objects.select_related(
+                        'organization', 'customer',
+                    ).get(pk=self.inquiry_id)
+                conv, _ = OrgCustomerConversation.objects.get_or_create(
+                    organization_id=inquiry.organization_id,
+                    customer_id=inquiry.customer_id,
+                )
+                self.conversation = conv
         self.full_clean()
         super().save(*args, **kwargs)
 

@@ -330,34 +330,83 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.CharField(source='sender.full_name', read_only=True)
     sender_role = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
+    card = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequestMessage
         fields = (
-            'id', 'body', 'sender', 'sender_name', 'sender_role', 'is_mine', 'created_at',
+            'id',
+            'kind',
+            'body',
+            'meta',
+            'card',
+            'sender',
+            'sender_name',
+            'sender_role',
+            'is_mine',
+            'created_at',
+            'booking',
+            'inquiry',
         )
         read_only_fields = fields
 
     def get_sender_role(self, obj):
+        conversation = getattr(obj, 'conversation', None)
+        if conversation and obj.sender_id == conversation.customer_id:
+            return 'customer'
         booking = getattr(obj, 'booking', None)
         inquiry = getattr(obj, 'inquiry', None)
         if booking and obj.sender_id == booking.customer_id:
             return 'customer'
         if inquiry and obj.sender_id == inquiry.customer_id:
             return 'customer'
+        if obj.kind in (
+            ServiceRequestMessage.Kind.BOOKING_CARD,
+            ServiceRequestMessage.Kind.INQUIRY_CARD,
+            ServiceRequestMessage.Kind.SYSTEM,
+        ):
+            return 'system'
         return 'provider'
 
     def get_is_mine(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
+        if obj.kind in (
+            ServiceRequestMessage.Kind.BOOKING_CARD,
+            ServiceRequestMessage.Kind.INQUIRY_CARD,
+        ):
+            return False
         return obj.sender_id == request.user.id
+
+    def get_card(self, obj):
+        if obj.kind not in (
+            ServiceRequestMessage.Kind.BOOKING_CARD,
+            ServiceRequestMessage.Kind.INQUIRY_CARD,
+        ):
+            return None
+        from .message_services import _booking_card_meta, _inquiry_card_meta
+
+        # Prefer live booking/inquiry so status stays accurate after completion, etc.
+        if obj.kind == ServiceRequestMessage.Kind.BOOKING_CARD and obj.booking_id:
+            booking = getattr(obj, 'booking', None)
+            if booking is not None:
+                return {'type': obj.kind, **_booking_card_meta(booking)}
+        if obj.kind == ServiceRequestMessage.Kind.INQUIRY_CARD and obj.inquiry_id:
+            inquiry = getattr(obj, 'inquiry', None)
+            if inquiry is not None:
+                return {'type': obj.kind, **_inquiry_card_meta(inquiry)}
+        meta = obj.meta or {}
+        return {
+            'type': obj.kind,
+            **meta,
+        }
 
 
 class CustomerConversationSummarySerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=('booking', 'inquiry'))
+    kind = serializers.ChoiceField(choices=('direct', 'booking', 'inquiry'))
     id = serializers.IntegerField()
-    reference = serializers.CharField()
+    reference = serializers.CharField(allow_blank=True)
     subject = serializers.CharField()
     organization_name = serializers.CharField()
     organization_slug = serializers.CharField()
@@ -366,6 +415,7 @@ class CustomerConversationSummarySerializer(serializers.Serializer):
     last_message_at = serializers.DateTimeField()
     last_sender_name = serializers.CharField(allow_blank=True)
     customer_name = serializers.CharField(required=False, allow_blank=True, default='')
+    customer_id = serializers.IntegerField(required=False, allow_null=True)
     has_unread = serializers.BooleanField(required=False, default=False)
 
 
@@ -730,6 +780,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     quote_questions = serializers.JSONField(read_only=True)
     quoted_at = serializers.DateTimeField(read_only=True, allow_null=True)
     requires_quote = serializers.SerializerMethodField()
+    awaiting_quote_details = serializers.SerializerMethodField()
     cost_lines = JobCostLineSerializer(many=True, read_only=True)
     profit = serializers.SerializerMethodField()
 
@@ -746,7 +797,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'parent_booking_id', 'return_visit_id', 'return_visit_start_at', 'return_visit_status',
             'invoice', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
-            'quote_questions', 'quoted_at',
+            'quote_questions', 'quoted_at', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'created_at', 'updated_at',
@@ -760,6 +811,11 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         from .booking_services import booking_requires_quote
 
         return booking_requires_quote(obj.organization, obj.service)
+
+    def get_awaiting_quote_details(self, obj):
+        from .booking_services import booking_awaiting_quote_details
+
+        return booking_awaiting_quote_details(obj)
 
     def get_profit(self, obj):
         from .job_costing_services import booking_profit_summary
@@ -856,6 +912,7 @@ class BookingSerializer(serializers.ModelSerializer):
     )
     quote_answers = serializers.JSONField(required=False, write_only=True)
     requires_quote = serializers.SerializerMethodField()
+    awaiting_quote_details = serializers.SerializerMethodField()
     cost_lines = JobCostLineSerializer(many=True, read_only=True)
     profit = serializers.SerializerMethodField()
 
@@ -873,7 +930,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'booked_by', 'customer_notes', 'service_address', 'status_events',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
-            'quote_questions', 'quoted_at', 'quote_answers',
+            'quote_questions', 'quoted_at', 'quote_answers', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'created_at', 'updated_at',
@@ -888,7 +945,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'availability_slot', 'source', 'booked_by',
             'parent_booking_id', 'invoice', 'can_rate', 'my_review', 'currency',
             'booking_policy', 'requires_quote', 'quote_amount', 'quote_message',
-            'quote_questions', 'quoted_at',
+            'quote_questions', 'quoted_at', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'status_events', 'created_at', 'updated_at',
@@ -908,6 +965,11 @@ class BookingSerializer(serializers.ModelSerializer):
         from .booking_services import booking_requires_quote
 
         return booking_requires_quote(obj.organization, obj.service)
+
+    def get_awaiting_quote_details(self, obj):
+        from .booking_services import booking_awaiting_quote_details
+
+        return booking_awaiting_quote_details(obj)
 
     def get_profit(self, obj):
         request = self.context.get('request')

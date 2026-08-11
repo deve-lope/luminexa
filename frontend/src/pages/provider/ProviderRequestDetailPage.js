@@ -45,7 +45,7 @@ export default function ProviderRequestDetailPage() {
   const [quoteAmount, setQuoteAmount] = useState('');
   const [quoteMessage, setQuoteMessage] = useState('');
   const [quoteQuestions, setQuoteQuestions] = useState(['']);
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [quoteFormMode, setQuoteFormMode] = useState(null); // 'ask' | 'quote' | null
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,31 +121,32 @@ export default function ProviderRequestDetailPage() {
       setError('Enter a quote amount greater than zero.');
       return;
     }
-    const existing = data?.quote_questions || [];
-    const questions = quoteQuestions
-      .map((q, i) => {
-        const text = q.trim();
-        if (!text) return null;
-        const prior =
-          existing.find((eq) => (eq.question || '').trim() === text) || existing[i] || null;
-        return {
-          id: prior?.id || `q${i + 1}`,
-          question: text,
-          answer: prior?.answer || '',
-        };
-      })
-      .filter(Boolean);
     const payload = {
       amount,
       message: quoteMessage.trim(),
     };
-    // Omit questions when empty so existing customer answers are kept server-side.
-    if (questions.length) payload.questions = questions;
     await runBookingAction(
       () => jobsAPI.sendBookingQuote(id, payload),
       'Quote sent to customer.'
     );
-    setShowQuoteForm(false);
+    setQuoteFormMode(null);
+  };
+
+  const askQuestions = async () => {
+    const questions = quoteQuestions.map((q) => q.trim()).filter(Boolean);
+    if (!questions.length) {
+      setError('Add at least one question for the customer.');
+      return;
+    }
+    await runBookingAction(
+      () =>
+        jobsAPI.askBookingQuoteQuestions(id, {
+          questions,
+          message: quoteMessage.trim(),
+        }),
+      'Questions sent — customer will be notified.'
+    );
+    setQuoteFormMode(null);
   };
 
   const runBookingAction = async (fn, successMessage) => {
@@ -217,8 +218,25 @@ export default function ProviderRequestDetailPage() {
             Waiting for the customer to accept the new time
             {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
             {needsQuote && status !== 'quoted'
-              ? ' Send a quote so they can confirm.'
+              ? data?.awaiting_quote_details
+                ? ' Waiting for the customer to answer your questions.'
+                : ' Ask questions if you need details, then send a quote.'
               : ''}
+          </p>
+        )}
+        {kind === 'booking' && data.awaiting_quote_details && (
+          <p className="mt-3 rounded-xl bg-amber-400/20 px-3 py-2 text-sm text-white">
+            Waiting for answers — you can send a priced quote after the customer replies.
+          </p>
+        )}
+        {kind === 'booking' &&
+          status === 'requested' &&
+          needsQuote &&
+          !data.awaiting_quote_details &&
+          (data.quote_questions || []).length > 0 &&
+          (data.quote_questions || []).every((q) => (q.answer || '').trim()) && (
+          <p className="mt-3 rounded-xl bg-emerald-400/20 px-3 py-2 text-sm text-white">
+            Answers received — send a quote when ready.
           </p>
         )}
         {kind === 'booking' && status === 'requested' && !needsQuote && !data.awaiting_customer_acceptance && (
@@ -280,14 +298,37 @@ export default function ProviderRequestDetailPage() {
           </div>
         )}
         {kind === 'booking' && needsQuote && (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {status === 'requested' && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() =>
+                  setQuoteFormMode((m) => (m === 'ask' ? null : 'ask'))
+                }
+                className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+              >
+                {quoteFormMode === 'ask' ? 'Hide questions' : 'Ask questions'}
+              </button>
+            )}
             <button
               type="button"
-              disabled={actionBusy}
-              onClick={() => setShowQuoteForm((v) => !v)}
+              disabled={actionBusy || Boolean(data.awaiting_quote_details)}
+              onClick={() =>
+                setQuoteFormMode((m) => (m === 'quote' ? null : 'quote'))
+              }
               className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+              title={
+                data.awaiting_quote_details
+                  ? 'Wait for the customer to answer your questions first'
+                  : undefined
+              }
             >
-              {showQuoteForm ? 'Hide quote form' : status === 'quoted' ? 'Update quote' : 'Send quote'}
+              {quoteFormMode === 'quote'
+                ? 'Hide quote form'
+                : status === 'quoted'
+                  ? 'Update quote'
+                  : 'Send quote'}
             </button>
             <button
               type="button"
@@ -374,12 +415,70 @@ export default function ProviderRequestDetailPage() {
         )}
       </header>
 
-      {kind === 'booking' && showQuoteForm && needsQuote && (
+      {kind === 'booking' && quoteFormMode === 'ask' && needsQuote && (
+        <section className="rounded-xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-amber-900">Ask questions</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Not a quote yet — the customer will answer these so you can price accurately. They get a
+            notification to reply.
+          </p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label htmlFor="ask-message" className="mb-1 block text-xs font-medium text-slate-600">
+                Note (optional)
+              </label>
+              <textarea
+                id="ask-message"
+                rows={2}
+                value={quoteMessage}
+                onChange={(e) => setQuoteMessage(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="A few details help us quote accurately…"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium text-slate-600">Questions</p>
+              <div className="space-y-2">
+                {quoteQuestions.map((q, idx) => (
+                  <input
+                    key={`ask-q-${idx}`}
+                    value={q}
+                    onChange={(e) => {
+                      const next = [...quoteQuestions];
+                      next[idx] = e.target.value;
+                      setQuoteQuestions(next);
+                    }}
+                    className="w-full min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm"
+                    placeholder={`Question ${idx + 1}`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuoteQuestions((list) => [...list, ''])}
+                className="mt-2 text-xs font-semibold text-amber-900"
+              >
+                + Add question
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={askQuestions}
+              className="min-h-[44px] w-full rounded-xl bg-amber-700 font-semibold text-white disabled:opacity-60"
+            >
+              {actionBusy ? 'Sending…' : 'Send questions to customer'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {kind === 'booking' && quoteFormMode === 'quote' && needsQuote && (
         <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-violet-800">Send quote</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Set a price and optional questions. Use Change time above if you need a different slot
-            before sending.
+            Set the price after you have enough detail. Use Ask questions first if you still need
+            answers. Use Change time if you need a different slot.
           </p>
           <div className="mt-4 space-y-3">
             <div>
@@ -410,31 +509,6 @@ export default function ProviderRequestDetailPage() {
                 placeholder="Scope, materials, notes…"
               />
             </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-slate-600">Questions for the customer</p>
-              <div className="space-y-2">
-                {quoteQuestions.map((q, idx) => (
-                  <input
-                    key={`qq-${idx}`}
-                    value={q}
-                    onChange={(e) => {
-                      const next = [...quoteQuestions];
-                      next[idx] = e.target.value;
-                      setQuoteQuestions(next);
-                    }}
-                    className="w-full min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm"
-                    placeholder={`Question ${idx + 1}`}
-                  />
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuoteQuestions((list) => [...list, ''])}
-                className="mt-2 text-xs font-semibold text-violet-700"
-              >
-                + Add question
-              </button>
-            </div>
             <button
               type="button"
               disabled={actionBusy}
@@ -449,21 +523,27 @@ export default function ProviderRequestDetailPage() {
 
       {kind === 'booking' &&
         status === 'requested' &&
-        (data.quote_questions || []).some((q) => (q.answer || '').trim()) && (
+        (data.quote_questions || []).length > 0 && (
         <section className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Customer answers</h2>
+          <h2 className="text-sm font-semibold uppercase text-slate-500">
+            {data.awaiting_quote_details ? 'Questions sent' : 'Customer answers'}
+          </h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
             {data.quote_questions.map((q) => (
               <li key={q.id} className="rounded-lg bg-slate-50 px-3 py-2">
                 <p className="font-medium">{q.question}</p>
-                <p className="mt-1 text-slate-600">{q.answer || '—'}</p>
+                {q.answer ? (
+                  <p className="mt-1 text-slate-600">{q.answer}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-700">Waiting for customer answer</p>
+                )}
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {kind === 'booking' && status === 'quoted' && data.quote_amount != null && !showQuoteForm && (
+      {kind === 'booking' && status === 'quoted' && data.quote_amount != null && quoteFormMode !== 'quote' && (
         <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Quote sent</h2>
           <p className="mt-2 text-2xl font-bold text-slate-900">
@@ -479,9 +559,7 @@ export default function ProviderRequestDetailPage() {
                   <p className="font-medium">{q.question}</p>
                   {q.answer ? (
                     <p className="mt-1 text-slate-600">Answer: {q.answer}</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-slate-500">Waiting for customer answer</p>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>

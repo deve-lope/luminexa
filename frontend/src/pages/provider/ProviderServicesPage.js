@@ -77,6 +77,11 @@ function FieldToggle({ checked, onChange, label, description, info }) {
   );
 }
 
+const DEFAULT_QUOTE_QUESTIONS = [
+  'What do you need done?',
+  'Any details that affect the price (size, condition, access)?',
+];
+
 const emptyServiceDraft = () => ({
   name: '',
   description: '',
@@ -85,23 +90,102 @@ const emptyServiceDraft = () => ({
   pricing_type: 'fixed',
   base_price: '0',
   price_max: '',
-  quote_questions: [''],
+  quote_questions: [...DEFAULT_QUOTE_QUESTIONS],
   show_price: true,
   allow_request: true,
   fulfillment_kind: 'mobile',
 });
+
+function normalizeQuoteQuestions(list) {
+  if (!Array.isArray(list) || !list.length) return [...DEFAULT_QUOTE_QUESTIONS];
+  return list.map((q) => (typeof q === 'string' ? q : q?.question || ''));
+}
+
+function questionsForPricingType(pricingType, current) {
+  const cleaned = (current || []).map((q) => String(q || '').trim()).filter(Boolean);
+  if (pricingType === 'quote' && cleaned.length === 0) {
+    return [...DEFAULT_QUOTE_QUESTIONS];
+  }
+  if (cleaned.length) return current.map((q) => String(q ?? ''));
+  return pricingType === 'quote' ? [...DEFAULT_QUOTE_QUESTIONS] : [''];
+}
+
+function QuoteQuestionsEditor({ questions, onChange, required }) {
+  const list = questions?.length ? questions : required ? [...DEFAULT_QUOTE_QUESTIONS] : [''];
+  return (
+    <div
+      className={`space-y-3 rounded-2xl border p-4 ${
+        required ? 'border-teal-200 bg-teal-50/40' : 'border-slate-200 bg-slate-50/60'
+      }`}
+    >
+      <div>
+        <p className="text-sm font-semibold text-slate-900">
+          {required ? 'Quote questions' : 'Quote questions (optional)'}
+        </p>
+        <p className="mt-0.5 text-xs text-slate-600">
+          Asked when the customer books. Answers help you send an accurate price.
+          {required ? ' Two starter questions are included — edit them or add more.' : null}
+        </p>
+      </div>
+      <ul className="space-y-2">
+        {list.map((q, idx) => (
+          <li
+            key={`qq-${idx}`}
+            className="flex items-start gap-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200/80"
+          >
+            <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-[11px] font-bold text-white">
+              {idx + 1}
+            </span>
+            <input
+              type="text"
+              value={q}
+              placeholder={`Question ${idx + 1}`}
+              onChange={(e) => {
+                const next = [...list];
+                next[idx] = e.target.value;
+                onChange(next);
+              }}
+              className={`${INPUT_CLASS} mt-0`}
+            />
+            <button
+              type="button"
+              className="mt-1 shrink-0 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              aria-label={`Remove question ${idx + 1}`}
+              onClick={() => {
+                const next = list.filter((_, i) => i !== idx);
+                onChange(
+                  next.length > 0 ? next : required ? [...DEFAULT_QUOTE_QUESTIONS] : ['']
+                );
+              }}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="inline-flex min-h-[40px] items-center rounded-xl bg-white px-3 text-sm font-semibold text-teal-800 ring-1 ring-teal-200 hover:bg-teal-50"
+        onClick={() => onChange([...list, ''])}
+      >
+        + Add question
+      </button>
+    </div>
+  );
+}
 
 const emptyBulkRow = () => ({
   name: '',
   base_price: '',
   price_max: '',
   description: '',
+  pricing_type: 'fixed',
+  quote_questions: [...DEFAULT_QUOTE_QUESTIONS],
 });
 
 const emptyBulkDefaults = (category = '') => ({
   category: category || '',
   duration_hours: '1',
-  pricing_type: 'fixed',
   show_price: true,
   allow_request: true,
   fulfillment_kind: 'mobile',
@@ -242,54 +326,62 @@ function ServiceDetailForm({
             </label>
             <select
               id="svc-pricing"
-              value={
-                serviceDraft.pricing_type === 'quote' ? 'average' : serviceDraft.pricing_type
-              }
-              onChange={(e) =>
+              value={serviceDraft.pricing_type}
+              onChange={(e) => {
+                const pricing_type = e.target.value;
                 setServiceDraft((d) => ({
                   ...d,
-                  pricing_type: e.target.value,
-                  show_price: e.target.value === 'fixed' ? d.show_price : true,
-                }))
-              }
+                  pricing_type,
+                  show_price: pricing_type === 'fixed' ? d.show_price : true,
+                  base_price: pricing_type === 'quote' ? '' : d.base_price,
+                  quote_questions: questionsForPricingType(pricing_type, d.quote_questions),
+                }));
+              }}
               className={INPUT_CLASS}
             >
               <option value="fixed">Fixed price</option>
               <option value="range">Price range (quote before confirm)</option>
               <option value="average">Typical price (quote before confirm)</option>
+              <option value="quote">Quote on request</option>
             </select>
             <p className="mt-1 text-xs text-slate-500">
-              Fixed uses your booking rules. Range and typical always send a quote for the customer
-              to accept — customers still see the estimate you enter.
+              Fixed uses your booking rules. Range and typical show an estimate, then you send a
+              final quote. Quote on request asks the customer questions first — no price until you
+              quote.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="svc-price" className={LABEL_CLASS}>
-              {serviceDraft.pricing_type === 'range'
-                ? 'From ($)'
-                : serviceDraft.pricing_type === 'average' || serviceDraft.pricing_type === 'quote'
-                  ? 'Typical price ($)'
-                  : 'Rate ($)'}
-            </label>
-            <input
-              id="svc-price"
-              type="number"
-              min={0}
-              step="0.01"
-              value={serviceDraft.base_price}
-              onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
-              className={INPUT_CLASS}
-              required={
-                serviceDraft.pricing_type === 'average' ||
-                serviceDraft.pricing_type === 'range' ||
-                serviceDraft.pricing_type === 'quote'
-              }
-            />
-          </div>
-          {(serviceDraft.pricing_type === 'range') && (
+        <div
+          className={`grid gap-3 ${
+            serviceDraft.pricing_type === 'quote' ? 'grid-cols-1' : 'grid-cols-2'
+          }`}
+        >
+          {serviceDraft.pricing_type !== 'quote' && (
+            <div>
+              <label htmlFor="svc-price" className={LABEL_CLASS}>
+                {serviceDraft.pricing_type === 'range'
+                  ? 'From ($)'
+                  : serviceDraft.pricing_type === 'average'
+                    ? 'Typical price ($)'
+                    : 'Rate ($)'}
+              </label>
+              <input
+                id="svc-price"
+                type="number"
+                min={0}
+                step="0.01"
+                value={serviceDraft.base_price}
+                onChange={(e) => setServiceDraft((d) => ({ ...d, base_price: e.target.value }))}
+                className={INPUT_CLASS}
+                required={
+                  serviceDraft.pricing_type === 'average' ||
+                  serviceDraft.pricing_type === 'range'
+                }
+              />
+            </div>
+          )}
+          {serviceDraft.pricing_type === 'range' && (
             <div>
               <label htmlFor="svc-price-max" className={LABEL_CLASS}>
                 To ($)
@@ -322,46 +414,66 @@ function ServiceDetailForm({
           </div>
         </div>
 
-        {(serviceDraft.pricing_type === 'range' ||
-          serviceDraft.pricing_type === 'average' ||
-          serviceDraft.pricing_type === 'quote') && (
-          <div className="space-y-2">
-            <p className={LABEL_CLASS}>Quote questions (asked when customer requests)</p>
-            <p className="text-xs text-slate-500">
-              Prefill questions so customers answer up front — less back-and-forth before you send
-              the final price.
-            </p>
-            {(serviceDraft.quote_questions || ['']).map((q, idx) => (
-              <div key={`qq-${idx}`} className="flex gap-2">
-                <input
-                  type="text"
-                  value={q}
-                  placeholder={`Question ${idx + 1}`}
-                  onChange={(e) => {
-                    const next = [...(serviceDraft.quote_questions || [''])];
-                    next[idx] = e.target.value;
-                    setServiceDraft((d) => ({ ...d, quote_questions: next }));
-                  }}
-                  className={INPUT_CLASS}
-                />
-                <button
-                  type="button"
-                  className="shrink-0 rounded-lg border border-slate-200 px-2 text-sm text-slate-600"
-                  onClick={() => {
-                    const next = (serviceDraft.quote_questions || ['']).filter((_, i) => i !== idx);
-                    setServiceDraft((d) => ({
-                      ...d,
-                      quote_questions: next.length ? next : [''],
-                    }));
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+        {serviceDraft.pricing_type === 'quote' && (
+          <QuoteQuestionsEditor
+            questions={serviceDraft.quote_questions}
+            required
+            onChange={(quote_questions) => setServiceDraft((d) => ({ ...d, quote_questions }))}
+          />
+        )}
+
+        {(serviceDraft.pricing_type === 'range' || serviceDraft.pricing_type === 'average') && (
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Quote questions (optional)</p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                Asked when the customer books. Leave blank if you do not need them.
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {(serviceDraft.quote_questions?.length
+                ? serviceDraft.quote_questions
+                : ['']
+              ).map((q, idx) => (
+                <li key={`qq-opt-${idx}`} className="flex items-start gap-2">
+                  <input
+                    type="text"
+                    value={q}
+                    placeholder={`Question ${idx + 1}`}
+                    onChange={(e) => {
+                      const next = [
+                        ...(serviceDraft.quote_questions?.length
+                          ? serviceDraft.quote_questions
+                          : ['']),
+                      ];
+                      next[idx] = e.target.value;
+                      setServiceDraft((d) => ({ ...d, quote_questions: next }));
+                    }}
+                    className={INPUT_CLASS}
+                  />
+                  <button
+                    type="button"
+                    className="mt-1 shrink-0 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-slate-100"
+                    aria-label={`Remove question ${idx + 1}`}
+                    onClick={() => {
+                      const cur = serviceDraft.quote_questions?.length
+                        ? serviceDraft.quote_questions
+                        : [''];
+                      const next = cur.filter((_, i) => i !== idx);
+                      setServiceDraft((d) => ({
+                        ...d,
+                        quote_questions: next.length ? next : [''],
+                      }));
+                    }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
             <button
               type="button"
-              className="text-sm font-medium text-luminexa-accent"
+              className="text-sm font-semibold text-teal-800 hover:underline"
               onClick={() =>
                 setServiceDraft((d) => ({
                   ...d,
@@ -432,10 +544,14 @@ function ServiceDetailForm({
             />
           )}
           {(serviceDraft.pricing_type === 'range' ||
-            serviceDraft.pricing_type === 'average' ||
-            serviceDraft.pricing_type === 'quote') && (
+            serviceDraft.pricing_type === 'average') && (
             <p className="text-xs text-slate-500">
-              Customers always see your range or typical price for quote services.
+              Customers always see your range or typical price for these quote services.
+            </p>
+          )}
+          {serviceDraft.pricing_type === 'quote' && (
+            <p className="text-xs text-slate-500">
+              Customers see “Quote on request” — no price until you send one.
             </p>
           )}
           <FieldToggle
@@ -475,7 +591,7 @@ function ServiceDetailForm({
 }
 
 /**
- * Create several catalog services in one go (shared category/pricing defaults + per-row name/price).
+ * Create several catalog services in one go (shared category/duration + per-row pricing).
  */
 function BulkAddServicesForm({
   bulkDefaults,
@@ -491,6 +607,7 @@ function BulkAddServicesForm({
   const updateRow = (index, patch) => {
     setBulkRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
+  const hasFixedRow = bulkRows.some((r) => r.pricing_type === 'fixed');
 
   return (
     <form
@@ -501,7 +618,7 @@ function BulkAddServicesForm({
         <div>
           <h4 className="text-sm font-semibold text-slate-900">Add services</h4>
           <p className="mt-0.5 text-xs text-slate-500">
-            Create several offerings at once. You can refine descriptions and photos later.
+            Create several offerings at once. Set pricing (and quote questions) on each row.
           </p>
         </div>
         <button
@@ -522,7 +639,7 @@ function BulkAddServicesForm({
       </div>
 
       <div className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="bulk-category" className={LABEL_CLASS}>
               Category (all rows)
@@ -539,27 +656,6 @@ function BulkAddServicesForm({
                   {cat.name}
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="bulk-pricing" className={LABEL_CLASS}>
-              Pricing
-            </label>
-            <select
-              id="bulk-pricing"
-              value={bulkDefaults.pricing_type === 'quote' ? 'average' : bulkDefaults.pricing_type}
-              onChange={(e) =>
-                setBulkDefaults((d) => ({
-                  ...d,
-                  pricing_type: e.target.value,
-                  show_price: e.target.value === 'fixed' ? d.show_price : true,
-                }))
-              }
-              className={INPUT_CLASS}
-            >
-              <option value="fixed">Fixed price</option>
-              <option value="range">Price range (quote before confirm)</option>
-              <option value="average">Typical price (quote before confirm)</option>
             </select>
           </div>
           <div>
@@ -627,11 +723,11 @@ function BulkAddServicesForm({
         </div>
 
         <div className="space-y-2">
-          {bulkDefaults.pricing_type === 'fixed' && (
+          {hasFixedRow && (
             <FieldToggle
               checked={bulkDefaults.show_price}
               onChange={(val) => setBulkDefaults((d) => ({ ...d, show_price: val }))}
-              label="Show price on public page"
+              label="Show price on public page (fixed-price rows)"
             />
           )}
           <FieldToggle
@@ -648,9 +744,9 @@ function BulkAddServicesForm({
           {bulkRows.map((row, index) => (
             <div
               key={`bulk-row-${index}`}
-              className="rounded-xl border border-slate-200 bg-slate-50/50 p-3"
+              className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3"
             >
-              <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-500">#{index + 1}</span>
                 {bulkRows.length > 1 && (
                   <button
@@ -675,12 +771,40 @@ function BulkAddServicesForm({
                     className={INPUT_CLASS}
                   />
                 </div>
-                <>
+                <div className="sm:col-span-2">
+                  <label className={LABEL_CLASS} htmlFor={`bulk-pricing-${index}`}>
+                    Pricing
+                  </label>
+                  <select
+                    id={`bulk-pricing-${index}`}
+                    value={row.pricing_type || 'fixed'}
+                    onChange={(e) => {
+                      const pricing_type = e.target.value;
+                      updateRow(index, {
+                        pricing_type,
+                        base_price: pricing_type === 'quote' ? '' : row.base_price,
+                        price_max: pricing_type === 'range' ? row.price_max : '',
+                        quote_questions: questionsForPricingType(
+                          pricing_type,
+                          row.quote_questions
+                        ),
+                      });
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="fixed">Fixed price</option>
+                    <option value="range">Price range (quote before confirm)</option>
+                    <option value="average">Typical price (quote before confirm)</option>
+                    <option value="quote">Quote on request</option>
+                  </select>
+                </div>
+                {row.pricing_type !== 'quote' && (
+                  <>
                     <div>
                       <label className={LABEL_CLASS} htmlFor={`bulk-price-${index}`}>
-                        {bulkDefaults.pricing_type === 'range'
+                        {row.pricing_type === 'range'
                           ? 'From ($)'
-                          : bulkDefaults.pricing_type === 'average'
+                          : row.pricing_type === 'average'
                             ? 'Typical ($)'
                             : 'Rate ($)'}
                       </label>
@@ -695,7 +819,7 @@ function BulkAddServicesForm({
                         className={INPUT_CLASS}
                       />
                     </div>
-                    {bulkDefaults.pricing_type === 'range' && (
+                    {row.pricing_type === 'range' && (
                       <div>
                         <label className={LABEL_CLASS} htmlFor={`bulk-price-max-${index}`}>
                           To ($)
@@ -713,6 +837,7 @@ function BulkAddServicesForm({
                       </div>
                     )}
                   </>
+                )}
                 <div className="sm:col-span-2">
                   <label className={LABEL_CLASS} htmlFor={`bulk-desc-${index}`}>
                     Description (optional)
@@ -726,6 +851,13 @@ function BulkAddServicesForm({
                   />
                 </div>
               </div>
+              {row.pricing_type === 'quote' && (
+                <QuoteQuestionsEditor
+                  questions={row.quote_questions}
+                  required
+                  onChange={(quote_questions) => updateRow(index, { quote_questions })}
+                />
+              )}
             </div>
           ))}
           <button
@@ -820,9 +952,9 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {duration && <span className="rounded-lg bg-slate-100 px-2 py-1">{duration}</span>}
           <span className="rounded-lg bg-slate-100 px-2 py-1">{locationLabel}</span>
-          {service.pricing_type === 'range' ||
-          service.pricing_type === 'average' ||
-          service.pricing_type === 'quote' ? (
+          {service.pricing_type === 'quote' ? (
+            <span className="rounded-lg bg-teal-50 px-2 py-1 text-teal-800">Quote on request</span>
+          ) : service.pricing_type === 'range' || service.pricing_type === 'average' ? (
             <span className="rounded-lg bg-teal-50 px-2 py-1 text-teal-800">Quote</span>
           ) : (
             <span className="rounded-lg bg-slate-100 px-2 py-1">Fixed</span>
@@ -1011,17 +1143,18 @@ export default function ProviderServicesPage({ embedded = false }) {
             description: svc.description || '',
             category: svc.category ? String(svc.category) : '',
             duration_hours: hoursFromMinutes(svc.duration_minutes ?? 60),
-            pricing_type: svc.pricing_type === 'quote' ? 'average' : svc.pricing_type || 'fixed',
+            pricing_type: svc.pricing_type || 'fixed',
             base_price: String(
               svc.base_price != null && Number(svc.base_price) > 0 ? svc.base_price : ''
             ),
             price_max: svc.price_max != null ? String(svc.price_max) : '',
-            quote_questions:
+            quote_questions: normalizeQuoteQuestions(
               Array.isArray(svc.quote_questions) && svc.quote_questions.length
-                ? svc.quote_questions.map((q) =>
-                    typeof q === 'string' ? q : q?.question || ''
-                  )
-                : [''],
+                ? svc.quote_questions
+                : svc.pricing_type === 'quote'
+                  ? DEFAULT_QUOTE_QUESTIONS
+                  : ['']
+            ),
             show_price: svc.show_price !== false,
             allow_request: svc.allow_request !== false,
             fulfillment_kind: svc.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
@@ -1079,12 +1212,22 @@ export default function ProviderServicesPage({ embedded = false }) {
       serviceDraft.pricing_type === 'range' ||
       serviceDraft.pricing_type === 'average' ||
       serviceDraft.pricing_type === 'quote';
-    if (needsQuote && !(Number(serviceDraft.base_price) > 0)) {
+    if (
+      (serviceDraft.pricing_type === 'range' || serviceDraft.pricing_type === 'average') &&
+      !(Number(serviceDraft.base_price) > 0)
+    ) {
       setError(
         serviceDraft.pricing_type === 'range'
           ? 'Enter the low end of your price range.'
           : 'Enter a typical price so customers see an estimate.'
       );
+      return;
+    }
+    const cleanedQuestions = (serviceDraft.quote_questions || [])
+      .map((q) => String(q || '').trim())
+      .filter(Boolean);
+    if (serviceDraft.pricing_type === 'quote' && cleanedQuestions.length < 1) {
+      setError('Add at least one quote question so customers can describe the job.');
       return;
     }
     if (
@@ -1102,14 +1245,13 @@ export default function ProviderServicesPage({ embedded = false }) {
       category: serviceDraft.category ? Number(serviceDraft.category) : null,
       duration_minutes: minutesFromHours(serviceDraft.duration_hours),
       pricing_type: serviceDraft.pricing_type,
-      base_price: serviceDraft.base_price || '0',
+      base_price:
+        serviceDraft.pricing_type === 'quote' ? '0' : serviceDraft.base_price || '0',
       price_max:
         serviceDraft.pricing_type === 'range' && serviceDraft.price_max
           ? serviceDraft.price_max
           : null,
-      quote_questions: needsQuote
-        ? (serviceDraft.quote_questions || []).map((q) => q.trim()).filter(Boolean)
-        : [],
+      quote_questions: needsQuote ? cleanedQuestions : [],
       show_price: needsQuote ? true : serviceDraft.show_price,
       allow_request: serviceDraft.allow_request,
       fulfillment_kind: serviceDraft.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
@@ -1149,8 +1291,12 @@ export default function ProviderServicesPage({ embedded = false }) {
       .map((row) => ({
         name: row.name.trim(),
         description: (row.description || '').trim(),
+        pricing_type: row.pricing_type || 'fixed',
         base_price: row.base_price,
         price_max: row.price_max,
+        quote_questions: (row.quote_questions || [])
+          .map((q) => String(q || '').trim())
+          .filter(Boolean),
       }))
       .filter((row) => row.name.length >= 2);
 
@@ -1159,26 +1305,23 @@ export default function ProviderServicesPage({ embedded = false }) {
       return;
     }
 
-    if (bulkDefaults.pricing_type === 'range') {
-      const bad = rows.find(
-        (row) => !row.price_max || Number(row.price_max) < Number(row.base_price || 0)
-      );
-      if (bad) {
-        setError(`“${bad.name}” needs a valid price range (To ≥ From).`);
+    for (const row of rows) {
+      if (row.pricing_type === 'range') {
+        if (!(Number(row.base_price) > 0)) {
+          setError(`“${row.name}” needs a From price.`);
+          return;
+        }
+        if (!row.price_max || Number(row.price_max) < Number(row.base_price || 0)) {
+          setError(`“${row.name}” needs a valid price range (To ≥ From).`);
+          return;
+        }
+      }
+      if (row.pricing_type === 'average' && !(Number(row.base_price) > 0)) {
+        setError(`“${row.name}” needs a typical price.`);
         return;
       }
-    }
-    if (
-      bulkDefaults.pricing_type === 'average' ||
-      bulkDefaults.pricing_type === 'range'
-    ) {
-      const bad = rows.find((row) => !(Number(row.base_price) > 0));
-      if (bad) {
-        setError(
-          bulkDefaults.pricing_type === 'range'
-            ? `“${bad.name}” needs a From price.`
-            : `“${bad.name}” needs a typical price.`
-        );
+      if (row.pricing_type === 'quote' && row.quote_questions.length < 1) {
+        setError(`“${row.name}” needs at least one quote question.`);
         return;
       }
     }
@@ -1187,15 +1330,15 @@ export default function ProviderServicesPage({ embedded = false }) {
     setError(null);
     const category = bulkDefaults.category ? Number(bulkDefaults.category) : null;
     const duration = minutesFromHours(bulkDefaults.duration_hours);
-    const needsQuote =
-      bulkDefaults.pricing_type === 'range' ||
-      bulkDefaults.pricing_type === 'average' ||
-      bulkDefaults.pricing_type === 'quote';
     let sortBase = services.length;
     let created = 0;
     const failures = [];
 
     for (const row of rows) {
+      const needsQuote =
+        row.pricing_type === 'range' ||
+        row.pricing_type === 'average' ||
+        row.pricing_type === 'quote';
       try {
         await jobsAPI.createService({
           organization: orgId,
@@ -1203,12 +1346,11 @@ export default function ProviderServicesPage({ embedded = false }) {
           description: row.description,
           category,
           duration_minutes: duration,
-          pricing_type: bulkDefaults.pricing_type,
-          base_price: row.base_price || '0',
+          pricing_type: row.pricing_type,
+          base_price: row.pricing_type === 'quote' ? '0' : row.base_price || '0',
           price_max:
-            bulkDefaults.pricing_type === 'range' && row.price_max
-              ? row.price_max
-              : null,
+            row.pricing_type === 'range' && row.price_max ? row.price_max : null,
+          quote_questions: row.pricing_type === 'quote' ? row.quote_questions : [],
           show_price: needsQuote ? true : bulkDefaults.show_price,
           allow_request: bulkDefaults.allow_request,
           fulfillment_kind: bulkDefaults.fulfillment_kind === 'shop' ? 'shop' : 'mobile',

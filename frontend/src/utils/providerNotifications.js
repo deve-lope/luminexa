@@ -15,6 +15,7 @@ export const BOOKING_ACTION_KINDS = new Set([
   'customer_cancelled_booking',
   'customer_reschedule_request',
   'quote_accepted',
+  'quote_answers_received',
   'payment_received',
 ]);
 
@@ -61,6 +62,7 @@ export function providerNotificationDestination(orgSlug, n) {
 /** Short CTA label for Today / alert cards. */
 export function providerNotificationCtaLabel(n) {
   if (n?.kind === 'promo_offer') return 'Redeem on Billing';
+  if (n?.kind === 'quote_answers_received') return 'Send quote';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';
   return 'Open schedule';

@@ -95,8 +95,9 @@ export default function BookingPolicySettings({
         <Link to={providerServices(orgSlug)} className="font-medium text-luminexa-accent">
           Services
         </Link>
-        , choose <strong>Price range</strong> or <strong>Typical price</strong>. Those always
-        quote before confirm. Fixed price uses the booking mode below.
+        , choose <strong>Price range</strong>, <strong>Typical price</strong>, or{' '}
+        <strong>Quote on request</strong> (with questions for the customer). Fixed price uses the
+        booking mode below.
       </p>
 
       {!isOwner ? (

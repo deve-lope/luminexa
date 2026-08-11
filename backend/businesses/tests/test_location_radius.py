@@ -1,7 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -301,3 +301,71 @@ class OrganizationLocationsAPITests(TestCase):
             self.assertEqual(overflow.status_code, 400)
             self.assertIn('at most', str(overflow.data).lower())
             self.assertEqual(self.org.locations.count(), 2)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PublicBrowseLatLngKeywordTests(TestCase):
+    """Lat/lng browse path should match description / tagline / business type like postal path."""
+
+    def setUp(self):
+        self.client = APIClient()
+        from jobs.models import Service
+
+        self.org = Organization.objects.create(
+            name='Detail Pros',
+            slug='detail-pros',
+            tagline='Mobile detailing',
+            profile_public=True,
+            is_active=True,
+            service_postal_code='78701',
+            service_latitude=Decimal('30.267200'),
+            service_longitude=Decimal('-97.743100'),
+            service_radius_miles=Decimal('25'),
+        )
+        OrganizationLocation.objects.create(
+            organization=self.org,
+            name='Primary',
+            is_primary=True,
+            postal_code='78701',
+            latitude=Decimal('30.267200'),
+            longitude=Decimal('-97.743100'),
+            radius_miles=Decimal('25'),
+        )
+        Service.objects.create(
+            organization=self.org,
+            name='Interior clean',
+            description='Full vacuum and steam shampoo for carpets',
+            duration_minutes=60,
+            base_price='89.00',
+            is_active=True,
+        )
+
+    def test_lat_lng_browse_matches_service_description(self):
+        res = self.client.get(
+            '/api/v1/public/services/',
+            {
+                'lat': '30.2672',
+                'lng': '-97.7431',
+                'radius_miles': '25',
+                'q': 'shampoo',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        names = [s['name'] for s in res.data.get('services', [])]
+        self.assertIn('Interior clean', names)
+
+    def test_lat_lng_browse_matches_org_tagline(self):
+        res = self.client.get(
+            '/api/v1/public/services/',
+            {
+                'lat': '30.2672',
+                'lng': '-97.7431',
+                'radius_miles': '25',
+                'q': 'detailing',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        names = [s['name'] for s in res.data.get('services', [])]
+        self.assertIn('Interior clean', names)

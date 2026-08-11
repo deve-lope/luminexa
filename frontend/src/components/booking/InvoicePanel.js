@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { jobsAPI } from '../../utils/api';
+import InvoiceStripePayModal from './InvoiceStripePayModal';
 
 function formatMoney(amount, currency = 'CAD') {
   try {
@@ -175,8 +176,10 @@ export default function InvoicePanel({
   className = '',
 }) {
   const [viewOpen, setViewOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [paidLocal, setPaidLocal] = useState(null);
 
   useEffect(() => {
     if (!viewOpen) return undefined;
@@ -189,42 +192,23 @@ export default function InvoicePanel({
 
   if (!invoice?.id && !invoice?.number) return null;
 
-  const currency = invoice.currency || 'CAD';
-  const amountLabel = formatMoney(invoice.amount, currency);
+  const displayInvoice = paidLocal || invoice;
+  const currency = displayInvoice.currency || 'CAD';
+  const amountLabel = formatMoney(displayInvoice.amount, currency);
   const canPay =
     allowPayOnline &&
-    invoice.status === 'issued' &&
-    invoice.can_pay_online &&
+    displayInvoice.status === 'issued' &&
+    displayInvoice.can_pay_online &&
     bookingId;
 
   const handleDownload = async () => {
     setBusy(true);
     setError(null);
     try {
-      await downloadInvoicePdf(invoice, bookingId);
+      await downloadInvoicePdf(displayInvoice, bookingId);
     } catch {
       setError('Download failed. Try again.');
     } finally {
-      setBusy(false);
-    }
-  };
-
-  const handlePay = async () => {
-    if (!bookingId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const path = window.location.pathname + window.location.search;
-      window.sessionStorage.setItem('luminexa.pendingInvoiceBookingId', String(bookingId));
-      const res = await jobsAPI.payBookingInvoice(bookingId, {
-        success_path: path,
-        cancel_path: path,
-      });
-      const url = res.data?.checkout_url;
-      if (!url) throw new Error('No checkout URL');
-      window.location.href = url;
-    } catch (e) {
-      setError(e?.response?.data?.detail || 'Could not start card payment.');
       setBusy(false);
     }
   };
@@ -233,10 +217,14 @@ export default function InvoicePanel({
     <button
       type="button"
       disabled={busy}
-      onClick={handlePay}
-      className="inline-flex min-h-[40px] items-center rounded-lg bg-emerald-700 px-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60"
+      onClick={() => {
+        setError(null);
+        window.sessionStorage.setItem('luminexa.pendingInvoiceBookingId', String(bookingId));
+        setPayOpen(true);
+      }}
+      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
     >
-      {busy ? 'Opening payment…' : 'Pay with wallet or card'}
+      Review & pay
     </button>
   ) : null;
 
@@ -251,18 +239,22 @@ export default function InvoicePanel({
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-teal-800/70">Invoice</p>
             <p className="mt-0.5 text-sm font-semibold text-slate-900">
-              {invoice.number} · {amountLabel}
+              {displayInvoice.number} · {amountLabel}
             </p>
             <p className="text-xs text-slate-600">
-              {statusLabel(invoice.status)}
-              {(providerName || invoice.provider_name) &&
-                ` · ${providerName || invoice.provider_name}`}
+              {statusLabel(displayInvoice.status)}
+              {(providerName || displayInvoice.provider_name) &&
+                ` · ${providerName || displayInvoice.provider_name}`}
             </p>
             {!compact && !showBreakdown && (
               <p className="mt-1 text-xs text-slate-500">
-                Fee {formatMoney(invoice.subtotal != null ? invoice.subtotal : invoice.amount, currency)}
-                {Number(invoice.tax_total) > 0
-                  ? ` · Tax ${formatMoney(invoice.tax_total, currency)}`
+                Fee{' '}
+                {formatMoney(
+                  displayInvoice.subtotal != null ? displayInvoice.subtotal : displayInvoice.amount,
+                  currency
+                )}
+                {Number(displayInvoice.tax_total) > 0
+                  ? ` · Tax ${formatMoney(displayInvoice.tax_total, currency)}`
                   : ''}
                 {` · Total ${amountLabel}`}
               </p>
@@ -295,7 +287,7 @@ export default function InvoicePanel({
 
         {showBreakdown && (
           <div className="mt-4 border-t border-teal-100/80 pt-4">
-            <InvoiceBreakdown invoice={invoice} providerName={providerName} />
+            <InvoiceBreakdown invoice={displayInvoice} providerName={providerName} />
             <div className="mt-4 flex flex-wrap gap-2">
               {payButton}
               <button
@@ -340,7 +332,7 @@ export default function InvoicePanel({
               </button>
             </div>
             <div className="mt-4">
-              <InvoiceBreakdown invoice={invoice} providerName={providerName} />
+              <InvoiceBreakdown invoice={displayInvoice} providerName={providerName} />
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
               {payButton}
@@ -363,6 +355,20 @@ export default function InvoicePanel({
           </div>
         </div>
       )}
+
+      <InvoiceStripePayModal
+        open={payOpen}
+        bookingId={bookingId}
+        invoice={displayInvoice}
+        organizationName={providerName || displayInvoice.provider_name}
+        onClose={() => setPayOpen(false)}
+        onPaid={(paid) => {
+          setPaidLocal({ ...paid, can_pay_online: false });
+          setPayOpen(false);
+          setViewOpen(false);
+          window.sessionStorage.removeItem('luminexa.pendingInvoiceBookingId');
+        }}
+      />
     </>
   );
 }

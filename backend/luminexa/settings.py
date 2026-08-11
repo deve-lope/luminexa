@@ -243,6 +243,15 @@ QUICKBOOKS_ENVIRONMENT = config('QUICKBOOKS_ENVIRONMENT', default='sandbox')
 PUBLIC_API_URL = config('PUBLIC_API_URL', default='')
 QUICKBOOKS_ENABLED = bool(QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET)
 
+# Play Store review: one customer email may use a fixed OTP (no inbox needed).
+# Leave blank to disable. Never reuse these values for real users.
+PLAY_STORE_DEMO_CUSTOMER_EMAIL = config(
+    'PLAY_STORE_DEMO_CUSTOMER_EMAIL', default=''
+).strip().lower()
+PLAY_STORE_DEMO_CUSTOMER_OTP = config(
+    'PLAY_STORE_DEMO_CUSTOMER_OTP', default=''
+).strip()
+
 # ── Production HTTPS / browser hardening (only when DEBUG=False) ───────────
 if not DEBUG:
     SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default='True').lower() == 'true'

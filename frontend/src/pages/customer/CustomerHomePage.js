@@ -22,6 +22,8 @@ import {
 } from '../../utils/customerNotifications';
 import { lxPillTone } from '../../utils/pillGradients';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
+import useUnpaidInvoice from '../../hooks/useUnpaidInvoice';
+import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
 
 const MAX_HOME_PROVIDERS = 3;
 const MAX_HOME_CATEGORIES = 8;
@@ -98,6 +100,12 @@ export default function CustomerHomePage() {
   const [searchAreaLabel, setSearchAreaLabel] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const {
+    payment: unpaidPayment,
+    reload: reloadUnpaid,
+    clear: clearUnpaid,
+  } = useUnpaidInvoice({ pollMs: 30000 });
   const [notifications, setNotifications] = useState([]);
 
   const loadNotifications = useCallback(() => {
@@ -269,9 +277,56 @@ export default function CustomerHomePage() {
   const upcoming = home?.upcoming_bookings || [];
   const homeNotifications = notifications.slice(0, 2);
   const extraNotificationCount = Math.max(0, notifications.length - 2);
+  const unpaidInvoice = unpaidPayment?.invoice;
+  const unpaidAmountLabel = (() => {
+    if (!unpaidInvoice) return '';
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: unpaidInvoice.currency || 'CAD',
+      }).format(Number(unpaidInvoice.amount) || 0);
+    } catch {
+      return `$${Number(unpaidInvoice.amount || 0).toFixed(2)}`;
+    }
+  })();
 
   return (
     <div className="space-y-6 pb-4 lg:space-y-8">
+      {unpaidInvoice && (
+        <section
+          className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 shadow-sm ring-1 ring-amber-100"
+          aria-label="Unpaid invoice"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">
+                Payment due
+              </p>
+              <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">
+                {unpaidAmountLabel}
+              </p>
+              <p className="truncate text-sm text-slate-600">
+                {unpaidPayment.organization_name}
+                {unpaidPayment.service_name ? ` · ${unpaidPayment.service_name}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                window.sessionStorage.setItem(
+                  'luminexa.pendingInvoiceBookingId',
+                  String(unpaidPayment.booking_id)
+                );
+                setPayOpen(true);
+              }}
+              className="lx-btn-primary min-h-[48px] shrink-0 px-5"
+            >
+              Pay now
+            </button>
+          </div>
+        </section>
+      )}
+
       {homeNotifications.length > 0 && (
         <section className="space-y-2" aria-label="Updates">
           <div className="flex items-end justify-between gap-2">
@@ -523,6 +578,23 @@ export default function CustomerHomePage() {
         />
       ) : (
         providers.length > 0 && <ProvidersSection providers={providers} />
+      )}
+
+      {unpaidInvoice && (
+        <InvoiceStripePayModal
+          open={payOpen}
+          bookingId={unpaidPayment.booking_id}
+          invoice={unpaidInvoice}
+          organizationName={unpaidPayment.organization_name}
+          serviceName={unpaidPayment.service_name}
+          onClose={() => setPayOpen(false)}
+          onPaid={() => {
+            setPayOpen(false);
+            clearUnpaid();
+            reloadUnpaid();
+            showToast?.('Payment received.');
+          }}
+        />
       )}
     </div>
   );

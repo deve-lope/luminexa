@@ -283,3 +283,33 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(bad.status_code, 400)
+
+    @override_settings(
+        PLAY_STORE_DEMO_CUSTOMER_EMAIL='demo.customer@luminex-a.com',
+        PLAY_STORE_DEMO_CUSTOMER_OTP='246810',
+    )
+    def test_play_store_demo_customer_fixed_otp(self):
+        User.objects.create_user(
+            email='demo.customer@luminex-a.com',
+            full_name='Demo Customer',
+            password=None,
+            email_verified=True,
+        )
+        start = self.client.post(
+            '/accounts/api/login/start/',
+            {'email': 'demo.customer@luminex-a.com'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(start.status_code, 200, start.data)
+        self.assertEqual(start.data['auth_method'], 'otp')
+
+        verify = self.client.post(
+            '/accounts/api/login/otp/verify/',
+            {'email': 'demo.customer@luminex-a.com', 'code': '246810'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(verify.status_code, 200, verify.data)
+        from django.conf import settings as dj_settings
+        self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, verify.cookies)

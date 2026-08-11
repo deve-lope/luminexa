@@ -243,6 +243,8 @@ def provider_book_customer(
     )
     if slot:
         slot.refresh_status(save=True)
+    from .message_services import ensure_booking_card
+    ensure_booking_card(booking=booking, sender=staff_user)
     return booking
 
 
@@ -322,6 +324,8 @@ def customer_request_slot(
         quote_questions=quote_questions,
     )
     slot.refresh_status(save=True)
+    from .message_services import ensure_booking_card
+    ensure_booking_card(booking=booking, sender=customer)
     return booking
 
 
@@ -445,6 +449,105 @@ def _merge_quote_questions(existing, incoming):
     return normalized
 
 
+def booking_awaiting_quote_details(booking) -> bool:
+    """True when provider asked questions and customer has not answered them all yet."""
+    if booking.status != Booking.Status.REQUESTED:
+        return False
+    questions = booking.quote_questions or []
+    if not questions:
+        return False
+    return any(
+        (q.get('question') or '').strip() and not (q.get('answer') or '').strip()
+        for q in questions
+    )
+
+
+def booking_quote_questions_all_answered(booking) -> bool:
+    questions = booking.quote_questions or []
+    if not questions:
+        return False
+    return all((q.get('answer') or '').strip() for q in questions if (q.get('question') or '').strip())
+
+
+@transaction.atomic
+def ask_booking_quote_questions(
+    booking,
+    *,
+    staff_user,
+    questions,
+    message='',
+):
+    """
+    Provider asks clarifying questions before pricing.
+
+    This is not a quote — status stays/returns to REQUESTED and quote_amount is cleared.
+    """
+    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
+        raise ValidationError({'status': 'Only open requests can receive quote questions.'})
+    normalized = _normalize_quote_questions(questions)
+    if not normalized:
+        raise ValidationError({'questions': 'Add at least one question for the customer.'})
+
+    booking.quote_questions = _merge_quote_questions(booking.quote_questions, normalized)
+    # Ensure the asked set still has at least one unanswered question for the customer.
+    if not any(not (q.get('answer') or '').strip() for q in booking.quote_questions):
+        # All questions already answered (re-ask same set) — clear answers for newly listed blanks only
+        pass
+    booking.quote_amount = None
+    booking.quote_message = (message or '').strip()[:4000]
+    booking.quoted_at = None
+    booking.status = Booking.Status.REQUESTED
+    booking.booked_by = staff_user
+    booking.save(
+        update_fields=[
+            'quote_questions',
+            'quote_amount',
+            'quote_message',
+            'quoted_at',
+            'status',
+            'booked_by',
+            'updated_at',
+        ]
+    )
+    return booking
+
+
+@transaction.atomic
+def answer_booking_quote_questions(booking, *, customer, answers):
+    """Customer submits answers so the provider can send an accurate quote."""
+    if booking.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can answer these questions.')
+    if booking.status != Booking.Status.REQUESTED:
+        raise ValidationError({'status': 'These questions are no longer open for answers.'})
+    questions = list(booking.quote_questions or [])
+    if not questions:
+        raise ValidationError({'detail': 'There are no questions to answer on this request.'})
+
+    by_id = {}
+    if isinstance(answers, list):
+        for item in answers:
+            if isinstance(item, dict) and item.get('id'):
+                by_id[str(item['id'])] = (item.get('answer') or '').strip()[:1000]
+    elif isinstance(answers, dict):
+        for k, v in answers.items():
+            by_id[str(k)] = (v or '').strip()[:1000]
+
+    for q in questions:
+        qid = str(q.get('id') or '')
+        if qid in by_id:
+            q['answer'] = by_id[qid]
+
+    missing = [q['question'] for q in questions if not (q.get('answer') or '').strip()]
+    if missing:
+        raise ValidationError({
+            'answers': f'Please answer all questions ({len(missing)} remaining).',
+        })
+
+    booking.quote_questions = questions
+    booking.save(update_fields=['quote_questions', 'updated_at'])
+    return booking
+
+
 @transaction.atomic
 def send_booking_quote(
     booking,
@@ -455,7 +558,7 @@ def send_booking_quote(
     questions=None,
     new_slot=None,
 ):
-    """Provider sends a priced quote (optional questions + optional new time)."""
+    """Provider sends a priced quote (optional already-answered questions + optional new time)."""
     if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
         raise ValidationError({'status': 'Only open requests can receive a quote.'})
     try:
@@ -471,9 +574,22 @@ def send_booking_quote(
         reschedule_booking(booking, new_slot=new_slot, by_user=staff_user)
         booking.refresh_from_db()
 
+    merged = _merge_quote_questions(booking.quote_questions, questions)
+    unanswered = [
+        q for q in merged
+        if (q.get('question') or '').strip() and not (q.get('answer') or '').strip()
+    ]
+    if unanswered:
+        raise ValidationError({
+            'questions': (
+                'Ask the customer to answer questions first (Ask questions), '
+                'then send a priced quote. Unanswered questions cannot go out with a price.'
+            ),
+        })
+
     booking.quote_amount = amount
     booking.quote_message = (message or '').strip()[:4000]
-    booking.quote_questions = _merge_quote_questions(booking.quote_questions, questions)
+    booking.quote_questions = merged
     booking.quoted_at = timezone.now()
     booking.status = Booking.Status.QUOTED
     booking.booked_by = staff_user

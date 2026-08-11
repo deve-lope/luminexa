@@ -7,6 +7,32 @@ function normalizePath(pathname) {
   return pathname.replace(/\/$/, '') || '/';
 }
 
+/**
+ * Safe in-app return path from ?returnTo= (used when leaving chat for a booking detail).
+ * Only same-origin relative paths under /customer or /provider.
+ */
+export function parseReturnTo(search = '') {
+  const qs = (search || '').startsWith('?') ? search.slice(1) : search || '';
+  if (!qs) return null;
+  try {
+    const raw = new URLSearchParams(qs).get('returnTo');
+    if (!raw) return null;
+    const decoded = decodeURIComponent(raw);
+    if (!decoded.startsWith('/') || decoded.startsWith('//')) return null;
+    if (!(decoded.startsWith('/customer') || decoded.startsWith('/provider'))) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/** Append ?returnTo= (or &returnTo=) for detail links opened from chat. */
+export function withReturnTo(href, returnTo) {
+  if (!href || !returnTo) return href;
+  const sep = href.includes('?') ? '&' : '?';
+  return `${href}${sep}returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 export function isMarketingOrLogin(pathname) {
   return NO_NAV_EXACT.has(normalizePath(pathname));
 }
@@ -15,10 +41,11 @@ export function isMarketingOrLogin(pathname) {
 export function resolveCustomerBack(pathname, search = '') {
   const path = normalizePath(pathname);
   const qs = (search || '').startsWith('?') ? search : search ? `?${search}` : '';
+  const returnTo = parseReturnTo(qs || search);
   const catOnly = (() => {
     if (!qs) return '';
     try {
-      const cat = new URLSearchParams(qs).get('cat');
+      const cat = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs).get('cat');
       return cat ? `?cat=${encodeURIComponent(cat)}` : '';
     } catch {
       return '';
@@ -26,6 +53,10 @@ export function resolveCustomerBack(pathname, search = '') {
   })();
 
   if (path === '/customer') return null;
+
+  if (returnTo && /^\/customer\/bookings\/[^/]+$/.test(path)) {
+    return { to: returnTo };
+  }
 
   if (path === '/customer/find') return { to: '/customer' };
   if (path === '/customer/categories') return { to: '/customer' };
@@ -79,12 +110,20 @@ export function resolveCustomerBack(pathname, search = '') {
   return null;
 }
 
-export function resolveProviderBack(pathname, orgSlug) {
+export function resolveProviderBack(pathname, orgSlug, search = '') {
   if (!orgSlug) return null;
   const base = `/provider/${orgSlug}`;
   const path = normalizePath(pathname);
+  const returnTo = parseReturnTo(search);
 
   if (path === base) return null;
+
+  if (
+    returnTo &&
+    (path.startsWith(`${base}/schedule/`) || path.startsWith(`${base}/requests/`))
+  ) {
+    return { to: returnTo };
+  }
 
   if (path === `${base}/schedule`) return { to: base };
   if (path === `${base}/requests`) return { to: base };

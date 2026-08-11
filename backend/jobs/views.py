@@ -36,12 +36,19 @@ from .booking_services import (
 from .datetime_display import format_booking_when
 from .message_services import (
     can_access_booking_messages,
+    can_access_conversation,
+    conversation_active_bookings,
+    conversation_active_inquiries,
     count_unread_summaries,
+    ensure_conversation_context_cards,
     list_booking_messages,
+    list_conversation_messages,
     list_customer_conversation_summaries,
     list_provider_conversation_summaries,
+    mark_conversation_messages_read,
     post_booking_incomplete_message,
     post_booking_message,
+    post_conversation_message,
 )
 from .models import (
     AvailabilitySlot,
@@ -49,6 +56,7 @@ from .models import (
     BookingStatusEvent,
     CustomerNotification,
     CustomerServiceInquiry,
+    OrgCustomerConversation,
     ProviderNotification,
     Service,
     ServiceCategory,
@@ -539,6 +547,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             service_address=(data.get('service_address') or '').strip(),
             preferred_date=data.get('preferred_date'),
         )
+        from .message_services import ensure_inquiry_card
+        ensure_inquiry_card(inquiry=inquiry, sender=request.user)
         return Response(
             CustomerServiceInquirySerializer(inquiry).data,
             status=status.HTTP_201_CREATED,
@@ -1285,6 +1295,32 @@ class BookingViewSet(viewsets.ModelViewSet):
         notify_booking_accepted(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='ask-quote-questions')
+    def ask_quote_questions(self, request, pk=None):
+        from .booking_services import ask_booking_quote_questions
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        old = booking.status
+        ask_booking_quote_questions(
+            booking,
+            staff_user=request.user,
+            questions=request.data.get('questions'),
+            message=request.data.get('message') or '',
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.QUOTE_DETAILS_ASKED,
+            old_status=old,
+            new_status=booking.status,
+            note=(request.data.get('message') or '')[:200],
+        )
+        from .notifications import notify_quote_details_requested
+
+        notify_quote_details_requested(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'], url_path='send-quote')
     def send_quote(self, request, pk=None):
         from .booking_services import send_booking_quote
@@ -1317,6 +1353,29 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .notifications import notify_booking_quoted
 
         notify_booking_quoted(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='answer-quote-questions')
+    def answer_quote_questions(self, request, pk=None):
+        from .booking_services import answer_booking_quote_questions
+
+        booking = self.get_object()
+        old = booking.status
+        answer_booking_quote_questions(
+            booking,
+            customer=request.user,
+            answers=request.data.get('answers'),
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.QUOTE_ANSWERED,
+            old_status=old,
+            new_status=booking.status,
+        )
+        from .notifications import notify_quote_answers_received
+
+        notify_quote_answers_received(booking)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='accept-quote')
@@ -1918,7 +1977,7 @@ class CustomerMyInquiriesAPIView(APIView):
 
 
 class CustomerConversationsAPIView(APIView):
-    """Unified booking + inquiry message threads for the customer inbox."""
+    """Unified org↔customer message threads for the customer inbox."""
 
     permission_classes = [IsAuthenticated]
 
@@ -1930,6 +1989,52 @@ class CustomerConversationsAPIView(APIView):
             'unread_count': count_unread_summaries(summaries),
             'results': data,
         })
+
+
+class ConversationMessagesAPIView(APIView):
+    """List / send messages on an org↔customer conversation."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_conversation(self, request, conversation_id):
+        conversation = (
+            OrgCustomerConversation.objects.select_related('organization', 'customer')
+            .filter(pk=conversation_id)
+            .first()
+        )
+        if not conversation:
+            raise ValidationError({'detail': 'Conversation not found.'})
+        if not can_access_conversation(request.user, conversation):
+            raise PermissionDenied('You cannot view this conversation.')
+        return conversation
+
+    def get(self, request, conversation_id):
+        conversation = self.get_conversation(request, conversation_id)
+        mark_conversation_messages_read(conversation=conversation, user=request.user)
+        ensure_conversation_context_cards(conversation)
+        messages = list_conversation_messages(conversation)
+        return Response({
+            'results': ServiceRequestMessageSerializer(
+                messages, many=True, context={'request': request},
+            ).data,
+            'active_bookings': conversation_active_bookings(conversation),
+            'active_inquiries': conversation_active_inquiries(conversation),
+        })
+
+    def post(self, request, conversation_id):
+        conversation = self.get_conversation(request, conversation_id)
+        if is_org_staff(request.user, conversation.organization):
+            require_provider_subscription(conversation.organization)
+        body = request.data.get('body', '')
+        msg = post_conversation_message(
+            conversation=conversation,
+            sender=request.user,
+            body=body,
+        )
+        return Response(
+            ServiceRequestMessageSerializer(msg, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class CustomerNotificationsAPIView(APIView):

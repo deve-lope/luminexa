@@ -147,6 +147,10 @@ export default function AddressSearchField({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
+        onKeyDown={(e) => {
+          // Keep Enter from submitting the parent booking form while searching.
+          if (e.key === 'Enter') e.preventDefault();
+        }}
         placeholder={placeholder}
         autoComplete="street-address"
         autoCorrect="off"

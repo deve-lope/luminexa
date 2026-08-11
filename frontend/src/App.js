@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ApiHealthProvider, useApiHealth } from './contexts/ApiHealthContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import MaintenancePage from './pages/MaintenancePage';
 import LandingRoute from './pages/LandingRoute';
 import AboutPage from './pages/AboutPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
@@ -80,7 +82,13 @@ function PrivateRoute({ children }) {
 }
 
 function AppRoutes() {
+  const { underMaintenance } = useApiHealth();
   const location = useLocation();
+
+  if (underMaintenance) {
+    return <MaintenancePage />;
+  }
+
   const isAuthShell =
     location.pathname === '/' ||
     location.pathname === '/login' ||
@@ -235,9 +243,11 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <ToastProvider>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
+          <ApiHealthProvider>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </ApiHealthProvider>
         </ToastProvider>
       </BrowserRouter>
     </ErrorBoundary>

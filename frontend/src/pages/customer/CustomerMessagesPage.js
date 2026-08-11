@@ -1,20 +1,30 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import RequestMessageThread from '../../components/provider/RequestMessageThread';
+import { useSearchParams } from 'react-router-dom';
+import ChatThread from '../../components/chat/ChatThread';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { emitNotificationsChanged } from '../../utils/customerNotifications';
 import { emitMessagesChanged } from '../../utils/messageBadge';
 import parseApiError from '../../utils/parseApiError';
 
-function conversationKey(item) {
-  return `${item.kind}-${item.id}`;
+function initials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
 export default function CustomerMessagesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
+
+  const conversationParam = searchParams.get('conversation');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -32,110 +42,113 @@ export default function CustomerMessagesPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (conversationParam) {
+      const match = conversations.find(
+        (c) => String(c.id) === String(conversationParam),
+      );
+      if (match) {
+        setSelected((prev) => (prev && prev.id === match.id ? prev : match));
+        return;
+      }
+      return;
+    }
+    setSelected(null);
+  }, [conversations, conversationParam]);
+
   const openConversation = (item) => {
     setSelected(item);
     setConversations((prev) =>
-      prev.map((c) =>
-        conversationKey(c) === conversationKey(item) ? { ...c, has_unread: false } : c,
-      ),
+      prev.map((c) => (c.id === item.id ? { ...c, has_unread: false } : c)),
     );
+    setSearchParams({ conversation: String(item.id) }, { replace: false });
   };
 
-  const loadMessagesAndRefreshBadge = async () => {
-    const res =
-      selected.kind === 'inquiry'
-        ? await jobsAPI.listInquiryMessages(
-            selected.organization_slug || selected.organization_public_ref,
-            selected.id,
-          )
-        : await jobsAPI.listBookingMessages(selected.id);
+  const closeConversation = () => {
+    setSelected(null);
+    setSearchParams({}, { replace: true });
+    load();
+  };
+
+  const loadMessagesAndRefreshBadge = useCallback(async () => {
+    const res = await jobsAPI.listConversationMessages(selected.id);
     emitMessagesChanged();
-    // Backend dismisses related new_message alerts on mark-read; refresh the bell.
     emitNotificationsChanged();
     return res;
-  };
+  }, [selected]);
+
+  const chatReturnTo = selected
+    ? `/customer/messages?conversation=${selected.id}`
+    : '/customer/messages';
 
   if (loading && conversations.length === 0) {
     return <p className="py-12 text-center text-slate-500">Loading…</p>;
   }
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-3 pb-4">
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
-
-      <p className="text-sm text-slate-600">
-        Messages with providers about your bookings and custom service requests. Unread threads are
-        shown in bold.
-      </p>
 
       {conversations.length === 0 ? (
         <div className="lx-empty">
           <p className="text-sm font-medium text-slate-800">No conversations yet</p>
           <p className="lx-muted mt-1">
-            When you message a provider from a booking or request, it will appear here.
+            When you book a provider, your chat with them appears here — including booking details.
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="-mx-1 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-lx-soft ring-1 ring-slate-100">
           {conversations.map((item) => {
-            const active = selected && conversationKey(selected) === conversationKey(item);
             const unread = Boolean(item.has_unread);
             return (
-              <li key={conversationKey(item)}>
+              <li key={item.id}>
                 <button
                   type="button"
                   onClick={() => openConversation(item)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                    active
-                      ? 'border-teal-300 bg-teal-50/80 ring-1 ring-teal-200'
-                      : unread
-                        ? 'border-teal-100 bg-teal-50/70 hover:border-teal-200'
-                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${
+                    unread ? 'bg-teal-50/50' : ''
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <div
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm font-bold text-white"
+                    aria-hidden
+                  >
+                    {initials(item.organization_name || item.subject)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
                       <p
-                        className={`truncate text-slate-900 ${
+                        className={`truncate text-[15px] text-slate-900 ${
                           unread ? 'font-bold' : 'font-semibold'
                         }`}
                       >
-                        {item.subject}
+                        {item.organization_name || item.subject}
                       </p>
-                      <p
-                        className={`truncate text-sm ${
-                          unread ? 'font-semibold text-slate-800' : 'text-slate-600'
-                        }`}
-                      >
-                        {item.organization_name}
-                      </p>
-                      <p
-                        className={`mt-1 line-clamp-2 text-sm ${
-                          unread ? 'font-semibold text-slate-900' : 'text-slate-700'
-                        }`}
-                      >
-                        {item.last_sender_name
-                          ? `${item.last_sender_name}: ${item.last_message_preview}`
-                          : item.last_message_preview}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                        {item.kind === 'inquiry' ? 'Request' : 'Booking'}
-                      </span>
-                      {item.last_message_at && (
-                        <p
-                          className={`mt-2 text-xs ${
-                            unread ? 'font-semibold text-slate-700' : 'text-slate-500'
+                      {item.last_message_at ? (
+                        <span
+                          className={`shrink-0 text-[11px] ${
+                            unread ? 'font-semibold text-teal-700' : 'text-slate-400'
                           }`}
                         >
                           {formatWhen(item.last_message_at)}
-                        </p>
-                      )}
+                        </span>
+                      ) : null}
                     </div>
+                    <p
+                      className={`mt-0.5 line-clamp-1 text-sm ${
+                        unread ? 'font-semibold text-slate-800' : 'text-slate-500'
+                      }`}
+                    >
+                      {item.last_sender_name
+                        ? `${item.last_sender_name}: ${item.last_message_preview}`
+                        : item.last_message_preview}
+                    </p>
                   </div>
+                  {unread ? (
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-teal-600" aria-label="Unread" />
+                  ) : null}
                 </button>
               </li>
             );
@@ -144,25 +157,16 @@ export default function CustomerMessagesPage() {
       )}
 
       {selected && (
-        <RequestMessageThread
-          key={conversationKey(selected)}
-          sheetOnly
-          initiallyOpen
-          peerName={selected.organization_name}
-          onClose={() => {
-            setSelected(null);
-            load();
-          }}
+        <ChatThread
+          key={selected.id}
+          open
+          peerName={selected.organization_name || selected.subject}
+          peerSubtitle="Provider"
+          onClose={closeConversation}
           loadMessages={loadMessagesAndRefreshBadge}
-          sendMessage={(body) =>
-            selected.kind === 'inquiry'
-              ? jobsAPI.sendInquiryMessage(
-                  selected.organization_slug || selected.organization_public_ref,
-                  selected.id,
-                  body,
-                )
-              : jobsAPI.sendBookingMessage(selected.id, body)
-          }
+          sendMessage={(body) => jobsAPI.sendConversationMessage(selected.id, body)}
+          bookingDetailHref={(bookingId) => `/customer/bookings/${bookingId}`}
+          returnTo={chatReturnTo}
         />
       )}
     </div>

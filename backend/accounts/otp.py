@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 
@@ -17,6 +18,17 @@ OTP_MAX_ATTEMPTS = 5
 
 def normalize_email(email: str) -> str:
     return (email or '').strip().lower()
+
+
+def play_store_demo_otp(email: str) -> str | None:
+    """Return fixed Play Store OTP for the configured demo customer, else None."""
+    demo_email = (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_EMAIL', '') or '').strip().lower()
+    demo_otp = (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_OTP', '') or '').strip()
+    if not demo_email or not demo_otp:
+        return None
+    if normalize_email(email) != demo_email:
+        return None
+    return demo_otp
 
 
 def user_uses_password_login(user: User) -> bool:
@@ -42,7 +54,7 @@ def _generate_code() -> str:
 
 def issue_login_code(email: str) -> str:
     email = normalize_email(email)
-    raw = _generate_code()
+    raw = play_store_demo_otp(email) or _generate_code()
     now = timezone.now()
     LoginCode.objects.filter(email=email, consumed_at__isnull=True).update(consumed_at=now)
     LoginCode.objects.create(
@@ -59,6 +71,11 @@ def verify_login_code(email: str, code: str) -> bool:
     if not email or not code:
         return False
     now = timezone.now()
+    fixed = play_store_demo_otp(email)
+    if fixed and code == fixed:
+        # Accept fixed Play Store code without requiring inbox access.
+        LoginCode.objects.filter(email=email, consumed_at__isnull=True).update(consumed_at=now)
+        return True
     entry = (
         LoginCode.objects.filter(email=email, consumed_at__isnull=True, expires_at__gte=now)
         .order_by('-created_at')

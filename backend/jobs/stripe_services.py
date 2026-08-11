@@ -67,6 +67,16 @@ def _raise_stripe_error(exc: Exception) -> None:
             ),
             'code': 'stripe_connect_not_enabled',
         }) from exc
+    if 'managing losses' in lower or 'platform-profile' in lower:
+        raise ValidationError({
+            'detail': (
+                'Finish your Stripe Connect platform profile first: open '
+                'https://dashboard.stripe.com/settings/connect/platform-profile '
+                '(Live mode), review how you manage losses for connected accounts, save, '
+                'then try Set up payouts again.'
+            ),
+            'code': 'stripe_connect_platform_profile',
+        }) from exc
     raise ValidationError({'detail': msg, 'code': 'stripe_error'}) from exc
 
 
@@ -164,6 +174,46 @@ def org_can_accept_card_payments(org: Organization) -> bool:
     return bool(org.stripe_account_id and org.stripe_charges_enabled)
 
 
+_apple_pay_domains_ensured = False
+
+
+def ensure_apple_pay_domains() -> None:
+    """Register SPA hostnames so Apple Pay can show in Safari / iOS (idempotent)."""
+    global _apple_pay_domains_ensured
+    if _apple_pay_domains_ensured:
+        return
+    require_stripe()
+    base = (getattr(settings, 'PUBLIC_APP_URL', None) or '').strip()
+    hosts = set()
+    if base:
+        try:
+            from urllib.parse import urlparse
+
+            host = (urlparse(base).hostname or '').lower()
+            if host:
+                hosts.add(host)
+                # Common apex / www pair.
+                if host.startswith('www.'):
+                    hosts.add(host[4:])
+                elif host.count('.') == 1:
+                    hosts.add(f'www.{host}')
+                # app.example.com → also register example.com
+                parts = host.split('.')
+                if len(parts) >= 3 and parts[0] in ('app', 'www', 'm'):
+                    hosts.add('.'.join(parts[1:]))
+        except Exception:
+            pass
+    hosts.update({'luminex-a.com', 'www.luminex-a.com', 'app.luminex-a.com'})
+    for domain in sorted(hosts):
+        if not domain or domain in ('localhost', '127.0.0.1'):
+            continue
+        try:
+            stripe.ApplePayDomain.create(domain_name=domain)
+        except stripe.error.StripeError:
+            # Already registered or not allowed in this account mode — ignore.
+            pass
+    _apple_pay_domains_ensured = True
+
 def create_invoice_checkout_session(
     *,
     invoice,
@@ -171,7 +221,7 @@ def create_invoice_checkout_session(
     success_path: str,
     cancel_path: str,
 ) -> dict:
-    """Customer pays an issued invoice; Luminexa % fee; rest to provider Connect account."""
+    """Legacy hosted Checkout (kept for fallback). Prefer create_invoice_payment_intent."""
     require_stripe()
     from jobs.models import Invoice
 
@@ -253,6 +303,118 @@ def create_invoice_checkout_session(
     return {'checkout_url': session.url, 'session_id': session.id}
 
 
+def create_invoice_payment_intent(*, invoice, customer_user) -> dict:
+    """In-app Payment Element: PaymentIntent with Connect destination + platform fee."""
+    require_stripe()
+    from jobs.models import Invoice
+
+    if invoice.status == Invoice.Status.PAID:
+        raise ValidationError({'detail': 'This invoice is already paid.'})
+    if invoice.status == Invoice.Status.VOID:
+        raise ValidationError({'detail': 'This invoice is void.'})
+
+    org = invoice.booking.organization
+    org = refresh_connect_account(org)
+    if not org_can_accept_card_payments(org):
+        raise ValidationError({
+            'detail': 'This business has not finished setting up card payments yet.',
+            'code': 'connect_incomplete',
+        })
+
+    if invoice.booking.customer_id != customer_user.id:
+        raise PermissionDenied('Only the customer can pay this invoice.')
+
+    amount_cents = amount_to_cents(invoice.amount)
+    fee = platform_fee_cents_for_amount(amount_cents)
+    currency = (invoice.currency or 'CAD').lower()
+    publishable = getattr(settings, 'STRIPE_PUBLISHABLE_KEY', '') or ''
+    if not publishable:
+        raise ValidationError({
+            'detail': 'Online payments need STRIPE_PUBLISHABLE_KEY on the server.',
+            'code': 'stripe_publishable_missing',
+        })
+
+    metadata = {
+        'kind': 'invoice_payment',
+        'invoice_id': str(invoice.id),
+        'booking_id': str(invoice.booking_id),
+        'organization_id': str(org.id),
+    }
+
+    # Reuse an open intent when the customer reopens Pay (avoids duplicate PIs).
+    if invoice.stripe_payment_intent_id:
+        try:
+            existing = stripe.PaymentIntent.retrieve(invoice.stripe_payment_intent_id)
+        except stripe.error.StripeError:
+            existing = None
+        if existing is not None:
+            status = existing.get('status') if isinstance(existing, dict) else existing.status
+            amount = existing.get('amount') if isinstance(existing, dict) else existing.amount
+            cur = existing.get('currency') if isinstance(existing, dict) else existing.currency
+            client_secret = (
+                existing.get('client_secret')
+                if isinstance(existing, dict)
+                else existing.client_secret
+            )
+            pi_id = existing.get('id') if isinstance(existing, dict) else existing.id
+            if (
+                status in (
+                    'requires_payment_method',
+                    'requires_confirmation',
+                    'requires_action',
+                )
+                and int(amount or 0) == amount_cents
+                and str(cur or '') == currency
+                and client_secret
+            ):
+                invoice.platform_fee_cents = fee
+                invoice.save(update_fields=['platform_fee_cents', 'updated_at'])
+                return {
+                    'mode': 'payment_element',
+                    'client_secret': client_secret,
+                    'payment_intent_id': pi_id,
+                    'publishable_key': publishable,
+                    'amount_cents': amount_cents,
+                    'currency': currency,
+                }
+
+    create_kwargs = {
+        'amount': amount_cents,
+        'currency': currency,
+        # Card only — Apple Pay / Google Pay attach as card wallets.
+        # Do not use automatic_payment_methods (that re-enables Link).
+        'payment_method_types': ['card'],
+        'transfer_data': {'destination': org.stripe_account_id},
+        'metadata': metadata,
+        'description': f'Invoice {invoice.number}',
+        'receipt_email': customer_user.email or None,
+    }
+    if fee > 0:
+        create_kwargs['application_fee_amount'] = fee
+
+    try:
+        ensure_apple_pay_domains()
+        intent = stripe.PaymentIntent.create(**create_kwargs)
+    except stripe.error.StripeError as exc:
+        _raise_stripe_error(exc)
+
+    pi_id = intent.get('id') if isinstance(intent, dict) else intent.id
+    client_secret = (
+        intent.get('client_secret') if isinstance(intent, dict) else intent.client_secret
+    )
+    invoice.stripe_payment_intent_id = pi_id
+    invoice.platform_fee_cents = fee
+    invoice.save(update_fields=['stripe_payment_intent_id', 'platform_fee_cents', 'updated_at'])
+    return {
+        'mode': 'payment_element',
+        'client_secret': client_secret,
+        'payment_intent_id': pi_id,
+        'publishable_key': publishable,
+        'amount_cents': amount_cents,
+        'currency': currency,
+    }
+
+
 def sync_invoice_checkout_session(*, invoice, customer_user, session_id: str):
     """Confirm a returned Checkout Session without waiting for the webhook."""
     require_stripe()
@@ -278,6 +440,30 @@ def sync_invoice_checkout_session(*, invoice, customer_user, session_id: str):
         invoice=invoice,
         payment_intent_id=str(payment_intent),
         session_id=session.get('id') or '',
+    )
+
+
+def sync_invoice_payment_intent(*, invoice, customer_user, payment_intent_id: str):
+    """Confirm an in-app PaymentIntent after Elements confirmPayment."""
+    require_stripe()
+    if invoice.booking.customer_id != customer_user.id:
+        raise PermissionDenied('Only the customer can confirm this payment.')
+    if not payment_intent_id:
+        raise ValidationError({'payment_intent_id': 'Missing payment intent id.'})
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+    except stripe.error.StripeError as exc:
+        _raise_stripe_error(exc)
+    metadata = intent.get('metadata') if isinstance(intent, dict) else (intent.metadata or {})
+    if str(metadata.get('invoice_id') or '') != str(invoice.id):
+        raise PermissionDenied('This payment does not belong to this invoice.')
+    status = intent.get('status') if isinstance(intent, dict) else intent.status
+    if status != 'succeeded':
+        raise ValidationError({'detail': 'Payment has not completed yet.', 'code': 'payment_incomplete'})
+    pi_id = intent.get('id') if isinstance(intent, dict) else intent.id
+    return mark_invoice_paid_from_stripe(
+        invoice=invoice,
+        payment_intent_id=str(pi_id),
     )
 
 

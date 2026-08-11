@@ -63,6 +63,10 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # EMAIL_USE_TLS=True
 # DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
+# Play Store review — customer signs in with email + this fixed OTP (no inbox).
+# PLAY_STORE_DEMO_CUSTOMER_EMAIL=demo.customer@luminex-a.com
+# PLAY_STORE_DEMO_CUSTOMER_OTP=246810
+
 # ── Stripe (Connect marketplace + provider subscriptions) ───────────────────
 # Leave empty until configured — APIs return a clear "not configured" error.
 # STRIPE_SECRET_KEY=sk_live_...

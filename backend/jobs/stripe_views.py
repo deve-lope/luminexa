@@ -145,7 +145,7 @@ class InstantPayoutAPIView(APIView):
 
 
 class InvoicePayCheckoutAPIView(APIView):
-    """Customer starts Stripe Checkout to pay an issued invoice."""
+    """Start invoice payment — in-app Payment Element (default) or legacy Checkout."""
 
     permission_classes = [IsAuthenticated]
 
@@ -163,20 +163,27 @@ class InvoicePayCheckoutAPIView(APIView):
         except Invoice.DoesNotExist:
             return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
 
-        org_slug = booking.organization.slug
-        success = request.data.get('success_path') or f'/customer/bookings?org={org_slug}'
-        cancel = request.data.get('cancel_path') or f'/customer/bookings?org={org_slug}'
-        result = stripe_services.create_invoice_checkout_session(
+        if request.data.get('legacy_checkout') or request.data.get('mode') == 'checkout':
+            org_slug = booking.organization.slug
+            success = request.data.get('success_path') or f'/customer/bookings?org={org_slug}'
+            cancel = request.data.get('cancel_path') or f'/customer/bookings?org={org_slug}'
+            result = stripe_services.create_invoice_checkout_session(
+                invoice=invoice,
+                customer_user=request.user,
+                success_path=success,
+                cancel_path=cancel,
+            )
+            return Response(result)
+
+        result = stripe_services.create_invoice_payment_intent(
             invoice=invoice,
             customer_user=request.user,
-            success_path=success,
-            cancel_path=cancel,
         )
         return Response(result)
 
 
 class InvoicePaySyncAPIView(APIView):
-    """Confirm payment immediately after Stripe redirects the customer back."""
+    """Confirm payment after Payment Element or Checkout redirect."""
 
     permission_classes = [IsAuthenticated]
 
@@ -194,11 +201,21 @@ class InvoicePaySyncAPIView(APIView):
             invoice = booking.invoice
         except Invoice.DoesNotExist:
             return Response({'detail': 'No invoice yet.'}, status=status.HTTP_404_NOT_FOUND)
-        invoice = stripe_services.sync_invoice_checkout_session(
-            invoice=invoice,
-            customer_user=request.user,
-            session_id=(request.data.get('session_id') or '').strip(),
-        )
+
+        payment_intent_id = (request.data.get('payment_intent_id') or '').strip()
+        session_id = (request.data.get('session_id') or '').strip()
+        if payment_intent_id:
+            invoice = stripe_services.sync_invoice_payment_intent(
+                invoice=invoice,
+                customer_user=request.user,
+                payment_intent_id=payment_intent_id,
+            )
+        else:
+            invoice = stripe_services.sync_invoice_checkout_session(
+                invoice=invoice,
+                customer_user=request.user,
+                session_id=session_id,
+            )
         return Response(InvoiceSerializer(invoice, context={'request': request}).data)
 
 

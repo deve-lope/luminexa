@@ -9,6 +9,11 @@ import {
   formatRadiusMiles,
 } from '../../constants/locationSearch';
 import { bookService } from '../../utils/customerPaths';
+import {
+  canUseBrowserGeolocation,
+  geolocationUnavailableReason,
+  shareLocationButtonLabel,
+} from '../../utils/geolocationSupport';
 
 const centerPin = L.divIcon({
   className: '',
@@ -49,13 +54,20 @@ function groupByOrg(services) {
 
 /**
  * Customer location search bar with embedded live map.
- * Uses address search to set the search center, then shows providers on the map.
+ * Uses address search or “Use my location” to set the search center.
  */
 export default function LocationSearchBar({
   radiusMiles = DEFAULT_RADIUS_MILES,
   onLocationChange,
   onRadiusChange,
   onClear,
+  onUseMyLocation,
+  locating = false,
+  locationError = null,
+  /** Sync from parent (GPS / localStorage / map). */
+  externalLat = null,
+  externalLng = null,
+  externalLabel = '',
   services = [],
 }) {
   const [locationLabel, setLocationLabel] = useState('');
@@ -63,12 +75,31 @@ export default function LocationSearchBar({
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [pendingRadius, setPendingRadius] = useState(radiusMiles);
+  const gpsAvailable = canUseBrowserGeolocation();
 
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const circleRef = useRef(null);
   const centerMarkerRef = useRef(null);
   const providerMarkersRef = useRef([]);
+
+  useEffect(() => {
+    setPendingRadius(radiusMiles);
+  }, [radiusMiles]);
+
+  // Keep bar in sync when parent restores GPS / storage / map center.
+  useEffect(() => {
+    if (externalLat == null || externalLng == null) {
+      return;
+    }
+    const nextLat = Number(externalLat);
+    const nextLng = Number(externalLng);
+    if (!Number.isFinite(nextLat) || !Number.isFinite(nextLng)) return;
+    setLat(nextLat);
+    setLng(nextLng);
+    setHasLocation(true);
+    if (externalLabel) setLocationLabel(externalLabel);
+  }, [externalLat, externalLng, externalLabel]);
 
   // Init Leaflet map when location is set
   useEffect(() => {
@@ -141,7 +172,10 @@ export default function LocationSearchBar({
             `<a href="${bookService(org.slug, s.id)}" style="display:block;padding:3px 0;color:#7c3aed;font-size:13px;text-decoration:none">${s.name}${s.show_price !== false && s.base_price ? ` · $${Number(s.base_price).toFixed(0)}` : ''}</a>`
         )
         .join('');
-      const more = org.services.length > 4 ? `<p style="font-size:12px;color:#64748b;margin:4px 0 0">+${org.services.length - 4} more</p>` : '';
+      const more =
+        org.services.length > 4
+          ? `<p style="font-size:12px;color:#64748b;margin:4px 0 0">+${org.services.length - 4} more</p>`
+          : '';
       marker.bindPopup(
         `<div style="min-width:160px;max-width:210px"><p style="font-weight:700;font-size:14px;margin:0 0 2px">${org.name}</p><p style="color:#64748b;font-size:12px;margin:0 0 6px">${org.location_short}</p>${serviceLinks}${more}</div>`,
         { maxWidth: 230 }
@@ -182,7 +216,6 @@ export default function LocationSearchBar({
   const handleRadiusChange = (e) => {
     const next = Number(e.target.value);
     setPendingRadius(next);
-    // Update circle live
     if (circleRef.current) {
       circleRef.current.setRadius(next * MILES_TO_METERS);
       if (mapRef.current) {
@@ -208,7 +241,13 @@ export default function LocationSearchBar({
     onClear?.();
   };
 
+  const handleUseMyLocation = () => {
+    if (!gpsAvailable) return;
+    onUseMyLocation?.();
+  };
+
   const orgsOnMap = groupByOrg(services);
+  const gpsBlockedReason = !gpsAvailable ? geolocationUnavailableReason() : null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
@@ -221,7 +260,6 @@ export default function LocationSearchBar({
         )}
       </div>
 
-      {/* Active location pill */}
       {hasLocation ? (
         <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2">
           <svg className="h-3.5 w-3.5 shrink-0 text-luminexa-accent" fill="currentColor" viewBox="0 0 24 24">
@@ -235,22 +273,45 @@ export default function LocationSearchBar({
           </button>
         </div>
       ) : (
-        <AddressSearchField
-          id="customer-location-search"
-          label=""
-          placeholder="City, postal code, or address…"
-          onSelect={handleAddressSelect}
-        />
+        <div className="space-y-2">
+          {onUseMyLocation && (
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={locating || !gpsAvailable}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-60"
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              </svg>
+              {shareLocationButtonLabel({ locating })}
+            </button>
+          )}
+          {gpsBlockedReason && (
+            <p className="text-xs text-amber-700">{gpsBlockedReason}</p>
+          )}
+          {locationError && (
+            <p className="text-xs text-amber-700">{locationError}</p>
+          )}
+          <AddressSearchField
+            id="customer-location-search"
+            label=""
+            placeholder="City, postal code, or address…"
+            onSelect={handleAddressSelect}
+          />
+        </div>
       )}
 
-      {/* Live map — shown once a location is set */}
       {hasLocation && (
         <>
+          {locationError && (
+            <p className="text-xs text-amber-700">{locationError}</p>
+          )}
           <div className="overflow-hidden rounded-xl border border-slate-200">
             <div ref={mapEl} className="h-[280px] w-full bg-slate-100" />
           </div>
 
-          {/* Radius slider */}
           <div>
             <div className="mb-1.5 flex items-center justify-between text-xs">
               <span className="font-medium text-slate-600">Search within</span>
@@ -270,7 +331,6 @@ export default function LocationSearchBar({
             </div>
           </div>
 
-          {/* Provider summary */}
           {orgsOnMap.length > 0 ? (
             <p className="text-xs text-slate-500">
               <span className="font-semibold text-slate-700">{orgsOnMap.length}</span> provider{orgsOnMap.length !== 1 ? 's' : ''} in this area — tap a marker to see services.

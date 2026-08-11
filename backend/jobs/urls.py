@@ -16,6 +16,10 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 urlpatterns = [
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
     path('me/conversations/', views.CustomerConversationsAPIView.as_view()),
+    path(
+        'conversations/<int:conversation_id>/messages/',
+        views.ConversationMessagesAPIView.as_view(),
+    ),
     path('me/notifications/', views.CustomerNotificationsAPIView.as_view()),
     path(
         'me/notifications/dismiss-all/',

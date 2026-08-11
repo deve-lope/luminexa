@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
+import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { jobsAPI } from '../../utils/api';
@@ -17,6 +18,17 @@ import {
   emitNotificationsChanged,
 } from '../../utils/customerNotifications';
 
+function formatMoney(amount, currency = 'CAD') {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'CAD',
+    }).format(Number(amount) || 0);
+  } catch {
+    return `$${(Number(amount) || 0).toFixed(2)}`;
+  }
+}
+
 export default function CustomerBookingDetailPage() {
   const { bookingId } = useParams();
   const { showToast } = useToast();
@@ -27,6 +39,7 @@ export default function CustomerBookingDetailPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [payOpen, setPayOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!bookingId) return;
@@ -92,6 +105,13 @@ export default function CustomerBookingDetailPage() {
     );
   }
 
+  const invoice = booking?.invoice;
+  const canPayOnline =
+    invoice &&
+    invoice.status === 'issued' &&
+    invoice.can_pay_online &&
+    booking?.status === 'completed';
+
   return (
     <div className="space-y-4">
       <Link to={customerBookings()} className="lx-link inline-flex min-h-[40px] items-center">
@@ -100,6 +120,41 @@ export default function CustomerBookingDetailPage() {
 
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      )}
+
+      {canPayOnline && (
+        <section
+          className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 shadow-sm ring-1 ring-amber-100"
+          aria-label="Unpaid invoice"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">
+                Payment due
+              </p>
+              <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">
+                {formatMoney(invoice.amount, invoice.currency)}
+              </p>
+              <p className="truncate text-sm text-slate-600">
+                {invoice.number}
+                {booking.organization_name ? ` · ${booking.organization_name}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                window.sessionStorage.setItem(
+                  'luminexa.pendingInvoiceBookingId',
+                  String(booking.id)
+                );
+                setPayOpen(true);
+              }}
+              className="lx-btn-primary min-h-[48px] shrink-0 px-5"
+            >
+              Pay now
+            </button>
+          </div>
+        </section>
       )}
 
       <ul className="space-y-3">
@@ -115,6 +170,22 @@ export default function CustomerBookingDetailPage() {
           onReviewSubmitted={load}
         />
       </ul>
+
+      {canPayOnline && (
+        <InvoiceStripePayModal
+          open={payOpen}
+          bookingId={booking.id}
+          invoice={invoice}
+          organizationName={invoice.provider_name || booking.organization_name}
+          serviceName={booking.service_name}
+          onClose={() => setPayOpen(false)}
+          onPaid={() => {
+            setPayOpen(false);
+            showToast('Payment received.', 'success');
+            load();
+          }}
+        />
+      )}
 
       <RescheduleBookingModal
         open={rescheduleOpen}

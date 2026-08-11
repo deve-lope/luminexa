@@ -385,6 +385,22 @@ def _availability_summary_for_services(services, window):
     return summary
 
 
+def _service_keyword_filter(q: str) -> Q:
+    """Shared keyword match for browse/discover (postal path and lat/lng path)."""
+    q_postal = normalize_postal_code(q) if q else ''
+    return (
+        Q(name__icontains=q)
+        | Q(description__icontains=q)
+        | Q(organization__name__icontains=q)
+        | Q(organization__tagline__icontains=q)
+        | Q(organization__service_city__icontains=q)
+        | Q(organization__service_state__icontains=q)
+        | Q(organization__service_address__icontains=q)
+        | Q(organization__service_postal_code__icontains=q_postal or q)
+        | Q(organization__business_types__name__icontains=q)
+    )
+
+
 def _apply_service_filters(
     qs,
     *,
@@ -431,19 +447,7 @@ def _apply_service_filters(
     if state:
         qs = qs.filter(organization__service_state__icontains=state.strip())
     if q:
-        ql = q.lower()
-        q_postal = normalize_postal_code(q)
-        qs = qs.filter(
-            Q(name__icontains=q)
-            | Q(description__icontains=q)
-            | Q(organization__name__icontains=q)
-            | Q(organization__tagline__icontains=q)
-            | Q(organization__service_city__icontains=q)
-            | Q(organization__service_state__icontains=q)
-            | Q(organization__service_address__icontains=q)
-            | Q(organization__service_postal_code__icontains=q_postal or q)
-            | Q(organization__business_types__name__icontains=q)
-        ).distinct()
+        qs = qs.filter(_service_keyword_filter(q)).distinct()
     return qs, dist_map
 
 
@@ -661,10 +665,7 @@ def public_services_browse_api(request):
             qs = _bookable_services_queryset()
             qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
             if q:
-                qs = qs.filter(
-                    Q(name__icontains=q)
-                    | Q(organization__name__icontains=q)
-                ).distinct()
+                qs = qs.filter(_service_keyword_filter(q)).distinct()
             qs = _apply_availability_filter(qs, availability_window)
             service_list = list(qs[:200])
             ctx = {
@@ -800,9 +801,7 @@ def customer_discover_api(request):
             qs = _bookable_services_queryset()
             qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
             if q:
-                qs = qs.filter(
-                    Q(name__icontains=q) | Q(organization__name__icontains=q)
-                ).distinct()
+                qs = qs.filter(_service_keyword_filter(q)).distinct()
             ctx = {'request': request, 'distance_by_org_id': dist_map}
             services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:40]]
             orgs_qs = Organization.objects.filter(

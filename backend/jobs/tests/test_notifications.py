@@ -347,7 +347,8 @@ class BookingNotificationTests(TestCase):
         booking_confirmed.refresh_from_db()
         provider_note.refresh_from_db()
         self.assertIsNotNone(customer_note.dismissed_at)
-        self.assertIsNone(other_customer_note.dismissed_at)
+        # Same org↔customer chat — both new_message alerts clear when the thread is opened.
+        self.assertIsNotNone(other_customer_note.dismissed_at)
         self.assertIsNone(booking_confirmed.dismissed_at)
         self.assertIsNone(provider_note.dismissed_at)
 
@@ -416,7 +417,8 @@ class BookingNotificationTests(TestCase):
         other_note.refresh_from_db()
         provider_note.refresh_from_db()
         self.assertIsNotNone(customer_note.dismissed_at)
-        self.assertIsNone(other_note.dismissed_at)
+        # Same org↔customer chat — opening the thread clears all new_message alerts for that provider.
+        self.assertIsNotNone(other_note.dismissed_at)
         self.assertIsNone(provider_note.dismissed_at)
 
         self.client.force_authenticate(user=self.provider)

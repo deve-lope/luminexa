@@ -51,8 +51,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      mailpit:
-        condition: service_started
     volumes:
       - luminexa_media:/app/media
     healthcheck:

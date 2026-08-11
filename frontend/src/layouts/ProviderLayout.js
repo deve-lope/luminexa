@@ -173,8 +173,8 @@ function ProviderShell() {
   }, [location.pathname, providerHomePath]);
 
   const backNav = useMemo(
-    () => resolveProviderBack(location.pathname, orgSlug),
-    [location.pathname, orgSlug]
+    () => resolveProviderBack(location.pathname, orgSlug, location.search),
+    [location.pathname, location.search, orgSlug]
   );
 
   const { eyebrow, title } = useMemo(() => {

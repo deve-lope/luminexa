@@ -25,9 +25,11 @@ def provider_request_link_path(org_slug, booking_id):
     return f'/provider/{org_slug}/requests/booking/{booking_id}'
 
 
-def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None):
+def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None, conversation_id=None):
     """In-app Messages inbox, optionally deep-linked to a conversation."""
     base = f'/provider/{org_slug}/messages'
+    if conversation_id:
+        return f'{base}?conversation={conversation_id}'
     if booking_id:
         return f'{base}?booking={booking_id}'
     if inquiry_id:
@@ -96,6 +98,7 @@ CUSTOMER_BOOKING_UPDATE_KINDS = (
     CustomerNotification.Kind.BOOKING_COMPLETED,
     CustomerNotification.Kind.INVOICE_READY,
     CustomerNotification.Kind.PAYMENT_CONFIRMED,
+    CustomerNotification.Kind.QUOTE_DETAILS_REQUESTED,
 )
 
 # Cleared when provider staff open that booking's request/schedule detail.
@@ -104,6 +107,7 @@ PROVIDER_BOOKING_UPDATE_KINDS = (
     ProviderNotification.Kind.CUSTOMER_CANCELLED_BOOKING,
     ProviderNotification.Kind.CUSTOMER_RESCHEDULE_REQUEST,
     ProviderNotification.Kind.QUOTE_ACCEPTED,
+    ProviderNotification.Kind.QUOTE_ANSWERS_RECEIVED,
     ProviderNotification.Kind.PAYMENT_RECEIVED,
 )
 
@@ -359,6 +363,41 @@ def notify_booking_quoted(booking):
     send_booking_email('booking_quoted', booking)
 
 
+def notify_quote_details_requested(booking):
+    """Customer: answer questions so the provider can price the job accurately."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    n = len(booking.quote_questions or [])
+    q_label = 'a question' if n == 1 else f'{n} questions'
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.QUOTE_DETAILS_REQUESTED,
+        title=f'Answer questions — {booking.organization.name}',
+        message=(
+            f'{booking.organization.name} needs you to answer {q_label} about {service_name} '
+            f'before they can send an accurate quote. Open Bookings to reply.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+        link_path=f'/customer/bookings/{booking.pk}',
+    )
+    send_booking_email('quote_details_requested', booking)
+
+
+def notify_quote_answers_received(booking):
+    """Provider: customer answered clarifying questions — ready to price."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    ProviderNotification.objects.create(
+        organization=booking.organization,
+        booking=booking,
+        kind=ProviderNotification.Kind.QUOTE_ANSWERS_RECEIVED,
+        message=(
+            f'{_customer_label(booking)} answered your questions for {service_name}. '
+            f'Open the request to send a quote.'
+        ),
+        link_path=provider_request_link_path(booking.organization.slug, booking.pk),
+    )
+
+
 def notify_booking_declined(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
     create_customer_notification(
@@ -563,6 +602,29 @@ def send_booking_email(event, booking):
         body_lines.extend([
             '',
             'Open your bookings to accept the quote and confirm, or decline if it does not work.',
+            f'View bookings: {bookings_url}',
+        ])
+    elif event == 'quote_details_requested':
+        msg = (booking.quote_message or '').strip()
+        questions = [
+            (q.get('question') or '').strip()
+            for q in (booking.quote_questions or [])
+            if (q.get('question') or '').strip() and not (q.get('answer') or '').strip()
+        ]
+        recipients = [booking.customer.email] if booking.customer.email else []
+        subject = f'{org.name} needs a few details for your quote'
+        body_lines = [
+            f'{org.name} asked you to answer questions about {service_name} so they can send an accurate quote.',
+            f'Appointment: {when}',
+        ]
+        if questions:
+            body_lines.extend(['', 'Questions:'])
+            body_lines.extend([f'• {q}' for q in questions[:20]])
+        if msg:
+            body_lines.extend(['', 'Note from the business:', msg])
+        body_lines.extend([
+            '',
+            'Open your bookings to answer, then the business will send your quote.',
             f'View bookings: {bookings_url}',
         ])
     elif event == 'quote_accepted':

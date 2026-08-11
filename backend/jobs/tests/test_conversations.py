@@ -133,22 +133,28 @@ class CustomerConversationsAPITests(TestCase):
         self.client.force_authenticate(user=self.customer)
         res = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data['count'], 2)
+        # One thread per provider (booking + inquiry share the same org↔customer chat).
+        self.assertEqual(res.data['count'], 1)
         results = res.data['results']
-        self.assertEqual(results[0]['kind'], 'inquiry')
-        self.assertEqual(results[0]['id'], self.inquiry.id)
-        self.assertEqual(results[0]['subject'], 'Deep clean')
+        self.assertEqual(results[0]['kind'], 'direct')
         self.assertEqual(results[0]['organization_slug'], 'conv-co')
+        self.assertEqual(results[0]['subject'], 'Conv Co')
         self.assertIn('Newer inquiry reply', results[0]['last_message_preview'])
         self.assertEqual(results[0]['last_sender_name'], 'Customer')
-
-        self.assertEqual(results[1]['kind'], 'booking')
-        self.assertEqual(results[1]['id'], self.booking.id)
-        self.assertEqual(results[1]['last_message_preview'], 'Older booking note')
-        self.assertEqual(results[1]['reference'], f'BK-{self.booking.pk:05d}')
-        self.assertTrue(results[1]['has_unread'])
+        # Latest message is from the customer → not unread for customer.
         self.assertFalse(results[0]['has_unread'])
-        self.assertEqual(res.data['unread_count'], 1)
+        self.assertEqual(res.data['unread_count'], 0)
+
+        # Provider-authored older booking note would be unread if it were latest;
+        # with customer as latest, open booking messages and ensure conversation loads.
+        open_res = self.client.get(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(open_res.status_code, 200)
+        bodies = [m['body'] for m in open_res.data if m.get('kind') == 'text']
+        self.assertIn('Older booking note', bodies)
+        self.assertIn('Newer inquiry reply with enough text for a preview', bodies)
 
     def test_opening_messages_marks_customer_thread_read(self):
         ServiceRequestMessage.objects.create(
@@ -170,6 +176,46 @@ class CustomerConversationsAPITests(TestCase):
         list_after = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
         self.assertFalse(list_after.data['results'][0]['has_unread'])
         self.assertEqual(list_after.data['unread_count'], 0)
+
+    def test_conversation_thread_includes_active_bookings_and_live_card_status(self):
+        from jobs.message_services import ensure_booking_card
+        from jobs.models import OrgCustomerConversation
+
+        ensure_booking_card(booking=self.booking, sender=self.customer)
+        conv = OrgCustomerConversation.objects.get(
+            organization=self.org,
+            customer=self.customer,
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.get(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertIn('results', res.data)
+        self.assertIn('active_bookings', res.data)
+        self.assertIn('active_inquiries', res.data)
+        self.assertEqual(len(res.data['active_bookings']), 1)
+        self.assertEqual(res.data['active_bookings'][0]['booking_id'], self.booking.id)
+        self.assertEqual(res.data['active_bookings'][0]['status'], Booking.Status.CONFIRMED)
+
+        cards = [m for m in res.data['results'] if m.get('kind') == 'booking_card']
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]['card']['status'], Booking.Status.CONFIRMED)
+
+        self.booking.status = Booking.Status.COMPLETED
+        self.booking.save(update_fields=['status', 'updated_at'])
+
+        res_after = self.client.get(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res_after.status_code, 200, res_after.data)
+        self.assertEqual(res_after.data['active_bookings'], [])
+        cards_after = [m for m in res_after.data['results'] if m.get('kind') == 'booking_card']
+        self.assertEqual(len(cards_after), 1)
+        self.assertEqual(cards_after[0]['card']['status'], Booking.Status.COMPLETED)
 
 
 @override_settings(
@@ -257,9 +303,9 @@ class ProviderConversationsAPITests(TestCase):
         self.assertIsNotNone(note)
         self.assertIn('Customer', note.message)
         self.assertEqual(note.booking_id, self.booking.id)
-        self.assertEqual(
-            note.link_path,
-            f'/provider/{self.org.slug}/messages?booking={self.booking.id}',
+        self.assertIn(f'/provider/{self.org.slug}/messages?', note.link_path)
+        self.assertTrue(
+            'conversation=' in note.link_path or f'booking={self.booking.id}' in note.link_path,
         )
 
         self.client.force_authenticate(user=self.owner)
