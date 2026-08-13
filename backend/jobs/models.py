@@ -45,6 +45,9 @@ class Service(models.Model):
         MOBILE = 'mobile', 'Mobile — we come to the customer'
         SHOP = 'shop', 'In-shop — customer comes to us'
 
+    # Abuse / storage guard — raise only with product intent.
+    MAX_PER_ORGANIZATION = 50
+
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='services'
     )

@@ -17,6 +17,37 @@ function parseUploadError(err) {
   return Array.isArray(first) ? first[0] : first || 'Upload failed.';
 }
 
+function ImageFileButton({
+  id,
+  label,
+  accept,
+  onChange,
+  disabled,
+  busyLabel,
+  busy = false,
+}) {
+  return (
+    <div className="mt-2">
+      <input
+        id={id}
+        type="file"
+        accept={accept}
+        onChange={onChange}
+        disabled={disabled}
+        className="sr-only"
+      />
+      <label
+        htmlFor={id}
+        className={`lx-btn-secondary w-full cursor-pointer sm:w-auto ${
+          disabled ? 'pointer-events-none opacity-60' : ''
+        }`}
+      >
+        {busy ? busyLabel : label}
+      </label>
+    </div>
+  );
+}
+
 export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 'Page appearance & bio' }) {
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
@@ -215,16 +246,15 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
               </div>
             )}
           </div>
-          <input
-            type="file"
+          <ImageFileButton
+            id="provider-cover-upload"
+            label={bannerUrl ? 'Change cover photo' : 'Choose cover photo'}
             accept="image/jpeg,image/png,image/webp,image/gif"
             onChange={onBannerSelected}
             disabled={uploading === 'banner'}
-            className="mt-2 block w-full text-sm"
+            busy={uploading === 'banner'}
+            busyLabel="Uploading cover…"
           />
-          {uploading === 'banner' && (
-            <p className="mt-1 text-xs text-slate-500">Uploading cover…</p>
-          )}
         </div>
 
         <div>
@@ -241,14 +271,15 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
               Logo
             </div>
           )}
-          <input
-            type="file"
+          <ImageFileButton
+            id="provider-logo-upload"
+            label={logoUrl ? 'Change logo' : 'Choose logo'}
             accept="image/jpeg,image/png,image/webp,image/gif"
             onChange={onLogoSelected}
             disabled={uploading === 'logo'}
-            className="mt-2 block w-full text-sm"
+            busy={uploading === 'logo'}
+            busyLabel="Uploading logo…"
           />
-          {uploading === 'logo' && <p className="mt-1 text-xs text-slate-500">Uploading logo…</p>}
         </div>
 
         <label htmlFor="tagline" className="block text-sm font-medium text-slate-700">
@@ -286,7 +317,7 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
           type="button"
           onClick={saveText}
           disabled={saving || Boolean(uploading)}
-          className="w-full min-h-[44px] rounded-lg border border-slate-200 font-medium disabled:opacity-60"
+          className="lx-btn-primary w-full min-h-[48px]"
         >
           {saving ? 'Saving…' : 'Save profile'}
         </button>
@@ -294,16 +325,15 @@ export default function ProviderProfileEditor({ orgSlug, onMediaChange, title = 
 
       <div className="mt-6 border-t border-slate-100 pt-4">
         <h3 className="text-sm font-medium text-slate-800">Gallery ({gallery.length}/5)</h3>
-        <input
-          type="file"
+        <ImageFileButton
+          id="provider-gallery-upload"
+          label={gallery.length >= 5 ? 'Gallery full (5/5)' : 'Add gallery photo'}
           accept="image/*"
           onChange={uploadGallery}
           disabled={uploading === 'gallery' || gallery.length >= 5}
-          className="mt-2 block w-full text-sm"
+          busy={uploading === 'gallery'}
+          busyLabel="Uploading to gallery…"
         />
-        {uploading === 'gallery' && (
-          <p className="mt-1 text-xs text-slate-500">Uploading to gallery…</p>
-        )}
         <ul className="mt-3 grid grid-cols-3 gap-2">
           {gallery.map((img) => (
             <li key={img.id} className="relative">

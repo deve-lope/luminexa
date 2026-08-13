@@ -164,16 +164,6 @@ export default function ProviderSettingsPage() {
           }
         />
       )}
-      <BookingPolicySettings
-        orgSlug={orgSlug}
-        organizationName={activeOrg?.organization_name}
-        isOwner={isOwner}
-      />
-
-      <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} />
-
-      <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} />
-
       <p className="text-sm text-slate-600">
         <strong>Weekly schedule</strong> repeats the same hours and auto-creates bookable slots.{' '}
         <strong>Flexi</strong> lets you open specific dates yourself (one at a time or on Schedule).
@@ -315,6 +305,16 @@ export default function ProviderSettingsPage() {
 
       {message && <p className="text-sm text-emerald-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <BookingPolicySettings
+        orgSlug={orgSlug}
+        organizationName={activeOrg?.organization_name}
+        isOwner={isOwner}
+      />
+
+      <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} />
+
+      <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} />
     </div>
   );
 }

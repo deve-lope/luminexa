@@ -21,6 +21,8 @@ import {
 const INPUT_CLASS =
   'w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-luminexa-accent focus:outline-none focus:ring-2 focus:ring-luminexa-accent/20';
 const LABEL_CLASS = 'mb-1 block text-xs font-medium text-slate-600';
+/** Keep in sync with jobs.models.Service.MAX_PER_ORGANIZATION */
+const MAX_SERVICES_PER_ORG = 50;
 
 function FieldToggle({ checked, onChange, label, description, info }) {
   const [showInfo, setShowInfo] = useState(false);
@@ -1262,6 +1264,11 @@ export default function ProviderServicesPage({ embedded = false }) {
       if (editingServiceId) {
         await jobsAPI.patchService(editingServiceId, payload);
       } else {
+        if (services.length >= MAX_SERVICES_PER_ORG) {
+          setError(`You can add at most ${MAX_SERVICES_PER_ORG} services for this business.`);
+          setSavingService(false);
+          return;
+        }
         await jobsAPI.createService({
           ...payload,
           organization: orgId,
@@ -1302,6 +1309,19 @@ export default function ProviderServicesPage({ embedded = false }) {
 
     if (rows.length === 0) {
       setError('Enter at least one service name (2+ characters).');
+      return;
+    }
+
+    const remaining = MAX_SERVICES_PER_ORG - services.length;
+    if (remaining <= 0) {
+      setError(`You can add at most ${MAX_SERVICES_PER_ORG} services for this business.`);
+      return;
+    }
+    if (rows.length > remaining) {
+      setError(
+        `You can add ${remaining} more service${remaining === 1 ? '' : 's'} ` +
+          `(limit ${MAX_SERVICES_PER_ORG}). Remove some rows or delete unused services.`
+      );
       return;
     }
 

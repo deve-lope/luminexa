@@ -212,3 +212,59 @@ class MediaAccessTests(TestCase):
         allowed = self.client.get('/media/private/secret.txt', HTTP_HOST='localhost')
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(self._body(allowed), 'top-secret')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ServiceLimitTests(TestCase):
+    """Providers cannot spam unlimited services (abuse / storage guard)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            email='svc-limit-owner@test.local',
+            password='pass12345',
+            full_name='Owner',
+            phone='5552000030',
+        )
+        self.org = Organization.objects.create(
+            name='Limit Co',
+            slug='limit-co',
+            profile_public=True,
+            is_active=True,
+            subscription_status='active',
+            subscription_plan='pro_monthly',
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=self.owner,
+            role=OrganizationMembership.Role.OWNER,
+        )
+
+    def test_create_service_rejected_at_org_max(self):
+        from unittest.mock import patch
+
+        with patch.object(Service, 'MAX_PER_ORGANIZATION', 2):
+            for i in range(2):
+                Service.objects.create(
+                    organization=self.org,
+                    name=f'Service {i}',
+                    duration_minutes=60,
+                    base_price='10.00',
+                    is_active=True,
+                )
+            self.client.force_authenticate(user=self.owner)
+            res = self.client.post(
+                '/api/v1/services/',
+                {
+                    'organization': self.org.id,
+                    'name': 'Too Many',
+                    'duration_minutes': 60,
+                    'pricing_type': 'fixed',
+                    'base_price': '10.00',
+                },
+                format='json',
+                HTTP_HOST='localhost',
+            )
+            self.assertEqual(res.status_code, 400, res.data)
+            self.assertEqual(res.data.get('code'), 'service_limit')
+            self.assertEqual(self.org.services.count(), 2)

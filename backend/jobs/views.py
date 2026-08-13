@@ -893,6 +893,14 @@ class ServiceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         org = serializer.validated_data['organization']
         require_staff_ops(self.request.user, org)
+        if org.services.count() >= Service.MAX_PER_ORGANIZATION:
+            raise ValidationError({
+                'detail': (
+                    f'You can add at most {Service.MAX_PER_ORGANIZATION} services '
+                    f'for this business.'
+                ),
+                'code': 'service_limit',
+            })
         serializer.save()
 
     def perform_update(self, serializer):

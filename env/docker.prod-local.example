@@ -31,10 +31,20 @@ EMAIL_PORT=1025
 EMAIL_USE_TLS=False
 DEFAULT_FROM_EMAIL=noreply@luminexa.local
 
-# ── Going live: send real email ────────────────────────────────────────────
-# Replace the Mailpit block above with ONE real provider below, then set
-# PUBLIC_APP_URL to your real domain so links in emails point to the live app.
-# Verify your sending domain (SPF/DKIM) with the provider or mail lands in spam.
+# ── Going live: Brevo HTTPS API (recommended — no SMTP IP allowlist) ───────
+# Create an API key in Brevo → SMTP & API → API keys, then set:
+# BREVO_API_KEY=xkeysib-...
+# DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+# (When BREVO_API_KEY is set, Django uses anymail Brevo backend and ignores SMTP.)
+#
+# Legacy SMTP (needs Authorized IPs if Brevo locks them):
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=smtp-relay.brevo.com
+# EMAIL_PORT=587
+# EMAIL_HOST_USER=...
+# EMAIL_HOST_PASSWORD=...
+# EMAIL_USE_TLS=True
+# DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 #
 # SendGrid (username is literally "apikey"):
 # EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend

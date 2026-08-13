@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'businesses',
     'jobs',
+    'anymail',
 ]
 
 MIDDLEWARE = [
@@ -188,15 +189,24 @@ PUBLIC_APP_URL = config('PUBLIC_APP_URL', default='http://localhost:3000')
 CUSTOMER_BOOKING_LEAD_HOURS = config('CUSTOMER_BOOKING_LEAD_HOURS', default=2, cast=int)
 
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@luminexa.local')
-EMAIL_BACKEND = config(
-    'EMAIL_BACKEND',
-    default='django.core.mail.backends.console.EmailBackend',
-)
+# Prefer Brevo HTTPS API when BREVO_API_KEY is set (no SMTP IP allowlist).
+# Otherwise fall back to EMAIL_* SMTP (Mailpit locally, or legacy SMTP).
+BREVO_API_KEY = config('BREVO_API_KEY', default='')
 EMAIL_HOST = config('EMAIL_HOST', default='')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default='True').lower() == 'true'
+if BREVO_API_KEY:
+    EMAIL_BACKEND = 'anymail.backends.brevo.EmailBackend'
+    ANYMAIL = {
+        'BREVO_API_KEY': BREVO_API_KEY,
+    }
+else:
+    EMAIL_BACKEND = config(
+        'EMAIL_BACKEND',
+        default='django.core.mail.backends.console.EmailBackend',
+    )
 
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
