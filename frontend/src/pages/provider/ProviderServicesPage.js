@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { publicServicesCatalog, serviceDetail } from '../../utils/customerPaths';
+import { withReturnTo } from '../../utils/navigationBack';
+import { providerServices } from '../../utils/providerPaths';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import {
@@ -184,6 +186,8 @@ const emptyBulkRow = () => ({
   pricing_type: 'fixed',
   quote_questions: [...DEFAULT_QUOTE_QUESTIONS],
 });
+
+const initialBulkRows = () => [emptyBulkRow()];
 
 const emptyBulkDefaults = (category = '') => ({
   category: category || '',
@@ -618,9 +622,9 @@ function BulkAddServicesForm({
     >
       <div className="flex items-center justify-between gap-3 border-b border-teal-100 bg-teal-50/50 px-4 py-3 sm:px-5">
         <div>
-          <h4 className="text-sm font-semibold text-slate-900">Add services</h4>
+          <h4 className="text-sm font-semibold text-slate-900">Add a service</h4>
           <p className="mt-0.5 text-xs text-slate-500">
-            Create several offerings at once. Set pricing (and quote questions) on each row.
+            Fill in this offering. Click “Add another row” below if you want to create more at once.
           </p>
         </div>
         <button
@@ -746,11 +750,11 @@ function BulkAddServicesForm({
           {bulkRows.map((row, index) => (
             <div
               key={`bulk-row-${index}`}
-              className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3"
+              className="space-y-3 rounded-xl border border-teal-100 bg-white p-3 shadow-sm ring-1 ring-teal-600/5"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-500">#{index + 1}</span>
-                {bulkRows.length > 1 && (
+              {bulkRows.length > 1 && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-teal-800">Service {index + 1}</span>
                   <button
                     type="button"
                     onClick={() => setBulkRows((rows) => rows.filter((_, i) => i !== index))}
@@ -758,8 +762,8 @@ function BulkAddServicesForm({
                   >
                     Remove
                   </button>
-                )}
-              </div>
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className={LABEL_CLASS} htmlFor={`bulk-name-${index}`}>
@@ -865,7 +869,7 @@ function BulkAddServicesForm({
           <button
             type="button"
             onClick={() => setBulkRows((rows) => [...rows, emptyBulkRow()])}
-            className="w-full min-h-[44px] rounded-xl border border-dashed border-slate-300 text-sm font-semibold text-slate-700 hover:border-luminexa-accent/50 hover:bg-violet-50/40"
+            className="w-full min-h-[44px] rounded-xl border border-dashed border-teal-300 bg-teal-50/50 text-sm font-semibold text-teal-800 hover:border-teal-500 hover:bg-teal-50"
           >
             + Add another row
           </button>
@@ -901,22 +905,45 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
   const hidden = service.is_active === false;
   const needsDetails = serviceNeedsDetails(service);
   const duration = formatDurationLabel(service.duration_minutes);
-  const locationLabel = service.fulfillment_kind === 'shop' ? 'In-shop' : 'Mobile';
+  const isShop = service.fulfillment_kind === 'shop';
+  const locationLabel = isShop ? 'In-shop' : 'Mobile';
   const description = (service.description || '').trim();
   const priceLabel = meta ? meta.split(' · ')[0] : null;
+  const categoryName = (service.category_name || '').trim();
 
   return (
     <article
-      className={`overflow-hidden rounded-2xl border bg-white shadow-lx-soft transition ${
+      className={`overflow-hidden rounded-2xl border shadow-lx-card transition ${
         detailsOpen
-          ? 'border-teal-600 ring-2 ring-teal-600/15'
+          ? 'border-teal-600 bg-white ring-2 ring-teal-600/20'
           : hidden
-            ? 'border-dashed border-slate-200 bg-slate-50/80'
-            : 'border-luminexa-line hover:border-teal-200'
+            ? 'border-dashed border-slate-300 bg-slate-50/90'
+            : 'border-teal-100/90 bg-gradient-to-br from-white via-luminexa-mist to-teal-50/70 hover:border-teal-300 hover:shadow-lx-elevated'
       }`}
     >
+      <div
+        className={`h-1.5 ${
+          hidden
+            ? 'bg-slate-200'
+            : needsDetails
+              ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+              : 'bg-gradient-to-r from-teal-700 via-luminexa-accent to-cyan-400'
+        }`}
+      />
       <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg shadow-sm ${
+              hidden
+                ? 'bg-slate-200 text-slate-500'
+                : isShop
+                  ? 'bg-gradient-to-br from-sky-100 to-teal-100 text-teal-800 ring-1 ring-teal-200/70'
+                  : 'bg-gradient-to-br from-teal-700 to-teal-500 text-white'
+            }`}
+            aria-hidden
+          >
+            {isShop ? '🏪' : '🚐'}
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-bold tracking-tight text-slate-900">{service.name}</h3>
@@ -931,6 +958,9 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
                 </span>
               )}
             </div>
+            {categoryName && (
+              <p className="mt-0.5 text-xs font-medium text-teal-800/80">{categoryName}</p>
+            )}
             {service.rating_summary?.count > 0 && (
               <div className="mt-1.5">
                 <ServiceRatingSummary summary={service.rating_summary} compact />
@@ -945,26 +975,46 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
             )}
           </div>
           {priceLabel && (
-            <p className="shrink-0 text-right text-sm font-bold tabular-nums text-slate-900">
+            <p
+              className={`shrink-0 rounded-xl px-2.5 py-1.5 text-right text-sm font-bold tabular-nums ${
+                hidden
+                  ? 'bg-slate-100 text-slate-600'
+                  : 'bg-teal-700 text-white shadow-sm'
+              }`}
+            >
               {priceLabel}
             </p>
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {duration && <span className="rounded-lg bg-slate-100 px-2 py-1">{duration}</span>}
-          <span className="rounded-lg bg-slate-100 px-2 py-1">{locationLabel}</span>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+          {duration && (
+            <span className="rounded-lg bg-white/80 px-2 py-1 text-teal-900 ring-1 ring-teal-200/70">
+              {duration}
+            </span>
+          )}
+          <span className="rounded-lg bg-white/80 px-2 py-1 text-teal-900 ring-1 ring-teal-200/70">
+            {locationLabel}
+          </span>
           {service.pricing_type === 'quote' ? (
-            <span className="rounded-lg bg-teal-50 px-2 py-1 text-teal-800">Quote on request</span>
+            <span className="rounded-lg bg-teal-700 px-2 py-1 text-white">Quote on request</span>
           ) : service.pricing_type === 'range' || service.pricing_type === 'average' ? (
-            <span className="rounded-lg bg-teal-50 px-2 py-1 text-teal-800">Quote</span>
+            <span className="rounded-lg bg-teal-600 px-2 py-1 text-white">Quote</span>
           ) : (
-            <span className="rounded-lg bg-slate-100 px-2 py-1">Fixed</span>
+            <span className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-800 ring-1 ring-emerald-200/80">
+              Fixed
+            </span>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
+      <div
+        className={`flex flex-wrap items-center gap-2 border-t px-4 py-3 sm:px-5 ${
+          hidden
+            ? 'border-slate-200 bg-slate-100/70'
+            : 'border-teal-100/80 bg-teal-50/60'
+        }`}
+      >
         <button
           type="button"
           onClick={() => onDetails(service)}
@@ -973,15 +1023,15 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
               ? 'bg-teal-700 text-white'
               : needsDetails
                 ? 'bg-teal-700 text-white hover:bg-teal-800'
-                : 'border border-slate-200 bg-white text-slate-800 hover:border-teal-300'
+                : 'border border-teal-200 bg-white text-teal-900 hover:border-teal-400 hover:bg-teal-50'
           }`}
         >
           {detailsOpen ? 'Close' : needsDetails ? 'Complete details' : 'Edit'}
         </button>
         {orgSlug && !hidden && (
           <Link
-            to={serviceDetail(orgSlug, service.id)}
-            className="inline-flex min-h-[40px] items-center rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:border-teal-300"
+            to={withReturnTo(serviceDetail(orgSlug, service.id), providerServices(orgSlug))}
+            className="inline-flex min-h-[40px] items-center rounded-xl border border-teal-200 bg-white px-3.5 text-sm font-semibold text-teal-900 transition hover:border-teal-400 hover:bg-teal-50"
           >
             Preview
           </Link>
@@ -1017,15 +1067,21 @@ function ServicesSkeleton() {
         ))}
       </div>
       {[1, 2, 3].map((i) => (
-        <div key={i} className="animate-pulse rounded-2xl border border-slate-100 bg-white p-5">
-          <div className="flex justify-between gap-3">
-            <div className="h-5 w-40 rounded-lg bg-slate-200/80" />
-            <div className="h-5 w-16 rounded-lg bg-slate-200/80" />
-          </div>
-          <div className="mt-3 h-4 w-full max-w-md rounded-lg bg-slate-100" />
-          <div className="mt-4 flex gap-2">
-            <div className="h-7 w-16 rounded-lg bg-slate-100" />
-            <div className="h-7 w-16 rounded-lg bg-slate-100" />
+        <div
+          key={i}
+          className="animate-pulse overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-white to-teal-50/50"
+        >
+          <div className="h-1.5 bg-teal-200/70" />
+          <div className="p-5">
+            <div className="flex justify-between gap-3">
+              <div className="h-5 w-40 rounded-lg bg-teal-100" />
+              <div className="h-8 w-16 rounded-xl bg-teal-200/80" />
+            </div>
+            <div className="mt-3 h-4 w-full max-w-md rounded-lg bg-teal-50" />
+            <div className="mt-4 flex gap-2">
+              <div className="h-7 w-16 rounded-lg bg-teal-100/80" />
+              <div className="h-7 w-16 rounded-lg bg-teal-100/80" />
+            </div>
           </div>
         </div>
       ))}
@@ -1049,11 +1105,7 @@ export default function ProviderServicesPage({ embedded = false }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [serviceDraft, setServiceDraft] = useState(emptyServiceDraft);
   const [bulkDefaults, setBulkDefaults] = useState(() => emptyBulkDefaults());
-  const [bulkRows, setBulkRows] = useState(() => [
-    emptyBulkRow(),
-    emptyBulkRow(),
-    emptyBulkRow(),
-  ]);
+  const [bulkRows, setBulkRows] = useState(initialBulkRows);
   const [editingServiceId, setEditingServiceId] = useState(null);
   const [expandedServiceId, setExpandedServiceId] = useState(null);
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -1190,7 +1242,7 @@ export default function ProviderServicesPage({ embedded = false }) {
         ? String(selectedCategoryId)
         : '';
     setBulkDefaults(emptyBulkDefaults(category));
-    setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+    setBulkRows(initialBulkRows());
   };
 
   const resetServiceForm = () => {
@@ -1199,7 +1251,7 @@ export default function ProviderServicesPage({ embedded = false }) {
     setShowServiceForm(false);
     setServiceDraft(emptyServiceDraft());
     setBulkDefaults(emptyBulkDefaults());
-    setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+    setBulkRows(initialBulkRows());
   };
 
   const saveService = async (e) => {
@@ -1468,7 +1520,7 @@ export default function ProviderServicesPage({ embedded = false }) {
               </p>
               {publicCatalogPath && (
                 <Link
-                  to={publicCatalogPath}
+                  to={withReturnTo(publicCatalogPath, providerServices(orgSlug))}
                   className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 transition hover:text-teal-900"
                 >
                   Preview customer catalog

@@ -1,5 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { consumePreviousInAppPath, locationEntry } from '../../utils/inAppNavStack';
 
 export default function BackButton({
   fallback = '/',
@@ -10,13 +11,19 @@ export default function BackButton({
   preferFallback = false,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const goBack = () => {
-    if (!preferFallback && window.history.length > 1) {
-      navigate(-1);
-      return;
+    if (!preferFallback) {
+      const prev = consumePreviousInAppPath(locationEntry(location));
+      if (prev) {
+        navigate(prev, { replace: true });
+        return;
+      }
     }
-    navigate(fallback, { replace: true });
+    if (fallback) {
+      navigate(fallback, { replace: true });
+    }
   };
 
   return (

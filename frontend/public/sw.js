@@ -6,7 +6,7 @@
  * - Manifest always from network (so DevTools / install UI see updates)
  * - Never caches API / auth requests
  */
-const CACHE_VERSION = 'lx-shell-v6';
+const CACHE_VERSION = 'lx-shell-v7';
 const SHELL_URLS = [
   '/',
   '/index.html',

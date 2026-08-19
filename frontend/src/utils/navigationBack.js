@@ -8,7 +8,7 @@ function normalizePath(pathname) {
 }
 
 /**
- * Safe in-app return path from ?returnTo= (used when leaving chat for a booking detail).
+ * Safe in-app return path from ?returnTo=.
  * Only same-origin relative paths under /customer or /provider.
  */
 export function parseReturnTo(search = '') {
@@ -26,7 +26,7 @@ export function parseReturnTo(search = '') {
   }
 }
 
-/** Append ?returnTo= (or &returnTo=) for detail links opened from chat. */
+/** Append ?returnTo= (or &returnTo=) for detail/preview links. */
 export function withReturnTo(href, returnTo) {
   if (!href || !returnTo) return href;
   const sep = href.includes('?') ? '&' : '?';
@@ -37,26 +37,25 @@ export function isMarketingOrLogin(pathname) {
   return NO_NAV_EXACT.has(normalizePath(pathname));
 }
 
-/** Fallback when history is empty — Back still uses navigate(-1) first. */
+function catalogQuery(search = '') {
+  const qs = (search || '').startsWith('?') ? search : search ? `?${search}` : '';
+  if (!qs) return '';
+  try {
+    const cat = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs).get('cat');
+    return cat ? `?cat=${encodeURIComponent(cat)}` : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Semantic parent when the in-app stack is empty (refresh / shared link). */
 export function resolveCustomerBack(pathname, search = '') {
   const path = normalizePath(pathname);
-  const qs = (search || '').startsWith('?') ? search : search ? `?${search}` : '';
-  const returnTo = parseReturnTo(qs || search);
-  const catOnly = (() => {
-    if (!qs) return '';
-    try {
-      const cat = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs).get('cat');
-      return cat ? `?cat=${encodeURIComponent(cat)}` : '';
-    } catch {
-      return '';
-    }
-  })();
+  const returnTo = parseReturnTo(search);
+  const catOnly = catalogQuery(search);
 
   if (path === '/customer') return null;
-
-  if (returnTo && /^\/customer\/bookings\/[^/]+$/.test(path)) {
-    return { to: returnTo };
-  }
+  if (returnTo) return { to: returnTo };
 
   if (path === '/customer/find') return { to: '/customer' };
   if (path === '/customer/categories') return { to: '/customer' };
@@ -117,13 +116,7 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   const returnTo = parseReturnTo(search);
 
   if (path === base) return null;
-
-  if (
-    returnTo &&
-    (path.startsWith(`${base}/schedule/`) || path.startsWith(`${base}/requests/`))
-  ) {
-    return { to: returnTo };
-  }
+  if (returnTo) return { to: returnTo };
 
   if (path === `${base}/schedule`) return { to: base };
   if (path === `${base}/requests`) return { to: base };
@@ -133,12 +126,17 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   if (path === `${base}/billing`) return { to: `${base}/account` };
   if (path === `${base}/about`) return { to: base };
   if (path === `${base}/analytics`) return { to: base };
+  if (path === `${base}/subscribe`) return { to: `${base}/account` };
+  if (path === `${base}/clients`) return { to: base };
 
   if (path.startsWith(`${base}/schedule/`)) {
     return { to: `${base}/schedule` };
   }
   if (path.startsWith(`${base}/requests/`)) {
     return { to: `${base}/requests` };
+  }
+  if (path.startsWith(`${base}/clients/`)) {
+    return { to: `${base}/clients` };
   }
   if (path === `${base}/messages`) return { to: base };
   if (path === `${base}/notifications`) return { to: base };
@@ -151,14 +149,53 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   return null;
 }
 
-export function resolvePublicBack(pathname) {
+/**
+ * Provider viewing their own public /book URLs (service preview, catalog, storefront).
+ */
+export function resolveOwnerBookBack(pathname, orgSlug, search = '') {
+  if (!orgSlug) return null;
   const path = normalizePath(pathname);
+  const returnTo = parseReturnTo(search);
+  if (returnTo) return { to: returnTo };
+
+  const services = `/provider/${orgSlug}/services`;
+  const myPage = `/provider/${orgSlug}/my-page`;
+  const home = `/provider/${orgSlug}`;
+
+  if (path === `/book/${orgSlug}/services` || path.startsWith(`/book/${orgSlug}/services/`)) {
+    return { to: services };
+  }
+  if (path === `/book/${orgSlug}`) {
+    return { to: myPage };
+  }
+  if (path.startsWith(`/book/${orgSlug}/`)) {
+    return { to: `/book/${orgSlug}` };
+  }
+  return { to: home };
+}
+
+export function resolvePublicBack(pathname, search = '') {
+  const path = normalizePath(pathname);
+  const returnTo = parseReturnTo(search);
+  if (returnTo) return { to: returnTo };
   if (NO_NAV_EXACT.has(path)) return null;
   if (path === '/services') return { to: '/' };
+  if (/^\/book\/[^/]+\/services\/[^/]+$/.test(path)) {
+    const slug = path.split('/')[2];
+    return { to: `/book/${slug}/services` };
+  }
   if (/^\/book\/[^/]+\/services$/.test(path)) {
     return { to: path.replace(/\/services$/, '') };
   }
-  if (/^\/book\/[^/]+$/.test(path)) return { to: '/' };
+  if (/^\/book\/[^/]+\/checkout$/.test(path)) {
+    const slug = path.split('/')[2];
+    return { to: `/book/${slug}` };
+  }
+  if (/^\/book\/[^/]+\/[^/]+$/.test(path)) {
+    const slug = path.split('/')[2];
+    return { to: `/book/${slug}` };
+  }
+  if (/^\/book\/[^/]+$/.test(path)) return { to: '/services' };
   if (path === '/register') return { to: '/' };
   if (path === '/register/business') return { to: '/' };
   if (path === '/forgot-password') return { to: '/login' };

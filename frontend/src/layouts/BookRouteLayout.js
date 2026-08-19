@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import CustomerLayout from './CustomerLayout';
-import { ProviderOrgProvider } from '../contexts/ProviderOrgContext';
+import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
   PUBLIC_BOOK_TABS,
@@ -12,7 +12,6 @@ import {
 } from '../config/navigation';
 import { isOrgStaff } from '../utils/bookingAccess';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
-import { businessPage } from '../utils/customerPaths';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 import {
@@ -21,11 +20,14 @@ import {
   providerSettings,
   providerShare,
 } from '../utils/providerPaths';
+import { resolveOwnerBookBack, resolvePublicBack } from '../utils/navigationBack';
 
-function BookOwnerShell({ orgSlug, children }) {
+function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { orgSlug: ctxSlug } = useProviderOrg();
+  const orgSlug = orgSlugProp || ctxSlug;
 
   const tabs = useMemo(() => buildProviderTabs(orgSlug), [orgSlug]);
   const menuItems = useMemo(
@@ -42,9 +44,14 @@ function BookOwnerShell({ orgSlug, children }) {
     [logout, navigate, orgSlug, user?.can_access_django_admin]
   );
 
-  const onServicesPage = location.pathname.endsWith('/services');
-  const title = onServicesPage ? 'Services' : 'Booking page';
-  const eyebrow = onServicesPage ? 'Public catalog' : 'Your business';
+  const onServiceDetail = /\/services\/[^/]+\/?$/.test(location.pathname);
+  const onServicesPage = /\/services\/?$/.test(location.pathname);
+  const title = onServiceDetail ? 'Service details' : onServicesPage ? 'Services' : 'Booking page';
+  const eyebrow = onServiceDetail || onServicesPage ? 'Public catalog' : 'Your business';
+  const backNav = useMemo(
+    () => resolveOwnerBookBack(location.pathname, orgSlug, location.search),
+    [location.pathname, location.search, orgSlug]
+  );
 
   return (
     <AppShell
@@ -54,8 +61,9 @@ function BookOwnerShell({ orgSlug, children }) {
       tabs={tabs}
       menuItems={menuItems}
       menuTitle="Provider menu"
-      showBack
-      backTo={providerHome(orgSlug)}
+      showBack={Boolean(backNav?.to)}
+      backTo={backNav?.to}
+      homeTo={providerHome(orgSlug)}
     >
       {children}
     </AppShell>
@@ -64,19 +72,23 @@ function BookOwnerShell({ orgSlug, children }) {
 
 function BookGuestShell({ children }) {
   const location = useLocation();
-  const { slug } = useParams();
-  const onServicesPage = location.pathname.endsWith('/services');
+  const onServiceDetail = /\/services\/[^/]+\/?$/.test(location.pathname);
+  const onServicesPage = /\/services\/?$/.test(location.pathname);
+  const backNav = useMemo(
+    () => resolvePublicBack(location.pathname, location.search),
+    [location.pathname, location.search]
+  );
 
   return (
     <AppShell
       brand="Luminexa"
       eyebrow="Book"
-      title={onServicesPage ? 'Services' : 'Provider'}
+      title={onServiceDetail ? 'Service details' : onServicesPage ? 'Services' : 'Provider'}
       tabs={PUBLIC_BOOK_TABS}
       menuItems={buildPublicBookMenuItems()}
       menuTitle="Menu"
-      showBack
-      backTo={onServicesPage ? businessPage(slug) : '/'}
+      showBack={Boolean(backNav?.to)}
+      backTo={backNav?.to}
     >
       {children}
     </AppShell>
@@ -139,7 +151,7 @@ export default function BookRouteLayout() {
   if (variant === 'owner') {
     return (
       <ProviderOrgProvider providerOrgs={providerOrgs} orgSlug={slug}>
-        <BookOwnerShell>
+        <BookOwnerShell orgSlug={slug}>
           <Outlet context={outletContext} />
         </BookOwnerShell>
       </ProviderOrgProvider>

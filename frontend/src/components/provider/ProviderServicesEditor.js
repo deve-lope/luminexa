@@ -4,6 +4,7 @@ import { jobsAPI } from '../../utils/api';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { providerServices } from '../../utils/providerPaths';
 import { publicServicesCatalog } from '../../utils/customerPaths';
+import { withReturnTo } from '../../utils/navigationBack';
 
 /**
  * Summary + link to full Services catalog (categories, pricing, request options).
@@ -70,7 +71,7 @@ export default function ProviderServicesEditor({ orgSlug: orgSlugProp }) {
           Manage services
         </Link>
         <Link
-          to={publicServicesCatalog(orgSlug)}
+          to={withReturnTo(publicServicesCatalog(orgSlug), providerServices(orgSlug))}
           className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-slate-200 text-sm font-medium text-slate-700"
         >
           Preview public page
