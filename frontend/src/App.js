@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ApiHealthProvider, useApiHealth } from './contexts/ApiHealthContext';
@@ -66,6 +66,7 @@ import {
 } from './components/booking/BookRedirect';
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import { bootstrapNativeApp, isNativeApp } from './native/capacitorNative';
 import ScrollToTop from './components/ScrollToTop';
 import InAppNavTracker from './components/InAppNavTracker';
 
@@ -104,7 +105,7 @@ function AppRoutes() {
 
   return (
     <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-canvas' : 'min-h-[100dvh] bg-slate-50'}>
-      <PwaInstallPrompt />
+      {!isNativeApp() && <PwaInstallPrompt />}
       <Routes>
         <Route path="/" element={<LandingRoute />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -239,6 +240,10 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    bootstrapNativeApp();
+  }, []);
+
   return (
     <ErrorBoundary>
       <BrowserRouter>

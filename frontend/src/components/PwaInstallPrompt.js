@@ -5,6 +5,7 @@ export default function PwaInstallPrompt() {
   const { canInstall, showIosGuide, install, dismiss } = usePwaInstall();
 
   if (!canInstall && !showIosGuide) return null;
+  if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] p-3 px-safe pb-safe sm:p-4">

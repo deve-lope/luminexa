@@ -40,6 +40,10 @@ backups/
 
 # Android / Play release outputs
 android-twa/
+frontend/android/.gradle/
+frontend/android/app/build/
+frontend/android/local.properties
+frontend/android/app/google-services.json
 *.aab
 *.apk
 *.jks
