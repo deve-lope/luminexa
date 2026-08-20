@@ -23,6 +23,7 @@ import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
+import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -163,6 +164,9 @@ export default function ProviderScheduleDetailPage() {
       <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Not found.'}</p>
     );
   }
+
+  const canJobAction = canStartOrCompleteJob(data);
+  const jobActionFrom = jobActionAvailableAt(data);
 
   if (kind === 'booking') {
     return (
@@ -414,7 +418,13 @@ export default function ProviderScheduleDetailPage() {
 
         {(data.status === 'confirmed' || data.status === 'in_progress') && (
           <div className="flex flex-col gap-2">
-            {data.status === 'confirmed' && (
+            {!canJobAction && jobActionFrom && (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Start job and mark complete are available from {formatWhen(jobActionFrom.toISOString())}{' '}
+                (6 hours before the appointment).
+              </p>
+            )}
+            {data.status === 'confirmed' && canJobAction && (
               <button
                 type="button"
                 disabled={actionBusy}
@@ -435,14 +445,16 @@ export default function ProviderScheduleDetailPage() {
                 Start job
               </button>
             )}
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => setCompleteOpen(true)}
-              className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
-            >
-              Mark complete
-            </button>
+            {canJobAction && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setCompleteOpen(true)}
+                className="min-h-[48px] w-full rounded-xl bg-luminexa-accent font-medium text-white disabled:opacity-60"
+              >
+                Mark complete
+              </button>
+            )}
             {data.status === 'in_progress' && (
               <button
                 type="button"

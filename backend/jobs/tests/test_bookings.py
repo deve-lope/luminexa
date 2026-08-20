@@ -107,13 +107,34 @@ class BookingLifecycleTests(TestCase):
         self.slot.refresh_from_db()
         self.assertEqual(self.slot.status, AvailabilitySlot.Status.OPEN)
 
-    def test_provider_complete_booking(self):
+    def test_provider_cannot_start_or_complete_booking_two_days_early(self):
         booking = Booking.objects.create(
             organization=self.org,
             service=self.service,
             customer=self.customer,
+            availability_slot=self.slot,
             start_at=self.slot.start_at,
             end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.PROVIDER_DIRECT,
+        )
+        self._auth(self.provider)
+        start = self.client.post(f'/api/v1/bookings/{booking.id}/start/', HTTP_HOST='localhost')
+        self.assertEqual(start.status_code, 400)
+        complete = self.client.post(f'/api/v1/bookings/{booking.id}/complete/', HTTP_HOST='localhost')
+        self.assertEqual(complete.status_code, 400)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+
+    def test_provider_complete_booking(self):
+        start = timezone.now() + timedelta(hours=2)
+        end = start + timedelta(hours=1)
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            start_at=start,
+            end_at=end,
             status=Booking.Status.CONFIRMED,
             source=Booking.Source.PROVIDER_DIRECT,
         )
@@ -123,6 +144,24 @@ class BookingLifecycleTests(TestCase):
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.COMPLETED)
         self.assertTrue(hasattr(booking, 'invoice') or Invoice.objects.filter(booking=booking).exists())
+
+    def test_provider_start_booking_within_six_hours(self):
+        start = timezone.now() + timedelta(hours=2)
+        end = start + timedelta(hours=1)
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            start_at=start,
+            end_at=end,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.PROVIDER_DIRECT,
+        )
+        self._auth(self.provider)
+        res = self.client.post(f'/api/v1/bookings/{booking.id}/start/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.IN_PROGRESS)
 
     def test_customer_reschedule_confirmed_booking(self):
         new_start = timezone.now() + timedelta(days=3)

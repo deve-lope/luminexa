@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import CustomerInvoicePaymentPrompt from '../components/customer/CustomerInvoicePaymentPrompt';
+import CustomerRatePrompt from '../components/customer/CustomerRatePrompt';
 import CustomerNotificationBell from '../components/customer/CustomerNotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { buildCustomerTabs, buildCustomerMenuItems } from '../config/navigation';
@@ -215,6 +216,7 @@ export default function CustomerLayout({ children }) {
         {children ?? <Outlet />}
       </AppShell>
       {isAuthenticated && isCustomerAppRoute && <CustomerInvoicePaymentPrompt />}
+      {isAuthenticated && isCustomerAppRoute && <CustomerRatePrompt />}
     </>
   );
 }

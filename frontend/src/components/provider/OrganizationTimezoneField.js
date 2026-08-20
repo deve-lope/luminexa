@@ -51,6 +51,7 @@ export default function OrganizationTimezoneField({
   isOwner = true,
   onSaved,
   onError,
+  embedded = false,
 }) {
   const [saving, setSaving] = useState(false);
 
@@ -86,11 +87,20 @@ export default function OrganizationTimezoneField({
   };
 
   return (
-    <section className="lx-card">
-      <h2 className="text-sm font-semibold uppercase text-slate-500">Timezone</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Weekly hours and generated slots use this timezone.
-      </p>
+    <section className={embedded ? 'space-y-3' : 'lx-card'}>
+      {!embedded && (
+        <>
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Timezone</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Weekly hours and generated slots use this timezone.
+          </p>
+        </>
+      )}
+      {embedded && (
+        <p className="text-sm text-slate-600">
+          Weekly hours and generated slots use this timezone.
+        </p>
+      )}
 
       {isOwner ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">

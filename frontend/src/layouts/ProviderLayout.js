@@ -36,6 +36,7 @@ import {
 import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
 import {
   countBookingActionNotifications,
+  dismissProviderNotificationQuietly,
   PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
 } from '../utils/providerNotifications';
 
@@ -59,6 +60,12 @@ function ProviderShell() {
   const onNotificationsPage = useMemo(() => {
     if (!orgSlug) return false;
     return location.pathname.startsWith(`/provider/${orgSlug}/notifications`);
+  }, [location.pathname, orgSlug]);
+
+  const onTodayPage = useMemo(() => {
+    if (!orgSlug) return false;
+    const path = location.pathname.replace(/\/$/, '') || '/';
+    return path === `/provider/${orgSlug}`;
   }, [location.pathname, orgSlug]);
 
   const loadAlerts = useCallback(() => {
@@ -89,6 +96,8 @@ function ProviderShell() {
           if (!window.sessionStorage.getItem(seenKey)) {
             window.sessionStorage.setItem(seenKey, '1');
             showToast(payment.message, 'success');
+          } else if (!onTodayPage && !onNotificationsPage) {
+            dismissProviderNotificationQuietly(orgSlug, payment.id);
           }
         }
         const promo = notifications.find((n) => n.kind === 'promo_offer');
@@ -101,7 +110,7 @@ function ProviderShell() {
         }
       })
       .catch(() => {});
-  }, [orgSlug, showToast, onRequestsTab, onNotificationsPage]);
+  }, [orgSlug, showToast, onRequestsTab, onNotificationsPage, onTodayPage]);
 
   const loadMessagesCount = useCallback(() => {
     if (!orgSlug) return;
@@ -120,7 +129,7 @@ function ProviderShell() {
       window.clearInterval(id);
       window.removeEventListener(PROVIDER_NOTIFICATIONS_CHANGED_EVENT, onChanged);
     };
-  }, [loadAlerts]);
+  }, [loadAlerts, location.pathname]);
 
   useEffect(() => {
     loadMessagesCount();

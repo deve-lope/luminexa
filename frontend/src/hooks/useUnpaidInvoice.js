@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { jobsAPI } from '../utils/api';
+import { requestRatePrompt } from '../utils/ratePrompt';
+
+export const RECENTLY_PAID_BOOKING_KEY = 'luminexa.recentlyPaidInvoiceBookingId';
+
+export function markInvoiceBookingPaid(bookingId) {
+  if (bookingId == null) return;
+  window.sessionStorage.setItem(RECENTLY_PAID_BOOKING_KEY, String(bookingId));
+  requestRatePrompt(bookingId);
+}
 
 /**
  * Latest unpaid online invoice for the signed-in customer (ignores session dismiss).
@@ -11,7 +20,13 @@ export default function useUnpaidInvoice({ pollMs = 0 } = {}) {
   const load = useCallback(async () => {
     try {
       const res = await jobsAPI.getMyUnpaidInvoice();
-      setPayment(res.data?.invoice ? res.data : null);
+      const next = res.data?.invoice ? res.data : null;
+      const paidId = window.sessionStorage.getItem(RECENTLY_PAID_BOOKING_KEY);
+      if (next && paidId && String(next.booking_id) === paidId) {
+        setPayment(null);
+        return;
+      }
+      setPayment(next);
     } catch {
       setPayment(null);
     } finally {

@@ -4,6 +4,7 @@ import BookingPolicySettings from '../../components/provider/BookingPolicySettin
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
+import SettingsSectionOverlay from '../../components/provider/SettingsSectionOverlay';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
@@ -13,6 +14,7 @@ import parseApiError from '../../utils/parseApiError';
 import DateRangeControl from '../../components/scheduling/DateRangeControl';
 import SavingOverlay from '../../components/ui/SavingOverlay';
 import { formatLocalDateKey } from '../../utils/dateRange';
+import { IconChevronLeft } from '../../components/icons/NavIcons';
 
 const WEEKDAYS = [
   { value: 0, label: 'Mon' },
@@ -25,6 +27,29 @@ const WEEKDAYS = [
 ];
 
 const DEFAULT_BLOCK = { weekday: 0, start_time: '08:00', end_time: '16:00', is_active: true };
+
+const SETTINGS_SECTIONS = [
+  {
+    id: 'availability',
+    title: 'Availability',
+    hint: 'Timezone, weekly hours, or flexi dates',
+  },
+  {
+    id: 'booking',
+    title: 'How customers book',
+    hint: 'Approval, jobs at the same time, cancel cutoff',
+  },
+  {
+    id: 'books',
+    title: 'Business books',
+    hint: 'Invoice reminders and labor rate',
+  },
+  {
+    id: 'locations',
+    title: 'Service locations',
+    hint: 'Addresses and how far you travel',
+  },
+];
 
 function defaultDateRange() {
   const from = new Date();
@@ -50,6 +75,7 @@ export default function ProviderSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+  const [openSection, setOpenSection] = useState(null);
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -153,7 +179,7 @@ export default function ProviderSettingsPage() {
   }
 
   return (
-    <div className="relative space-y-6">
+    <div className="relative space-y-3">
       {saving && (
         <SavingOverlay
           message="Saving availability"
@@ -164,157 +190,209 @@ export default function ProviderSettingsPage() {
           }
         />
       )}
+
       <p className="text-sm text-slate-600">
-        <strong>Weekly schedule</strong> repeats the same hours and auto-creates bookable slots.{' '}
-        <strong>Flexi</strong> lets you open specific dates yourself (one at a time or on Schedule).
+        Open a section to change it. Only one is shown at a time.
       </p>
 
-      <OrganizationTimezoneField
-        orgSlug={orgSlug}
-        timezone={timezone}
-        onTimezoneChange={setTimezone}
-        schedulingMode={mode}
-        isOwner={isOwner}
-        onSaved={(msg) => {
-          setMessage(msg);
-          setError(null);
-        }}
-        onError={(msg) => {
-          if (msg) setError(msg);
-        }}
-      />
+      <ul className="space-y-2">
+        {SETTINGS_SECTIONS.map((section) => (
+          <li key={section.id}>
+            <button
+              type="button"
+              onClick={() => setOpenSection(section.id)}
+              className="flex w-full min-h-[64px] items-center gap-3 overflow-hidden rounded-2xl border border-teal-100/90 bg-gradient-to-br from-white via-luminexa-mist to-teal-50/70 px-4 py-3 text-left shadow-lx-card transition hover:border-teal-300 hover:shadow-lx-elevated"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold tracking-tight text-slate-900">
+                  {section.title}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">{section.hint}</span>
+              </span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80 text-teal-800 ring-1 ring-teal-200/70">
+                <IconChevronLeft className="h-4 w-4 rotate-180" />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
 
-      <section className="lx-card">
-        <h2 className="text-sm font-semibold uppercase text-slate-500">Availability mode</h2>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setMode('recurring')}
-            className={`min-h-[52px] rounded-xl border-2 p-3 text-left text-sm ${
-              mode === 'recurring' ? 'border-luminexa-accent bg-violet-50' : 'border-slate-200'
-            }`}
-          >
-            <span className="font-semibold text-slate-900">Weekly schedule</span>
-            <span className="mt-0.5 block text-xs text-slate-600">Same hours each week, auto slots</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('flexi')}
-            className={`min-h-[52px] rounded-xl border-2 p-3 text-left text-sm ${
-              mode === 'flexi' ? 'border-luminexa-accent bg-violet-50' : 'border-slate-200'
-            }`}
-          >
-            <span className="font-semibold text-slate-900">Flexi</span>
-            <span className="mt-0.5 block text-xs text-slate-600">Pick each date & time yourself</span>
-          </button>
-        </div>
-      </section>
+      {message && !openSection && <p className="text-sm text-emerald-700">{message}</p>}
+      {error && !openSection && <p className="text-sm text-red-600">{error}</p>}
 
-      {mode === 'recurring' && (
-        <>
-          <section className="lx-card">
-            <h2 className="text-sm font-semibold uppercase text-slate-500">Date range</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Slide the handles or pick dates — open slots are auto-generated only in this range.
-            </p>
-            <div className="mt-4">
-              <DateRangeControl
-                from={validFrom}
-                until={validUntil}
-                onChange={({ from, until }) => {
-                  setValidFrom(from);
-                  setValidUntil(until);
-                }}
-                maxSpanDays={365}
-              />
-            </div>
-          </section>
+      <SettingsSectionOverlay
+        open={Boolean(openSection)}
+        title={SETTINGS_SECTIONS.find((s) => s.id === openSection)?.title || 'Settings'}
+        onClose={() => setOpenSection(null)}
+      >
+        {openSection === 'availability' && (
+          <div className="space-y-6">
+            <OrganizationTimezoneField
+              orgSlug={orgSlug}
+              timezone={timezone}
+              onTimezoneChange={setTimezone}
+              schedulingMode={mode}
+              isOwner={isOwner}
+              embedded
+              onSaved={(msg) => {
+                setMessage(msg);
+                setError(null);
+              }}
+              onError={(msg) => {
+                if (msg) setError(msg);
+              }}
+            />
 
-          <section className="lx-card">
-            <h2 className="text-sm font-semibold uppercase text-slate-500">Weekly hours</h2>
-            <p className="mt-1 text-sm text-slate-600">Start and end time for each working day.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {WEEKDAYS.map((d) => (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Availability mode</h3>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
-                  key={d.value}
                   type="button"
-                  onClick={() => toggleDay(d.value)}
-                  className={`min-h-[40px] min-w-[48px] rounded-lg text-sm font-medium ${
-                    isDayActive(d.value) ? 'lx-toggle-active' : 'bg-slate-100 text-slate-600'
+                  onClick={() => setMode('recurring')}
+                  className={`min-h-[52px] rounded-xl border-2 p-3 text-left text-sm ${
+                    mode === 'recurring' ? 'border-luminexa-accent bg-violet-50' : 'border-slate-200 bg-white'
                   }`}
                 >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 space-y-3">
-              {blocks.map((b) => (
-                <div key={b.weekday} className="grid grid-cols-[3rem_1fr_auto_1fr] items-center gap-2 text-sm">
-                  <span className="font-medium text-slate-700">
-                    {WEEKDAYS.find((d) => d.value === b.weekday)?.label}
+                  <span className="font-semibold text-slate-900">Weekly schedule</span>
+                  <span className="mt-0.5 block text-xs text-slate-600">
+                    Same hours each week, auto slots
                   </span>
-                  <div>
-                    <label className="sr-only">Start time</label>
-                    <input
-                      type="time"
-                      value={b.start_time}
-                      onChange={(e) => updateBlockTime(b.weekday, 'start_time', e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 px-2 py-2"
-                    />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('flexi')}
+                  className={`min-h-[52px] rounded-xl border-2 p-3 text-left text-sm ${
+                    mode === 'flexi' ? 'border-luminexa-accent bg-violet-50' : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <span className="font-semibold text-slate-900">Flexi</span>
+                  <span className="mt-0.5 block text-xs text-slate-600">
+                    Pick each date & time yourself
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            {mode === 'recurring' && (
+              <>
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Date range</h3>
+                  <p className="text-sm text-slate-600">
+                    Slide the handles or pick dates — open slots are auto-generated only in this range.
+                  </p>
+                  <DateRangeControl
+                    from={validFrom}
+                    until={validUntil}
+                    onChange={({ from, until }) => {
+                      setValidFrom(from);
+                      setValidUntil(until);
+                    }}
+                    maxSpanDays={365}
+                  />
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Weekly hours</h3>
+                  <p className="text-sm text-slate-600">Start and end time for each working day.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAYS.map((d) => (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => toggleDay(d.value)}
+                        className={`min-h-[40px] min-w-[48px] rounded-lg text-sm font-medium ${
+                          isDayActive(d.value) ? 'lx-toggle-active' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
                   </div>
-                  <span className="text-center text-slate-400">–</span>
-                  <div>
-                    <label className="sr-only">End time</label>
-                    <input
-                      type="time"
-                      value={b.end_time}
-                      onChange={(e) => updateBlockTime(b.weekday, 'end_time', e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 px-2 py-2"
-                    />
+                  <div className="space-y-3">
+                    {blocks.map((b) => (
+                      <div
+                        key={b.weekday}
+                        className="grid grid-cols-[3rem_1fr_auto_1fr] items-center gap-2 text-sm"
+                      >
+                        <span className="font-medium text-slate-700">
+                          {WEEKDAYS.find((d) => d.value === b.weekday)?.label}
+                        </span>
+                        <div>
+                          <label className="sr-only">Start time</label>
+                          <input
+                            type="time"
+                            value={b.start_time}
+                            onChange={(e) =>
+                              updateBlockTime(b.weekday, 'start_time', e.target.value)
+                            }
+                            className="w-full rounded-lg border border-slate-200 px-2 py-2"
+                          />
+                        </div>
+                        <span className="text-center text-slate-400">–</span>
+                        <div>
+                          <label className="sr-only">End time</label>
+                          <input
+                            type="time"
+                            value={b.end_time}
+                            onChange={(e) =>
+                              updateBlockTime(b.weekday, 'end_time', e.target.value)
+                            }
+                            className="w-full rounded-lg border border-slate-200 px-2 py-2"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </>
-      )}
+                </section>
+              </>
+            )}
 
-      {mode === 'flexi' && (
-        <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Open times by date</h2>
-          <FlexiQuickOpenSlots orgSlug={orgSlug} organizationId={orgId} />
-          <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            Need multiple blocks on one day, unavailable time, or booking a customer? Use{' '}
-            <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
-              Schedule
-            </Link>{' '}
-            (calendar + timeline).
-          </p>
-        </section>
-      )}
+            {mode === 'flexi' && (
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-900">Open times by date</h3>
+                <FlexiQuickOpenSlots orgSlug={orgSlug} organizationId={orgId} />
+                <p className="border-t border-slate-100 pt-3 text-xs text-slate-500">
+                  Need multiple blocks on one day, unavailable time, or booking a customer? Use{' '}
+                  <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
+                    Schedule
+                  </Link>{' '}
+                  (calendar + timeline).
+                </p>
+              </section>
+            )}
 
-      <button
-        type="button"
-        disabled={saving}
-        onClick={save}
-        aria-busy={saving}
-        className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-semibold text-white disabled:opacity-60"
-      >
-        Save availability mode
-      </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={save}
+              aria-busy={saving}
+              className="w-full min-h-[48px] rounded-xl bg-luminexa-accent font-semibold text-white disabled:opacity-60"
+            >
+              Save availability mode
+            </button>
 
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+            {message && <p className="text-sm text-emerald-700">{message}</p>}
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+        )}
 
-      <BookingPolicySettings
-        orgSlug={orgSlug}
-        organizationName={activeOrg?.organization_name}
-        isOwner={isOwner}
-      />
+        {openSection === 'booking' && (
+          <BookingPolicySettings
+            orgSlug={orgSlug}
+            organizationName={activeOrg?.organization_name}
+            isOwner={isOwner}
+            embedded
+          />
+        )}
 
-      <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} />
+        {openSection === 'books' && (
+          <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
+        )}
 
-      <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} />
+        {openSection === 'locations' && (
+          <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
+        )}
+      </SettingsSectionOverlay>
     </div>
   );
 }

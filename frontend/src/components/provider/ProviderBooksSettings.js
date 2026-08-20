@@ -5,7 +5,7 @@ import parseApiError from '../../utils/parseApiError';
 /**
  * Invoice payment reminders + default labor rate for job costing.
  */
-export default function ProviderBooksSettings({ orgSlug, isOwner }) {
+export default function ProviderBooksSettings({ orgSlug, isOwner, embedded = false }) {
   const [enabled, setEnabled] = useState(true);
   const [daysText, setDaysText] = useState('3, 7, 14');
   const [laborRate, setLaborRate] = useState('');
@@ -71,14 +71,22 @@ export default function ProviderBooksSettings({ orgSlug, isOwner }) {
   }
 
   return (
-    <section className="lx-card space-y-4">
-      <div>
-        <h2 className="text-sm font-semibold uppercase text-slate-500">Business books</h2>
-        <p className="mt-1 text-sm text-slate-600">
+    <section className={embedded ? 'space-y-4' : 'lx-card space-y-4'}>
+      {!embedded && (
+        <div>
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Business books</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Automatic unpaid-invoice emails and a default labor rate for job costing. Analytics and
+            CSV export are under Analytics &amp; books.
+          </p>
+        </div>
+      )}
+      {embedded && (
+        <p className="text-sm text-slate-600">
           Automatic unpaid-invoice emails and a default labor rate for job costing. Analytics and
           CSV export are under Analytics &amp; books.
         </p>
-      </div>
+      )}
 
       <label className="flex items-center gap-3 text-sm text-slate-800">
         <input

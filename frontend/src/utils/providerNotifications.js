@@ -9,18 +9,23 @@ import {
 
 export const PROVIDER_NOTIFICATIONS_CHANGED_EVENT = 'luminexa:provider-notifications-changed';
 
-/** Booking/request/payment alerts — cleared when that booking is opened. */
+/** Pending work on Requests — not informational payment receipts. */
 export const BOOKING_ACTION_KINDS = new Set([
   'new_customer_booking',
   'customer_cancelled_booking',
   'customer_reschedule_request',
   'quote_accepted',
   'quote_answers_received',
+]);
+
+/** Booking-tied alerts cleared when that booking is opened. */
+export const PROVIDER_BOOKING_UPDATE_KINDS = new Set([
+  ...BOOKING_ACTION_KINDS,
   'payment_received',
 ]);
 
 export function isProviderBookingUpdateNotification(notification) {
-  return BOOKING_ACTION_KINDS.has(notification?.kind);
+  return PROVIDER_BOOKING_UPDATE_KINDS.has(notification?.kind);
 }
 
 export function isPromoOfferNotification(notification) {
@@ -30,7 +35,7 @@ export function isPromoOfferNotification(notification) {
 /** Count undismissed booking-update alerts (for Requests tab badge). */
 export function countBookingActionNotifications(notifications) {
   return (notifications || []).filter(
-    (n) => isProviderBookingUpdateNotification(n) && !n.dismissed_at && !n.is_read,
+    (n) => BOOKING_ACTION_KINDS.has(n?.kind) && !n.dismissed_at && !n.is_read,
   ).length;
 }
 
@@ -51,7 +56,7 @@ export function providerNotificationDestination(orgSlug, n) {
     return providerMessages(orgSlug);
   }
 
-  if (BOOKING_ACTION_KINDS.has(n?.kind)) {
+  if (PROVIDER_BOOKING_UPDATE_KINDS.has(n?.kind)) {
     if (n.booking_id) return providerRequestDetail(orgSlug, 'booking', n.booking_id);
     return providerRequests(orgSlug);
   }
@@ -62,6 +67,7 @@ export function providerNotificationDestination(orgSlug, n) {
 /** Short CTA label for Today / alert cards. */
 export function providerNotificationCtaLabel(n) {
   if (n?.kind === 'promo_offer') return 'Redeem on Billing';
+  if (n?.kind === 'payment_received') return 'View booking';
   if (n?.kind === 'quote_answers_received') return 'Send quote';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';

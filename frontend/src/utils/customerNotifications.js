@@ -3,8 +3,8 @@ import { jobsAPI } from './api';
 
 export const NOTIFICATIONS_CHANGED_EVENT = 'luminexa:notifications-changed';
 
-/** Booking/status/quote/invoice alerts — cleared when that booking is opened. */
-export const CUSTOMER_BOOKING_UPDATE_KINDS = new Set([
+/** Status / invoice work that should badge the Bookings tab. */
+export const CUSTOMER_BOOKING_BADGE_KINDS = new Set([
   'booking_confirmed',
   'booking_declined',
   'booking_cancelled',
@@ -12,6 +12,11 @@ export const CUSTOMER_BOOKING_UPDATE_KINDS = new Set([
   'booking_time_change',
   'booking_completed',
   'invoice_ready',
+]);
+
+/** Booking-tied alerts cleared when that booking is opened. */
+export const CUSTOMER_BOOKING_UPDATE_KINDS = new Set([
+  ...CUSTOMER_BOOKING_BADGE_KINDS,
   'payment_confirmed',
 ]);
 
@@ -22,7 +27,7 @@ export function isCustomerBookingUpdateNotification(notification) {
 /** Count undismissed booking-update alerts (for Bookings tab badge). */
 export function countBookingUpdateNotifications(notifications) {
   return (notifications || []).filter(
-    (n) => isCustomerBookingUpdateNotification(n) && !n.dismissed_at && !n.is_read,
+    (n) => CUSTOMER_BOOKING_BADGE_KINDS.has(n?.kind) && !n.dismissed_at && !n.is_read,
   ).length;
 }
 

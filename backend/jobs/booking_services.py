@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -702,10 +704,34 @@ def cancel_booking(booking, *, by_user):
     return booking
 
 
+JOB_ACTION_EARLY_HOURS = 6
+
+
+def earliest_job_action_at(booking):
+    """First instant Start job / Mark complete are allowed (start_at minus 6 hours)."""
+    if not booking.start_at:
+        return None
+    return booking.start_at - timedelta(hours=JOB_ACTION_EARLY_HOURS)
+
+
+def _require_job_action_window(booking):
+    earliest = earliest_job_action_at(booking)
+    if earliest is None:
+        return
+    if timezone.now() < earliest:
+        raise ValidationError({
+            'status': (
+                'This job can be started or completed from 6 hours before '
+                'the scheduled time.'
+            ),
+        })
+
+
 @transaction.atomic
 def start_booking(booking, *, staff_user):
     if booking.status != Booking.Status.CONFIRMED:
         raise ValidationError({'status': 'Only confirmed bookings can be started.'})
+    _require_job_action_window(booking)
     if not OrganizationMembership.objects.filter(
         organization=booking.organization,
         user=staff_user,
@@ -724,6 +750,7 @@ def start_booking(booking, *, staff_user):
 def complete_booking(booking, *, staff_user):
     if booking.status not in (Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS):
         raise ValidationError({'status': 'Only confirmed bookings can be marked complete.'})
+    _require_job_action_window(booking)
     if not OrganizationMembership.objects.filter(
         organization=booking.organization,
         user=staff_user,

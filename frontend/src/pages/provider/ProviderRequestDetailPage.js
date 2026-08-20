@@ -18,6 +18,7 @@ import {
   emitProviderNotificationsChanged,
 } from '../../utils/providerNotifications';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
+import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 function DetailRow({ label, children }) {
@@ -96,6 +97,8 @@ export default function ProviderRequestDetailPage() {
   );
 
   const status = data?.status;
+  const canJobAction = kind === 'booking' && canStartOrCompleteJob(data);
+  const jobActionFrom = kind === 'booking' ? jobActionAvailableAt(data) : null;
   const statusBadgeClass = requestStatusTone(kind, status);
   const isQuotePolicy = data?.booking_policy === 'quote';
   const needsQuote =
@@ -354,26 +357,36 @@ export default function ProviderRequestDetailPage() {
           </div>
         )}
         {kind === 'booking' && status === 'confirmed' && (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => setRescheduleOpen(true)}
-              className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
-            >
-              Reschedule
-            </button>
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => setCompleteOpen(true)}
-              className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
-            >
-              Mark complete
-            </button>
+          <div className="mt-4 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setRescheduleOpen(true)}
+                className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+              >
+                Reschedule
+              </button>
+              {canJobAction && (
+                <button
+                  type="button"
+                  disabled={actionBusy}
+                  onClick={() => setCompleteOpen(true)}
+                  className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+                >
+                  Mark complete
+                </button>
+              )}
+            </div>
+            {!canJobAction && jobActionFrom && (
+              <p className="text-sm text-white/85">
+                Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours
+                before the appointment).
+              </p>
+            )}
           </div>
         )}
-        {kind === 'booking' && status === 'in_progress' && (
+        {kind === 'booking' && status === 'in_progress' && canJobAction && (
           <button
             type="button"
             disabled={actionBusy}
@@ -382,6 +395,12 @@ export default function ProviderRequestDetailPage() {
           >
             Mark complete
           </button>
+        )}
+        {kind === 'booking' && status === 'in_progress' && !canJobAction && jobActionFrom && (
+          <p className="mt-4 text-sm text-white/85">
+            Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours before
+            the appointment).
+          </p>
         )}
         {kind === 'inquiry' && status === 'pending' && (
           <div className="mt-4 flex gap-2">

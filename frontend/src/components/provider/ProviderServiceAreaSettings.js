@@ -32,7 +32,7 @@ function emptyDraft() {
 /**
  * Manage one or more service locations / branches for a provider.
  */
-export default function ProviderServiceAreaSettings({ orgSlug, isOwner, onSaved }) {
+export default function ProviderServiceAreaSettings({ orgSlug, isOwner, onSaved, embedded = false }) {
   const [locations, setLocations] = useState([]);
   const [editing, setEditing] = useState(null); // draft object or null
   const [showAddChoice, setShowAddChoice] = useState(false);
@@ -208,11 +208,13 @@ export default function ProviderServiceAreaSettings({ orgSlug, isOwner, onSaved 
   }
 
   return (
-    <section className="lx-card">
+    <section className={embedded ? 'space-y-3' : 'lx-card'}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Service locations</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          {!embedded && (
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Service locations</h2>
+          )}
+          <p className={`${embedded ? '' : 'mt-1 '}text-sm text-slate-600`}>
             You can keep multiple locations on this business, or register a separate business account
             per branch. Customers searching by ZIP and miles match if they are near any location on
             this profile.

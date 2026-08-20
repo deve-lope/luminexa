@@ -13,6 +13,7 @@ import {
   isUntouchedBookingRequest,
 } from '../../utils/customerBookings';
 import { customerBookings } from '../../utils/customerPaths';
+import { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import {
   dismissNotificationsForBooking,
   emitNotificationsChanged,
@@ -181,6 +182,7 @@ export default function CustomerBookingDetailPage() {
           onClose={() => setPayOpen(false)}
           onPaid={() => {
             setPayOpen(false);
+            markInvoiceBookingPaid(booking.id);
             showToast('Payment received.', 'success');
             load();
           }}

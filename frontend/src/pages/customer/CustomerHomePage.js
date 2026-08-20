@@ -22,7 +22,7 @@ import {
 } from '../../utils/customerNotifications';
 import { lxPillTone } from '../../utils/pillGradients';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
-import useUnpaidInvoice from '../../hooks/useUnpaidInvoice';
+import useUnpaidInvoice, { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
 
 const MAX_HOME_PROVIDERS = 3;
@@ -103,7 +103,6 @@ export default function CustomerHomePage() {
   const [payOpen, setPayOpen] = useState(false);
   const {
     payment: unpaidPayment,
-    reload: reloadUnpaid,
     clear: clearUnpaid,
   } = useUnpaidInvoice({ pollMs: 30000 });
   const [notifications, setNotifications] = useState([]);
@@ -590,8 +589,8 @@ export default function CustomerHomePage() {
           onClose={() => setPayOpen(false)}
           onPaid={() => {
             setPayOpen(false);
+            markInvoiceBookingPaid(unpaidPayment.booking_id);
             clearUnpaid();
-            reloadUnpaid();
             showToast?.('Payment received.');
           }}
         />

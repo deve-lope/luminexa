@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { jobsAPI } from '../../utils/api';
+import { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from './InvoiceStripePayModal';
 
 function formatMoney(amount, currency = 'CAD') {
@@ -367,6 +368,7 @@ export default function InvoicePanel({
           setPayOpen(false);
           setViewOpen(false);
           window.sessionStorage.removeItem('luminexa.pendingInvoiceBookingId');
+          markInvoiceBookingPaid(bookingId);
         }}
       />
     </>

@@ -56,7 +56,7 @@ export default function BookingRateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-6 sm:items-center sm:pt-4"
+      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-6 sm:items-center sm:pt-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rate-booking-title"

@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.luminexa.app",
       "sha256_cert_fingerprints": [
-        "89:16:19:8C:97:45:05:B4:B0:34:99:18:BD:3F:06:B9:8A:3C:76:FE:B2:48:A8:01:D5:AF:BD:42:72:22:88:5D"
+        "89:16:19:8C:97:45:05:B4:B0:34:99:18:BD:3F:06:B9:8A:3C:76:FE:B2:48:A8:01:D5:AF:BD:42:72:22:88:5D",
+        "A3:BE:D0:8E:BC:94:49:BF:B1:A8:27:48:60:BF:B5:CB:12:E3:0A:32:65:FE:47:31:47:47:5E:17:6D:9A:F1:FC"
       ]
     }
   }

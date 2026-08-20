@@ -19,6 +19,7 @@ export default function BookingPolicySettings({
   organizationName,
   isOwner,
   onSaved,
+  embedded = false,
 }) {
   const [policy, setPolicy] = useState('approval');
   const [cancelCutoffHours, setCancelCutoffHours] = useState(24);
@@ -82,13 +83,24 @@ export default function BookingPolicySettings({
   }
 
   return (
-    <section className="lx-card">
-      <h2 className="text-sm font-semibold uppercase text-slate-500">How customers book</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Choose whether appointments are confirmed automatically or need your approval.
-        Pricing and quotes are set on each service.
-        {organizationName ? ` Applies to ${organizationName}.` : ''}
-      </p>
+    <section className={embedded ? 'space-y-3' : 'lx-card'}>
+      {!embedded && (
+        <>
+          <h2 className="text-sm font-semibold uppercase text-slate-500">How customers book</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Choose whether appointments are confirmed automatically or need your approval.
+            Pricing and quotes are set on each service.
+            {organizationName ? ` Applies to ${organizationName}.` : ''}
+          </p>
+        </>
+      )}
+      {embedded && (
+        <p className="text-sm text-slate-600">
+          Choose whether appointments are confirmed automatically or need your approval.
+          Pricing and quotes are set on each service.
+          {organizationName ? ` Applies to ${organizationName}.` : ''}
+        </p>
+      )}
 
       <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
         Need a quote for some jobs? On{' '}
