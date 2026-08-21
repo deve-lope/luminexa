@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { userAPI, businessesAPI } from '../utils/api';
 import { storage } from '../utils/helpers';
+import { clearPushTokenOnLogout, flushPendingPushToken } from '../native/capacitorNative';
 
 const AuthContext = createContext(null);
 
@@ -25,6 +26,7 @@ export function AuthProvider({ children }) {
       } catch {
         setMemberships([]);
       }
+      flushPendingPushToken();
     } catch {
       setUser(null);
       setMemberships([]);
@@ -48,6 +50,7 @@ export function AuthProvider({ children }) {
       list = [];
     }
     setMemberships(list);
+    flushPendingPushToken();
     return { user: data.user, memberships: list };
   }, []);
 
@@ -68,6 +71,11 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(async () => {
+    try {
+      await clearPushTokenOnLogout();
+    } catch {
+      /* ignore */
+    }
     try {
       await userAPI.logout();
     } catch {

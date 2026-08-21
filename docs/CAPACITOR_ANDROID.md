@@ -11,10 +11,21 @@ Package ID stays `com.luminexa.app` so you can replace the TWA on Play.
 - Full-screen app (no Chrome address bar)
 - Isolated login: **Settings → Apps → Luminexa → Clear data** signs you out
 - Android 13+ **notification permission** prompt on first open
-- Same UI as the website
+- Device token saved to `/accounts/api/push-tokens/` after login
+- Outside-app pushes when Firebase is configured (invoice ready, payment, new booking, cancel)
 
-Lock-screen **push** (bill ready / payment) still needs Firebase later:
-put `google-services.json` in `frontend/android/app/` and we can send FCM.
+## Firebase (required for lock-screen push)
+
+1. Create a Firebase project → add Android app `com.luminexa.app`.
+2. Download **`google-services.json`** into `frontend/android/app/` (gitignored).
+3. Project settings → Service accounts → Generate new private key (JSON).
+4. On the **API server**, set one of:
+   - `FIREBASE_CREDENTIALS_FILE=/path/to/service-account.json`
+   - or `FIREBASE_CREDENTIALS_JSON='{...}'` (single-line JSON)
+5. Rebuild/restart Django (`web` + celery if used) after installing `firebase-admin`.
+6. Rebuild the Capacitor AAB so `google-services.json` is in the app.
+
+Without credentials, the API still accepts tokens but **does not send** pushes.
 
 ## Build the Play bundle (.aab)
 
@@ -37,4 +48,6 @@ Do not upload an APK if Play asks for an AAB.
 ## After install
 
 Uninstall the old TWA first, then install from the **tester opt-in link**.
-The first launch should ask for notifications (Android 13+).
+The first launch should ask for notifications (Android 13+). Sign in so the
+device token is registered. Then complete a test invoice payment to verify a
+lock-screen push.

@@ -77,6 +77,10 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # PLAY_STORE_DEMO_CUSTOMER_EMAIL=demo.customer@luminex-a.com
 # PLAY_STORE_DEMO_CUSTOMER_OTP=246810
 
+# Capacitor / FCM outside-app push (optional until google-services.json is set up)
+# FIREBASE_CREDENTIALS_FILE=/app/secrets/firebase-service-account.json
+# FIREBASE_CREDENTIALS_JSON=
+
 # ── Stripe (Connect marketplace + provider subscriptions) ───────────────────
 # Leave empty until configured — APIs return a clear "not configured" error.
 # STRIPE_SECRET_KEY=sk_live_...

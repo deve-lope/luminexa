@@ -19,7 +19,7 @@ from .emails import (
     send_login_otp_email,
     send_password_reset_email,
 )
-from .models import User
+from .models import DevicePushToken, User
 from .otp import issue_login_code, normalize_email, user_uses_password_login, verify_login_code
 from .serializers import (
     EmailVerifySerializer,
@@ -518,3 +518,39 @@ class ResendVerificationAPIView(APIView):
         return Response({
             'detail': 'If that email needs verification, we sent a new code.',
         })
+
+
+class DevicePushTokenAPIView(APIView):
+    """Register / remove FCM tokens for Capacitor outside-app notifications."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = (request.data.get('token') or '').strip()
+        platform = (request.data.get('platform') or 'android').strip().lower()
+        if not token or len(token) < 20:
+            raise ValidationError({'token': 'A valid device push token is required.'})
+        if platform not in (
+            DevicePushToken.Platform.ANDROID,
+            DevicePushToken.Platform.IOS,
+            DevicePushToken.Platform.WEB,
+        ):
+            platform = DevicePushToken.Platform.ANDROID
+        # Token may move between users on shared devices.
+        DevicePushToken.objects.filter(token=token).exclude(user=request.user).delete()
+        obj, _ = DevicePushToken.objects.update_or_create(
+            token=token,
+            defaults={'user': request.user, 'platform': platform},
+        )
+        return Response(
+            {'id': obj.id, 'platform': obj.platform},
+            status=status.HTTP_200_OK,
+        )
+
+    def delete(self, request):
+        token = (request.data.get('token') or request.query_params.get('token') or '').strip()
+        qs = DevicePushToken.objects.filter(user=request.user)
+        if token:
+            qs = qs.filter(token=token)
+        deleted, _ = qs.delete()
+        return Response({'deleted': deleted})

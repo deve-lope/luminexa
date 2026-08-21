@@ -139,6 +139,11 @@ export const userAPI = {
   requestAccountDeletion: (email) =>
     api.post('/accounts/api/account/delete/request/', { email }),
   confirmAccountDeletion: (data) => api.post('/accounts/api/account/delete/confirm/', data),
+  registerPushToken: (data) => api.post('/accounts/api/push-tokens/', data),
+  deletePushToken: (token) =>
+    token
+      ? api.delete('/accounts/api/push-tokens/', { data: { token } })
+      : api.delete('/accounts/api/push-tokens/'),
 };
 
 export const businessesAPI = {

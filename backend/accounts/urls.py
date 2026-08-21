@@ -67,4 +67,9 @@ urlpatterns = [
         api_views.DeleteAccountConfirmAPIView.as_view(),
         name='delete_account_confirm_api',
     ),
+    path(
+        'api/push-tokens/',
+        api_views.DevicePushTokenAPIView.as_view(),
+        name='push_tokens_api',
+    ),
 ]

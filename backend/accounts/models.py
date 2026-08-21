@@ -159,3 +159,35 @@ class ProviderDeletionFeedback(models.Model):
 
     def __str__(self):
         return f'{self.get_reason_display()} · {self.organization_slug or self.user_id_snapshot}'
+
+
+class DevicePushToken(models.Model):
+    """FCM device token for Capacitor / native push (outside-app notifications)."""
+
+    class Platform(models.TextChoices):
+        ANDROID = 'android', 'Android'
+        IOS = 'ios', 'iOS'
+        WEB = 'web', 'Web'
+
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='push_tokens',
+    )
+    token = models.CharField(max_length=512, unique=True)
+    platform = models.CharField(
+        max_length=16,
+        choices=Platform.choices,
+        default=Platform.ANDROID,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', '-updated_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.platform}:{self.token[:16]}…'

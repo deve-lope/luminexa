@@ -253,6 +253,9 @@ QUICKBOOKS_ENVIRONMENT = config('QUICKBOOKS_ENVIRONMENT', default='sandbox')
 PUBLIC_API_URL = config('PUBLIC_API_URL', default='')
 QUICKBOOKS_ENABLED = bool(QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET)
 
+FIREBASE_CREDENTIALS_FILE = config('FIREBASE_CREDENTIALS_FILE', default='').strip()
+FIREBASE_CREDENTIALS_JSON = config('FIREBASE_CREDENTIALS_JSON', default='').strip()
+
 # Play Store review: one customer email may use a fixed OTP (no inbox needed).
 # Leave blank to disable. Never reuse these values for real users.
 PLAY_STORE_DEMO_CUSTOMER_EMAIL = config(

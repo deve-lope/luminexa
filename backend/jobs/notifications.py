@@ -151,7 +151,10 @@ def create_customer_notification(
     """Create an in-app customer alert (shown after login on Home)."""
     if not customer:
         return None
-    return CustomerNotification.objects.create(
+    path = link_path or (
+        f'/customer/bookings/{booking.pk}' if booking is not None else '/customer/bookings'
+    )
+    n = CustomerNotification.objects.create(
         customer=customer,
         organization=organization,
         booking=booking,
@@ -159,9 +162,24 @@ def create_customer_notification(
         kind=kind,
         title=title[:200],
         message=message[:500],
-        link_path=link_path
-        or (f'/customer/bookings/{booking.pk}' if booking is not None else '/customer/bookings'),
+        link_path=path,
     )
+    try:
+        from .push_services import send_push_to_user
+
+        send_push_to_user(customer, title=n.title, body=n.message, link_path=n.link_path)
+    except Exception:
+        logger.exception('Customer push failed for notification %s', n.pk)
+    return n
+
+
+def _push_org_staff(organization, *, title, body, link_path=''):
+    try:
+        from .push_services import send_push_to_org_staff
+
+        send_push_to_org_staff(organization, title=title, body=body, link_path=link_path)
+    except Exception:
+        logger.exception('Provider push failed for org %s', getattr(organization, 'pk', None))
 
 
 def notify_customer_booking_created(booking):
@@ -204,6 +222,12 @@ def create_provider_booking_notification(booking):
         ),
         link_path=provider_request_link_path(org.slug, booking.pk),
     )
+    _push_org_staff(
+        org,
+        title=f'New booking — {org.name}',
+        body=f'{customer_name} {action} {service_name}.',
+        link_path=provider_request_link_path(org.slug, booking.pk),
+    )
 
 
 def create_provider_customer_cancel_notification(booking):
@@ -220,6 +244,12 @@ def create_provider_customer_cancel_notification(booking):
             f'(was {_format_when(booking.start_at)}). '
             'Open Service requests if you need to follow up.'
         ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
+    )
+    _push_org_staff(
+        org,
+        title=f'Booking cancelled — {org.name}',
+        body=f'{customer_name} cancelled {service_name}.',
         link_path=provider_request_link_path(org.slug, booking.pk),
     )
 
@@ -510,7 +540,7 @@ def notify_invoice_paid(invoice):
         kind=CustomerNotification.Kind.INVOICE_READY,
         dismissed_at__isnull=True,
     ).update(dismissed_at=timezone.now())
-    CustomerNotification.objects.get_or_create(
+    _, created = CustomerNotification.objects.get_or_create(
         customer=booking.customer,
         booking=booking,
         kind=CustomerNotification.Kind.PAYMENT_CONFIRMED,
@@ -521,9 +551,21 @@ def notify_invoice_paid(invoice):
             'link_path': '/customer/history',
         },
     )
+    if created:
+        try:
+            from .push_services import send_push_to_user
+
+            send_push_to_user(
+                booking.customer,
+                title=f'Payment confirmed — {booking.organization.name}',
+                body=f'Your payment of {amount} for invoice {invoice.number} was successful.',
+                link_path='/customer/history',
+            )
+        except Exception:
+            logger.exception('Customer payment push failed for booking %s', booking.pk)
     customer_name = _customer_label(booking)
     org = booking.organization
-    ProviderNotification.objects.get_or_create(
+    _, provider_created = ProviderNotification.objects.get_or_create(
         organization=org,
         booking=booking,
         kind=ProviderNotification.Kind.PAYMENT_RECEIVED,
@@ -535,6 +577,13 @@ def notify_invoice_paid(invoice):
             'link_path': provider_request_link_path(org.slug, booking.pk),
         },
     )
+    if provider_created:
+        _push_org_staff(
+            org,
+            title=f'Payment received — {org.name}',
+            body=f'{customer_name} paid {amount}.',
+            link_path=provider_request_link_path(org.slug, booking.pk),
+        )
 
 
 def send_invoice_email(booking):
