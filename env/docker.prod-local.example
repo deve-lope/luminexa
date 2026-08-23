@@ -78,8 +78,21 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # PLAY_STORE_DEMO_CUSTOMER_OTP=246810
 
 # Capacitor / FCM outside-app push (optional until google-services.json is set up)
+# With neither set, the API still stores device tokens but drops every push
+# (one warning per process in the `web` logs).
+#
+# Simplest — paste the service-account JSON on ONE line. `web` already has
+# env_file: .env.docker.prod, so docker-compose.yml needs no change.
+# Keep the \n escapes inside private_key as literal backslash-n; expanding them
+# into real newlines breaks the key (and the value must stay on one line).
+# No surrounding quotes needed here — the value is read literally to end of line.
+# FIREBASE_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\nMII...\n-----END PRIVATE KEY-----\n","client_email":"...","token_uri":"https://oauth2.googleapis.com/token"}
+#
+# Alternative — a path INSIDE the container. This additionally needs a read-only
+# bind mount, because `web` mounts only luminexa_media:/app/media and so
+# /app/secrets does not exist. Add under the web service's volumes:
+#   - ./secrets/firebase-service-account.json:/app/secrets/firebase-service-account.json:ro
 # FIREBASE_CREDENTIALS_FILE=/app/secrets/firebase-service-account.json
-# FIREBASE_CREDENTIALS_JSON=
 
 # ── Stripe (Connect marketplace + provider subscriptions) ───────────────────
 # Leave empty until configured — APIs return a clear "not configured" error.

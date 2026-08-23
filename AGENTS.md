@@ -31,6 +31,8 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 | Multi-location / branches | [`.cursor/rules/provider-locations.mdc`](.cursor/rules/provider-locations.mdc) + PRODUCT_RULES § Locations |
 | Test plan & high-value cases | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) |
 | Play Store / Android release | [`docs/PLAY_STORE_RELEASE.md`](docs/PLAY_STORE_RELEASE.md) |
+| App Store / iOS release (Mac required) | [`docs/CAPACITOR_IOS.md`](docs/CAPACITOR_IOS.md) |
+| iOS work split with a Mac collaborator | [`docs/IOS_MAC_COLLABORATOR.md`](docs/IOS_MAC_COLLABORATOR.md) |
 | Play Console listing copy | [`docs/PLAY_CONSOLE_LISTING.md`](docs/PLAY_CONSOLE_LISTING.md) |
 | TWA / Android build steps | [`docs/TWA_BUILD.md`](docs/TWA_BUILD.md) |
 | Greenfield platform spec | [`docs/LUMINEXA_PLATFORM_REPORT.md`](docs/LUMINEXA_PLATFORM_REPORT.md) |

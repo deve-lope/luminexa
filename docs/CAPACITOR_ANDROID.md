@@ -25,7 +25,22 @@ Package ID stays `com.luminexa.app` so you can replace the TWA on Play.
 5. Rebuild/restart Django (`web` + celery if used) after installing `firebase-admin`.
 6. Rebuild the Capacitor AAB so `google-services.json` is in the app.
 
-Without credentials, the API still accepts tokens but **does not send** pushes.
+Without credentials, the API still accepts tokens but **does not send** pushes;
+the `web` log carries one `push notifications are being dropped` warning per
+process.
+
+Confirm credentials are live (prints no secrets and no user data):
+
+```bash
+docker compose exec -T web python -c "
+import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE','luminexa.settings'); django.setup()
+from jobs.push_services import fcm_enabled, _ensure_firebase
+print('fcm_enabled =', fcm_enabled(), '| initialized =', _ensure_firebase() is not None)"
+```
+
+Both must be `True`. `fcm_enabled = True` with `initialized = False` means the
+credentials were found but **rejected** — check the logs for
+`Failed to initialize Firebase for FCM`.
 
 ## Build the Play bundle (.aab)
 

@@ -272,7 +272,11 @@ class BookingNotificationTests(TestCase):
             any('Booking cancelled' in m.subject for m in customer_mails),
             [m.subject for m in mail.outbox],
         )
-        msg = ServiceRequestMessage.objects.filter(booking=booking).first()
+        # The booking card (posted as the customer) precedes the cancellation
+        # note, so select the system message rather than the first in the thread.
+        msg = ServiceRequestMessage.objects.filter(
+            booking=booking, kind=ServiceRequestMessage.Kind.SYSTEM,
+        ).first()
         self.assertIsNotNone(msg)
         self.assertIn('cancelled', msg.body.lower())
 

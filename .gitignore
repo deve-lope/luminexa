@@ -51,3 +51,12 @@ frontend/android/app/google-services.json
 _keystore-backup-DO-NOT-COMMIT/
 KEYSTORE-PASSWORD.txt
 *keystore-backup*.zip
+luminexa-*.zip
+
+# iOS / App Store release outputs
+frontend/ios/App/App/GoogleService-Info.plist
+*.ipa
+*.xcarchive
+*.p8
+*.p12
+*.mobileprovision

@@ -79,7 +79,11 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(accept.status_code, 200)
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.CONFIRMED)
-        msg = ServiceRequestMessage.objects.filter(booking=booking).first()
+        # The booking card (posted as the customer) precedes the approval, so
+        # select the automated text message rather than the first in the thread.
+        msg = ServiceRequestMessage.objects.filter(
+            booking=booking, kind=ServiceRequestMessage.Kind.TEXT,
+        ).first()
         self.assertIsNotNone(msg)
         self.assertEqual(msg.sender_id, self.provider.id)
         self.assertIn('approved', msg.body.lower())
@@ -280,7 +284,8 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(booking.status, Booking.Status.REQUESTED)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
 
-    def test_provider_reschedule_on_instant_org_stays_confirmed(self):
+    def test_provider_reschedule_on_instant_org_proposes_new_time(self):
+        """Instant booking does not let staff move a confirmed job unilaterally."""
         self.org.booking_policy = Organization.BookingPolicy.INSTANT
         self.org.save()
         new_start = timezone.now() + timedelta(days=6)
@@ -315,10 +320,11 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(res.status_code, 200)
         booking.refresh_from_db()
         new_slot.refresh_from_db()
-        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
-        self.assertEqual(new_slot.status, AvailabilitySlot.Status.BOOKED)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
 
-    def test_provider_reschedule_on_approval_org_stays_confirmed(self):
+    def test_provider_reschedule_on_approval_org_proposes_new_time(self):
         self.org.booking_policy = Organization.BookingPolicy.APPROVAL
         self.org.save()
         new_start = timezone.now() + timedelta(days=7)
@@ -353,8 +359,9 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(res.status_code, 200)
         booking.refresh_from_db()
         new_slot.refresh_from_db()
-        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
-        self.assertEqual(new_slot.status, AvailabilitySlot.Status.BOOKED)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
 
     def test_provider_incomplete_schedule_later(self):
         booking = Booking.objects.create(

@@ -422,7 +422,11 @@ class ServiceInquiryPermissionTests(TestCase):
         )
         self.assertEqual(accept.status_code, 200)
         inquiry = CustomerServiceInquiry.objects.get(pk=inquiry_id)
-        msg = ServiceRequestMessage.objects.filter(inquiry=inquiry).first()
+        # The inquiry card (posted as the customer) precedes the approval, so
+        # select the automated text message rather than the first in the thread.
+        msg = ServiceRequestMessage.objects.filter(
+            inquiry=inquiry, kind=ServiceRequestMessage.Kind.TEXT,
+        ).first()
         self.assertIsNotNone(msg)
         self.assertEqual(msg.sender_id, owner.id)
         self.assertIn('approved', msg.body.lower())

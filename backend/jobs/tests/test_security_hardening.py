@@ -1,4 +1,7 @@
+import shutil
+import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -184,8 +187,13 @@ class MediaAccessTests(TestCase):
             full_name='Media User',
             phone='5552000020',
         )
-        media_root = settings.MEDIA_ROOT
-        media_root.mkdir(parents=True, exist_ok=True)
+        # Fixtures go in a temp root; the real MEDIA_ROOT is shared with the dev
+        # server and may not even be writable (Docker creates it as root).
+        media_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, media_root, ignore_errors=True)
+        media_override = override_settings(MEDIA_ROOT=media_root)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
         public = media_root / 'orgs' / 'logos'
         public.mkdir(parents=True, exist_ok=True)
         (public / 'logo.txt').write_text('public-logo', encoding='utf-8')

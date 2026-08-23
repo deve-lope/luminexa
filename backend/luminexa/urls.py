@@ -23,9 +23,7 @@ urlpatterns = [
 
 if settings.DEBUG or settings.SERVE_MEDIA:
     urlpatterns += [
-        re_path(
-            r'^media/(?P<path>.*)$',
-            serve_media,
-            {'document_root': settings.MEDIA_ROOT},
-        ),
+        # No document_root kwarg: serve_media reads MEDIA_ROOT per request, so
+        # it is not frozen into the URLconf at import time.
+        re_path(r'^media/(?P<path>.*)$', serve_media),
     ]
