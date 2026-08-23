@@ -871,3 +871,34 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(booking.status, Booking.Status.CONFIRMED)
         self.assertFalse(booking.awaiting_customer_acceptance)
         self.assertIsNone(booking.prior_start_at)
+
+    def test_public_customer_view_token_shows_booking_without_login(self):
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'customer': self.customer.id,
+                'start_at': self.slot.start_at.isoformat(),
+                'end_at': self.slot.end_at.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        token = res.data.get('customer_view_token')
+        self.assertTrue(token)
+        self.assertIn('/b/', res.data.get('customer_view_url') or '')
+
+        self.client.force_authenticate(user=None)
+        public = self.client.get(f'/api/v1/public/bookings/{token}/', HTTP_HOST='localhost')
+        self.assertEqual(public.status_code, 200)
+        self.assertEqual(public.data['service_name'], 'Oil change')
+        self.assertEqual(public.data['organization_name'], 'Test Co')
+        self.assertNotIn('customer_email', public.data)
+        self.assertNotIn('customer_phone', public.data)
+        self.assertNotIn('email', public.data)
+
+        missing = self.client.get('/api/v1/public/bookings/not-a-real-token/', HTTP_HOST='localhost')
+        self.assertEqual(missing.status_code, 404)

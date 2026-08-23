@@ -118,7 +118,8 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_URL: ""
-        REACT_APP_PUBLIC_URL: http://localhost:3000
+        # Empty = SPA uses window.location.origin (avoids baking localhost into prod).
+        REACT_APP_PUBLIC_URL: ""
     container_name: luminexa-frontend
     ports:
       - "0.0.0.0:3000:80"

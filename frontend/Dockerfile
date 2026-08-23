@@ -3,8 +3,9 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Empty REACT_APP_API_URL = same-origin requests via nginx proxy to Django.
+# Empty REACT_APP_PUBLIC_URL = share links use the current browser origin.
 ARG REACT_APP_API_URL=
-ARG REACT_APP_PUBLIC_URL=http://localhost:3000
+ARG REACT_APP_PUBLIC_URL=
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 ENV REACT_APP_PUBLIC_URL=$REACT_APP_PUBLIC_URL
 

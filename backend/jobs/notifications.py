@@ -37,6 +37,10 @@ def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None, c
     return base
 
 
+def customer_appointment_url(booking):
+    return booking.customer_view_url()
+
+
 def customer_bookings_url():
     return f'{_public_app_url()}/customer/bookings'
 
@@ -180,6 +184,24 @@ def _push_org_staff(organization, *, title, body, link_path=''):
         send_push_to_org_staff(organization, title=title, body=body, link_path=link_path)
     except Exception:
         logger.exception('Provider push failed for org %s', getattr(organization, 'pk', None))
+
+
+def notify_customer_provider_direct(booking):
+    """Customer confirmation after staff books on their behalf. Do not ping staff."""
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Booking confirmed — {booking.organization.name}',
+        message=(
+            f'{booking.organization.name} booked '
+            f'{booking.service.name if booking.service_id else "a service"} '
+            f'for you on {_format_when(booking.start_at)}.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+        link_path=booking.customer_view_path(),
+    )
+    send_booking_email('booking_confirmed', booking)
 
 
 def notify_customer_booking_created(booking):
@@ -718,7 +740,7 @@ def send_booking_email(event, booking):
             f'Business: {org.name}',
             *_job_location_lines(booking),
             '',
-            f'View your bookings: {bookings_url}',
+            f'View your appointment: {customer_appointment_url(booking)}',
         ]
     elif event == 'booking_rescheduled':
         recipients = [booking.customer.email] if booking.customer.email else []

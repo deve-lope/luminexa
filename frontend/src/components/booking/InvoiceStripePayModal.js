@@ -350,7 +350,7 @@ export default function InvoiceStripePayModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[94dvh] w-full max-w-md overflow-y-auto rounded-t-[1.75rem] bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl sm:rounded-3xl sm:p-6"
+        className="max-h-[94dvh] w-full max-w-md overflow-y-auto rounded-t-[1.75rem] bg-white px-5 pb-[max(1.25rem,var(--lx-sab))] pt-3 shadow-2xl sm:rounded-3xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200 sm:hidden" aria-hidden />

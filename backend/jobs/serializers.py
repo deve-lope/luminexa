@@ -783,6 +783,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     awaiting_quote_details = serializers.SerializerMethodField()
     cost_lines = JobCostLineSerializer(many=True, read_only=True)
     profit = serializers.SerializerMethodField()
+    customer_view_url = serializers.SerializerMethodField()
+    customer_view_token = serializers.CharField(read_only=True)
 
     class Meta:
         model = Booking
@@ -800,9 +802,13 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'quote_questions', 'quoted_at', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
+            'customer_view_token', 'customer_view_url',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
+
+    def get_customer_view_url(self, obj):
+        return obj.customer_view_url()
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -915,6 +921,8 @@ class BookingSerializer(serializers.ModelSerializer):
     awaiting_quote_details = serializers.SerializerMethodField()
     cost_lines = JobCostLineSerializer(many=True, read_only=True)
     profit = serializers.SerializerMethodField()
+    customer_view_url = serializers.SerializerMethodField()
+    customer_view_token = serializers.CharField(read_only=True)
 
     class Meta:
         model = Booking
@@ -933,6 +941,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'quote_questions', 'quoted_at', 'quote_answers', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
+            'customer_view_token', 'customer_view_url',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -948,6 +957,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'quote_questions', 'quoted_at', 'awaiting_quote_details',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
+            'customer_view_token', 'customer_view_url',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -981,6 +991,9 @@ class BookingSerializer(serializers.ModelSerializer):
             return None
         from .job_costing_services import booking_profit_summary
         return booking_profit_summary(obj)
+
+    def get_customer_view_url(self, obj):
+        return obj.customer_view_url()
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -1181,6 +1194,50 @@ class BatchBookingSerializer(serializers.Serializer):
                     'bookings': 'You can book at most 10 services at once.',
                 })
         return attrs
+
+
+class PublicCustomerBookingSerializer(serializers.ModelSerializer):
+    """Read-only booking card for the unauthenticated /b/<token> share link."""
+
+    service_name = serializers.CharField(source='service.name', read_only=True)
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    organization_public_ref = serializers.CharField(
+        source='organization.public_ref', read_only=True,
+    )
+    fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
+    job_location = serializers.SerializerMethodField()
+    job_location_label = serializers.SerializerMethodField()
+    customer_first_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = (
+            'id', 'status', 'start_at', 'end_at',
+            'service_name', 'organization_name', 'organization_public_ref',
+            'fulfillment_kind', 'job_location', 'job_location_label',
+            'customer_first_name',
+        )
+        read_only_fields = fields
+
+    def get_customer_first_name(self, obj):
+        name = (getattr(obj.customer, 'full_name', None) or '').strip()
+        return name.split()[0] if name else ''
+
+    def get_job_location(self, obj):
+        addr = (obj.service_address or '').strip()
+        if addr:
+            return addr
+        svc = obj.service if obj.service_id else None
+        if svc and getattr(svc, 'fulfillment_kind', None) == Service.FulfillmentKind.SHOP:
+            from businesses.utils import organization_location_full
+            return organization_location_full(obj.organization) or ''
+        return ''
+
+    def get_job_location_label(self, obj):
+        kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
+        if kind == Service.FulfillmentKind.SHOP:
+            return 'Job location — come to the shop'
+        return 'Job location — we come to you'
 
 
 class ProviderBookSerializer(serializers.Serializer):

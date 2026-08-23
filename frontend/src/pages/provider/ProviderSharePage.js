@@ -7,6 +7,7 @@ import ProviderStorefrontPreview from '../../components/provider/ProviderStorefr
 import ProviderServicesPage from './ProviderServicesPage';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { getCustomerBookingUrl } from '../../utils/bookingLink';
+import LinkShareBar from '../../components/LinkShareBar';
 import { providerSchedule, providerSettings } from '../../utils/providerPaths';
 import { providerHasServiceArea } from '../../utils/serviceArea';
 
@@ -20,7 +21,6 @@ export default function ProviderSharePage() {
   const [editing, setEditing] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
   const [staffEmail, setStaffEmail] = useState('');
   const [staffMessage, setStaffMessage] = useState(null);
   const [invitingStaff, setInvitingStaff] = useState(false);
@@ -43,22 +43,6 @@ export default function ProviderSharePage() {
   const finishEditing = () => {
     setEditing(false);
     loadPreview();
-  };
-
-  const copyBookingLink = async () => {
-    if (!bookingUrl) return;
-    try {
-      await navigator.clipboard.writeText(bookingUrl);
-    } catch {
-      const input = document.createElement('textarea');
-      input.value = bookingUrl;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-    }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
   };
 
   if (!orgSlug) {
@@ -131,20 +115,12 @@ export default function ProviderSharePage() {
             <p className="mt-1 text-sm text-slate-600">
               Send this link so customers can view your page, connect, and book appointments.
             </p>
-            <div className="mt-4 flex gap-2">
-              <input
-                type="text"
-                readOnly
-                value={bookingUrl}
-                className="min-h-[48px] flex-1 truncate rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"
+            <div className="mt-4">
+              <LinkShareBar
+                url={bookingUrl}
+                title={activeOrg?.organization_name || 'Luminexa'}
+                text={`Book with ${activeOrg?.organization_name || 'us'} on Luminexa`}
               />
-              <button
-                type="button"
-                onClick={copyBookingLink}
-                className="min-h-[48px] shrink-0 rounded-xl bg-luminexa-accent px-4 font-medium text-white"
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </button>
             </div>
             <a
               href={bookingUrl}

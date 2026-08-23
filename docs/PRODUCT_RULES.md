@@ -126,9 +126,32 @@ Copy should make the tradeoff clear: separate account = independent discovery/bo
 
 ---
 
+## App install — Play Store only
+
+Customers must install **the latest Play Store app** (`com.luminexa.app`), not a browser PWA.
+
+### What it means
+
+Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that can be an older cached web copy. The in-app banner and any future install CTA must open `PLAY_STORE_URL` in `frontend/src/utils/storeLinks.js`.
+
+### Binding details
+
+- Block `beforeinstallprompt` (`preventDefault`); never call `.prompt()`.
+- Manifest: `prefer_related_applications: true` + Play `related_applications`.
+- iOS: no banner until `APP_STORE_URL` is set. Do not teach Add to Home Screen.
+- Android App Links (`https://app.luminex-a.com`) belong in the Capacitor `AndroidManifest` so booking links open the installed app after a Play update.
+
+### What NOT to simplify away
+
+- Do not ship a “Install this website” / PWA path alongside Play.
+- Do not pin a versionCode or APK in the install link — Play serves the current listing.
+
+---
+
 ## Quick “shipped truths” checklist for agents
 
 1. Capacity default 1; UI label “Jobs at the same time”; FK not OneToOne; OPEN while remaining > 0.
 2. Dual radius in `location.py`; lat/lng preferred; postal for ungeocoded.
 3. Multi-location any-branch match; primary sync; 2nd-location choice UX.
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
+5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.

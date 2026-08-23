@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { getPreferredStoreUrl } from '../utils/storeLinks';
 
 const DISMISS_KEY = 'luminexa_pwa_dismiss';
 const DISMISS_DAYS = 14;
@@ -10,8 +11,9 @@ function isStandalone() {
   );
 }
 
-function isIos() {
-  return /iP(hone|od|ad)/.test(navigator.userAgent) && !window.MSStream;
+function isLocalDevHost() {
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 }
 
 function wasDismissedRecently() {
@@ -25,49 +27,36 @@ function wasDismissedRecently() {
 }
 
 export default function usePwaInstall() {
-  const deferredPrompt = useRef(null);
-  const [canInstall, setCanInstall] = useState(false);
-  const [showIosGuide, setShowIosGuide] = useState(false);
+  const [storeUrl, setStoreUrl] = useState(null);
 
   useEffect(() => {
-    if (isStandalone()) return undefined;
-
-    if (isIos() && !wasDismissedRecently()) {
-      setShowIosGuide(true);
-      return undefined;
-    }
-
-    const handler = (e) => {
-      // Only take over the install UI if we will show our banner.
-      // preventDefault without prompt() makes Chrome log a console warning.
-      if (wasDismissedRecently()) return;
+    // Never let Chrome/Edge install a second, often stale PWA from this origin.
+    const blockBrowserInstall = (e) => {
       e.preventDefault();
-      deferredPrompt.current = e;
-      setCanInstall(true);
     };
+    window.addEventListener('beforeinstallprompt', blockBrowserInstall);
 
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const install = useCallback(async () => {
-    const prompt = deferredPrompt.current;
-    if (!prompt) return;
-    prompt.prompt();
-    const { outcome } = await prompt.userChoice;
-    if (outcome === 'accepted') {
-      setCanInstall(false);
+    if (isStandalone() || isLocalDevHost() || wasDismissedRecently()) {
+      return () => window.removeEventListener('beforeinstallprompt', blockBrowserInstall);
     }
-    deferredPrompt.current = null;
+
+    const url = getPreferredStoreUrl(navigator.userAgent || '');
+    if (url) setStoreUrl(url);
+
+    return () => window.removeEventListener('beforeinstallprompt', blockBrowserInstall);
   }, []);
+
+  const install = useCallback(() => {
+    if (!storeUrl) return;
+    window.location.assign(storeUrl);
+  }, [storeUrl]);
 
   const dismiss = useCallback(() => {
     try {
       localStorage.setItem(DISMISS_KEY, String(Date.now()));
     } catch {}
-    setCanInstall(false);
-    setShowIosGuide(false);
+    setStoreUrl(null);
   }, []);
 
-  return { canInstall, showIosGuide, install, dismiss };
+  return { canInstall: Boolean(storeUrl), showIosGuide: false, storeUrl, install, dismiss };
 }

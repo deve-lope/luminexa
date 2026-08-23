@@ -20,6 +20,7 @@ from .catalog import build_service_catalog
 from .models import AvailabilitySlot, Booking, Service, ServiceReview
 from .scheduling_services import sync_recurring_slots
 from .serializers import (
+    PublicCustomerBookingSerializer,
     PublicOrganizationReadSerializer,
     PublicServiceDetailSerializer,
     PublicServiceReadSerializer,
@@ -419,3 +420,23 @@ class PublicServiceReviewAPIView(APIView):
             PublicServiceReviewSerializer(review, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class PublicCustomerBookingAPIView(APIView):
+    """Unauthenticated view of a booking via the customer share token."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, token):
+        token = (token or '').strip()
+        if not token:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        booking = (
+            Booking.objects.select_related('organization', 'service', 'customer')
+            .filter(customer_view_token=token)
+            .first()
+        )
+        if not booking:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PublicCustomerBookingSerializer(booking).data)

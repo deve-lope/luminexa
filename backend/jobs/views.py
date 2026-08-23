@@ -1180,6 +1180,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             slot=data.get('slot_id'),
             notes=data.get('customer_notes') or '',
         )
+        from .notifications import notify_customer_provider_direct
+
+        notify_customer_provider_direct(booking)
         return Response(
             BookingSerializer(booking, context={'request': request}).data,
             status=status.HTTP_201_CREATED,

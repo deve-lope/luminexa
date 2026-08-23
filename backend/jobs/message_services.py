@@ -512,10 +512,35 @@ def find_conversation_for_inquiry_id(*, organization=None, customer=None, inquir
     return conversation_for_inquiry(inquiry)
 
 
+# Avoid flooding the customer inbox during a live chat. Email once per
+# conversation, then skip further chat emails until this window elapses.
+CHAT_EMAIL_COOLDOWN = timezone.timedelta(hours=2)
+
+
+def _staff_chat_email_recently_sent(*, conversation, customer, current_message) -> bool:
+    """True if another staff TEXT in this thread already fell in the cooldown window.
+
+    The first staff message in a quiet window emails; later ones rely on in-app
+    + push until CHAT_EMAIL_COOLDOWN has passed since that prior staff text.
+    """
+    cutoff = timezone.now() - CHAT_EMAIL_COOLDOWN
+    return (
+        ServiceRequestMessage.objects.filter(
+            conversation=conversation,
+            kind=ServiceRequestMessage.Kind.TEXT,
+            created_at__gte=cutoff,
+        )
+        .exclude(pk=current_message.pk)
+        .exclude(sender_id=customer.id)
+        .exists()
+    )
+
+
 def _notify_new_message(message, *, create_in_app=True):
     """Notify the other party about a new message.
 
-    Provider→customer: email + optional in-app CustomerNotification.
+    Provider→customer: at most one email per conversation every
+    CHAT_EMAIL_COOLDOWN (in-app + push still fire every time).
     Customer→provider: in-app ProviderNotification only (no email — chat spam).
     """
     from .models import CustomerNotification, ProviderNotification
@@ -543,7 +568,11 @@ def _notify_new_message(message, *, create_in_app=True):
     messages_path = provider_messages_link_path(org.slug, conversation_id=conversation.pk)
 
     if sender_is_staff:
-        if customer.email:
+        if customer.email and not _staff_chat_email_recently_sent(
+            conversation=conversation,
+            customer=customer,
+            current_message=message,
+        ):
             _send_to(
                 customer.email,
                 f'New message from {org.name}',

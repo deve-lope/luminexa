@@ -73,8 +73,8 @@ export default function PrivacyPolicyPage() {
           <p>
             <strong>Device and technical data.</strong> Basic logs such as IP address, browser type,
             and pages requested, used for security, debugging, and reliable delivery of the service.
-            If you install the app as a PWA, the browser may store an install preference and cached
-            app shell files on your device.
+            If you install the Android app from Google Play, the OS may store the app, a device
+            push token, and cached files used to run Luminexa.
           </p>
         </Section>
 
@@ -140,7 +140,7 @@ export default function PrivacyPolicyPage() {
               </Link>
             </li>
             <li>Request access by emailing {CONTACT}</li>
-            <li>Uninstall the PWA / clear site data from your browser</li>
+            <li>Uninstall the app from your device, or clear site data from your browser</li>
           </ul>
         </Section>
 

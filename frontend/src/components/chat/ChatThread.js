@@ -418,7 +418,7 @@ export default function ChatThread({
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}
     >
-      <header className="flex shrink-0 items-center gap-3 border-b border-black/5 bg-teal-800 px-3 py-2.5 text-white shadow-sm pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-black/5 bg-teal-800 px-3 py-2.5 text-white shadow-sm">
         <button
           type="button"
           onClick={onClose}
@@ -488,7 +488,7 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className="shrink-0 border-t border-black/5 bg-[#f0f2f5] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 border-t border-black/5 bg-[#f0f2f5] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}

@@ -1,5 +1,8 @@
 # Luminexa — iOS work on a collaborator's Mac
 
+**Start here for the full friend handoff (phases + push like Android):**
+[`IOS_HELP_GUIDE.md`](IOS_HELP_GUIDE.md).
+
 How a second developer with a Mac builds, signs, and ships the iOS app while the
 main developer keeps working on the Linux server. Build steps themselves live in
 [`CAPACITOR_IOS.md`](CAPACITOR_IOS.md); this file covers the **two-machine split**.
@@ -86,14 +89,18 @@ himself, then only `GoogleService-Info.plist` has to travel.
 Enrol **the main dev / the business** in the Apple Developer Program ($99/yr),
 then invite the friend into that team:
 
-1. App Store Connect → **Users and Access** → **+** → invite his Apple ID.
+1. App Store Connect → **Users and Access** → **+** → invite **his own Apple
+   ID email** (any email he already uses for iCloud). GitHub (`deve-lope`) and
+   the owner’s git email (`ajil@luminexa.com`) are **not** his Apple ID unless
+   he happens to use the same address for Apple — they do not have to match.
 2. Role: **Developer** at minimum — that is what grants signing certificates and
    provisioning profiles. **App Manager** if he should also manage TestFlight and
    the listing. **Admin** only if he needs to manage users too.
-3. He signs into Xcode with that Apple ID and picks the shared **Team** under
-   Signing & Capabilities.
+3. He signs into Xcode with **his** Apple ID and picks the shared **Team** under
+   Signing & Capabilities. He must not enrol a second $99 program or publish as
+   himself.
 
-Do **not** let him publish under his own personal Apple account. The app record,
+Do **not** let him publish under his own personal Apple Developer Program. The app record,
 the listing, and the Apple relationship would belong to him, and moving an app
 between Apple accounts later is a manual transfer that fails if there are
 outstanding agreements or an active subscription.

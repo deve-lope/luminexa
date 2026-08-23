@@ -351,7 +351,7 @@ class ProviderConversationsAPITests(TestCase):
         self.assertIsNotNone(note)
         self.assertEqual(note.link_path, '/customer/messages')
 
-        # Provider→customer still emails.
+        # First provider→customer message in a quiet thread still emails.
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.customer.email])
         self.assertIn('New message', mail.outbox[0].subject)
@@ -360,3 +360,49 @@ class ProviderConversationsAPITests(TestCase):
         inbox = self.client.get('/api/v1/me/conversations/', HTTP_HOST='localhost')
         self.assertTrue(inbox.data['results'][0]['has_unread'])
         self.assertEqual(inbox.data['unread_count'], 1)
+
+    def test_provider_chat_email_cooldown_skips_followups_within_two_hours(self):
+        from jobs.models import CustomerNotification, ServiceRequestMessage
+
+        mail.outbox.clear()
+        self.client.force_authenticate(user=self.owner)
+        first = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'On our way.'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(len(mail.outbox), 1)
+
+        second = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'Five minutes out.'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(second.status_code, 201, second.data)
+        # Still one email — follow-ups stay in-app/push during the cooldown.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            CustomerNotification.objects.filter(
+                customer=self.customer,
+                kind=CustomerNotification.Kind.NEW_MESSAGE,
+            ).count(),
+            2,
+        )
+
+        # After the cooldown window, the next staff message emails again.
+        ServiceRequestMessage.objects.filter(
+            booking=self.booking,
+            kind=ServiceRequestMessage.Kind.TEXT,
+        ).update(created_at=timezone.now() - timedelta(hours=2, minutes=1))
+        mail.outbox.clear()
+        third = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'Parking now.'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(third.status_code, 201, third.data)
+        self.assertEqual(len(mail.outbox), 1)

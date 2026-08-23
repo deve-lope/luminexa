@@ -21,6 +21,26 @@
     <meta name="description" content="Luminexa — Book local services. Effortlessly." />
     <title>Luminexa</title>
     <script>
+      // Mark Capacitor early (bridge may inject after first paint on remote URL).
+      (function () {
+        function mark() {
+          try {
+            if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+              document.documentElement.classList.add('capacitor-native');
+              return true;
+            }
+          } catch (e) {}
+          return false;
+        }
+        if (!mark()) {
+          var n = 0;
+          var t = setInterval(function () {
+            if (mark() || ++n > 60) clearInterval(t);
+          }, 50);
+        }
+      })();
+    </script>
+    <script>
       // Only clear workers on local dev hosts. Production registers /sw.js from index.js.
       (function () {
         var h = location.hostname;

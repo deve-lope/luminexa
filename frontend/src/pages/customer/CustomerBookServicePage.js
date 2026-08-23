@@ -19,7 +19,8 @@ import {
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { serviceDetail, customerBookings } from '../../utils/customerPaths';
-import { formatServiceMeta, formatFulfillmentDescription, isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
+import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
+import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
@@ -413,12 +414,7 @@ export default function CustomerBookServicePage() {
               >
                 Show full details →
               </Link>
-              {formatServiceMeta(service) && (
-                <p className="mt-2 text-sm text-slate-500">{formatServiceMeta(service)}</p>
-              )}
-              <p className="mt-2 text-sm font-medium text-slate-700">
-                {formatFulfillmentDescription(service)}
-              </p>
+              <ServiceVisitFacts service={service} />
             </div>
           </div>
         </section>

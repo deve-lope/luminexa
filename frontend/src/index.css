@@ -9,6 +9,11 @@
     --lx-accent: 13 148 136;
     --lx-surface: 255 255 255;
     --lx-border: 228 231 235;
+    /* Capacitor SystemBars injects --safe-area-inset-* on Android (env() is often wrong). */
+    --lx-sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --lx-sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --lx-sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+    --lx-sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   }
 
   body {
@@ -20,10 +25,29 @@
     color: #1c2733;
     letter-spacing: -0.006em;
     overflow-x: hidden;
+    /* Always honor Capacitor/SystemBars vars (0 on desktop). Do not gate on .capacitor-native —
+       that class can miss if Cap bridge injects after first paint on remote URL loads. */
+    padding-top: var(--lx-sat);
+    padding-left: var(--lx-sal);
+    padding-right: var(--lx-sar);
+    box-sizing: border-box;
   }
 
   html {
     overflow-x: hidden;
+  }
+
+  html.capacitor-native {
+    background-color: #0d9488;
+  }
+
+  html.capacitor-native body {
+    min-height: 100%;
+    background-color: #f8fafc;
+  }
+
+  html.capacitor-native #root {
+    min-height: 100%;
   }
 
   #root {
@@ -44,28 +68,28 @@
 
   .lx-container {
     @apply w-full;
-    padding-left: max(1rem, env(safe-area-inset-left, 0px));
-    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    padding-left: max(1rem, var(--lx-sal));
+    padding-right: max(1rem, var(--lx-sar));
   }
 
   @media (min-width: 640px) {
     .lx-container {
-      padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
-      padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+      padding-left: max(1.5rem, var(--lx-sal));
+      padding-right: max(1.5rem, var(--lx-sar));
     }
   }
 
   @media (min-width: 1024px) {
     .lx-container {
-      padding-left: max(1.75rem, env(safe-area-inset-left, 0px));
-      padding-right: max(1.75rem, env(safe-area-inset-right, 0px));
+      padding-left: max(1.75rem, var(--lx-sal));
+      padding-right: max(1.75rem, var(--lx-sar));
     }
   }
 
   .lx-auth-page {
     @apply flex min-h-[100dvh] w-full flex-col justify-center bg-luminexa-ink text-luminexa-mist;
-    padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
-      max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+    padding: max(1rem, var(--lx-sat)) max(1rem, var(--lx-sar)) max(1rem, var(--lx-sab))
+      max(1rem, var(--lx-sal));
   }
 
   .lx-auth-card {
@@ -78,7 +102,12 @@
 
   .lx-header {
     @apply sticky top-0 z-20 border-b border-luminexa-line bg-white/80 backdrop-blur-xl backdrop-saturate-150;
+    /* Body already padded on Capacitor; keep env/var for browser PWA only */
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  html.capacitor-native .lx-header {
+    padding-top: 0;
   }
 
   .lx-card {
@@ -183,12 +212,16 @@
 }
 
 .pb-safe {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(0.5rem, var(--lx-sab));
 }
 
 .px-safe {
-  padding-left: max(1rem, env(safe-area-inset-left, 0px));
-  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-left: max(1rem, var(--lx-sal));
+  padding-right: max(1rem, var(--lx-sar));
+}
+
+.pt-safe {
+  padding-top: var(--lx-sat);
 }
 
 .sidebar-scroll {

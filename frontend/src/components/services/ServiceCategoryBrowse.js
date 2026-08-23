@@ -65,10 +65,10 @@ export default function ServiceCategoryBrowse({
             key={tile.id}
             type="button"
             onClick={() => setCategory(tile.id)}
-            className="flex min-h-[88px] flex-col items-start justify-center rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-luminexa-accent/40 hover:shadow-md"
+            className="flex min-h-[88px] flex-col items-start justify-center rounded-xl border border-teal-200/80 bg-gradient-to-br from-teal-50 via-emerald-50/80 to-white p-4 text-left shadow-sm ring-1 ring-teal-100/70 transition hover:border-luminexa-accent hover:shadow-md"
           >
-            <span className="font-semibold text-slate-900">{tile.name}</span>
-            <span className="mt-1 text-sm text-slate-500">
+            <span className="font-semibold text-teal-950">{tile.name}</span>
+            <span className="mt-1 text-sm font-medium text-teal-800/70">
               {tile.count} service{tile.count === 1 ? '' : 's'}
             </span>
           </button>
@@ -84,7 +84,7 @@ export default function ServiceCategoryBrowse({
       <button
         type="button"
         onClick={() => setCategory(null)}
-        className="inline-flex min-h-[40px] items-center text-sm font-medium text-luminexa-accent"
+        className="inline-flex min-h-[40px] items-center rounded-full border border-teal-200 bg-teal-50 px-3.5 text-sm font-semibold text-teal-800"
       >
         ← All categories
       </button>

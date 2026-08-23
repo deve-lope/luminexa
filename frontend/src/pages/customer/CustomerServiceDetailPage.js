@@ -13,7 +13,7 @@ import {
   customerProviderService,
 } from '../../utils/customerPaths';
 import { providerRouteKey } from '../../utils/providerRouteKey';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 
 const COMMENT_PREVIEW = 2;
 
@@ -127,7 +127,6 @@ export default function CustomerServiceDetailPage() {
     );
   }
 
-  const meta = formatServiceMeta(service);
   const myReview = service.my_review;
   const canEdit = Boolean(service.can_edit_review || myReview);
 
@@ -145,7 +144,7 @@ export default function CustomerServiceDetailPage() {
         {service.category_name && (
           <p className="mt-1 text-sm text-slate-500">{service.category_name}</p>
         )}
-        {meta && <p className="mt-2 text-sm font-medium text-slate-700">{meta}</p>}
+        <ServiceVisitFacts service={service} forceShowPrice={isOwnerView} />
       </header>
 
       <ServicePictureCarousel images={pictures} alt={service.name} />

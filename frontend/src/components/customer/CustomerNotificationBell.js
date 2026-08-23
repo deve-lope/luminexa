@@ -85,7 +85,7 @@ export default function CustomerNotificationBell({ unreadCount = 0, onCountChang
       {open &&
         createPortal(
           <div
-            className="fixed inset-0 z-[110] flex items-start justify-end bg-slate-900/40 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4"
+            className="fixed inset-0 z-[110] flex items-start justify-end bg-slate-900/40 p-3 pt-[max(0.75rem,var(--lx-sat))] sm:p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="customer-notif-preview-title"

@@ -1,4 +1,5 @@
 from decimal import Decimal
+import secrets
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -562,6 +563,12 @@ class Booking(models.Model):
         blank=True,
         related_name='bookings_created_as_staff',
     )
+    customer_view_token = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text='Unguessable token for the customer share URL (/b/<token>).',
+    )
     customer_notes = models.TextField(blank=True)
     service_address = models.TextField(
         blank=True,
@@ -640,7 +647,16 @@ class Booking(models.Model):
         if self.start_at and self.end_at and self.start_at >= self.end_at:
             raise ValidationError('end_at must be after start_at.')
 
+    def customer_view_path(self):
+        return f'/b/{self.customer_view_token}'
+
+    def customer_view_url(self):
+        base = getattr(settings, 'PUBLIC_APP_URL', 'http://localhost:3000').rstrip('/')
+        return f'{base}{self.customer_view_path()}'
+
     def save(self, *args, **kwargs):
+        if not self.customer_view_token:
+            self.customer_view_token = secrets.token_urlsafe(32)
         self.full_clean()
         super().save(*args, **kwargs)
 

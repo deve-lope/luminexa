@@ -95,7 +95,7 @@ function SiteHeader() {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-30 transition duration-300 ${
+      className={`fixed inset-x-0 top-0 z-30 pt-safe transition duration-300 ${
         solid
           ? 'border-b border-teal-900/10 bg-white/90 shadow-sm backdrop-blur-xl'
           : 'bg-transparent'

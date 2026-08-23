@@ -14,6 +14,10 @@ frontend/build/
 .env.docker.prod
 .env.docker.dev
 
+# Firebase service-account key (FIREBASE_CREDENTIALS_FILE bind mount)
+*firebase-adminsdk*.json
+/secrets/
+
 # Env — native only (optional)
 backend/.env
 frontend/.env

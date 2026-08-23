@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import { markNativeDocument } from './native/capacitorNative';
 import App from './App';
+
+markNativeDocument();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

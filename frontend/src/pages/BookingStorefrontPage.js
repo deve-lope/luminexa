@@ -8,8 +8,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { businessesAPI } from '../utils/api';
 import { bookService, bookMultipleServices, businessPage, customerProviderService, customerProviderCheckout } from '../utils/customerPaths';
 import { providerRouteKey } from '../utils/providerRouteKey';
-import { providerServices } from '../utils/providerPaths';
+import { providerRequests, providerServices } from '../utils/providerPaths';
 import ExpandableText from '../components/ui/ExpandableText';
+import ExpandablePhoto from '../components/ui/ExpandablePhoto';
+import ExpandableGallery from '../components/ui/ExpandableGallery';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
 import ServiceRatingSummary from '../components/services/ServiceRatingSummary';
 import { buildCatalogFromFlat } from '../components/services/ServiceCatalogView';
@@ -232,10 +234,11 @@ export default function BookingStorefrontPage() {
           <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
         )}
         {organization.logo_url && (
-          <img
+          <ExpandablePhoto
             src={organization.logo_url}
-            alt=""
-            className="absolute bottom-3 left-4 h-16 w-16 rounded-xl border-2 border-white bg-white object-cover shadow-md"
+            alt={`${organization.name} profile photo`}
+            buttonClassName="absolute bottom-3 left-4 z-[1] h-16 w-16 overflow-hidden rounded-xl border-2 border-white bg-white shadow-md cursor-zoom-in"
+            imgClassName="h-full w-full object-cover"
           />
         )}
         {isOwnerView && (
@@ -469,29 +472,19 @@ export default function BookingStorefrontPage() {
             {gallery.length > 0 && (
               <section className="lx-card">
                 <h2 className="text-sm font-semibold uppercase text-slate-500">Gallery</h2>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {gallery.map((img) => (
-                    <figure key={img.id} className="overflow-hidden rounded-lg">
-                      <img
-                        src={img.image_url}
-                        alt={img.caption || organization.name}
-                        className="aspect-square w-full object-cover"
-                      />
-                    </figure>
-                  ))}
-                </div>
+                <ExpandableGallery images={gallery} fallbackAlt={organization.name} />
               </section>
             )}
 
-            {!isOwnerView && (
-              <CustomerServiceRequestForm
-                orgSlug={customerKey}
-                businessTypes={businessTypes}
-                categories={serviceCatalog?.categories || []}
-                isGuest={isGuest}
-                loginNextUrl={providerPagePath}
-              />
-            )}
+            <CustomerServiceRequestForm
+              orgSlug={customerKey}
+              businessTypes={businessTypes}
+              categories={serviceCatalog?.categories || []}
+              isGuest={isGuest}
+              loginNextUrl={providerPagePath}
+              previewMode={isOwnerView}
+              previewRequestsHref={isOwnerView ? providerRequests(adminOrgSlug) : null}
+            />
           </>
         )}
       </div>

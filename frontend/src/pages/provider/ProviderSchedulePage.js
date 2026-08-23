@@ -11,6 +11,7 @@ import { jobsAPI } from '../../utils/api';
 import { buildOpenSlotDays, slotLocalDayKey } from '../../utils/slotCalendar';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import TimelineTimeAdjust from '../../components/scheduling/TimelineTimeAdjust';
+import LinkShareBar from '../../components/LinkShareBar';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -36,6 +37,7 @@ export default function ProviderSchedulePage() {
   const [pendingCustomers, setPendingCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
+  const [customerShareUrl, setCustomerShareUrl] = useState('');
   const [error, setError] = useState(null);
 
   const [slotService, setSlotService] = useState('');
@@ -234,6 +236,7 @@ export default function ProviderSchedulePage() {
           end_at,
         });
         setMessage('Open slot saved — customers can book this time.');
+        setCustomerShareUrl('');
       } else if (mode === 'unavailable') {
         const unavailRes = await jobsAPI.createUnavailableBlock({
           organization: activeOrg.organization,
@@ -251,8 +254,9 @@ export default function ProviderSchedulePage() {
           unavailMsg += ` ${declined} pending request${declined === 1 ? '' : 's'} declined.`;
         }
         setMessage(unavailMsg);
+        setCustomerShareUrl('');
       } else if (mode === 'book') {
-        await jobsAPI.providerBook({
+        const bookRes = await jobsAPI.providerBook({
           organization: activeOrg.organization,
           service: serviceId,
           customer: customerId,
@@ -260,7 +264,13 @@ export default function ProviderSchedulePage() {
           end_at,
           customer_notes: bookNotes || '',
         });
-        setMessage('Appointment booked for customer.');
+        const url = bookRes.data?.customer_view_url || '';
+        setCustomerShareUrl(url);
+        setMessage(
+          url
+            ? 'Appointment booked for customer. Copy the link below to send them.'
+            : 'Appointment booked for customer.'
+        );
       }
       resetAddFlow();
       await load();
@@ -288,9 +298,21 @@ export default function ProviderSchedulePage() {
       <SchedulingModeBanner orgSlug={orgSlug} />
 
       {message && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 sm:px-4 sm:py-3">
-          {message}
-        </p>
+        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 sm:px-4 sm:py-3">
+          <p>{message}</p>
+          {customerShareUrl && (
+            <div className="mt-3">
+              <LinkShareBar
+                url={customerShareUrl}
+                title="Your Luminexa booking"
+                text="Here is your appointment"
+                showInput={false}
+                copyLabel="Copy link"
+                compact
+              />
+            </div>
+          )}
+        </div>
       )}
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:px-4 sm:py-3">{error}</p>

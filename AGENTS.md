@@ -31,8 +31,10 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 | Multi-location / branches | [`.cursor/rules/provider-locations.mdc`](.cursor/rules/provider-locations.mdc) + PRODUCT_RULES § Locations |
 | Test plan & high-value cases | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) |
 | Play Store / Android release | [`docs/PLAY_STORE_RELEASE.md`](docs/PLAY_STORE_RELEASE.md) |
+| App install (Play only, never PWA) | [`.cursor/rules/app-install.mdc`](.cursor/rules/app-install.mdc) + PRODUCT_RULES § App install |
 | App Store / iOS release (Mac required) | [`docs/CAPACITOR_IOS.md`](docs/CAPACITOR_IOS.md) |
 | iOS work split with a Mac collaborator | [`docs/IOS_MAC_COLLABORATOR.md`](docs/IOS_MAC_COLLABORATOR.md) |
+| iOS help guide (friend handoff — push like Android) | [`docs/IOS_HELP_GUIDE.md`](docs/IOS_HELP_GUIDE.md) |
 | Play Console listing copy | [`docs/PLAY_CONSOLE_LISTING.md`](docs/PLAY_CONSOLE_LISTING.md) |
 | TWA / Android build steps | [`docs/TWA_BUILD.md`](docs/TWA_BUILD.md) |
 | Greenfield platform spec | [`docs/LUMINEXA_PLATFORM_REPORT.md`](docs/LUMINEXA_PLATFORM_REPORT.md) |
@@ -42,6 +44,7 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 1. **`concurrent_capacity`** on Organization (default 1). UI: “Jobs at the same time”. Slot bookable while `remaining_capacity > 0`. `Booking.availability_slot` is FK (`related_name=bookings`), not OneToOne.
 2. **Dual-radius search**: visible only if distance ≤ customer `radius_miles` **and** ≤ that location’s `radius_miles`. Core: `organization_distances_within_radius`. Prefer lat/lng; still send postal for ungeocoded matches.
 3. **Multi-location**: `OrganizationLocation`; search matches any active branch; primary syncs to `Organization.service_*`; 2nd+ location settings show separate account vs add on this profile.
+4. **App install**: never Chrome/Safari PWA or “Add to Home Screen”. Always the latest store listing in `frontend/src/utils/storeLinks.js` (Play Store; App Store when `APP_STORE_URL` is set).
 
 ## High-risk modules (touch carefully)
 

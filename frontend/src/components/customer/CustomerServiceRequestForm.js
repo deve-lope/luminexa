@@ -49,6 +49,8 @@ export default function CustomerServiceRequestForm({
   categories = [],
   isGuest = false,
   loginNextUrl,
+  previewMode = false,
+  previewRequestsHref = null,
 }) {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState(false);
@@ -129,6 +131,12 @@ export default function CustomerServiceRequestForm({
       setError('Please enter the job location.');
       return;
     }
+    if (previewMode) {
+      setSuccess(
+        'Preview only — customers send this from your shop page. New requests show up in Requests.'
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const label = (serviceLabel.trim() || category).trim();
@@ -150,25 +158,39 @@ export default function CustomerServiceRequestForm({
 
   if (!expanded) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <p className="text-sm text-slate-700">
-          Can&apos;t find what you need?{' '}
-          <span className="text-slate-600">Request a custom service and we&apos;ll follow up.</span>
+      <section
+        id="custom-request"
+        className="overflow-hidden rounded-xl border border-teal-200/80 bg-gradient-to-br from-teal-50 via-white to-emerald-50/50 p-4 shadow-sm ring-1 ring-teal-100/70"
+      >
+        <h2 className="text-base font-semibold text-teal-950">Can&apos;t find what you need?</h2>
+        <p className="mt-1 text-sm text-teal-900/80">
+          {previewMode
+            ? 'Customers tap the button, describe the job, and you get it in Requests.'
+            : 'Request a custom service — describe the job and we will follow up.'}
         </p>
-        {isGuest ? (
+        {previewMode && previewRequestsHref && (
+          <p className="mt-1 text-sm text-teal-800/70">
+            Open{' '}
+            <Link to={previewRequestsHref} className="font-medium text-luminexa-accent underline">
+              Requests
+            </Link>{' '}
+            to reply.
+          </p>
+        )}
+        {isGuest && !previewMode ? (
           <Link
             to={`/login?next=${encodeURIComponent(loginNextUrl || '/')}`}
-            className="mt-2 inline-flex min-h-[40px] items-center text-sm font-medium text-luminexa-accent"
+            className="lx-btn-primary mt-3 flex min-h-[48px] w-full items-center justify-center"
           >
-            Sign in to send a request →
+            Sign in to send a request
           </Link>
         ) : (
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="mt-2 inline-flex min-h-[40px] items-center text-sm font-medium text-luminexa-accent"
+            className="lx-btn-primary mt-3 w-full min-h-[48px]"
           >
-            Send a custom request →
+            {previewMode ? 'See how a custom request works' : 'Send a custom request'}
           </button>
         )}
       </section>
@@ -206,8 +228,9 @@ export default function CustomerServiceRequestForm({
         <div>
           <h2 className="text-base font-semibold text-slate-900">Custom service request</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Pick a category, describe the job, and when you&apos;d like it done. The business will
-            follow up or add a booking for you.
+            {previewMode
+              ? 'Customers pick a category, describe the job, and optionally add a date. You follow up from Requests.'
+              : 'Pick a category, describe the job, and when you\'d like it done. The business will follow up or add a booking for you.'}
           </p>
         </div>
         <button

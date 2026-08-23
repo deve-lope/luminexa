@@ -107,6 +107,11 @@ urlpatterns = [
         stripe_views.CustomerUnpaidInvoiceAPIView.as_view(),
     ),
     path('webhooks/stripe/', stripe_views.stripe_webhook),
+    path(
+        'public/bookings/<str:token>/',
+        public_views.PublicCustomerBookingAPIView.as_view(),
+        name='public-customer-booking',
+    ),
     path('public/providers/<slug>/', public_views.PublicProviderStorefrontAPIView.as_view()),
     path(
         'public/providers/<slug>/services/<int:service_id>/',

@@ -12,7 +12,8 @@ import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
-import { getProviderBookingDetailUrl } from '../../utils/bookingLink';
+import { getCustomerAppointmentUrl } from '../../utils/bookingLink';
+import LinkShareBar from '../../components/LinkShareBar';
 import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
 import {
   dismissProviderNotificationsForBooking,
@@ -43,7 +44,6 @@ export default function ProviderScheduleDetailPage() {
   const [siblingSlots, setSiblingSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [copied, setCopied] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [returnVisitOpen, setReturnVisitOpen] = useState(false);
@@ -321,29 +321,20 @@ export default function ProviderScheduleDetailPage() {
         </section>
 
         <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Share</h2>
-          <p className="mt-1 text-sm text-slate-600">Copy a direct link to this booking.</p>
-          <button
-            type="button"
-            onClick={async () => {
-              const url = getProviderBookingDetailUrl(orgSlug, data.id);
-              try {
-                await navigator.clipboard.writeText(url);
-              } catch {
-                const input = document.createElement('textarea');
-                input.value = url;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-              }
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 2000);
-            }}
-            className="mt-3 w-full min-h-[44px] rounded-xl border border-slate-200 font-medium text-slate-800"
-          >
-            {copied ? 'Link copied' : 'Copy booking link'}
-          </button>
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Send this link so they can view the appointment in the browser or the Luminexa app.
+          </p>
+          <div className="mt-3">
+            <LinkShareBar
+              url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
+              title={data.organization_name || 'Your Luminexa booking'}
+              text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}`}
+              showInput={false}
+              copyLabel="Copy link"
+              compact
+            />
+          </div>
         </section>
 
         {data.status === 'requested' &&

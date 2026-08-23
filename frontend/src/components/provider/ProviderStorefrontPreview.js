@@ -1,9 +1,13 @@
 import React from 'react';
 import { policyLabel } from '../../constants/bookingPolicies';
 import ExpandableText from '../ui/ExpandableText';
+import ExpandablePhoto from '../ui/ExpandablePhoto';
+import ExpandableGallery from '../ui/ExpandableGallery';
 import ServiceCategoryBrowse from '../services/ServiceCategoryBrowse';
 import { buildCatalogFromFlat } from '../services/ServiceCatalogView';
+import CustomerServiceRequestForm from '../customer/CustomerServiceRequestForm';
 import { formatProviderServiceArea, providerHasServiceArea } from '../../utils/serviceArea';
+import { providerRequests } from '../../utils/providerPaths';
 
 /**
  * Read-only customer-facing booking page preview for providers.
@@ -40,10 +44,11 @@ export default function ProviderStorefrontPreview({
           <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
         )}
         {organization.logo_url && (
-          <img
+          <ExpandablePhoto
             src={organization.logo_url}
-            alt=""
-            className="absolute bottom-3 left-4 h-16 w-16 rounded-xl border-2 border-white bg-white object-cover shadow-md"
+            alt={`${organization.name} profile photo`}
+            buttonClassName="absolute bottom-3 left-4 z-[1] h-16 w-16 overflow-hidden rounded-xl border-2 border-white bg-white shadow-md cursor-zoom-in"
+            imgClassName="h-full w-full object-cover"
           />
         )}
         {showEditOnBanner && onEdit && (
@@ -123,26 +128,17 @@ export default function ProviderStorefrontPreview({
         {gallery.length > 0 && (
           <section>
             <h2 className="text-sm font-semibold uppercase text-slate-500">Gallery</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {gallery.map((img) => (
-                <figure key={img.id} className="overflow-hidden rounded-lg">
-                  <img
-                    src={img.image_url}
-                    alt={img.caption || organization.name}
-                    className="aspect-square w-full object-cover"
-                  />
-                </figure>
-              ))}
-            </div>
+            <ExpandableGallery images={gallery} fallbackAlt={organization.name} />
           </section>
         )}
 
-        <section className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="text-sm text-slate-700">
-            Can&apos;t find what you need?{' '}
-            <span className="text-slate-600">Customers can request a custom service here.</span>
-          </p>
-        </section>
+        <CustomerServiceRequestForm
+          orgSlug={orgSlug}
+          businessTypes={data.business_types || []}
+          categories={serviceCatalog?.categories || []}
+          previewMode
+          previewRequestsHref={providerRequests(orgSlug)}
+        />
       </div>
     </div>
   );

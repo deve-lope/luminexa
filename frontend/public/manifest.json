@@ -9,6 +9,14 @@
   "background_color": "#10231F",
   "theme_color": "#0D9488",
   "orientation": "portrait-primary",
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.luminexa.app",
+      "url": "https://play.google.com/store/apps/details?id=com.luminexa.app"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

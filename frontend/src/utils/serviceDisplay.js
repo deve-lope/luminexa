@@ -65,6 +65,20 @@ export function formatDurationLabel(mins) {
   return `${h} hours`;
 }
 
+/** Job length — not an hourly rate. */
+export function formatDurationTakesLabel(mins) {
+  const duration = formatDurationLabel(mins);
+  return duration ? `Takes ${duration}` : null;
+}
+
+/** True when the listed price is for the whole visit, not per hour. */
+export function servicePriceIsForVisit(service) {
+  if (!service) return false;
+  const type = service.pricing_type || 'fixed';
+  if (type === 'quote' && !(Number(service.base_price) > 0)) return false;
+  return true;
+}
+
 /** Human-readable price for catalog cards (fixed, range, average, or legacy quote). */
 export function formatServicePrice(service, currency, options = {}) {
   const { forceShowPrice = false } = options;

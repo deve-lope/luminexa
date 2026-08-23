@@ -1,0 +1,23 @@
+---
+description: Install Luminexa from Play Store only — never a browser PWA
+globs: frontend/src/components/PwaInstallPrompt.js,frontend/src/hooks/usePwaInstall.js,frontend/src/utils/storeLinks.js,frontend/public/manifest.json,frontend/android/**
+alwaysApply: true
+---
+
+# App install (Play Store only)
+
+Never prompt Chrome, Edge, or Safari to “Install app” / **Add to Home Screen**. That creates a second, often stale PWA next to the Play Store app.
+
+## Binding rules
+
+- Install CTAs go to the **current store listing** in `frontend/src/utils/storeLinks.js` (`PLAY_STORE_URL`). Do not hardcode old version codes or APK/AAB files.
+- Block `beforeinstallprompt` (`preventDefault`) so the browser cannot install a web copy.
+- Web manifest must keep `prefer_related_applications: true` + Play `related_applications`.
+- iOS: `APP_STORE_URL` when live, otherwise App Store search for Luminexa. Never Add to Home Screen.
+- Play Store always serves the latest published track — do not deep-link a specific version.
+
+## Do not “simplify”
+
+- Do not call `beforeinstallprompt.prompt()`.
+- Do not recommend PWA / TWA-from-browser as the install path.
+---

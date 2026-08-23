@@ -1,10 +1,41 @@
-export function getPublicAppUrl() {
-  const fromEnv = process.env.REACT_APP_PUBLIC_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
+function isLoopbackHost(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function httpOrigin(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.origin;
+  } catch {
+    return '';
   }
-  return 'http://localhost:3000';
+}
+
+/**
+ * Public SPA origin for customer-facing links.
+ * Prefer the current browser host so production never advertises a baked-in
+ * localhost URL from REACT_APP_PUBLIC_URL / Docker build args.
+ */
+export function getPublicAppUrl() {
+  const pageOrigin = httpOrigin(
+    typeof window !== 'undefined' ? window.location?.origin : ''
+  );
+  const envOrigin = httpOrigin(process.env.REACT_APP_PUBLIC_URL);
+
+  if (pageOrigin && !isLoopbackHost(new URL(pageOrigin).hostname)) {
+    return pageOrigin;
+  }
+  if (envOrigin && !isLoopbackHost(new URL(envOrigin).hostname)) {
+    return envOrigin;
+  }
+  return pageOrigin || envOrigin || 'http://localhost:3000';
+}
+
+export function getCustomerAppointmentUrl(token) {
+  if (!token) return '';
+  return `${getPublicAppUrl()}/b/${encodeURIComponent(token)}`;
 }
 
 export function getCustomerBookingUrl(slug) {

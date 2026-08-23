@@ -82,6 +82,7 @@ const PUBLIC_PATH_PREFIXES = [
 function isPublicPath(pathname) {
   if (PUBLIC_PATH_PREFIXES.includes(pathname)) return true;
   if (pathname.startsWith('/book/')) return true;
+  if (pathname.startsWith('/b/')) return true;
   return false;
 }
 
@@ -242,6 +243,7 @@ export const jobsAPI = {
   sendInquiryMessage: (orgSlug, inquiryId, body) =>
     api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`, { body }),
   getBooking: (id) => api.get(`/api/v1/bookings/${id}/`),
+  getPublicBooking: (token) => api.get(`/api/v1/public/bookings/${encodeURIComponent(token)}/`),
   getSlot: (id) => api.get(`/api/v1/availability-slots/${id}/`),
   getUnavailableBlock: (id) => api.get(`/api/v1/unavailable-blocks/${id}/`),
   createBooking: (data) => api.post('/api/v1/bookings/', data),

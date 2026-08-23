@@ -21,6 +21,7 @@ const config: CapacitorConfig = {
     // Safe areas are handled by the SPA's own CSS env(safe-area-inset-*) hooks.
     contentInset: 'never',
     backgroundColor: '#10231F',
+    // Universal Links: opens https://app.luminex-a.com/b/... in the app when installed.
   },
   plugins: {
     // EdgeToEdge plugin owns WebView insets on Android 15+.

@@ -8,6 +8,7 @@ import MaintenancePage from './pages/MaintenancePage';
 import LandingRoute from './pages/LandingRoute';
 import AboutPage from './pages/AboutPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import GuestBookingPage from './pages/GuestBookingPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -105,10 +106,11 @@ function AppRoutes() {
 
   return (
     <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-canvas' : 'min-h-[100dvh] bg-slate-50'}>
-      {!isNativeApp() && <PwaInstallPrompt />}
+      {!isNativeApp() && !location.pathname.startsWith('/b/') && <PwaInstallPrompt />}
       <Routes>
         <Route path="/" element={<LandingRoute />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/b/:token" element={<GuestBookingPage />} />
         <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
         <Route path="/delete-account" element={<DeleteAccountPage />} />
         <Route path="/login" element={<LoginPage />} />

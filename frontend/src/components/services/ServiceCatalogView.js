@@ -5,7 +5,12 @@ import {
   customerProviderServiceDetail,
   serviceDetail,
 } from '../../utils/customerPaths';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import {
+  formatDurationTakesLabel,
+  formatFulfillmentLabel,
+  formatServicePrice,
+  servicePriceIsForVisit,
+} from '../../utils/serviceDisplay';
 
 export function ServiceRow({
   service,
@@ -18,7 +23,10 @@ export function ServiceRow({
   useCustomerProviderUrls = false,
   categoryId = null,
 }) {
-  const meta = formatServiceMeta(service, undefined, { forceShowPrice });
+  const price = formatServicePrice(service, undefined, { forceShowPrice });
+  const duration = formatDurationTakesLabel(service.duration_minutes);
+  const priceForVisit = servicePriceIsForVisit(service);
+  const fulfillment = formatFulfillmentLabel(service);
   let detailHref = null;
   if (orgSlug) {
     detailHref = useCustomerProviderUrls
@@ -32,41 +40,65 @@ export function ServiceRow({
   return (
     <li
       id={`service-${service.id}`}
-      className={`rounded-xl border bg-white p-4 shadow-sm ${
-        selected ? 'border-luminexa-accent ring-1 ring-luminexa-accent/30' : 'border-slate-200'
+      className={`overflow-hidden rounded-xl border shadow-sm ${
+        selected
+          ? 'border-luminexa-accent bg-white ring-1 ring-luminexa-accent/30'
+          : 'border-teal-200/80 bg-gradient-to-br from-teal-50 via-white to-emerald-50/50 ring-1 ring-teal-100/70'
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 gap-3">
-          {selectable && (
-            <label className="mt-0.5 flex shrink-0 cursor-pointer items-start">
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={() => onToggleSelect?.(service.id)}
-                className="mt-1 h-4 w-4 accent-luminexa-accent"
-                aria-label={`Select ${service.name}`}
-              />
-            </label>
+      <div className="h-1 bg-gradient-to-r from-teal-700 via-luminexa-accent to-cyan-400" />
+      <div className="flex items-start gap-3 p-4">
+        {selectable && (
+          <label className="mt-0.5 flex shrink-0 cursor-pointer items-start">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect?.(service.id)}
+              className="mt-1 h-4 w-4 accent-luminexa-accent"
+              aria-label={`Select ${service.name}`}
+            />
+          </label>
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-teal-950">{service.name}</h3>
+          {service.rating_summary?.count > 0 && (
+            <div className="mt-1">
+              <ServiceRatingSummary summary={service.rating_summary} compact />
+            </div>
           )}
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-slate-900">{service.name}</h3>
-            {service.rating_summary?.count > 0 && (
-              <div className="mt-1">
-                <ServiceRatingSummary summary={service.rating_summary} compact />
-              </div>
-            )}
-            {meta && <p className="mt-2 text-sm font-medium text-slate-700">{meta}</p>}
-            {detailHref && (
-              <Link
-                to={detailHref}
-                className="mt-2 inline-flex min-h-[36px] items-center text-sm font-medium text-luminexa-accent"
-              >
-                Show full details →
-              </Link>
+          {(duration || fulfillment) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {duration && (
+                <span className="rounded-lg bg-white/90 px-2 py-0.5 text-xs font-medium text-teal-900 ring-1 ring-teal-200/80">
+                  {duration}
+                </span>
+              )}
+              {fulfillment && (
+                <span className="rounded-lg bg-white/90 px-2 py-0.5 text-xs font-medium text-teal-900 ring-1 ring-teal-200/80">
+                  {fulfillment}
+                </span>
+              )}
+            </div>
+          )}
+          {detailHref && (
+            <Link
+              to={detailHref}
+              className="mt-2 inline-flex min-h-[36px] items-center text-sm font-medium text-luminexa-accent"
+            >
+              Show full details →
+            </Link>
+          )}
+        </div>
+        {price && (
+          <div className="max-w-[42%] shrink-0 text-right sm:max-w-none">
+            <p className="rounded-xl bg-teal-700 px-2.5 py-1.5 text-sm font-bold leading-tight tabular-nums text-white shadow-sm">
+              {price}
+            </p>
+            {priceForVisit && (
+              <p className="mt-1 text-[11px] font-medium text-teal-800">for this visit</p>
             )}
           </div>
-        </div>
+        )}
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>
     </li>
