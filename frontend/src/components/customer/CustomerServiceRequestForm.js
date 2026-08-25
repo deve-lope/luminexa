@@ -266,7 +266,6 @@ export default function CustomerServiceRequestForm({
             </option>
             {categoryOptions.map((opt) => (
               <option key={opt.id} value={opt.name}>
-                {opt.icon ? `${opt.icon} ` : ''}
                 {opt.name}
               </option>
             ))}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
+import BusinessTypeIcon from '../../components/icons/BusinessTypeIcon';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import { businessesAPI } from '../../utils/api';
 import { businessPage } from '../../utils/customerPaths';
@@ -43,8 +44,12 @@ export default function CustomerProvidersByTypePage() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">
-        {businessType?.icon && <span className="mr-1">{businessType.icon}</span>}
+      <p className="flex items-center gap-2 text-sm text-slate-600">
+        <BusinessTypeIcon
+          slug={businessType?.slug || typeSlug}
+          name={businessType?.name}
+          className="h-4 w-4 text-teal-700"
+        />
         {businessType?.name}
       </p>
       {providers.length === 0 ? (

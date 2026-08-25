@@ -3,7 +3,7 @@ import { businessesAPI } from '../../utils/api';
 import { DEFAULT_RADIUS_MILES, RADIUS_MILE_OPTIONS } from '../../constants/locationSearch';
 import SearchableOptionInput from '../ui/SearchableOptionInput';
 import SearchableRegionInput from '../ui/SearchableRegionInput';
-import { canUseBrowserGeolocation, geolocationUnavailableReason } from '../../utils/geolocationSupport';
+import { canUseBrowserGeolocation, geolocationUnavailableReason, requestGeolocationCoordinates } from '../../utils/geolocationSupport';
 
 function formatPostalInput(value) {
   return String(value || '')
@@ -123,8 +123,8 @@ export default function LocationFilterBar({
     }
     setLocating(true);
     setLocError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+    requestGeolocationCoordinates()
+      .then(async (pos) => {
         try {
           const res = await businessesAPI.reverseGeocode({
             lat: pos.coords.latitude,
@@ -139,13 +139,11 @@ export default function LocationFilterBar({
         } finally {
           setLocating(false);
         }
-      },
-      () => {
+      })
+      .catch((err) => {
         setLocating(false);
-        setLocError('Allow location access or enter your postal code manually.');
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+        setLocError(err?.message || 'Turn on location, or enter your postal code.');
+      });
   };
 
   return (

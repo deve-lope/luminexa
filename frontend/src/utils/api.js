@@ -97,7 +97,16 @@ export function registerApiHealthHandler(handler) {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (apiHealthHandler) {
+      try {
+        apiHealthHandler(null);
+      } catch {
+        /* ignore health handler failures */
+      }
+    }
+    return response;
+  },
   (error) => {
     if (apiHealthHandler) {
       try {

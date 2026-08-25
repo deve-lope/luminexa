@@ -11,6 +11,7 @@ Package ID stays `com.luminexa.app` so you can replace the TWA on Play.
 - Full-screen app (no Chrome address bar)
 - Isolated login: **Settings → Apps → Luminexa → Clear data** signs you out
 - Android 13+ **notification permission** prompt on first open
+- **Location permission** when the customer taps Share my location (find / book)
 - Device token saved to `/accounts/api/push-tokens/` after login
 - Outside-app pushes when Firebase is configured (invoice ready, payment, new booking, cancel)
 
@@ -56,7 +57,7 @@ In Android Studio:
 
 1. **Build → Generate Signed App Bundle / APK**
 2. Sign with the **same upload keystore** you used for the TWA
-3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **3** / 1.1.0)
+3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **5** / 1.1.2)
 
 Do not upload an APK if Play asks for an AAB.
 

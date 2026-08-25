@@ -85,7 +85,7 @@ function BookGuestShell({ children }) {
       eyebrow="Book"
       title={onServiceDetail ? 'Service details' : onServicesPage ? 'Services' : 'Provider'}
       tabs={PUBLIC_BOOK_TABS}
-      menuItems={buildPublicBookMenuItems()}
+      menuItems={buildPublicBookMenuItems(location.pathname + location.search)}
       menuTitle="Menu"
       showBack={Boolean(backNav?.to)}
       backTo={backNav?.to}

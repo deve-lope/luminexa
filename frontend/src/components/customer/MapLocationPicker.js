@@ -10,6 +10,7 @@ import {
 } from '../../constants/addressSearch';
 import { businessesAPI } from '../../utils/api';
 import { canUseBrowserGeolocation, requestGeolocationCoordinates, shareLocationButtonLabel } from '../../utils/geolocationSupport';
+import LocationEnablePrompt from './LocationEnablePrompt';
 import useAddressCountry from '../../hooks/useAddressCountry';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -175,7 +176,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
       })
       .catch((err) => {
         if (err?.code === 1) {
-          setError('Location permission was blocked. Allow location access in your browser, or search the address above.');
+          setError(err.message || 'Turn on location for Luminexa. When your phone asks, tap Allow.');
         } else if (err?.code === 3) {
           setError('Could not get your current location in time. Try again or search the address.');
         } else {
@@ -368,7 +369,13 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
           {pendingLabel && (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{pendingLabel}</p>
           )}
-          {error && <p className="text-sm text-amber-700">{error}</p>}
+          {error && (
+            <LocationEnablePrompt
+              error={error}
+              locating={locating}
+              onRetry={useCurrentLocation}
+            />
+          )}
         </div>
       </div>
     </div>

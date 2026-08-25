@@ -107,7 +107,6 @@ export default function useNearMeLocation({ defaultRadiusMiles = DEFAULT_RADIUS_
     }
 
     setStatus('prompting');
-    setError(null);
 
     return fetchCurrentLocation().then((payload) => {
       if (!payload) {

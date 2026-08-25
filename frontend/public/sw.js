@@ -6,7 +6,7 @@
  * - Manifest always from network (so DevTools / install UI see updates)
  * - Never caches API / auth requests
  */
-const CACHE_VERSION = 'lx-shell-v14';
+const CACHE_VERSION = 'lx-shell-v22';
 const SHELL_URLS = [
   '/',
   '/index.html',
@@ -75,6 +75,20 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (isApiRequest(url)) return;
 
+  // City SEO HTML is static files — do not intercept (avoids SPA 404 / stale shell).
+  const seoPath = url.pathname;
+  if (
+    seoPath === '/ottawa' ||
+    seoPath === '/toronto' ||
+    seoPath.startsWith('/ottawa/') ||
+    seoPath.startsWith('/toronto/') ||
+    seoPath === '/robots.txt' ||
+    seoPath === '/sitemap.xml' ||
+    seoPath === '/llms.txt'
+  ) {
+    return;
+  }
+
   // Always fetch a fresh manifest so installability checks see current screenshots.
   if (url.pathname === '/manifest.json' || url.pathname === '/sw.js') {
     return;
@@ -85,8 +99,12 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(request);
-          const cache = await caches.open(CACHE_VERSION);
-          cache.put('/index.html', fresh.clone());
+          const path = url.pathname;
+          const isAppShell = path === '/' || path === '/index.html';
+          if (isAppShell && fresh.ok) {
+            const cache = await caches.open(CACHE_VERSION);
+            cache.put('/index.html', fresh.clone());
+          }
           return fresh;
         } catch {
           const cached =

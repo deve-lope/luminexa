@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 import { lxPillTone } from '../../utils/pillGradients';
 
 export default function BusinessTypeTile({ type, linkTo, toneIndex = 0, toneCount = 4 }) {
@@ -14,14 +15,12 @@ export default function BusinessTypeTile({ type, linkTo, toneIndex = 0, toneCoun
       className={`group flex h-full min-h-[140px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-lx-elevated ${tone.surface} ${tone.ring}`}
     >
       <div>
-        {type.icon && (
-          <span
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-base ${tone.chip}`}
-            aria-hidden
-          >
-            {type.icon}
-          </span>
-        )}
+        <span
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl ${tone.chip}`}
+          aria-hidden
+        >
+          <BusinessTypeIcon slug={type.slug} name={type.name} className="h-5 w-5" />
+        </span>
         <h3 className={`mt-3 text-[15px] font-semibold tracking-tight ${tone.title}`}>
           {type.name}
         </h3>

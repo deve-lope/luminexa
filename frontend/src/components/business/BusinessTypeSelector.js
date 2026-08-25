@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 import { businessesAPI } from '../../utils/api';
 
 function parseApiError(err) {
@@ -41,7 +42,6 @@ export default function BusinessTypeSelector({
   const listRef = useRef(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newIcon, setNewIcon] = useState('');
   const [newLocationKind, setNewLocationKind] = useState('mobile');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
@@ -85,7 +85,6 @@ export default function BusinessTypeSelector({
     try {
       const res = await businessesAPI.createBusinessType({
         name,
-        icon: newIcon.trim(),
         location_kind: newLocationKind,
       });
       const created = normalizeType(res.data);
@@ -107,7 +106,6 @@ export default function BusinessTypeSelector({
 
       setJustAddedSlug(created.slug);
       setNewName('');
-      setNewIcon('');
       setNewLocationKind('mobile');
       setShowAdd(false);
 
@@ -164,14 +162,20 @@ export default function BusinessTypeSelector({
                 onChange={() => toggle(t.slug)}
                 className="mt-1 h-4 w-4 shrink-0 accent-luminexa-accent"
               />
-              <span>
-                {t.icon && <span className="mr-1">{t.icon}</span>}
-                {t.name}
-                {highlight && (
-                  <span className={`ml-1 text-xs ${isDark ? 'text-emerald-300' : 'text-emerald-600'}`}>
-                    (new)
-                  </span>
-                )}
+              <span className="flex min-w-0 items-start gap-2">
+                <BusinessTypeIcon
+                  slug={t.slug}
+                  name={t.name}
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${isDark ? 'text-teal-200' : 'text-teal-700'}`}
+                />
+                <span>
+                  {t.name}
+                  {highlight && (
+                    <span className={`ml-1 text-xs ${isDark ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                      (new)
+                    </span>
+                  )}
+                </span>
               </span>
             </label>
           );
@@ -207,14 +211,6 @@ export default function BusinessTypeSelector({
               placeholder="e.g. Mobile car wash"
               className={inputClass}
               autoFocus
-            />
-            <input
-              type="text"
-              value={newIcon}
-              onChange={(e) => setNewIcon(e.target.value)}
-              placeholder="Icon (optional emoji)"
-              maxLength={4}
-              className={inputClass}
             />
             <fieldset className="space-y-2">
               <legend className={`text-xs font-medium ${isDark ? 'text-luminexa-mist/80' : 'text-slate-600'}`}>

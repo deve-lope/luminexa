@@ -4,6 +4,7 @@ import {
   buildAddressFromGeocode,
   formatLocationAddress,
   geolocationUnavailableReason,
+  locationPermissionDeniedMessage,
   requestGeolocationCoordinates,
 } from '../utils/geolocationSupport';
 
@@ -23,7 +24,8 @@ export default function useCurrentLocation() {
     }
 
     setLocating(true);
-    setError(null);
+
+    // Keep the prompt on screen while we ask the phone — clearing error makes it flicker.
 
     // getCurrentPosition must run in the same turn as the user tap — no permission pre-check.
     return requestGeolocationCoordinates()
@@ -53,11 +55,11 @@ export default function useCurrentLocation() {
           return null;
         }
       })
-      .catch((err) => {
-        if (err?.code === 1) {
-          setError(
-            'Location permission was denied. Allow location access in your browser settings, then try again.'
-          );
+        .catch((err) => {
+        if (err?.nativeUnavailable) {
+          setError(err.message);
+        } else if (err?.code === 1) {
+          setError(err.message || locationPermissionDeniedMessage());
         } else if (err?.code === 3) {
           setError('Location timed out. Move to an open area or search your address.');
         } else if (err?.message) {

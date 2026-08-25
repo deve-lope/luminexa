@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthFormShell from '../components/auth/AuthFormShell';
 import AddressCountrySelect from '../components/location/AddressCountrySelect';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import { userAPI } from '../utils/api';
+import { authPathWithNext, isSafeNextPath } from '../utils/postLoginRoute';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const nextPath = searchParams.get('next');
+  const nextQs = isSafeNextPath(nextPath) ? `?next=${encodeURIComponent(nextPath)}` : '';
+  const backTo = isSafeNextPath(nextPath) ? nextPath : '/';
   const [email, setEmail] = useState(() => location.state?.email || '');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -25,7 +30,7 @@ export default function RegisterPage() {
       const payload = { email, full_name: fullName, address_country: addressCountry };
       if (phone.trim()) payload.phone = phone.trim();
       const { data } = await userAPI.register(payload);
-      navigate('/login', {
+      navigate(authPathWithNext('/login', nextPath), {
         replace: true,
         state: {
           email: data.email || email,
@@ -50,18 +55,21 @@ export default function RegisterPage() {
     <AuthFormShell
       title="Create account"
       subtitle="Email is required. We’ll send a one-time code so you can sign in — no password needed."
-      backTo="/"
+      backTo={backTo}
       footer={
         <>
           <p>
             Running a business?{' '}
-            <Link to="/register/business" className="font-semibold text-teal-700 hover:text-teal-800">
+            <Link
+              to={`/register/business${nextQs}`}
+              className="font-semibold text-teal-700 hover:text-teal-800"
+            >
               Register your business
             </Link>
           </p>
           <p className="mt-2">
             Already have an account?{' '}
-            <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">
+            <Link to={`/login${nextQs}`} className="font-semibold text-teal-700 hover:text-teal-800">
               Sign in
             </Link>
           </p>

@@ -34,7 +34,9 @@ Customer **Popular categories** / type browse list a provider only when that org
 `BusinessType` name. Org `business_types` tags alone are not enough.
 
 Code: `jobs.catalog.organizations_with_services_for_business_type`,
-`business_types_with_service_provider_counts` · API: `business_type_providers_api`,
+`business_types_with_service_provider_counts` · API: `business_type_providers_api` (AllowAny — guests can browse a category;
+login is only required to book; after Sign in / Sign up, `next` returns the customer
+to `/book/:slug/:serviceId`),
 customer home / discover type tiles.
 
 Test: `businesses.tests.test_browse_by_category`

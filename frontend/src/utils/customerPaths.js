@@ -81,3 +81,7 @@ export function serviceDetail(providerKey, serviceId) {
 export function servicesBrowse() {
   return '/services';
 }
+
+export function servicesBrowseType(typeSlug) {
+  return `/services/${typeSlug}`;
+}

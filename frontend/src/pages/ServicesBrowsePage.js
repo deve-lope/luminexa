@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BookableServiceCard from '../components/customer/BookableServiceCard';
 import BusinessTypeTileGrid from '../components/customer/BusinessTypeTileGrid';
 import CustomerSearchMapView from '../components/customer/CustomerSearchMapView';
@@ -9,10 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { DEFAULT_RADIUS_MILES } from '../constants/locationSearch';
 import { businessesAPI } from '../utils/api';
 import { bookService } from '../utils/customerPaths';
+import { authPathWithNext } from '../utils/postLoginRoute';
 import { isPostalSearchReady, normalizePostalInput } from '../utils/postalInput';
 
 export default function ServicesBrowsePage({ embedded = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState('list');
   const [query, setQuery] = useState('');
@@ -75,7 +77,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
 
   const typeLink = (typeSlug) => {
     if (isAuthenticated) return `/customer/find/${typeSlug}`;
-    return `/login?next=${encodeURIComponent(`/customer/find/${typeSlug}`)}`;
+    return `/services/${typeSlug}`;
   };
 
   const bookLink = (orgSlug, serviceId) => {
@@ -231,6 +233,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
                         <BookableServiceCard
                           service={s}
                           bookTo={bookLink(s.organization_slug, s.id)}
+                          useCustomerProviderUrls={isAuthenticated}
                         />
                       </li>
                     ))}
@@ -245,7 +248,9 @@ export default function ServicesBrowsePage({ embedded = false }) {
               <p className="text-sm text-white/80">Sign in to connect with a provider and book.</p>
               <button
                 type="button"
-                onClick={() => navigate('/login?next=/services')}
+                onClick={() =>
+                  navigate(authPathWithNext('/login', location.pathname + location.search))
+                }
                 className="mt-3 min-h-[44px] rounded-lg bg-luminexa-accent px-6 font-medium"
               >
                 Sign in to book
@@ -267,10 +272,16 @@ export default function ServicesBrowsePage({ embedded = false }) {
             Luminexa
           </Link>
           <div className="flex gap-3 text-sm">
-            <Link to="/login" className="font-medium text-slate-600">
+            <Link
+              to={authPathWithNext('/login', location.pathname + location.search)}
+              className="font-medium text-slate-600"
+            >
               Sign in
             </Link>
-            <Link to="/register" className="font-medium text-luminexa-accent">
+            <Link
+              to={authPathWithNext('/register', location.pathname + location.search)}
+              className="font-medium text-luminexa-accent"
+            >
               Sign up
             </Link>
           </div>

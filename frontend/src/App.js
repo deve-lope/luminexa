@@ -4,9 +4,11 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ApiHealthProvider, useApiHealth } from './contexts/ApiHealthContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import ConnectionLoadingPage from './pages/ConnectionLoadingPage';
 import MaintenancePage from './pages/MaintenancePage';
 import LandingRoute from './pages/LandingRoute';
 import AboutPage from './pages/AboutPage';
+import { CityCategoryPage, CityHubPage } from './pages/OttawaLandingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import GuestBookingPage from './pages/GuestBookingPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
@@ -27,6 +29,7 @@ import AcceptStaffInvitePage from './pages/AcceptStaffInvitePage';
 import BookRouteLayout from './layouts/BookRouteLayout';
 import BookingStorefrontPage from './pages/BookingStorefrontPage';
 import ServicesBrowseWrapper from './pages/ServicesBrowseWrapper';
+import ServicesTypePage from './pages/ServicesTypePage';
 import ProviderLayout from './layouts/ProviderLayout';
 import CustomerLayout from './layouts/CustomerLayout';
 import ProviderTodayPage from './pages/provider/ProviderTodayPage';
@@ -85,10 +88,13 @@ function PrivateRoute({ children }) {
 }
 
 function AppRoutes() {
-  const { underMaintenance } = useApiHealth();
+  const { connectionStatus } = useApiHealth();
   const location = useLocation();
 
-  if (underMaintenance) {
+  if (connectionStatus === 'connecting') {
+    return <ConnectionLoadingPage />;
+  }
+  if (connectionStatus === 'down') {
     return <MaintenancePage />;
   }
 
@@ -109,6 +115,12 @@ function AppRoutes() {
       {!isNativeApp() && !location.pathname.startsWith('/b/') && <PwaInstallPrompt />}
       <Routes>
         <Route path="/" element={<LandingRoute />} />
+        <Route path="/ottawa" element={<CityHubPage />} />
+        <Route path="/ottawa/:slug" element={<CityCategoryPage />} />
+        <Route path="/ottawa/:slug/" element={<CityCategoryPage />} />
+        <Route path="/toronto" element={<CityHubPage />} />
+        <Route path="/toronto/:slug" element={<CityCategoryPage />} />
+        <Route path="/toronto/:slug/" element={<CityCategoryPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/b/:token" element={<GuestBookingPage />} />
         <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
@@ -228,6 +240,7 @@ function AppRoutes() {
         <Route path="/customer/provider/:orgSlug" element={<RedirectToBookProvider />} />
         <Route path="/customer/book/:orgSlug/:serviceId" element={<RedirectToBookService />} />
         <Route path="/services" element={<ServicesBrowseWrapper />} />
+        <Route path="/services/:typeSlug" element={<ServicesTypePage />} />
         <Route path="/book/:slug/checkout" element={<BookMultipleGateway />} />
         <Route path="/book/:orgSlug/:serviceId" element={<BookServiceGateway />} />
         <Route path="/book/:slug" element={<BookRouteLayout />}>

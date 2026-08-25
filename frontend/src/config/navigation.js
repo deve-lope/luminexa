@@ -1,3 +1,5 @@
+import { authPathWithNext } from '../utils/postLoginRoute';
+
 export function buildProviderTabs(
   orgSlug,
   { requestsBadgeCount = 0, messagesBadgeCount = 0 } = {},
@@ -77,11 +79,15 @@ export function mergeTabsIntoMenuItems(tabs, menuItems) {
   ];
 }
 
-export function buildPublicBookMenuItems() {
+export function buildPublicBookMenuItems(nextPath) {
   return [
-    { id: 'signin', label: 'Sign in', to: '/login' },
-    { id: 'register', label: 'Create account', to: '/register' },
-    { id: 'business', label: 'For your business', to: '/register/business' },
+    { id: 'signin', label: 'Sign in', to: authPathWithNext('/login', nextPath) },
+    { id: 'register', label: 'Create account', to: authPathWithNext('/register', nextPath) },
+    {
+      id: 'business',
+      label: 'For your business',
+      to: authPathWithNext('/register/business', nextPath),
+    },
   ];
 }
 

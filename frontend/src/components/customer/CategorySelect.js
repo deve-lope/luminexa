@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 
 /**
  * Accessible category picker with a scrollable options list (for long catalogs).
@@ -51,7 +52,11 @@ export default function CategorySelect({
         <span className={selected ? 'text-slate-900' : 'text-slate-400'}>
           {selected ? (
             <>
-              {selected.icon ? <span className="mr-1.5">{selected.icon}</span> : null}
+              <BusinessTypeIcon
+                slug={selected.slug}
+                name={selected.name}
+                className="mr-1.5 inline-block h-4 w-4 align-[-2px] text-teal-700"
+              />
               {selected.name}
             </>
           ) : options.length === 0 ? (
@@ -85,7 +90,11 @@ export default function CategorySelect({
                     setOpen(false);
                   }}
                 >
-                  {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
+                  <BusinessTypeIcon
+                    slug={opt.slug}
+                    name={opt.name}
+                    className="h-4 w-4 shrink-0 text-teal-700"
+                  />
                   <span>{opt.name}</span>
                 </button>
               </li>
@@ -101,16 +110,20 @@ export default function CategorySelect({
 export function buildCategoryOptions(categories = [], businessTypes = []) {
   const seen = new Set();
   const out = [];
-  const push = (id, name, icon) => {
+  const push = (id, name, slug) => {
     const trimmed = (name || '').trim();
     if (!trimmed) return;
     const key = trimmed.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ id: id != null ? String(id) : trimmed, name: trimmed, icon: icon || '' });
+    out.push({
+      id: id != null ? String(id) : trimmed,
+      name: trimmed,
+      slug: slug || '',
+    });
   };
-  (categories || []).forEach((c) => push(c.id, c.name, c.icon));
-  (businessTypes || []).forEach((t) => push(t.slug || t.id, t.name, t.icon));
+  (categories || []).forEach((c) => push(c.id, c.name, c.slug));
+  (businessTypes || []).forEach((t) => push(t.slug || t.id, t.name, t.slug));
   return out;
 }
 

@@ -102,6 +102,18 @@ class BrowseByServiceCategoryTests(TestCase):
         slugs = [p['slug'] for p in res.data['providers']]
         self.assertEqual(slugs, [self.org.slug])
 
+    def test_anonymous_can_list_providers_by_type(self):
+        self.client.force_authenticate(user=None)
+        res = self.client.get(
+            f'/api/v1/business-types/{self.auto.slug}/providers/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        slugs = [p['slug'] for p in res.data['providers']]
+        self.assertEqual(slugs, [self.org.slug])
+        self.assertEqual(res.data['business_type']['slug'], 'auto-vehicles')
+
     def test_types_ordered_by_booking_count(self):
         from datetime import timedelta
 

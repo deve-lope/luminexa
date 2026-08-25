@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Allow: /ottawa/
+Allow: /toronto/
+Allow: /sitemap.xml
+Allow: /llms.txt
+
+Disallow: /api/
+Disallow: /accounts/
+Disallow: /admin/
+Disallow: /account/
+Disallow: /login
+Disallow: /customer/
+Disallow: /provider/
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /check-email
+Disallow: /verify-email
+Disallow: /accept-staff-invite
+Disallow: /delete-account
+
+Sitemap: https://app.luminex-a.com/sitemap.xml

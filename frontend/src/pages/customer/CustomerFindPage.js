@@ -14,6 +14,7 @@ import {
   canUseBrowserGeolocation,
   shareLocationButtonLabel,
 } from '../../utils/geolocationSupport';
+import LocationEnablePrompt from '../../components/customer/LocationEnablePrompt';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 
 export default function CustomerFindPage() {
@@ -350,8 +351,13 @@ export default function CustomerFindPage() {
             )}
           </div>
 
-          {nearMeError && (
-            <p className="text-sm text-amber-700">{nearMeError}</p>
+          {nearMeError && !locationExpanded && (
+            <LocationEnablePrompt
+              error={nearMeError}
+              locating={locating}
+              onRetry={handleUseMyLocation}
+              onEnterAddress={() => setLocationExpanded(true)}
+            />
           )}
 
           {locationExpanded && (

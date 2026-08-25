@@ -8,7 +8,7 @@ import {
   RADIUS_MILE_OPTIONS,
   formatRadiusMiles,
 } from '../../constants/locationSearch';
-import { canUseBrowserGeolocation } from '../../utils/geolocationSupport';
+import { canUseBrowserGeolocation, requestGeolocationCoordinates } from '../../utils/geolocationSupport';
 import { bookService } from '../../utils/customerPaths';
 import {
   formatPostalLabel,
@@ -306,8 +306,8 @@ export default function CustomerSearchMapView({
     if (!gpsAvailable) return;
     setLocating(true);
     setError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+    requestGeolocationCoordinates()
+      .then(async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         try {
@@ -326,13 +326,11 @@ export default function CustomerSearchMapView({
         } finally {
           setLocating(false);
         }
-      },
-      () => {
+      })
+      .catch((err) => {
         setLocating(false);
-        setError('Could not get your location. Pan the map or enter a postal code.');
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
+        setError(err?.message || 'Turn on location, or pan the map / enter a postal code.');
+      });
   };
 
   const orgsOnMap = groupByOrg(services || []);

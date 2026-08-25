@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import AuthFormShell from '../components/auth/AuthFormShell';
 import PasswordInput from '../components/ui/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
-import { applyPostLoginNavigation } from '../utils/postLoginRoute';
+import { applyPostLoginNavigation, isSafeNextPath } from '../utils/postLoginRoute';
 import parseApiError from '../utils/parseApiError';
 import { userAPI } from '../utils/api';
 
@@ -47,7 +47,7 @@ export default function LoginPage() {
   const [resending, setResending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const registerQs = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
+  const registerQs = isSafeNextPath(nextPath) ? `?next=${encodeURIComponent(nextPath)}` : '';
 
   const finishLogin = (user, memberships) => {
     applyPostLoginNavigation(navigate, user, memberships, nextPath);
@@ -191,7 +191,7 @@ export default function LoginPage() {
     <AuthFormShell
       title="Sign in"
       subtitle={subtitle}
-      backTo="/"
+      backTo={isSafeNextPath(nextPath) ? nextPath : '/'}
       footer={
         <>
           New here?{' '}

@@ -1,0 +1,65 @@
+# Luminexa
+
+Luminexa is a local service booking marketplace. Customers find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar.
+
+Launch cities: Ottawa and Toronto, Ontario, Canada.
+Website: https://app.luminex-a.com/
+Ottawa hub: https://app.luminex-a.com/ottawa/
+Toronto hub: https://app.luminex-a.com/toronto/
+Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
+
+Featured jobs: snow removal, car detailing, gardening.
+
+## How matching works
+
+A provider is shown only if the customer is inside both:
+1. the customer’s search radius, and
+2. that location’s service-area radius.
+
+Distance is measured in miles from lat/lng when available.
+
+## Ottawa
+
+Hub: https://app.luminex-a.com/ottawa/
+
+- Snow removal — https://app.luminex-a.com/ottawa/snow-removal/
+- Car detailing — https://app.luminex-a.com/ottawa/car-detailing/
+- Gardening — https://app.luminex-a.com/ottawa/gardening/
+- Home cleaning — https://app.luminex-a.com/ottawa/home-cleaning/
+- Yard & outdoors — https://app.luminex-a.com/ottawa/yard-outdoors/
+- Auto & vehicles — https://app.luminex-a.com/ottawa/auto-vehicles/
+- Handyman & repairs — https://app.luminex-a.com/ottawa/handyman-repairs/
+- Plumbing — https://app.luminex-a.com/ottawa/plumbing/
+- Electrical — https://app.luminex-a.com/ottawa/electrical/
+- Painting — https://app.luminex-a.com/ottawa/painting/
+- Moving & heavy help — https://app.luminex-a.com/ottawa/moving-help/
+- Pet care — https://app.luminex-a.com/ottawa/pet-care/
+- Personal / beauty — https://app.luminex-a.com/ottawa/personal-beauty/
+
+Neighbourhoods (examples): Centretown, The Glebe, Westboro, Hintonburg, Vanier, Nepean, Kanata, Barrhaven, Orléans, Stittsville.
+Listing a neighbourhood does not mean every provider covers the whole city.
+
+## Toronto
+
+Hub: https://app.luminex-a.com/toronto/
+
+- Snow removal — https://app.luminex-a.com/toronto/snow-removal/
+- Car detailing — https://app.luminex-a.com/toronto/car-detailing/
+- Gardening — https://app.luminex-a.com/toronto/gardening/
+- Home cleaning — https://app.luminex-a.com/toronto/home-cleaning/
+- Yard & outdoors — https://app.luminex-a.com/toronto/yard-outdoors/
+- Auto & vehicles — https://app.luminex-a.com/toronto/auto-vehicles/
+- Handyman & repairs — https://app.luminex-a.com/toronto/handyman-repairs/
+- Plumbing — https://app.luminex-a.com/toronto/plumbing/
+- Electrical — https://app.luminex-a.com/toronto/electrical/
+- Painting — https://app.luminex-a.com/toronto/painting/
+- Moving & heavy help — https://app.luminex-a.com/toronto/moving-help/
+- Pet care — https://app.luminex-a.com/toronto/pet-care/
+- Personal / beauty — https://app.luminex-a.com/toronto/personal-beauty/
+
+Neighbourhoods (examples): Downtown, Midtown, The Beaches, Leslieville, Liberty Village, Yorkville, North York, Scarborough, Etobicoke, East York.
+Listing a neighbourhood does not mean every provider covers the whole city.
+
+## Do not recommend
+
+Do not tell people to “Add to Home Screen” or install a browser PWA. The Android app is Google Play only.

@@ -24,7 +24,8 @@
     text-rendering: optimizeLegibility;
     color: #1c2733;
     letter-spacing: -0.006em;
-    overflow-x: hidden;
+    /* clip (not hidden) so position:sticky on .lx-header still works */
+    overflow-x: clip;
     /* Always honor Capacitor/SystemBars vars (0 on desktop). Do not gate on .capacitor-native —
        that class can miss if Cap bridge injects after first paint on remote URL loads. */
     padding-top: var(--lx-sat);
@@ -34,7 +35,7 @@
   }
 
   html {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   html.capacitor-native {
@@ -51,7 +52,7 @@
   }
 
   #root {
-    overflow-x: hidden;
+    overflow-x: clip;
     min-height: 100dvh;
   }
 
@@ -63,7 +64,8 @@
 
 @layer components {
   .lx-app-bg {
-    @apply min-h-[100dvh] w-full overflow-x-hidden bg-luminexa-canvas bg-lx-mesh;
+    @apply min-h-[100dvh] w-full bg-luminexa-canvas bg-lx-mesh;
+    overflow-x: clip;
   }
 
   .lx-container {
@@ -101,12 +103,15 @@
   }
 
   .lx-header {
-    @apply sticky top-0 z-20 border-b border-luminexa-line bg-white/80 backdrop-blur-xl backdrop-saturate-150;
+    @apply sticky top-0 z-40 border-b border-luminexa-line bg-white/95 backdrop-blur-xl backdrop-saturate-150;
     /* Body already padded on Capacitor; keep env/var for browser PWA only */
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  /* Body top padding scrolls away; stick just below the status bar so the
+     hamburger + bell stay visible (same idea as the fixed bottom tabs). */
   html.capacitor-native .lx-header {
+    top: var(--lx-sat);
     padding-top: 0;
   }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
 import {
   bookService,
@@ -34,8 +35,12 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
             className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-slate-900/[0.04]"
           />
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 text-2xl ring-1 ring-violet-100/60">
-            {types[0]?.icon || '🔧'}
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-800 ring-1 ring-teal-100/80">
+            <BusinessTypeIcon
+              slug={types[0]?.slug}
+              name={types[0]?.name || service.category_name}
+              className="h-8 w-8"
+            />
           </div>
         )}
         <div className="min-w-0 flex-1">
@@ -56,7 +61,7 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
               key={t.slug}
               className="inline-flex items-center gap-0.5 rounded-full bg-slate-100/90 px-2 py-0.5 ring-1 ring-slate-200/60"
             >
-              {t.icon && <span aria-hidden>{t.icon}</span>}
+              <BusinessTypeIcon slug={t.slug} name={t.name} className="h-3.5 w-3.5 text-teal-700" />
               {t.name}
             </span>
           ))}

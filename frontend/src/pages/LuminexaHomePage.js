@@ -1,27 +1,29 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import SeoHead from '../components/SeoHead';
+import { citySeo } from '../seo/citySeo';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
 const NEED_PROMPTS = [
+  {
+    q: 'Driveway buried in snow?',
+    a: 'Find snow removal crews nearby — driveway, walkway, and seasonal clearing with open times.',
+    hint: 'Snow removal',
+  },
+  {
+    q: 'Car looking tired?',
+    a: 'Book mobile or local car detailing — interior, exterior, and a visit at home or work.',
+    hint: 'Car detailing',
+  },
   {
     q: 'Wanna change your tires?',
     a: 'Find mobile tire techs and auto helpers nearby — see prices, then book a slot.',
     hint: 'Auto & tires',
   },
   {
-    q: 'Wanna get lawn work done?',
-    a: 'Mowing, cleanup, seasonal yard jobs — pick a local crew with open times.',
-    hint: 'Lawn & outdoors',
-  },
-  {
     q: 'Need the house cleaned?',
     a: 'Browse cleaners with clear rates, chat about the job, and lock in a time.',
     hint: 'Home cleaning',
-  },
-  {
-    q: 'Something broken at home?',
-    a: 'Repairs, handymen, and specialty trades ready for real bookings — not endless quoting.',
-    hint: 'Repairs & trades',
   },
 ];
 
@@ -48,7 +50,7 @@ const HOW_STEPS = [
   {
     n: '01',
     title: 'Say what you need',
-    text: 'Tires, lawn, cleaning, repairs — start from the job, not a search maze.',
+    text: 'Snow, detailing, cleaning, repairs — start from the job, not a search maze.',
   },
   {
     n: '02',
@@ -174,8 +176,8 @@ function Hero({ embedded = false, findPath = '/services' }) {
           alt=""
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-teal-950/90 via-teal-900/72 to-teal-800/50" />
-        <div className="absolute inset-0 bg-gradient-to-t from-teal-950/92 via-teal-950/25 to-teal-950/45" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/35 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
       </motion.div>
 
       <motion.div
@@ -403,7 +405,7 @@ function SplitShowcase() {
             alt="Local service professional at work"
             className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-teal-950/50 to-transparent md:bg-gradient-to-r md:from-transparent md:to-teal-950/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent md:bg-gradient-to-r md:from-transparent md:to-black/10" />
         </motion.div>
 
         <motion.div
@@ -472,7 +474,7 @@ function SplitShowcase() {
             alt="Mechanic changing a car tire"
             className="absolute inset-0 h-full w-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-teal-950/45 to-transparent md:bg-gradient-to-l md:from-transparent md:to-teal-950/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent md:bg-gradient-to-l md:from-transparent md:to-black/10" />
         </motion.div>
       </div>
     </section>
@@ -568,6 +570,22 @@ export default function LuminexaHomePage({ embedded = false }) {
 
   return (
     <div className="bg-luminexa-canvas text-slate-900">
+      {!embedded && (
+        <SeoHead
+          title="Luminexa | Book local services"
+          description="Book local services — snow removal, car detailing, cleaning, repairs, and more — with prices and real time slots."
+          canonical={`${citySeo.siteUrl}/`}
+          jsonLd={{
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: citySeo.brand,
+            url: citySeo.siteUrl,
+            description: 'Book local services with prices and real time slots.',
+            areaServed: citySeo.cities.map((c) => ({ '@type': 'City', name: c.city })),
+            sameAs: citySeo.sameAs,
+          }}
+        />
+      )}
       {!embedded && <SiteHeader />}
       <Hero embedded={embedded} findPath={findPath} />
       <NeedPrompts findPath={findPath} />

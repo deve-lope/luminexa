@@ -22,11 +22,11 @@ export default function MaintenancePage() {
       <div className="w-full max-w-md">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-800">Luminexa</p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">
-          Site under maintenance
+          Can&apos;t connect right now
         </h1>
         <p className="mt-3 text-base leading-relaxed text-slate-600">
-          We&apos;re temporarily unavailable. Sorry for the inconvenience — please try again in a
-          few minutes.
+          The app needs a connection to Luminexa. This is usually a slow start or a brief network
+          drop — not a planned outage. Check your signal and try again.
         </p>
         <button
           type="button"

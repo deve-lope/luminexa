@@ -14,6 +14,7 @@ import {
   geolocationUnavailableReason,
   shareLocationButtonLabel,
 } from '../../utils/geolocationSupport';
+import LocationEnablePrompt from './LocationEnablePrompt';
 
 const centerPin = L.divIcon({
   className: '',
@@ -292,7 +293,11 @@ export default function LocationSearchBar({
             <p className="text-xs text-amber-700">{gpsBlockedReason}</p>
           )}
           {locationError && (
-            <p className="text-xs text-amber-700">{locationError}</p>
+            <LocationEnablePrompt
+              error={locationError}
+              locating={locating}
+              onRetry={handleUseMyLocation}
+            />
           )}
           <AddressSearchField
             id="customer-location-search"

@@ -215,7 +215,7 @@ def map_search_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def business_type_providers_api(request, slug):
     try:
         business_type = BusinessType.objects.get(slug=slug, is_active=True)
