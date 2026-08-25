@@ -49,8 +49,9 @@ def customer_history_url():
     return f'{_public_app_url()}/customer/history'
 
 
-def _format_when(dt):
-    return format_booking_when(dt)
+def _format_when(dt, booking=None):
+    """Format in the booking organization's timezone (not Django UTC)."""
+    return format_booking_when(dt, tz=booking)
 
 
 def _provider_staff_emails(org):
@@ -80,7 +81,7 @@ def _booking_detail_lines(booking, *, include_address=False):
     service_name = booking.service.name if booking.service_id else 'Service'
     lines = [
         f'Service: {service_name}',
-        f'When: {_format_when(booking.start_at)}',
+        f'When: {_format_when(booking.start_at, booking)}',
         f'Customer: {_customer_label(booking)}',
     ]
     if booking.customer.phone:
@@ -195,7 +196,7 @@ def notify_customer_provider_direct(booking):
         message=(
             f'{booking.organization.name} booked '
             f'{booking.service.name if booking.service_id else "a service"} '
-            f'for you on {_format_when(booking.start_at)}.'
+            f'for you on {_format_when(booking.start_at, booking)}.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -218,7 +219,7 @@ def notify_customer_booking_created(booking):
             message=(
                 f'Your appointment for '
                 f'{booking.service.name if booking.service_id else "a service"} '
-                f'on {_format_when(booking.start_at)} is confirmed.'
+                f'on {_format_when(booking.start_at, booking)} is confirmed.'
             ),
             organization=booking.organization,
             booking=booking,
@@ -239,7 +240,7 @@ def create_provider_booking_notification(booking):
         booking=booking,
         kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
         message=(
-            f'{customer_name} {action} {service_name} for {_format_when(booking.start_at)}. '
+            f'{customer_name} {action} {service_name} for {_format_when(booking.start_at, booking)}. '
             'Open Service requests to review or manage it.'
         ),
         link_path=provider_request_link_path(org.slug, booking.pk),
@@ -263,7 +264,7 @@ def create_provider_customer_cancel_notification(booking):
         kind=ProviderNotification.Kind.CUSTOMER_CANCELLED_BOOKING,
         message=(
             f'{customer_name} cancelled {service_name} '
-            f'(was {_format_when(booking.start_at)}). '
+            f'(was {_format_when(booking.start_at, booking)}). '
             'Open Service requests if you need to follow up.'
         ),
         link_path=provider_request_link_path(org.slug, booking.pk),
@@ -287,7 +288,7 @@ def create_provider_customer_reschedule_notification(booking):
         kind=ProviderNotification.Kind.CUSTOMER_RESCHEDULE_REQUEST,
         message=(
             f'{customer_name} asked to reschedule {service_name} '
-            f'to {_format_when(booking.start_at)}. '
+            f'to {_format_when(booking.start_at, booking)}. '
             'Open Service requests to review or approve.'
         ),
         link_path=provider_request_link_path(org.slug, booking.pk),
@@ -310,7 +311,7 @@ def notify_booking_cancelled(booking, *, by_user=None):
         message=(
             f'Your appointment for '
             f'{booking.service.name if booking.service_id else "a service"} '
-            f'on {_format_when(booking.start_at)} was cancelled.'
+            f'on {_format_when(booking.start_at, booking)} was cancelled.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -346,7 +347,7 @@ def notify_booking_accepted(booking):
         title=f'Booking approved — {booking.organization.name}',
         message=(
             f'{booking.organization.name} approved your request for {service_name} '
-            f'on {_format_when(booking.start_at)}.'
+            f'on {_format_when(booking.start_at, booking)}.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -367,7 +368,7 @@ def create_provider_quote_accepted_notification(booking):
         kind=ProviderNotification.Kind.QUOTE_ACCEPTED,
         message=(
             f'{customer_name} accepted {amount_txt} for {service_name} '
-            f'on {_format_when(booking.start_at)}. '
+            f'on {_format_when(booking.start_at, booking)}. '
             'The booking is confirmed — open Service requests to review.'
         ),
         link_path=provider_request_link_path(org.slug, booking.pk),
@@ -387,7 +388,7 @@ def notify_quote_accepted(booking):
         title=f'Quote accepted — {booking.organization.name}',
         message=(
             f'You accepted {amount_txt} for {service_name} on '
-            f'{_format_when(booking.start_at)}. Your booking is confirmed.'
+            f'{_format_when(booking.start_at, booking)}. Your booking is confirmed.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -399,7 +400,7 @@ def notify_booking_quoted(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
     amount = booking.quote_amount
     amount_txt = f'${amount}' if amount is not None else 'a price'
-    when = _format_when(booking.start_at)
+    when = _format_when(booking.start_at, booking)
     create_customer_notification(
         customer=booking.customer,
         kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
@@ -458,7 +459,7 @@ def notify_booking_declined(booking):
         title=f'Booking declined — {booking.organization.name}',
         message=(
             f'{booking.organization.name} declined your request for {service_name} '
-            f'on {_format_when(booking.start_at)}.'
+            f'on {_format_when(booking.start_at, booking)}.'
         ),
         organization=booking.organization,
         booking=booking,
@@ -469,9 +470,9 @@ def notify_booking_declined(booking):
 
 def notify_booking_rescheduled_by_provider(booking):
     service_name = booking.service.name if booking.service_id else 'Service'
-    new_when = _format_when(booking.start_at)
+    new_when = _format_when(booking.start_at, booking)
     if booking.prior_start_at:
-        old_when = _format_when(booking.prior_start_at)
+        old_when = _format_when(booking.prior_start_at, booking)
         change_line = f'New time: {new_when} (was {old_when}).'
     else:
         change_line = f'New time: {new_when}.'
@@ -617,7 +618,7 @@ def send_booking_email(event, booking):
     """Send booking lifecycle email; failures are logged, not raised."""
     org = booking.organization
     service_name = booking.service.name if booking.service_id else 'Service'
-    when = _format_when(booking.start_at)
+    when = _format_when(booking.start_at, booking)
     provider_url = provider_booking_detail_url(org.slug, booking.id)
     bookings_url = customer_bookings_url()
     history_url = customer_history_url()
@@ -761,7 +762,7 @@ def send_booking_email(event, booking):
             f'Proposed time: {when}',
         ]
         if booking.prior_start_at:
-            body_lines.append(f'Previous time: {_format_when(booking.prior_start_at)}')
+            body_lines.append(f'Previous time: {_format_when(booking.prior_start_at, booking)}')
         if booking.quote_amount is not None:
             body_lines.append(f'Quote: ${booking.quote_amount}')
             if (booking.quote_message or '').strip():

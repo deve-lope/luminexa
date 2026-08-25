@@ -1665,9 +1665,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         if not slot:
             raise ValidationError({'slot_id': 'Slot not found.'})
         old_status = booking.status
-        prior_when = format_booking_when(booking.start_at)
+        prior_when = format_booking_when(booking.start_at, tz=booking)
         reschedule_booking(booking, new_slot=slot, by_user=request.user)
-        new_when = format_booking_when(booking.start_at)
+        new_when = format_booking_when(booking.start_at, tz=booking)
         note = (
             f'New time: {new_when} (was {prior_when})'
             if prior_when and prior_when != new_when

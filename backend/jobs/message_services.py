@@ -7,13 +7,14 @@ from .models import OrgCustomerConversation, ServiceRequestMessage
 from .permissions import is_org_staff
 
 
-def _format_when(dt):
-    return format_booking_when(dt)
+def _format_when(dt, booking=None):
+    """Format in the booking organization's timezone (not Django UTC)."""
+    return format_booking_when(dt, tz=booking)
 
 
 def booking_approval_message_body(booking):
     service_name = booking.service.name if booking.service_id else 'your service'
-    when = _format_when(booking.start_at)
+    when = _format_when(booking.start_at, booking)
     if when:
         return f'Your request for {service_name} on {when} has been approved.'
     return f'Your request for {service_name} has been approved.'
@@ -21,7 +22,7 @@ def booking_approval_message_body(booking):
 
 def booking_cancellation_message_body(booking):
     service_name = booking.service.name if booking.service_id else 'your service'
-    when = _format_when(booking.start_at)
+    when = _format_when(booking.start_at, booking)
     if when:
         return f'Your booking for {service_name} on {when} has been cancelled.'
     return f'Your booking for {service_name} has been cancelled.'
@@ -31,7 +32,7 @@ def booking_incomplete_message_body(booking, *, note='', return_booking=None):
     service_name = booking.service.name if booking.service_id else 'your service'
     note_text = (note or '').strip()
     if return_booking is not None:
-        when = _format_when(return_booking.start_at)
+        when = _format_when(return_booking.start_at, return_booking)
         body = (
             f'Work on {service_name} could not be finished today. '
             f'A return visit is scheduled for {when}.'
@@ -210,7 +211,7 @@ def ensure_booking_card(*, booking, sender):
     if existing:
         return None
     service_name = booking.service.name if booking.service_id else 'Booking'
-    when = _format_when(booking.start_at)
+    when = _format_when(booking.start_at, booking)
     body = f'Booking: {service_name}' + (f' · {when}' if when else '')
     msg = ServiceRequestMessage(
         conversation=conv,

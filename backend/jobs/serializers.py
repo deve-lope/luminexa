@@ -727,7 +727,7 @@ class BookingStatusEventSerializer(serializers.ModelSerializer):
 
     def get_note(self, obj):
         from .datetime_display import humanize_activity_note
-        return humanize_activity_note(obj.note)
+        return humanize_activity_note(obj.note, tz=getattr(obj, 'booking', None))
 
 
 class JobCostLineSerializer(serializers.ModelSerializer):
