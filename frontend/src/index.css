@@ -231,11 +231,11 @@
   padding-bottom: max(0.5rem, var(--lx-sab));
 }
 
-/* Always pin full-screen sheets to the IME (0px when closed). Do not wait for
-   a keyboard-open class — Android edge-to-edge often never reports overlap. */
+/* Pin full-screen sheets and overlays above the keyboard (0px when closed).
+   Two classes outrank Tailwind's own inset utilities without !important. */
 .lx-ime-sheet,
 .fixed.inset-0 {
-  bottom: var(--lx-keyboard-inset, 0px) !important;
+  bottom: var(--lx-keyboard-inset, 0px);
 }
 
 html.lx-keyboard-open .lx-bottom-tabs {

@@ -1,14 +1,23 @@
 /**
- * Keep focused fields above the on-screen keyboard.
+ * Keep focused fields above the on-screen keyboard on Android and iOS.
  *
- * Android Capacitor (edge-to-edge) often overlays the IME without shrinking
- * visualViewport. A focus-based fallback lifts the layout so the field stays
- * visible — but Pixel's keyboard-down control does not blur the field, so we
- * must drop that fallback as soon as the IME is gone.
+ * Platforms report the keyboard three different ways, so we pick per device:
+ *  - "platform": layout viewport shrinks (adjustResize / interactive-widget) —
+ *    the browser already made room, so we add nothing.
+ *  - "measured": visualViewport (iOS WKWebView, Android Chrome) or the Virtual
+ *    Keyboard API reports the covered height — we use that exact height.
+ *  - "fallback": Android edge-to-edge overlays the IME and reports nothing —
+ *    only then do we estimate, and only after waiting for a real measurement.
+ *
+ * Guessing before that wait is what makes the field visibly jump, so
+ * MEASURE_GRACE_MS must elapse with no signal before we estimate.
  */
 
 export const KEYBOARD_OPEN_PX = 80;
-export const NAV_INSET_HIDE_PX = 20;
+/** Wait this long for a real keyboard measurement before estimating. */
+export const MEASURE_GRACE_MS = 350;
+/** Re-check points after a field is tapped, spanning the keyboard animation. */
+export const FOCUS_SYNC_DELAYS_MS = [60, 180, MEASURE_GRACE_MS + 40, 650];
 
 export function keyboardOverlapPx({ innerHeight, visualHeight, visualOffsetTop }) {
   const layoutH = Number(innerHeight) || 0;
@@ -26,78 +35,66 @@ export function fallbackKeyboardPx(innerHeight) {
   return Math.max(0, Math.round(Math.min(h * 0.46, h - leaveVisible)));
 }
 
-export function resolveKeyboardInset({
-  overlap,
-  vkHeight,
-  visualOffsetTop,
-  fieldFocused,
-  innerHeight,
-  restInnerHeight,
-  heightAtFocus,
-  sawMeasuredOpen,
-  layoutShrunk,
-  imeDismissed,
-}) {
+/**
+ * Capawesome EdgeToEdge zeroes the WebView bottom margin while the IME is
+ * visible and restores the nav-bar inset once it hides. Only report a dismiss
+ * after we have seen the open state, so a device with no bottom inset (or a
+ * reading taken before the IME animates in) cannot collapse the lift early.
+ */
+export function edgeToEdgeImeState({ bottom, sawImeOpen }) {
+  const b = Number(bottom) || 0;
+  if (b < 8) return { sawImeOpen: true, dismiss: false };
+  if (sawImeOpen && b >= 16) return { sawImeOpen: true, dismiss: true };
+  return { sawImeOpen: Boolean(sawImeOpen), dismiss: false };
+}
+
+/**
+ * Only devices with an on-screen keyboard may use the estimate. A desktop
+ * browser reports nothing when a field is focused because no keyboard exists,
+ * which is indistinguishable from Android's silent overlay.
+ */
+export function canEstimateKeyboard({ coarsePointer, maxTouchPoints, nativeApp }) {
+  if (nativeApp) return true;
+  return Boolean(coarsePointer) && (Number(maxTouchPoints) || 0) > 0;
+}
+
+/** Modes that mean the keyboard was really up, so losing the signal = hidden. */
+const OPEN_MODES = new Set(['measured', 'platform']);
+
+/**
+ * Pure transition so every platform path is testable.
+ * `mode`: idle | waiting | measured | platform | fallback | dismissed
+ */
+export function nextKeyboardState(prev, snapshot) {
+  const prevMode = prev?.mode || 'idle';
+  const {
+    fieldFocused,
+    overlap,
+    vkHeight,
+    innerHeight,
+    restInnerHeight,
+    msSinceFocus,
+    nativeDismissed,
+    canEstimate = true,
+  } = snapshot;
+
+  if (!fieldFocused) return { mode: 'idle', inset: 0 };
+
   const measured = Math.max(Number(overlap) || 0, Number(vkHeight) || 0);
-  const offsetTop = Number(visualOffsetTop) || 0;
+  if (measured > KEYBOARD_OPEN_PX) return { mode: 'measured', inset: measured };
+
   const current = Number(innerHeight) || 0;
   const rest = Number(restInnerHeight) || 0;
-  const atFocus = Number(heightAtFocus) || 0;
+  if (rest - current > KEYBOARD_OPEN_PX) return { mode: 'platform', inset: 0 };
 
-  if (!fieldFocused) {
-    return {
-      inset: 0,
-      sawMeasuredOpen: false,
-      layoutShrunk: false,
-      imeDismissed: false,
-    };
+  // No live signal from here on.
+  if (nativeDismissed || prevMode === 'dismissed' || OPEN_MODES.has(prevMode)) {
+    return { mode: 'dismissed', inset: 0 };
   }
-
-  if (measured > KEYBOARD_OPEN_PX || offsetTop > KEYBOARD_OPEN_PX) {
-    return {
-      inset: measured > KEYBOARD_OPEN_PX ? measured : fallbackKeyboardPx(current),
-      sawMeasuredOpen: true,
-      layoutShrunk,
-      imeDismissed: false,
-    };
-  }
-
-  // Viewport reported an open IME, then went back to 0 — Pixel down-arrow.
-  if (sawMeasuredOpen) {
-    return {
-      inset: 0,
-      sawMeasuredOpen: true,
-      layoutShrunk,
-      imeDismissed: true,
-    };
-  }
-
-  if (imeDismissed) {
-    return { inset: 0, sawMeasuredOpen, layoutShrunk, imeDismissed: true };
-  }
-
-  // adjustResize / interactive-widget: layout shrank for the IME.
-  if (rest - current > KEYBOARD_OPEN_PX) {
-    return { inset: 0, sawMeasuredOpen, layoutShrunk: true, imeDismissed: false };
-  }
-
-  // Layout was shrunk and is now full again — IME hidden, caret still in the field.
-  if (layoutShrunk) {
-    return { inset: 0, sawMeasuredOpen, layoutShrunk: true, imeDismissed: true };
-  }
-
-  // Edge-to-edge Android: hiding the IME restores the nav-bar WebView margin,
-  // so innerHeight drops a little while the field stays focused.
-  if (atFocus > 0 && current < atFocus - NAV_INSET_HIDE_PX) {
-    return { inset: 0, sawMeasuredOpen, layoutShrunk, imeDismissed: true };
-  }
-
-  return {
-    inset: fallbackKeyboardPx(current),
-    sawMeasuredOpen,
-    layoutShrunk,
-    imeDismissed: false,
-  };
+  if (!canEstimate) return { mode: 'waiting', inset: 0 };
+  if (prevMode === 'fallback') return { mode: 'fallback', inset: fallbackKeyboardPx(current) };
+  if ((Number(msSinceFocus) || 0) < MEASURE_GRACE_MS) return { mode: 'waiting', inset: 0 };
+  return { mode: 'fallback', inset: fallbackKeyboardPx(current) };
 }
 
 function isEditable(el) {
@@ -121,9 +118,13 @@ function isEditable(el) {
   ].includes(type);
 }
 
+let appliedInset = -1;
+
 function applyInset(px) {
-  const root = document.documentElement;
   const inset = Math.max(0, Math.round(Number(px) || 0));
+  if (inset === appliedInset) return;
+  appliedInset = inset;
+  const root = document.documentElement;
   root.style.setProperty('--lx-keyboard-inset', `${inset}px`);
   root.classList.toggle('lx-keyboard-open', inset > KEYBOARD_OPEN_PX);
 }
@@ -147,6 +148,20 @@ function readVirtualKeyboardHeight() {
   }
 }
 
+function deviceCanEstimate() {
+  let coarsePointer = false;
+  try {
+    coarsePointer = window.matchMedia?.('(pointer: coarse)').matches || false;
+  } catch {
+    coarsePointer = false;
+  }
+  return canEstimateKeyboard({
+    coarsePointer,
+    maxTouchPoints: navigator.maxTouchPoints,
+    nativeApp: Boolean(window.Capacitor?.isNativePlatform?.()),
+  });
+}
+
 export function measureKeyboardOverlap() {
   if (typeof window === 'undefined') return 0;
   const vv = window.visualViewport;
@@ -157,58 +172,93 @@ export function measureKeyboardOverlap() {
   });
 }
 
+let state = { mode: 'idle', inset: 0 };
 let restInnerHeight = 0;
-let heightAtFocus = 0;
-let sawMeasuredOpen = false;
-let layoutShrunk = false;
-let imeDismissed = false;
+let focusAt = 0;
+let nativeDismissed = false;
+let e2eSawImeOpen = false;
+let e2ePollId = 0;
+let EdgeToEdgeApi = null;
 
 function captureRestHeight() {
-  if (typeof window === 'undefined') return;
   if (isEditable(document.activeElement)) return;
   restInnerHeight = window.innerHeight;
 }
 
-function resetFocusSession() {
-  heightAtFocus = typeof window !== 'undefined' ? window.innerHeight : 0;
-  sawMeasuredOpen = false;
-  layoutShrunk = false;
-  imeDismissed = false;
+function stopNativeImePoll() {
+  if (e2ePollId) {
+    window.clearInterval(e2ePollId);
+    e2ePollId = 0;
+  }
 }
 
-function dismissImeWhileFocused() {
-  imeDismissed = true;
+function markDismissed() {
+  nativeDismissed = true;
+  state = { mode: 'dismissed', inset: 0 };
   applyInset(0);
+  stopNativeImePoll();
+}
+
+async function readNativeBottomInset() {
+  try {
+    if (!EdgeToEdgeApi) {
+      const mod = await import('@capawesome/capacitor-android-edge-to-edge-support');
+      EdgeToEdgeApi = mod.EdgeToEdge;
+    }
+    const result = await EdgeToEdgeApi.getInsets();
+    return Number(result?.bottom) || 0;
+  } catch {
+    return null;
+  }
+}
+
+/** Android only: watch the native IME inset so hide-keyboard collapses the lift. */
+function startNativeImePoll() {
+  stopNativeImePoll();
+  e2eSawImeOpen = false;
+  const tick = async () => {
+    if (nativeDismissed || !isEditable(document.activeElement)) {
+      stopNativeImePoll();
+      return;
+    }
+    const bottom = await readNativeBottomInset();
+    if (bottom == null) {
+      stopNativeImePoll();
+      return;
+    }
+    const next = edgeToEdgeImeState({ bottom, sawImeOpen: e2eSawImeOpen });
+    e2eSawImeOpen = next.sawImeOpen;
+    if (next.dismiss) markDismissed();
+  };
+  e2ePollId = window.setInterval(tick, 120);
+  tick();
 }
 
 export function syncKeyboardInset({ scrollField = false } = {}) {
   if (typeof window === 'undefined') return 0;
   captureRestHeight();
-  const vv = window.visualViewport;
-  const next = resolveKeyboardInset({
+  state = nextKeyboardState(state, {
+    fieldFocused: isEditable(document.activeElement),
     overlap: measureKeyboardOverlap(),
     vkHeight: readVirtualKeyboardHeight(),
-    visualOffsetTop: vv ? vv.offsetTop : 0,
-    fieldFocused: isEditable(document.activeElement),
     innerHeight: window.innerHeight,
     restInnerHeight,
-    heightAtFocus,
-    sawMeasuredOpen,
-    layoutShrunk,
-    imeDismissed,
+    msSinceFocus: Date.now() - focusAt,
+    nativeDismissed,
+    canEstimate: deviceCanEstimate(),
   });
-  sawMeasuredOpen = next.sawMeasuredOpen;
-  layoutShrunk = next.layoutShrunk;
-  imeDismissed = next.imeDismissed;
-  applyInset(next.inset);
-  if (scrollField && next.inset > 0) scrollFocusedIntoView();
-  return next.inset;
+  applyInset(state.inset);
+  // Also scroll in "platform" mode, where the inset stays 0 but the shrunken
+  // viewport can still leave the field off screen (iOS and resizing Android).
+  if (scrollField && state.mode !== 'idle' && state.mode !== 'dismissed') {
+    scrollFocusedIntoView();
+  }
+  return state.inset;
 }
 
 export function installKeyboardInset() {
   if (typeof window === 'undefined') return () => {};
   restInnerHeight = window.innerHeight;
-  resetFocusSession();
 
   const timers = [];
   const later = (fn, ms) => {
@@ -219,46 +269,61 @@ export function installKeyboardInset() {
   };
 
   const onViewport = () => syncKeyboardInset({ scrollField: false });
-  const onFocusIn = () => {
-    clearTimers();
-    resetFocusSession();
-    syncKeyboardInset({ scrollField: true });
-    later(() => syncKeyboardInset({ scrollField: true }), 50);
-    later(() => syncKeyboardInset({ scrollField: true }), 200);
-    later(() => syncKeyboardInset({ scrollField: true }), 450);
+
+  const beginFocusSession = () => {
+    focusAt = Date.now();
+    nativeDismissed = false;
+    state = { mode: 'waiting', inset: 0 };
+    startNativeImePoll();
   };
+
+  // Every session must be re-checked after the grace window expires, or one
+  // that starts with no keyboard signal stays in "waiting" and never lifts.
+  const syncAcrossKeyboardAnimation = () => {
+    clearTimers();
+    syncKeyboardInset({ scrollField: true });
+    FOCUS_SYNC_DELAYS_MS.forEach((ms) =>
+      later(() => syncKeyboardInset({ scrollField: true }), ms)
+    );
+  };
+
+  const onFocusIn = () => {
+    // Moving between fields while the keyboard is already up keeps the current
+    // lift, so the layout does not collapse and re-expand between taps.
+    if (state.mode === 'idle' || state.mode === 'dismissed') beginFocusSession();
+    syncAcrossKeyboardAnimation();
+  };
+
   const onFocusOut = () => {
     clearTimers();
     later(() => {
-      if (!isEditable(document.activeElement)) resetFocusSession();
+      if (!isEditable(document.activeElement)) {
+        state = { mode: 'idle', inset: 0 };
+        nativeDismissed = false;
+        stopNativeImePoll();
+      }
       syncKeyboardInset({ scrollField: false });
     }, 80);
   };
 
   const onPointerDown = (event) => {
-    const target = event.target;
-    if (isEditable(target)) {
-      if (imeDismissed) {
-        resetFocusSession();
-        later(() => syncKeyboardInset({ scrollField: true }), 40);
+    if (isEditable(event.target)) {
+      // Re-tapping an already-focused field reopens the keyboard without firing
+      // focusin, so this is the only chance to restart a dismissed session.
+      if (state.mode === 'dismissed') {
+        beginFocusSession();
+        syncAcrossKeyboardAnimation();
       }
       return;
     }
-    const inset =
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue('--lx-keyboard-inset')
-      ) || 0;
-    // Tap the leftover IME gap (keyboard already gone) to collapse it.
-    if (inset > KEYBOARD_OPEN_PX && event.clientY > window.innerHeight - inset) {
-      dismissImeWhileFocused();
-    }
+    // Only the estimated lift can outlive the keyboard; tapping it collapses it.
+    if (state.mode !== 'fallback' || state.inset <= KEYBOARD_OPEN_PX) return;
+    if (event.clientY > window.innerHeight - state.inset) markDismissed();
   };
 
   const onKeyUp = (event) => {
-    const key = event.key;
-    const code = event.keyCode;
-    if (key === 'Escape' || key === 'GoBack' || code === 4 || code === 27) {
-      dismissImeWhileFocused();
+    if (event.key === 'Escape' || event.key === 'GoBack' || event.keyCode === 4) {
+      markDismissed();
     }
   };
 
@@ -272,13 +337,12 @@ export function installKeyboardInset() {
   window.addEventListener('pointerdown', onPointerDown, true);
   window.addEventListener('keyup', onKeyUp, true);
 
+  // Listen for keyboard geometry when available, but never set overlaysContent:
+  // that would opt out of the browser's own resize, which needs no estimate.
   let vk = null;
   try {
     vk = navigator.virtualKeyboard || null;
-    if (vk) {
-      vk.overlaysContent = true;
-      vk.addEventListener('geometrychange', onViewport);
-    }
+    vk?.addEventListener('geometrychange', onViewport);
   } catch {
     vk = null;
   }
@@ -300,6 +364,8 @@ export function installKeyboardInset() {
     } catch {
       /* ignore */
     }
+    stopNativeImePoll();
+    state = { mode: 'idle', inset: 0 };
     applyInset(0);
   };
 }

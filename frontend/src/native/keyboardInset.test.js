@@ -1,14 +1,24 @@
 import {
   keyboardOverlapPx,
   KEYBOARD_OPEN_PX,
+  MEASURE_GRACE_MS,
+  FOCUS_SYNC_DELAYS_MS,
   fallbackKeyboardPx,
-  resolveKeyboardInset,
+  nextKeyboardState,
+  canEstimateKeyboard,
+  edgeToEdgeImeState,
 } from './keyboardInset';
 
-const idle = {
-  sawMeasuredOpen: false,
-  layoutShrunk: false,
-  imeDismissed: false,
+/** Field focused, keyboard not reported yet, still inside the grace window. */
+const justFocused = {
+  fieldFocused: true,
+  overlap: 0,
+  vkHeight: 0,
+  innerHeight: 800,
+  restInnerHeight: 800,
+  msSinceFocus: 0,
+  nativeDismissed: false,
+  canEstimate: true,
 };
 
 describe('keyboardOverlapPx', () => {
@@ -53,145 +63,155 @@ describe('keyboardOverlapPx', () => {
   });
 });
 
-describe('resolveKeyboardInset', () => {
-  test('uses the measured overlap when the keyboard actually resizes the viewport', () => {
-    expect(
-      resolveKeyboardInset({
-        overlap: 320,
-        vkHeight: 0,
-        visualOffsetTop: 0,
-        fieldFocused: true,
-        innerHeight: 800,
-        restInnerHeight: 800,
-        heightAtFocus: 800,
-        ...idle,
-      }).inset
-    ).toBe(320);
-  });
-
-  test('falls back when Android overlays the IME and reports no overlap', () => {
-    const inset = resolveKeyboardInset({
-      overlap: 0,
-      vkHeight: 0,
-      visualOffsetTop: 0,
-      fieldFocused: true,
-      innerHeight: 800,
-      restInnerHeight: 800,
-      heightAtFocus: 800,
-      ...idle,
-    }).inset;
-    expect(inset).toBe(fallbackKeyboardPx(800));
-    expect(inset).toBeGreaterThan(KEYBOARD_OPEN_PX);
-  });
-
-  test('does not pad when nothing is focused', () => {
-    expect(
-      resolveKeyboardInset({
-        overlap: 0,
-        vkHeight: 0,
-        visualOffsetTop: 0,
-        fieldFocused: false,
-        innerHeight: 800,
-        restInnerHeight: 800,
-        heightAtFocus: 800,
-        ...idle,
-      }).inset
-    ).toBe(0);
-  });
-
-  test('does not double-pad when the layout viewport already shrank', () => {
-    const next = resolveKeyboardInset({
-      overlap: 0,
-      vkHeight: 0,
-      visualOffsetTop: 0,
-      fieldFocused: true,
-      innerHeight: 500,
-      restInnerHeight: 800,
-      heightAtFocus: 800,
-      ...idle,
+describe('nextKeyboardState', () => {
+  test('adds nothing while waiting for a first measurement (no focus flicker)', () => {
+    expect(nextKeyboardState({ mode: 'idle' }, justFocused)).toEqual({
+      mode: 'waiting',
+      inset: 0,
     });
-    expect(next.inset).toBe(0);
-    expect(next.layoutShrunk).toBe(true);
   });
 
-  test('prefers the Virtual Keyboard API height over the fallback', () => {
+  test('uses the measured height once visualViewport reports the keyboard', () => {
     expect(
-      resolveKeyboardInset({
-        overlap: 0,
-        vkHeight: 290,
-        visualOffsetTop: 0,
-        fieldFocused: true,
-        innerHeight: 800,
-        restInnerHeight: 800,
-        heightAtFocus: 800,
-        ...idle,
-      }).inset
-    ).toBe(290);
+      nextKeyboardState({ mode: 'waiting' }, { ...justFocused, overlap: 320 })
+    ).toEqual({ mode: 'measured', inset: 320 });
   });
 
-  test('drops the gap when the IME was measured and then hidden while focused', () => {
-    const next = resolveKeyboardInset({
-      overlap: 0,
-      vkHeight: 0,
-      visualOffsetTop: 0,
-      fieldFocused: true,
-      innerHeight: 800,
-      restInnerHeight: 800,
-      heightAtFocus: 800,
-      sawMeasuredOpen: true,
-      layoutShrunk: false,
-      imeDismissed: false,
-    });
-    expect(next.inset).toBe(0);
-    expect(next.imeDismissed).toBe(true);
-  });
-
-  test('drops the gap after Pixel down-arrow restores the nav-bar inset', () => {
-    const next = resolveKeyboardInset({
-      overlap: 0,
-      vkHeight: 0,
-      visualOffsetTop: 0,
-      fieldFocused: true,
-      innerHeight: 752,
-      restInnerHeight: 800,
-      heightAtFocus: 800,
-      ...idle,
-    });
-    expect(next.inset).toBe(0);
-    expect(next.imeDismissed).toBe(true);
-  });
-
-  test('does not bring the gap back after the layout recovers from a shrink', () => {
-    const next = resolveKeyboardInset({
-      overlap: 0,
-      vkHeight: 0,
-      visualOffsetTop: 0,
-      fieldFocused: true,
-      innerHeight: 800,
-      restInnerHeight: 800,
-      heightAtFocus: 800,
-      sawMeasuredOpen: false,
-      layoutShrunk: true,
-      imeDismissed: false,
-    });
-    expect(next.inset).toBe(0);
-    expect(next.imeDismissed).toBe(true);
-  });
-
-  test('keeps the gap gone after an explicit dismiss while the field stays focused', () => {
+  test('uses the Virtual Keyboard API height when visualViewport says nothing', () => {
     expect(
-      resolveKeyboardInset({
-        overlap: 0,
-        vkHeight: 0,
-        visualOffsetTop: 0,
-        fieldFocused: true,
-        innerHeight: 800,
-        restInnerHeight: 800,
-        heightAtFocus: 800,
-        sawMeasuredOpen: false,
-        layoutShrunk: false,
-        imeDismissed: true,
-      }).inset
-    ).toBe(0);
+      nextKeyboardState({ mode: 'waiting' }, { ...justFocused, vkHeight: 290 })
+    ).toEqual({ mode: 'measured', inset: 290 });
+  });
+
+  test('adds nothing when the platform already shrank the layout viewport', () => {
+    expect(
+      nextKeyboardState({ mode: 'waiting' }, { ...justFocused, innerHeight: 500 })
+    ).toEqual({ mode: 'platform', inset: 0 });
+  });
+
+  test('estimates only after the grace window passes with no signal', () => {
+    const next = nextKeyboardState(
+      { mode: 'waiting' },
+      { ...justFocused, msSinceFocus: MEASURE_GRACE_MS + 10 }
+    );
+    expect(next.mode).toBe('fallback');
+    expect(next.inset).toBe(fallbackKeyboardPx(800));
+    expect(next.inset).toBeGreaterThan(KEYBOARD_OPEN_PX);
+  });
+
+  test('never estimates on a device with no on-screen keyboard', () => {
+    expect(
+      nextKeyboardState(
+        { mode: 'waiting' },
+        { ...justFocused, canEstimate: false, msSinceFocus: MEASURE_GRACE_MS + 500 }
+      )
+    ).toEqual({ mode: 'waiting', inset: 0 });
+  });
+
+  test('holds the estimate steady on later ticks', () => {
+    const held = nextKeyboardState({ mode: 'fallback' }, justFocused);
+    expect(held).toEqual({ mode: 'fallback', inset: fallbackKeyboardPx(800) });
+  });
+
+  test('collapses when a measured keyboard goes away while the field stays focused', () => {
+    expect(nextKeyboardState({ mode: 'measured' }, justFocused)).toEqual({
+      mode: 'dismissed',
+      inset: 0,
+    });
+  });
+
+  test('collapses when a platform-resized viewport is restored', () => {
+    expect(nextKeyboardState({ mode: 'platform' }, justFocused)).toEqual({
+      mode: 'dismissed',
+      inset: 0,
+    });
+  });
+
+  test('collapses the estimate when the native IME inset reports hidden', () => {
+    expect(
+      nextKeyboardState({ mode: 'fallback' }, { ...justFocused, nativeDismissed: true })
+    ).toEqual({ mode: 'dismissed', inset: 0 });
+  });
+
+  test('stays collapsed instead of re-estimating after a dismiss', () => {
+    expect(
+      nextKeyboardState(
+        { mode: 'dismissed' },
+        { ...justFocused, msSinceFocus: MEASURE_GRACE_MS + 500 }
+      )
+    ).toEqual({ mode: 'dismissed', inset: 0 });
+  });
+
+  test('reopening is allowed once the keyboard is measured again', () => {
+    expect(
+      nextKeyboardState({ mode: 'dismissed' }, { ...justFocused, overlap: 320 })
+    ).toEqual({ mode: 'measured', inset: 320 });
+  });
+
+  test('goes idle with no inset when nothing is focused', () => {
+    expect(
+      nextKeyboardState({ mode: 'measured' }, { ...justFocused, fieldFocused: false })
+    ).toEqual({ mode: 'idle', inset: 0 });
+  });
+});
+
+describe('FOCUS_SYNC_DELAYS_MS', () => {
+  // Re-tapping a field only re-checked at 40ms once, inside the grace window,
+  // so the keyboard reopened over a field that never lifted.
+  test('re-checks after the grace window expires', () => {
+    expect(FOCUS_SYNC_DELAYS_MS.some((ms) => ms > MEASURE_GRACE_MS)).toBe(true);
+  });
+
+  test('also re-checks during the keyboard animation', () => {
+    expect(FOCUS_SYNC_DELAYS_MS.some((ms) => ms < MEASURE_GRACE_MS)).toBe(true);
+  });
+});
+
+describe('canEstimateKeyboard', () => {
+  test('a phone browser may estimate', () => {
+    expect(
+      canEstimateKeyboard({ coarsePointer: true, maxTouchPoints: 5, nativeApp: false })
+    ).toBe(true);
+  });
+
+  test('the native app may always estimate', () => {
+    expect(
+      canEstimateKeyboard({ coarsePointer: false, maxTouchPoints: 0, nativeApp: true })
+    ).toBe(true);
+  });
+
+  test('a desktop browser may not estimate', () => {
+    expect(
+      canEstimateKeyboard({ coarsePointer: false, maxTouchPoints: 0, nativeApp: false })
+    ).toBe(false);
+  });
+
+  test('a touchscreen laptop driven by a mouse may not estimate', () => {
+    expect(
+      canEstimateKeyboard({ coarsePointer: false, maxTouchPoints: 10, nativeApp: false })
+    ).toBe(false);
+  });
+});
+
+describe('edgeToEdgeImeState', () => {
+  test('treats a zeroed WebView bottom margin as the IME being open', () => {
+    expect(edgeToEdgeImeState({ bottom: 0, sawImeOpen: false })).toEqual({
+      sawImeOpen: true,
+      dismiss: false,
+    });
+  });
+
+  test('reports a dismiss when the nav-bar inset returns after the IME', () => {
+    expect(edgeToEdgeImeState({ bottom: 48, sawImeOpen: true })).toEqual({
+      sawImeOpen: true,
+      dismiss: true,
+    });
+  });
+
+  test('never dismisses before the IME has been seen open', () => {
+    expect(edgeToEdgeImeState({ bottom: 48, sawImeOpen: false })).toEqual({
+      sawImeOpen: false,
+      dismiss: false,
+    });
   });
 });
