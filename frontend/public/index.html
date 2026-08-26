@@ -2,7 +2,7 @@
 <html lang="en-CA">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
@@ -35,11 +35,27 @@
     </script>
     <script>
       // Mark Capacitor early (bridge may inject after first paint on remote URL).
+      // Native app must not keep a service worker — it pins a stale SPA after deploys.
       (function () {
+        function dropSw() {
+          try {
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                regs.forEach(function (reg) { reg.unregister(); });
+              });
+            }
+            if (window.caches) {
+              caches.keys().then(function (keys) {
+                keys.forEach(function (k) { caches.delete(k); });
+              });
+            }
+          } catch (e) {}
+        }
         function mark() {
           try {
             if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
               document.documentElement.classList.add('capacitor-native');
+              dropSw();
               return true;
             }
           } catch (e) {}

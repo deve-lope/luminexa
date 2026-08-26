@@ -413,7 +413,7 @@ export default function ChatThread({
   // On lg+, start after the w-60 sidebar so the composer is never covered.
   const sheet = (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-[#eae6df] lg:left-60"
+      className="lx-ime-sheet fixed inset-0 z-[100] flex flex-col bg-[#eae6df] lg:left-60"
       role="dialog"
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}

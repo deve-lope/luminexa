@@ -34,7 +34,7 @@ export default function AuthFormShell({
         className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-teal-600/25 to-transparent"
       />
 
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
+      <div className="lx-auth-form-col relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-6 flex items-center justify-between">
           <Link to="/" className="text-lg font-extrabold tracking-tight text-teal-900">
             Luminexa

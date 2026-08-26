@@ -12,7 +12,7 @@ export default function BottomTabBar({ tabs }) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/90 bg-white/95 backdrop-blur-xl lg:hidden"
+      className="lx-bottom-tabs fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/90 bg-white/95 backdrop-blur-xl lg:hidden"
       aria-label="Primary"
       style={{ paddingBottom: 'max(0.5rem, var(--lx-sab))' }}
     >

@@ -14,6 +14,7 @@
     --lx-sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
     --lx-sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
     --lx-sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --lx-keyboard-inset: 0px;
   }
 
   body {
@@ -31,11 +32,21 @@
     padding-top: var(--lx-sat);
     padding-left: var(--lx-sal);
     padding-right: var(--lx-sar);
+    padding-bottom: var(--lx-keyboard-inset);
     box-sizing: border-box;
   }
 
   html {
     overflow-x: clip;
+    scroll-padding-top: calc(var(--lx-sat) + 5rem);
+    scroll-padding-bottom: calc(var(--lx-keyboard-inset) + 1.25rem);
+  }
+
+  input,
+  textarea,
+  select {
+    scroll-margin-top: calc(var(--lx-sat) + 5rem);
+    scroll-margin-bottom: calc(var(--lx-keyboard-inset) + 1.5rem);
   }
 
   html.capacitor-native {
@@ -218,6 +229,23 @@
 
 .pb-safe {
   padding-bottom: max(0.5rem, var(--lx-sab));
+}
+
+/* Always pin full-screen sheets to the IME (0px when closed). Do not wait for
+   a keyboard-open class — Android edge-to-edge often never reports overlap. */
+.lx-ime-sheet,
+.fixed.inset-0 {
+  bottom: var(--lx-keyboard-inset, 0px) !important;
+}
+
+html.lx-keyboard-open .lx-bottom-tabs {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html.lx-keyboard-open .lx-auth-form-col {
+  justify-content: flex-start;
+  padding-bottom: calc(1.5rem + var(--lx-keyboard-inset));
 }
 
 .px-safe {

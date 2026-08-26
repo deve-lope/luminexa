@@ -24,7 +24,7 @@ export default function SettingsSectionOverlay({ open, title, onClose, children 
 
   const sheet = (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-luminexa-canvas bg-lx-mesh"
+      className="lx-ime-sheet fixed inset-0 z-[100] flex flex-col bg-luminexa-canvas bg-lx-mesh"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-section-title"
