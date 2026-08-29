@@ -18,6 +18,8 @@ export const KEYBOARD_OPEN_PX = 80;
 export const MEASURE_GRACE_MS = 350;
 /** Re-check points after a field is tapped, spanning the keyboard animation. */
 export const FOCUS_SYNC_DELAYS_MS = [60, 180, MEASURE_GRACE_MS + 40, 650];
+/** Keep a little air between the field and the sticky header / keyboard. */
+export const FIELD_VIEW_GAP_PX = 8;
 
 export function keyboardOverlapPx({ innerHeight, visualHeight, visualOffsetTop }) {
   const layoutH = Number(innerHeight) || 0;
@@ -97,6 +99,25 @@ export function nextKeyboardState(prev, snapshot) {
   return { mode: 'fallback', inset: fallbackKeyboardPx(current) };
 }
 
+/**
+ * How far to scroll so a focused field sits fully between the sticky header
+ * and the keyboard. Positive = field moves up. Zero if it is already in view.
+ *
+ * `scrollIntoView({ block: 'center' })` is what pulled the Find search box
+ * up under the frozen "Book a service" banner.
+ */
+export function scrollDeltaToReveal({ fieldTop, fieldBottom, safeTop, safeBottom }) {
+  const top = Number(fieldTop) || 0;
+  const bottom = Number(fieldBottom) || 0;
+  const minY = Number(safeTop) || 0;
+  const maxY = Number(safeBottom) || 0;
+  if (maxY - minY < 24) return 0;
+  if (top >= minY && bottom <= maxY) return 0;
+  if (bottom - top >= maxY - minY) return Math.round(top - minY);
+  if (bottom > maxY) return Math.round(bottom - maxY);
+  return Math.round(top - minY);
+}
+
 function isEditable(el) {
   if (!el || el === document.body || el === document.documentElement) return false;
   if (el.isContentEditable) return true;
@@ -129,13 +150,50 @@ function applyInset(px) {
   root.classList.toggle('lx-keyboard-open', inset > KEYBOARD_OPEN_PX);
 }
 
+function syncHeaderOffset() {
+  const header = document.querySelector('.lx-header');
+  const bottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
+  document.documentElement.style.setProperty('--lx-header-offset', `${bottom}px`);
+  return bottom;
+}
+
+function visibleBottomPx(keyboardInset) {
+  const vv = window.visualViewport;
+  const vvBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  const inset = Number(keyboardInset) || 0;
+  return Math.min(vvBottom, window.innerHeight - (inset > KEYBOARD_OPEN_PX ? inset : 0));
+}
+
+function scrollParentOf(el) {
+  let node = el.parentElement;
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && node.scrollHeight > node.clientHeight + 1) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
 function scrollFocusedIntoView() {
   const el = document.activeElement;
-  if (!isEditable(el) || typeof el.scrollIntoView !== 'function') return;
-  try {
-    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
-  } catch {
-    el.scrollIntoView(true);
+  if (!isEditable(el)) return;
+  const rect = el.getBoundingClientRect();
+  const headerBottom = syncHeaderOffset();
+  const delta = scrollDeltaToReveal({
+    fieldTop: rect.top,
+    fieldBottom: rect.bottom,
+    safeTop: headerBottom + FIELD_VIEW_GAP_PX,
+    safeBottom: visibleBottomPx(appliedInset) - FIELD_VIEW_GAP_PX,
+  });
+  if (Math.abs(delta) < 2) return;
+  const parent = scrollParentOf(el);
+  if (parent === document.scrollingElement || parent === document.documentElement || parent === document.body) {
+    window.scrollBy(0, delta);
+  } else {
+    parent.scrollTop += delta;
   }
 }
 
@@ -248,6 +306,7 @@ export function syncKeyboardInset({ scrollField = false } = {}) {
     canEstimate: deviceCanEstimate(),
   });
   applyInset(state.inset);
+  syncHeaderOffset();
   // Also scroll in "platform" mode, where the inset stays 0 but the shrunken
   // viewport can still leave the field off screen (iOS and resizing Android).
   if (scrollField && state.mode !== 'idle' && state.mode !== 'dismissed') {

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { formatServicePrice } from '../../utils/serviceDisplay';
+import { costLinesToBillItems } from '../../utils/jobBillItems';
 import { jobsAPI } from '../../utils/api';
 
 function money(n, currency = 'CAD') {
@@ -81,7 +82,7 @@ export default function CompleteBookingInvoiceModal({
   React.useEffect(() => {
     if (open) {
       setServiceFee(defaultServiceFee);
-      setLineItems([]);
+      setLineItems(costLinesToBillItems(booking?.cost_lines));
       setDraft(emptyDraft());
       setAdding(false);
       setNotes('');
@@ -370,7 +371,7 @@ export default function CompleteBookingInvoiceModal({
                       id="bill-item-qty"
                       type="number"
                       min="0.01"
-                      step="1"
+                      step="0.01"
                       inputMode="decimal"
                       value={draft.quantity}
                       onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))}
@@ -419,7 +420,12 @@ export default function CompleteBookingInvoiceModal({
 
             {!adding && lineItems.length === 0 && (
               <p className="text-xs text-slate-500">
-                Optional — add oil, filters, parts, or other materials to the bill.
+                Optional — add oil, filters, parts, or other extras to the bill.
+              </p>
+            )}
+            {!adding && lineItems.length > 0 && booking?.cost_lines?.length > 0 && (
+              <p className="text-xs text-slate-500">
+                Includes items added on this job. You can still change them before issuing.
               </p>
             )}
           </div>

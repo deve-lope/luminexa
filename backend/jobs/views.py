@@ -6,7 +6,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -643,9 +643,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     )
     def customer_detail(self, request, slug=None, user_id=None):
         """Clients lite: profile, notes, balance, recent bookings."""
-        from django.db.models import Sum
+        from django.db.models import F, Sum
 
-        from .models import Booking, Invoice
+        from .models import Booking, BookingStatusEvent, Invoice
 
         org = self.get_object()
         require_staff_ops(request.user, org)
@@ -677,6 +677,17 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             customer_id=membership.user_id,
             status=Booking.Status.COMPLETED,
         ).count()
+        cancel_count = BookingStatusEvent.objects.filter(
+            booking__organization=org,
+            booking__customer_id=membership.user_id,
+            action=BookingStatusEvent.Action.CANCELLED,
+            actor_id=F('booking__customer_id'),
+        ).count()
+        no_show_count = BookingStatusEvent.objects.filter(
+            booking__organization=org,
+            booking__customer_id=membership.user_id,
+            action=BookingStatusEvent.Action.NO_SHOW,
+        ).count()
         recent = (
             Booking.objects.filter(organization=org, customer_id=membership.user_id)
             .select_related('service', 'invoice')
@@ -692,6 +703,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'provider_notes': membership.provider_notes or '',
             'outstanding_balance': str(outstanding),
             'completed_bookings': completed,
+            'cancel_count': cancel_count,
+            'no_show_count': no_show_count,
             'recent_bookings': [
                 {
                     'id': b.id,
@@ -882,7 +895,9 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = Service.objects.select_related('organization', 'category').filter(
+        qs = Service.objects.select_related('organization', 'category').prefetch_related(
+            'gallery_images',
+        ).filter(
             organization__memberships__user=self.request.user,
         )
         slug = self.request.query_params.get('organization')
@@ -1114,7 +1129,7 @@ class UnavailableBlockViewSet(viewsets.ModelViewSet):
 
 class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
-    http_method_names = ['get', 'post', 'head', 'options', 'patch']
+    http_method_names = ['get', 'post', 'head', 'options', 'patch', 'delete']
 
     def get_throttles(self):
         from luminexa.throttles import BookingCreateThrottle
@@ -1131,6 +1146,10 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         from rest_framework.permissions import IsAuthenticated
         return [IsAuthenticated()]
+
+    def destroy(self, request, *args, **kwargs):
+        from rest_framework.exceptions import MethodNotAllowed
+        raise MethodNotAllowed('DELETE')
 
     def get_queryset(self):
         user = self.request.user
@@ -1891,6 +1910,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 'cost_line': JobCostLineSerializer(line).data,
+                'cost_lines': JobCostLineSerializer(booking.cost_lines.all(), many=True).data,
                 'profit': booking_profit_summary(booking),
             },
             status=status.HTTP_201_CREATED,
@@ -1904,15 +1924,19 @@ class BookingViewSet(viewsets.ModelViewSet):
     def cost_delete(self, request, pk=None, cost_id=None):
         from .job_costing_services import booking_profit_summary
         from .models import JobCostLine
+        from .serializers import JobCostLineSerializer
 
         booking = self.get_object()
         require_staff_ops(request.user, booking.organization)
         line = JobCostLine.objects.filter(booking=booking, pk=cost_id).first()
         if not line:
-            raise ValidationError({'detail': 'Cost line not found.'})
+            raise NotFound('Cost line not found.')
         line.delete()
         return Response({
             'detail': 'Deleted.',
+            'cost_lines': JobCostLineSerializer(
+                booking.cost_lines.all(), many=True
+            ).data,
             'profit': booking_profit_summary(booking),
         })
 

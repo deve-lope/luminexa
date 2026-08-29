@@ -70,6 +70,7 @@ export default function ProviderScheduleDetailPage() {
     setActionBusy(true);
     try {
       await jobsAPI.cancelBooking(id);
+      showToast('Booking cancelled.', 'success');
       navigate(providerSchedule(orgSlug));
     } catch (e) {
       setError(parseApiError(e));
@@ -260,29 +261,6 @@ export default function ProviderScheduleDetailPage() {
               />
             </div>
           )}
-          {kind === 'booking' && (
-            <div className="mt-4">
-              <JobCostPanel
-                bookingId={data.id}
-                currency={data.currency || data.invoice?.currency || 'CAD'}
-                initialLines={data.cost_lines || []}
-                initialProfit={data.profit}
-                onChanged={(payload) => {
-                  if (payload?.profit) {
-                    setData((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            profit: payload.profit,
-                            cost_lines: payload.cost_lines || prev.cost_lines,
-                          }
-                        : prev
-                    );
-                  }
-                }}
-              />
-            </div>
-          )}
           {data.status === 'completed' && !data.invoice && (
             <button
               type="button"
@@ -294,6 +272,25 @@ export default function ProviderScheduleDetailPage() {
             </button>
           )}
         </section>
+
+        {kind === 'booking' && (
+          <JobCostPanel
+            bookingId={data.id}
+            currency={data.currency || data.invoice?.currency || 'CAD'}
+            initialLines={data.cost_lines || []}
+            onChanged={(payload) => {
+              setData((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      profit: payload?.profit ?? prev.profit,
+                      cost_lines: payload?.cost_lines ?? prev.cost_lines,
+                    }
+                  : prev
+              );
+            }}
+          />
+        )}
 
         <ServiceAddressBlock
           address={data.job_location || data.service_address}
@@ -473,7 +470,7 @@ export default function ProviderScheduleDetailPage() {
               type="button"
               disabled={actionBusy}
               onClick={() => setConfirmAction('cancel')}
-              className="min-h-[48px] w-full rounded-xl border border-red-200 font-medium text-red-700 disabled:opacity-60"
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
             >
               Cancel booking
             </button>

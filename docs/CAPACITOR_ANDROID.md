@@ -57,9 +57,18 @@ In Android Studio:
 
 1. **Build → Generate Signed App Bundle / APK**
 2. Sign with the **same upload keystore** you used for the TWA
-3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **5** / 1.1.2)
+3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **6** / 1.1.3)
 
 Do not upload an APK if Play asks for an AAB.
+
+### What needs a new bundle vs. a web deploy
+
+The app loads the live SPA, so most fixes ship with `docker compose up -d --build
+frontend` and reach installed apps immediately. Only **native plugin** changes
+need a new AAB. `capacitor-native-settings` (versionCode 6) is one of these — it
+powers the **Open settings** button on the location prompt. Until a user updates,
+`canOpenLocationSettings()` returns false and they get written steps instead, so
+the button never appears dead.
 
 ## After install
 

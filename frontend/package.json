@@ -16,6 +16,7 @@
     "@stripe/react-stripe-js": "^3.10.0",
     "@stripe/stripe-js": "^5.10.0",
     "axios": "^1.4.0",
+    "capacitor-native-settings": "^8.2.0",
     "framer-motion": "^10.12.16",
     "leaflet": "^1.9.4",
     "react": "^18.2.0",

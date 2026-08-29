@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_RADIUS_MILES } from '../constants/locationSearch';
 import {
+  LOCATION_ERROR,
   canUseBrowserGeolocation,
   geolocationUnavailableReason,
+  queryGeolocationPermission,
 } from '../utils/geolocationSupport';
 import useCurrentLocation from './useCurrentLocation';
 
@@ -64,7 +66,8 @@ export function clearNearMeLocationStorage() {
 export default function useNearMeLocation({ defaultRadiusMiles = DEFAULT_RADIUS_MILES } = {}) {
   const [status, setStatus] = useState('idle');
   const [location, setLocation] = useState(null);
-  const { locating, error, setError, fetchCurrentLocation } = useCurrentLocation();
+  const { locating, error, errorKind, setError, fetchCurrentLocation } = useCurrentLocation();
+  const requestRef = useRef(null);
 
   useEffect(() => {
     const saved = readNearMeLocation();
@@ -135,11 +138,42 @@ export default function useNearMeLocation({ defaultRadiusMiles = DEFAULT_RADIUS_
     setError,
   ]);
 
+  useEffect(() => {
+    requestRef.current = requestNearMe;
+  }, [requestNearMe]);
+
+  /**
+   * A blocked permission never re-prompts, so the user has to fix it in device
+   * settings. Native apps pick the location up the moment you come back — do the
+   * same: on return, if the OS now says granted, retry without another tap.
+   */
+  useEffect(() => {
+    if (status !== 'denied' || errorKind === LOCATION_ERROR.APP_OUTDATED) return undefined;
+
+    let cancelled = false;
+    const recheck = () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      queryGeolocationPermission().then((state) => {
+        if (cancelled || state !== 'granted') return;
+        requestRef.current?.();
+      });
+    };
+
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [status, errorKind]);
+
   return {
     status,
     location,
     locating: locating || status === 'prompting',
     error,
+    errorKind,
     setError,
     requestNearMe,
     applyLocation,

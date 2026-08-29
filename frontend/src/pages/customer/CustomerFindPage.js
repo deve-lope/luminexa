@@ -38,6 +38,7 @@ export default function CustomerFindPage() {
     location: nearMe,
     locating,
     error: nearMeError,
+    errorKind: nearMeErrorKind,
     requestNearMe,
     applyLocation,
     clearLocation,
@@ -354,6 +355,7 @@ export default function CustomerFindPage() {
           {nearMeError && !locationExpanded && (
             <LocationEnablePrompt
               error={nearMeError}
+              errorKind={nearMeErrorKind}
               locating={locating}
               onRetry={handleUseMyLocation}
               onEnterAddress={() => setLocationExpanded(true)}
@@ -370,6 +372,7 @@ export default function CustomerFindPage() {
               onUseMyLocation={handleUseMyLocation}
               locating={locating}
               locationError={nearMeError}
+              locationErrorKind={nearMeErrorKind}
               externalLat={locationLat}
               externalLng={locationLng}
               externalLabel={locationLabel}

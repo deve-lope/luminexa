@@ -100,6 +100,10 @@ export default function ProviderClientDetailPage() {
             <p className="font-semibold text-slate-900">{data.completed_bookings ?? 0}</p>
           </div>
         </div>
+        <p className="mt-3 text-xs text-slate-500">
+          {data.cancel_count || 0} cancel{(data.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
+          {data.no_show_count || 0} no-show{(data.no_show_count || 0) === 1 ? '' : 's'}
+        </p>
       </section>
 
       <section className="rounded-2xl bg-white p-5 shadow-lx-soft ring-1 ring-slate-100 space-y-3">

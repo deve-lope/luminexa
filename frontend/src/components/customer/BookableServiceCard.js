@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
+import ServiceThumb from '../services/ServiceThumb';
 import {
   bookService,
   customerProviderService,
@@ -28,21 +29,15 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
   return (
     <article className="lx-card-interactive">
       <div className="flex gap-3">
-        {service.image_url ? (
-          <img
-            src={service.image_url}
-            alt=""
-            className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-slate-900/[0.04]"
-          />
-        ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-800 ring-1 ring-teal-100/80">
-            <BusinessTypeIcon
-              slug={types[0]?.slug}
-              name={types[0]?.name || service.category_name}
-              className="h-8 w-8"
-            />
-          </div>
-        )}
+        <ServiceThumb
+          service={{
+            ...service,
+            category_name: service.category_name || types[0]?.name,
+          }}
+          slug={types[0]?.slug}
+          className="h-16 w-16"
+          iconClassName="h-8 w-8"
+        />
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold tracking-tight text-slate-900">{service.name}</h3>
           <p className="text-sm text-slate-600">{service.organization_name}</p>

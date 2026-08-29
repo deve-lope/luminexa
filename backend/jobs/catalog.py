@@ -125,7 +125,11 @@ def build_service_catalog(organization, service_serializer, *, active_only=True)
     """
     ensure_org_categories_from_business_types(organization)
 
-    svc_qs = Service.objects.filter(organization=organization).select_related('category')
+    svc_qs = (
+        Service.objects.filter(organization=organization)
+        .select_related('category')
+        .prefetch_related('gallery_images')
+    )
     if active_only:
         svc_qs = svc_qs.filter(is_active=True)
 

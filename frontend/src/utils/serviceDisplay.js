@@ -150,3 +150,12 @@ export function formatJobLocationLabel(bookingOrService) {
   if (isShopService(bookingOrService)) return 'Job location — come to the shop';
   return 'Job location — we come to you';
 }
+
+/** Cover photo, else first gallery photo. Empty string when none. */
+export function serviceThumbnailUrl(service) {
+  if (!service) return '';
+  const cover = service.image_url || (typeof service.image === 'string' ? service.image : '');
+  if (cover) return cover;
+  const first = (service.gallery || [])[0];
+  return first?.image_url || '';
+}

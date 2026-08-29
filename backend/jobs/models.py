@@ -756,7 +756,7 @@ class Invoice(models.Model):
 
 
 class JobCostLine(models.Model):
-    """Internal job cost (not shown on the customer invoice)."""
+    """Parts/extras drafted on the job; copied onto the customer invoice at complete."""
 
     class Kind(models.TextChoices):
         MATERIAL = 'material', 'Material'

@@ -52,7 +52,7 @@ class PublicProviderStorefrontAPIView(APIView):
 
         services = Service.objects.filter(organization=org, is_active=True).select_related(
             'category'
-        ).order_by('sort_order', 'name')
+        ).prefetch_related('gallery_images').order_by('sort_order', 'name')
         ctx = {'request': request}
         types = org.business_types.filter(is_active=True).order_by('sort_order', 'name')
         ser = lambda qs: PublicServiceReadSerializer(qs, many=True, context=ctx).data

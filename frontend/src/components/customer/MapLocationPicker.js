@@ -9,7 +9,13 @@ import {
   shouldSearchAddressQuery,
 } from '../../constants/addressSearch';
 import { businessesAPI } from '../../utils/api';
-import { canUseBrowserGeolocation, requestGeolocationCoordinates, shareLocationButtonLabel } from '../../utils/geolocationSupport';
+import {
+  LOCATION_ERROR,
+  canUseBrowserGeolocation,
+  classifyLocationError,
+  requestGeolocationCoordinates,
+  shareLocationButtonLabel,
+} from '../../utils/geolocationSupport';
 import LocationEnablePrompt from './LocationEnablePrompt';
 import useAddressCountry from '../../hooks/useAddressCountry';
 import { useAuth } from '../../contexts/AuthContext';
@@ -58,6 +64,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState(null);
+  const [gpsErrorKind, setGpsErrorKind] = useState(null);
   const [pendingLabel, setPendingLabel] = useState('');
 
   const placeMarker = useCallback((lat, lng) => {
@@ -161,6 +168,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
 
   const useCurrentLocation = () => {
     if (!gpsAvailable || !mapRef.current) {
+      setGpsErrorKind(LOCATION_ERROR.UNSUPPORTED);
       setError(
         'Current location needs HTTPS or localhost. Search an address above or tap the map.'
       );
@@ -168,6 +176,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
     }
     setLocating(true);
     setError(null);
+    setGpsErrorKind(null);
     requestGeolocationCoordinates()
       .then((pos) => {
         const lat = pos.coords.latitude;
@@ -175,12 +184,14 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
         return confirmLocation(lat, lng, { zoom: 17 });
       })
       .catch((err) => {
-        if (err?.code === 1) {
-          setError(err.message || 'Turn on location for Luminexa. When your phone asks, tap Allow.');
-        } else if (err?.code === 3) {
+        const kind = classifyLocationError(err);
+        setGpsErrorKind(kind);
+        if (kind === LOCATION_ERROR.TIMEOUT) {
           setError('Could not get your current location in time. Try again or search the address.');
         } else {
-          setError(err?.message || 'Could not access your current location. Try searching the address.');
+          setError(
+            err?.message || 'Could not access your current location. Try searching the address.'
+          );
         }
       })
       .finally(() => setLocating(false));
@@ -372,6 +383,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
           {error && (
             <LocationEnablePrompt
               error={error}
+              errorKind={gpsErrorKind}
               locating={locating}
               onRetry={useCurrentLocation}
             />

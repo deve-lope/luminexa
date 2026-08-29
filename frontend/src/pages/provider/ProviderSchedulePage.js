@@ -5,7 +5,7 @@ import InteractiveDayTimeline from '../../components/scheduling/InteractiveDayTi
 import QuickAddServicePanel from '../../components/scheduling/QuickAddServicePanel';
 import ScheduleAddSheet from '../../components/scheduling/ScheduleAddSheet';
 import SchedulingModeBanner from '../../components/provider/SchedulingModeBanner';
-import { providerRequests, providerSettings } from '../../utils/providerPaths';
+import { providerClients, providerRequests, providerSettings } from '../../utils/providerPaths';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { buildOpenSlotDays, slotLocalDayKey } from '../../utils/slotCalendar';
@@ -30,7 +30,6 @@ export default function ProviderSchedulePage() {
 
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [blockedCustomers, setBlockedCustomers] = useState([]);
   const [slots, setSlots] = useState([]);
   const [unavailable, setUnavailable] = useState([]);
   const [weeklyBlocks, setWeeklyBlocks] = useState([]);
@@ -59,13 +58,12 @@ export default function ProviderSchedulePage() {
       const from = formatLocalDateKey(monthStart);
       const until = formatLocalDateKey(monthEnd);
 
-      const [svcRes, custRes, slotRes, pendingCustRes, blockedCustRes, unavailRes, schedRes] =
+      const [svcRes, custRes, slotRes, pendingCustRes, unavailRes, schedRes] =
         await Promise.all([
           jobsAPI.listServices({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug),
           jobsAPI.listSlots({ organization: orgSlug, from, until }),
           jobsAPI.listOrgCustomers(orgSlug, { status: 'pending' }),
-          jobsAPI.listOrgCustomers(orgSlug, { status: 'blocked' }),
           jobsAPI.listUnavailableBlocks({ organization: orgSlug }),
           jobsAPI.getSchedulingSettings(orgSlug),
         ]);
@@ -103,7 +101,6 @@ export default function ProviderSchedulePage() {
         Array.isArray(unavailPayload) ? unavailPayload : unavailPayload?.results || []
       );
       setPendingCustomers(pendingCustRes.data || []);
-      setBlockedCustomers(blockedCustRes.data || []);
       if (svcList.length && !slotService) setSlotService(String(svcList[0].id));
     } catch (e) {
       setError(parseApiError(e));
@@ -325,124 +322,19 @@ export default function ProviderSchedulePage() {
             {attentionCount} customer approval{attentionCount === 1 ? '' : 's'} waiting
           </p>
           <p className="mt-1 text-amber-800">
-            Approve customers below so they can book. Booking and custom requests are in{' '}
+            Review them in{' '}
+            <Link
+              to={`${providerClients(orgSlug)}?status=pending`}
+              className="font-medium text-luminexa-accent"
+            >
+              Clients
+            </Link>
+            . Booking requests are in{' '}
             <Link to={providerRequests(orgSlug)} className="font-medium text-luminexa-accent">
               Service requests
             </Link>
             .
           </p>
-        </section>
-      )}
-
-      {!loading && !!pendingCustomers.length && (
-        <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Pending customers</h2>
-          <ul className="mt-4 space-y-3">
-            {pendingCustomers.map((c) => (
-              <li
-                key={c.membership_id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{c.full_name}</p>
-                  <p className="truncate text-sm text-slate-600">{c.email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await jobsAPI.approveCustomer(orgSlug, c.id);
-                    setMessage(`${c.full_name} approved.`);
-                    load();
-                  }}
-                  className="min-h-[44px] shrink-0 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
-                >
-                  Approve
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {!loading && (!!customers.length || !!blockedCustomers.length) && (
-        <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Customers</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Cancel and no-show counts help spot patterns. Blocking stops them from booking again.
-          </p>
-          {!!customers.length && (
-            <ul className="mt-4 space-y-3">
-              {customers.map((c) => (
-                <li
-                  key={c.membership_id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-slate-900">{c.full_name}</p>
-                    <p className="truncate text-sm text-slate-600">{c.email}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
-                      {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await jobsAPI.blockCustomer(orgSlug, c.id);
-                        setMessage(`${c.full_name} blocked from booking.`);
-                        load();
-                      } catch (e) {
-                        setError(parseApiError(e));
-                      }
-                    }}
-                    className="min-h-[44px] shrink-0 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700"
-                  >
-                    Block
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {!!blockedCustomers.length && (
-            <>
-              <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Blocked
-              </h3>
-              <ul className="mt-2 space-y-3">
-                {blockedCustomers.map((c) => (
-                  <li
-                    key={c.membership_id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-900">{c.full_name}</p>
-                      <p className="truncate text-sm text-slate-600">{c.email}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
-                        {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await jobsAPI.unblockCustomer(orgSlug, c.id);
-                          setMessage(`${c.full_name} can book again.`);
-                          load();
-                        } catch (e) {
-                          setError(parseApiError(e));
-                        }
-                      }}
-                      className="min-h-[44px] shrink-0 rounded-lg bg-luminexa-accent px-4 text-sm font-medium text-white"
-                    >
-                      Unblock
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </section>
       )}
 

@@ -7,6 +7,7 @@ import { withReturnTo } from '../../utils/navigationBack';
 import { providerServices } from '../../utils/providerPaths';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
+import ServiceThumb from '../../components/services/ServiceThumb';
 import {
   formatDurationLabel,
   formatServiceMeta,
@@ -932,18 +933,7 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
       />
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-3">
-          <div
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg shadow-sm ${
-              hidden
-                ? 'bg-slate-200 text-slate-500'
-                : isShop
-                  ? 'bg-gradient-to-br from-sky-100 to-teal-100 text-teal-800 ring-1 ring-teal-200/70'
-                  : 'bg-gradient-to-br from-teal-700 to-teal-500 text-white'
-            }`}
-            aria-hidden
-          >
-            {isShop ? '🏪' : '🚐'}
-          </div>
+          <ServiceThumb service={service} muted={hidden} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-bold tracking-tight text-slate-900">{service.name}</h3>

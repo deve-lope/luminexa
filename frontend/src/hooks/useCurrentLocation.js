@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 import { businessesAPI } from '../utils/api';
 import {
+  LOCATION_ERROR,
   buildAddressFromGeocode,
+  classifyLocationError,
   formatLocationAddress,
   geolocationUnavailableReason,
   locationPermissionDeniedMessage,
@@ -15,11 +17,23 @@ import {
 export default function useCurrentLocation() {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState(null);
+  const [errorKind, setErrorKind] = useState(null);
+
+  const fail = useCallback((message, kind) => {
+    setError(message);
+    setErrorKind(kind || null);
+  }, []);
+
+  // Keep kind in step with the message so callers clearing the error also clear the steps.
+  const publicSetError = useCallback((next) => {
+    setError(next);
+    if (!next) setErrorKind(null);
+  }, []);
 
   const fetchCurrentLocation = useCallback(() => {
     const blocked = geolocationUnavailableReason();
     if (blocked) {
-      setError(blocked);
+      fail(blocked, LOCATION_ERROR.UNSUPPORTED);
       return Promise.resolve(null);
     }
 
@@ -46,33 +60,34 @@ export default function useCurrentLocation() {
           };
           payload.address = formatLocationAddress(payload);
           if (!payload.address) {
-            setError('Could not find an address for your location.');
+            fail('Could not find an address for your location.', LOCATION_ERROR.OFF);
             return null;
           }
+          setError(null);
+          setErrorKind(null);
           return payload;
         } catch {
-          setError('Could not resolve your location to an address.');
+          fail('Could not resolve your location to an address.', LOCATION_ERROR.OFF);
           return null;
         }
       })
-        .catch((err) => {
-        if (err?.nativeUnavailable) {
-          setError(err.message);
-        } else if (err?.code === 1) {
-          setError(err.message || locationPermissionDeniedMessage());
-        } else if (err?.code === 3) {
-          setError('Location timed out. Move to an open area or search your address.');
+      .catch((err) => {
+        const kind = classifyLocationError(err);
+        if (kind === LOCATION_ERROR.BLOCKED) {
+          fail(err?.message || locationPermissionDeniedMessage(), kind);
+        } else if (kind === LOCATION_ERROR.TIMEOUT) {
+          fail('Location timed out. Move to an open area or search your address.', kind);
         } else if (err?.message) {
-          setError(err.message);
+          fail(err.message, kind);
         } else {
-          setError('Could not access your current location. Search your address instead.');
+          fail('Could not access your current location. Search your address instead.', kind);
         }
         return null;
       })
       .finally(() => {
         setLocating(false);
       });
-  }, []);
+  }, [fail]);
 
-  return { locating, error, setError, fetchCurrentLocation };
+  return { locating, error, errorKind, setError: publicSetError, fetchCurrentLocation };
 }

@@ -456,6 +456,7 @@ class ServiceCategorySerializer(serializers.ModelSerializer):
 class ServiceSerializer(serializers.ModelSerializer):
     organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    image_url = serializers.SerializerMethodField()
     rating_summary = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
 
@@ -463,16 +464,19 @@ class ServiceSerializer(serializers.ModelSerializer):
         model = Service
         fields = (
             'id', 'organization', 'organization_slug', 'category', 'category_name',
-            'name', 'description', 'image',
+            'name', 'description', 'image', 'image_url',
             'duration_minutes', 'pricing_type', 'base_price', 'price_max',
             'show_price', 'quote_questions', 'allow_request', 'fulfillment_kind',
             'is_active', 'sort_order',
             'currency', 'rating_summary', 'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'organization_slug', 'category_name', 'currency', 'rating_summary',
-            'created_at', 'updated_at',
+            'id', 'organization_slug', 'category_name', 'image_url', 'currency',
+            'rating_summary', 'created_at', 'updated_at',
         )
+
+    def get_image_url(self, obj):
+        return _service_thumbnail_url(self.context.get('request'), obj)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -1371,6 +1375,16 @@ def _absolute_media_url(request, file_field):
     return file_field.url
 
 
+def _service_thumbnail_url(request, obj):
+    """Cover photo, or the first gallery photo if the cover was never set."""
+    if getattr(obj, 'image', None):
+        return _absolute_media_url(request, obj.image)
+    first = obj.gallery_images.all()[:1]
+    if first:
+        return _absolute_media_url(request, first[0].image)
+    return None
+
+
 class PublicGalleryImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
@@ -1519,7 +1533,7 @@ class PublicServiceReadSerializer(serializers.ModelSerializer):
         return _organization_currency(obj.organization)
 
     def get_image_url(self, obj):
-        return _absolute_media_url(self.context.get('request'), obj.image)
+        return _service_thumbnail_url(self.context.get('request'), obj)
 
     def get_rating_summary(self, obj):
         if hasattr(obj, '_rating_summary'):

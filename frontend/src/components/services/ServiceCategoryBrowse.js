@@ -68,8 +68,8 @@ export default function ServiceCategoryBrowse({
             onClick={() => setCategory(tile.id)}
             className="flex min-h-[88px] flex-col items-start justify-center rounded-xl border border-teal-200/80 bg-gradient-to-br from-teal-50 via-emerald-50/80 to-white p-4 text-left shadow-sm ring-1 ring-teal-100/70 transition hover:border-luminexa-accent hover:shadow-md"
           >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-white">
-              <BusinessTypeIcon name={tile.name} className="h-4 w-4" />
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-200/80">
+              <BusinessTypeIcon name={tile.name} className="h-5 w-5" />
             </span>
             <span className="mt-2 font-semibold text-teal-950">{tile.name}</span>
             <span className="mt-1 text-sm font-medium text-teal-800/70">

@@ -10,7 +10,7 @@ export default function ServiceSearchBar({
     <div
       className={
         sticky
-          ? 'sticky top-0 z-10 -mx-1 bg-luminexa-canvas/80 pb-3 pt-1 backdrop-blur-md'
+          ? 'lx-sticky-below-header -mx-1 bg-luminexa-canvas/80 pb-3 pt-1 backdrop-blur-md'
           : 'pb-3'
       }
     >

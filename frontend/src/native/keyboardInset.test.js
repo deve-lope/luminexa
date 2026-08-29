@@ -7,6 +7,7 @@ import {
   nextKeyboardState,
   canEstimateKeyboard,
   edgeToEdgeImeState,
+  scrollDeltaToReveal,
 } from './keyboardInset';
 
 /** Field focused, keyboard not reported yet, still inside the grace window. */
@@ -213,5 +214,33 @@ describe('edgeToEdgeImeState', () => {
       sawImeOpen: false,
       dismiss: false,
     });
+  });
+});
+
+describe('scrollDeltaToReveal', () => {
+  const gap = { safeTop: 88, safeBottom: 480 };
+
+  test('does not scroll when the field is already between the banner and the keyboard', () => {
+    expect(
+      scrollDeltaToReveal({ fieldTop: 120, fieldBottom: 168, ...gap })
+    ).toBe(0);
+  });
+
+  test('scrolls the field up when the keyboard covers its bottom', () => {
+    expect(
+      scrollDeltaToReveal({ fieldTop: 420, fieldBottom: 520, ...gap })
+    ).toBe(40);
+  });
+
+  test('scrolls the field down when the frozen banner covers its top', () => {
+    expect(
+      scrollDeltaToReveal({ fieldTop: 40, fieldBottom: 88, ...gap })
+    ).toBe(-48);
+  });
+
+  test('pins a tall field just below the banner instead of centering it', () => {
+    expect(
+      scrollDeltaToReveal({ fieldTop: 20, fieldBottom: 900, ...gap })
+    ).toBe(-68);
   });
 });

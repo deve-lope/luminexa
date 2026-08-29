@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from businesses.models import Organization, OrganizationMembership
-from jobs.invoice_services import issue_or_update_invoice
+from jobs.invoice_services import cost_lines_as_bill_items, issue_or_update_invoice
 from jobs.job_costing_services import booking_profit_summary
 from jobs.models import AvailabilitySlot, Booking, Invoice, JobCostLine, Service
 from jobs.notifications import send_unpaid_invoice_followups
@@ -101,6 +101,53 @@ class JobCostingAndBooksTests(TestCase):
         profit = booking_profit_summary(self.booking)
         self.assertEqual(profit['costs'], '20.00')
         self.assertEqual(Decimal(profit['revenue']), self.booking.invoice.amount)
+
+    def test_delete_cost_line(self):
+        self.client.force_authenticate(self.owner)
+        created = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/costs/',
+            {
+                'kind': 'expense',
+                'description': 'Parking',
+                'quantity': '1',
+                'unit_cost': '12.00',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        cost_id = created.data['cost_line']['id']
+        res = self.client.delete(
+            f'/api/v1/bookings/{self.booking.id}/costs/{cost_id}/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['cost_lines'], [])
+        self.assertEqual(res.data['profit']['costs'], '0.00')
+        self.assertEqual(JobCostLine.objects.filter(booking=self.booking).count(), 0)
+
+    def test_cannot_delete_booking_via_rest(self):
+        self.client.force_authenticate(self.owner)
+        res = self.client.delete(
+            f'/api/v1/bookings/{self.booking.id}/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 405)
+        self.assertTrue(Booking.objects.filter(pk=self.booking.id).exists())
+
+    def test_job_extras_copy_onto_the_customer_bill(self):
+        JobCostLine.objects.create(
+            booking=self.booking,
+            kind=JobCostLine.Kind.MATERIAL,
+            description='Oil filter',
+            quantity=Decimal('1'),
+            unit_cost=Decimal('18.50'),
+        )
+        items = cost_lines_as_bill_items(self.booking)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['name'], 'Oil filter')
+        self.assertEqual(items[0]['type'], 'material')
+        self.assertEqual(items[0]['amount'], '18.50')
 
     def test_analytics_includes_ar_and_profit(self):
         JobCostLine.objects.create(

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ServiceRatingSummary from './ServiceRatingSummary';
+import ServiceThumb from './ServiceThumb';
 import {
   customerProviderServiceDetail,
   serviceDetail,
@@ -59,6 +60,7 @@ export function ServiceRow({
             />
           </label>
         )}
+        <ServiceThumb service={service} className="h-14 w-14" iconClassName="h-7 w-7" />
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-teal-950">{service.name}</h3>
           {service.rating_summary?.count > 0 && (

@@ -31,11 +31,9 @@ function IconAuto({ className }) {
 function IconYard({ className }) {
   return (
     <Svg className={className}>
-      <path d="M12 20.5V8" />
-      <path d="M12 12c0-4.5 3.2-7.5 6.5-8.5-1 4.2-2.8 6.4-6.5 8.5Z" />
-      <path d="M12 13.5c0-4 2.8-6.6 5.6-7.4" />
-      <path d="M12 12C12 7.5 8.8 4.5 5.5 3.5 6.5 7.7 8.3 9.9 12 12Z" />
-      <path d="M4 20.5h16" />
+      <circle cx="12" cy="8.8" r="4.6" />
+      <path d="M12 13.4V20.2" />
+      <path d="M4.8 20.4h14.4" />
     </Svg>
   );
 }
@@ -165,6 +163,9 @@ const ALIASES = {
   landscaping: 'yard-outdoors',
   'lawn-outdoors': 'yard-outdoors',
   'yard-and-outdoors': 'yard-outdoors',
+  'yard-and-outdoor-work': 'yard-outdoors',
+  'outdoor-work': 'yard-outdoors',
+  'yard-work': 'yard-outdoors',
   cleaning: 'home-cleaning',
   'house-cleaning': 'home-cleaning',
   handyman: 'handyman-repairs',

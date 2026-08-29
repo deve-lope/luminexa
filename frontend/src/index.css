@@ -15,6 +15,8 @@
     --lx-sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
     --lx-sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
     --lx-keyboard-inset: 0px;
+    /* Sticky header height; JS replaces this with the measured banner bottom. */
+    --lx-header-offset: calc(var(--lx-sat) + 5rem);
   }
 
   body {
@@ -38,14 +40,14 @@
 
   html {
     overflow-x: clip;
-    scroll-padding-top: calc(var(--lx-sat) + 5rem);
+    scroll-padding-top: calc(var(--lx-header-offset) + 0.5rem);
     scroll-padding-bottom: calc(var(--lx-keyboard-inset) + 1.25rem);
   }
 
   input,
   textarea,
   select {
-    scroll-margin-top: calc(var(--lx-sat) + 5rem);
+    scroll-margin-top: calc(var(--lx-header-offset) + 0.5rem);
     scroll-margin-bottom: calc(var(--lx-keyboard-inset) + 1.5rem);
   }
 
@@ -117,6 +119,13 @@
     @apply sticky top-0 z-40 border-b border-luminexa-line bg-white/95 backdrop-blur-xl backdrop-saturate-150;
     /* Body already padded on Capacitor; keep env/var for browser PWA only */
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Stick below the frozen app banner, not under it. */
+  .lx-sticky-below-header {
+    position: sticky;
+    top: var(--lx-header-offset);
+    z-index: 10;
   }
 
   /* Body top padding scrolls away; stick just below the status bar so the

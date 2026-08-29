@@ -65,6 +65,7 @@ export default function LocationSearchBar({
   onUseMyLocation,
   locating = false,
   locationError = null,
+  locationErrorKind = null,
   /** Sync from parent (GPS / localStorage / map). */
   externalLat = null,
   externalLng = null,
@@ -295,6 +296,7 @@ export default function LocationSearchBar({
           {locationError && (
             <LocationEnablePrompt
               error={locationError}
+              errorKind={locationErrorKind}
               locating={locating}
               onRetry={handleUseMyLocation}
             />

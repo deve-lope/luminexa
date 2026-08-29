@@ -8,7 +8,7 @@ import ProviderServicesPage from './ProviderServicesPage';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { getCustomerBookingUrl } from '../../utils/bookingLink';
 import LinkShareBar from '../../components/LinkShareBar';
-import { providerSchedule, providerSettings } from '../../utils/providerPaths';
+import { providerClients, providerSettings } from '../../utils/providerPaths';
 import { providerHasServiceArea } from '../../utils/serviceArea';
 
 export default function ProviderSharePage() {
@@ -135,9 +135,9 @@ export default function ProviderSharePage() {
               <Link to={providerSettings(orgSlug)} className="font-medium text-luminexa-accent">
                 Settings
               </Link>
-              . Approve customers on{' '}
-              <Link to={providerSchedule(orgSlug)} className="font-medium text-luminexa-accent">
-                Schedule
+              . Approve customers in{' '}
+              <Link to={providerClients(orgSlug)} className="font-medium text-luminexa-accent">
+                Clients
               </Link>
               .
             </p>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { canNativeShare, copyText, shareOrCopy } from '../utils/shareLink';
+import ShareSheet from './ShareSheet';
+import { copyText } from '../utils/shareLink';
 
 export default function LinkShareBar({
   url,
@@ -11,8 +12,7 @@ export default function LinkShareBar({
   compact = false,
 }) {
   const [copied, setCopied] = useState(false);
-  const [hint, setHint] = useState('');
-  const nativeShare = canNativeShare();
+  const [shareOpen, setShareOpen] = useState(false);
 
   const markCopied = () => {
     setCopied(true);
@@ -23,24 +23,11 @@ export default function LinkShareBar({
     if (!url) return;
     await copyText(url);
     markCopied();
-    setHint('');
   };
 
-  const onShare = async () => {
-    if (!url) return;
-    const result = await shareOrCopy({ title, text, url });
-    if (result === 'copied') {
-      markCopied();
-      setHint('Share isn’t available here — link copied. On a phone, Share opens WhatsApp, SMS, email, and more.');
-    } else if (result === 'shared') {
-      setHint('');
-    }
-  };
-
-  const btn =
-    compact
-      ? 'min-h-[40px] rounded-lg px-3 text-sm font-medium'
-      : 'min-h-[48px] rounded-xl px-4 font-medium';
+  const btn = compact
+    ? 'min-h-[40px] rounded-lg px-3 text-sm font-medium'
+    : 'min-h-[48px] rounded-xl px-4 font-medium';
 
   return (
     <div>
@@ -63,19 +50,21 @@ export default function LinkShareBar({
         </button>
         <button
           type="button"
-          onClick={onShare}
+          onClick={() => url && setShareOpen(true)}
           disabled={!url}
           className={`${btn} flex-1 border border-teal-200 bg-teal-50 text-teal-900 disabled:opacity-60`}
         >
           {shareLabel}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
-        {hint ||
-          (nativeShare
-            ? 'Share opens WhatsApp, Messages, email, and other apps on your phone.'
-            : 'On a phone, Share opens WhatsApp, SMS, email, and more.')}
-      </p>
+      <ShareSheet
+        open={shareOpen}
+        url={url}
+        title={title}
+        text={text}
+        onClose={() => setShareOpen(false)}
+        onCopied={markCopied}
+      />
     </div>
   );
 }

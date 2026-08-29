@@ -288,7 +288,7 @@ def _bookable_services_queryset():
             organization__profile_public=True,
         )
         .select_related('organization')
-        .prefetch_related('organization__business_types', 'reviews')
+        .prefetch_related('organization__business_types', 'reviews', 'gallery_images')
         .order_by('organization__service_city', 'organization__name', 'sort_order', 'name')
     )
 

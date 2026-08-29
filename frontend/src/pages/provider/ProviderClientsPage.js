@@ -1,17 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Skeleton from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { providerClientDetail } from '../../utils/providerPaths';
 import parseApiError from '../../utils/parseApiError';
 
+const STATUS_TABS = ['approved', 'pending', 'blocked', 'all'];
+
 export default function ProviderClientsPage() {
   const { orgSlug } = useProviderOrg();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('approved');
+  const statusParam = searchParams.get('status');
+  const status = STATUS_TABS.includes(statusParam) ? statusParam : 'approved';
 
   const load = useCallback(() => {
     if (!orgSlug) return;
@@ -35,11 +39,11 @@ export default function ProviderClientsPage() {
       </p>
 
       <div className="flex gap-2">
-        {['approved', 'pending', 'blocked', 'all'].map((s) => (
+        {STATUS_TABS.map((s) => (
           <button
             key={s}
             type="button"
-            onClick={() => setStatus(s)}
+            onClick={() => setSearchParams(s === 'approved' ? {} : { status: s })}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${
               status === s ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'
             }`}
@@ -69,6 +73,10 @@ export default function ProviderClientsPage() {
                     {c.full_name || c.email}
                   </p>
                   <p className="truncate text-xs text-slate-500">{c.email}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
+                    {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
+                  </p>
                 </div>
                 <span className="shrink-0 text-xs font-medium capitalize text-slate-400">
                   {c.customer_status || '—'}

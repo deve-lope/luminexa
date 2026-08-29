@@ -91,6 +91,23 @@ def default_invoice_amount(booking: Booking) -> Decimal:
     return Decimal(service.base_price or 0).quantize(Decimal('0.01'))
 
 
+def cost_lines_as_bill_items(booking: Booking) -> list[dict]:
+    """Draft extras on the job become invoice line items at complete."""
+    items = []
+    for line in booking.cost_lines.all():
+        qty = line.quantity
+        qty_out = int(qty) if qty == qty.to_integral_value() else float(qty)
+        kind = (line.kind or '').lower()
+        items.append({
+            'name': (line.description or '')[:120],
+            'type': 'extra' if kind == 'expense' else kind,
+            'brand': '',
+            'quantity': qty_out,
+            'amount': str(line.total_cost),
+        })
+    return items
+
+
 def suggested_invoice_payload(booking: Booking) -> dict:
     service = booking.service
     pricing_type = getattr(service, 'pricing_type', Service.PricingType.FIXED) or Service.PricingType.FIXED
@@ -99,12 +116,15 @@ def suggested_invoice_payload(booking: Booking) -> dict:
     if service and pricing_type == Service.PricingType.RANGE and service.price_max is not None:
         estimated_max = Decimal(service.price_max)
     service_fee = default_invoice_amount(booking)
-    tax = calculate_tax_for_organization(booking.organization, service_fee)
+    extras = cost_lines_as_bill_items(booking)
+    extras_total = line_items_total(extras)
+    pre_tax = (service_fee + extras_total).quantize(Decimal('0.01'))
+    tax = calculate_tax_for_organization(booking.organization, pre_tax)
     return {
         'pricing_type': pricing_type,
         'estimated_amount': estimated.quantize(Decimal('0.01')),
         'estimated_max': estimated_max.quantize(Decimal('0.01')) if estimated_max is not None else None,
-        'service_fee': tax['subtotal'],
+        'service_fee': str(service_fee.quantize(Decimal('0.01'))),
         'subtotal': tax['subtotal'],
         'amount': tax['total'],
         'tax_total': tax['tax_total'],
@@ -115,7 +135,7 @@ def suggested_invoice_payload(booking: Booking) -> dict:
         'business_state': tax.get('business_state') or '',
         'business_city': tax.get('business_city') or '',
         'description': (service.name if service else 'Service')[:255],
-        'line_items': [],
+        'line_items': extras,
     }
 
 
