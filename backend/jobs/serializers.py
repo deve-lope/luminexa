@@ -317,6 +317,7 @@ class CustomerServiceInquirySerializer(serializers.ModelSerializer):
         fields = (
             'id', 'reference', 'service', 'service_name', 'service_label', 'message',
             'service_address', 'preferred_date', 'status', 'dismissed_at',
+            'quote_amount', 'quote_message', 'quoted_at', 'quote_accepted_at', 'booking',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'customer_name', 'customer_email', 'customer_phone', 'created_at',
         )
@@ -500,15 +501,13 @@ class ServiceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'price_max': 'Maximum must be at least the minimum price.'}
                 )
-            attrs['show_price'] = True
         elif pricing_type == Service.PricingType.AVERAGE:
             if base_price is None or Decimal(base_price) <= 0:
                 raise serializers.ValidationError(
                     {'base_price': 'Enter a typical price so customers see an estimate.'}
                 )
-            attrs['show_price'] = True
-        elif pricing_type == Service.PricingType.QUOTE:
-            attrs['show_price'] = True
+        # Catalog always shows fixed amounts, ranges, estimates, or “Quote on request”.
+        attrs['show_price'] = True
         quote_questions = attrs.get(
             'quote_questions',
             getattr(self.instance, 'quote_questions', None),

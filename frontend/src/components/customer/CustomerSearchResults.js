@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import BusinessTypeTileGrid from './BusinessTypeTileGrid';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
 import { bookService, businessPage } from '../../utils/customerPaths';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import { formatServiceCatalogLabel } from '../../utils/serviceDisplay';
 
 export default function CustomerSearchResults({ results, query, areaLabel, loading }) {
   const searchTerm = query?.trim() || '';
@@ -100,19 +100,21 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
                   className="block rounded-xl bg-white p-3 shadow-sm transition hover:shadow-md"
                 >
                   <p className="font-medium text-slate-900">{s.name}</p>
-                  <p className="text-sm text-slate-600">{s.organization_name}</p>
-                  {(s.location || s.location_short) && (
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      📍 {s.location || s.location_short}
+                  <p className="text-sm text-slate-600">
+                    {s.organization_name}
+                    {s.distance_miles != null && (
+                      <span className="text-slate-500"> · ~{s.distance_miles} mi away</span>
+                    )}
+                  </p>
+                  {formatServiceCatalogLabel(s) && (
+                    <p className="mt-1 text-sm font-medium text-slate-800">
+                      {formatServiceCatalogLabel(s)}
                     </p>
                   )}
                   {s.rating_summary?.count > 0 && (
                     <div className="mt-1">
                       <ServiceRatingSummary summary={s.rating_summary} compact />
                     </div>
-                  )}
-                  {formatServiceMeta(s) && (
-                    <p className="mt-1 text-xs text-slate-500">{formatServiceMeta(s)}</p>
                   )}
                 </Link>
               </li>

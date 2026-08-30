@@ -15,6 +15,19 @@ router.register(r'tasks', views.TaskViewSet, basename='task')
 
 urlpatterns = [
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
+    path('me/service-inquiries/<int:inquiry_id>/', views.CustomerMyInquiryDetailAPIView.as_view()),
+    path(
+        'me/service-inquiries/<int:inquiry_id>/accept-quote/',
+        views.CustomerInquiryAcceptQuoteAPIView.as_view(),
+    ),
+    path(
+        'me/service-inquiries/<int:inquiry_id>/decline-quote/',
+        views.CustomerInquiryDeclineQuoteAPIView.as_view(),
+    ),
+    path(
+        'me/service-inquiries/<int:inquiry_id>/book-slot/',
+        views.CustomerInquiryBookSlotAPIView.as_view(),
+    ),
     path('me/conversations/', views.CustomerConversationsAPIView.as_view()),
     path(
         'conversations/<int:conversation_id>/messages/',
@@ -41,6 +54,10 @@ urlpatterns = [
     path(
         'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/',
         service_request_views.ProviderServiceInquiryDetailAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/send-quote/',
+        service_request_views.ProviderInquirySendQuoteAPIView.as_view(),
     ),
     path(
         'organizations/<slug:slug>/service-inquiries/<int:inquiry_id>/messages/',

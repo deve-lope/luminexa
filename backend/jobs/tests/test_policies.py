@@ -433,6 +433,109 @@ class ServiceInquiryPermissionTests(TestCase):
         self.assertIn('Clean', msg.body)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
+class InquiryQuoteFlowTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        self.client = APIClient()
+        self.customer = User.objects.create_user(
+            email='quote-inq@test.local',
+            password='pass12345',
+            full_name='Quote Customer',
+            phone='5550000099',
+        )
+        self.owner = User.objects.create_user(
+            email='owner-quote-inq.local',
+            password='pass12345',
+            full_name='Owner',
+            phone='5550000100',
+        )
+        self.org = Organization.objects.create(
+            name='Quote Inq Co',
+            slug='quote-inq-co',
+            booking_policy=Organization.BookingPolicy.INSTANT,
+            profile_public=True,
+            is_active=True,
+            subscription_status='active',
+            subscription_plan='pro_monthly',
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=self.owner,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        self.service = Service.objects.create(
+            organization=self.org,
+            name='Deep clean',
+            duration_minutes=120,
+            pricing_type=Service.PricingType.QUOTE,
+            base_price='0',
+            is_active=True,
+            allow_request=True,
+        )
+        start = timezone.now() + timedelta(days=3)
+        end = start + timedelta(hours=2)
+        self.slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=start,
+            end_at=end,
+            status=AvailabilitySlot.Status.OPEN,
+        )
+
+    def test_inquiry_quote_accept_and_book_slot(self):
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiry/',
+            {
+                'service_id': self.service.id,
+                'message': 'Need deep cleaning quote',
+                'service_address': '123 Main St',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        inquiry_id = create.data['id']
+
+        self.client.force_authenticate(user=self.owner)
+        quoted = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiries/{inquiry_id}/send-quote/',
+            {'amount': '250.00', 'message': 'Includes supplies'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+        self.assertEqual(quoted.data['status'], CustomerServiceInquiry.Status.QUOTED)
+        self.assertEqual(str(quoted.data['quote_amount']), '250.00')
+
+        self.client.force_authenticate(user=self.customer)
+        accepted = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry_id}/accept-quote/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['status'], CustomerServiceInquiry.Status.QUOTE_ACCEPTED)
+
+        booked = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry_id}/book-slot/',
+            {'slot_id': self.slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(booked.status_code, 200, booked.data)
+        self.assertEqual(booked.data['inquiry']['status'], CustomerServiceInquiry.Status.COMPLETED)
+        self.assertEqual(booked.data['booking']['status'], Booking.Status.CONFIRMED)
+        self.assertEqual(str(booked.data['booking']['quote_amount']), '250.00')
+
+        inquiry = CustomerServiceInquiry.objects.get(pk=inquiry_id)
+        self.assertIsNotNone(inquiry.booking_id)
+        self.assertEqual(inquiry.booking.start_at, self.slot.start_at)
+
+
 class RecurringScheduleSyncTests(TestCase):
     def test_sync_replaces_old_generated_open_slots_when_hours_change(self):
         org = Organization.objects.create(

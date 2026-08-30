@@ -1,30 +1,28 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { IconChevronLeft } from '../icons/NavIcons';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 
 /**
  * Full-screen settings sheet so the Settings list can stay headings-only.
  */
 export default function SettingsSectionOverlay({ open, title, onClose, children }) {
+  useModalBodyLock(open);
+
   useEffect(() => {
     if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const onKey = (e) => {
       if (e.key === 'Escape') onClose?.();
     };
     window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;
 
   const sheet = (
     <div
-      className="lx-ime-sheet fixed inset-0 z-[100] flex flex-col bg-luminexa-canvas bg-lx-mesh"
+      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-luminexa-canvas bg-lx-mesh"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-section-title"
@@ -47,7 +45,9 @@ export default function SettingsSectionOverlay({ open, title, onClose, children 
           </h2>
         </div>
       </header>
-      <div className="lx-container min-h-0 flex-1 overflow-y-auto py-5 pb-28">{children}</div>
+      <div className="lx-container min-h-0 flex-1 overflow-y-auto py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:pb-8">
+        {children}
+      </div>
     </div>
   );
 

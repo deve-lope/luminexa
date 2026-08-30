@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import {
   blobToFile,
   getCroppedImageBlob,
@@ -27,6 +29,8 @@ export default function ImageCropDialog({
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState(null);
+
+  useModalBodyLock(open && Boolean(imageSrc));
 
   useEffect(() => {
     if (!open) return undefined;
@@ -68,9 +72,9 @@ export default function ImageCropDialog({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex flex-col bg-black/50 sm:items-center sm:justify-center sm:p-4"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex flex-col bg-black/50 sm:items-center sm:justify-center"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -139,6 +143,7 @@ export default function ImageCropDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

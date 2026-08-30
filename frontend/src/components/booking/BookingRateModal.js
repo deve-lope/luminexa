@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import ServiceRatingForm from '../services/ServiceRatingForm';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { businessesAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
@@ -16,20 +18,16 @@ export default function BookingRateModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  useModalBodyLock(open && Boolean(booking));
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
       if (e.key === 'Escape' && !submitting) onClose?.();
     };
     window.addEventListener('keydown', onKey);
-    // Keep the dialog in view near the top of the viewport (mobile sheet used to sit at bottom).
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, submitting, onClose]);
 
   if (!open || !booking) return null;
@@ -54,16 +52,16 @@ export default function BookingRateModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-6 sm:items-center sm:pt-4"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-slate-900/50 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rate-booking-title"
       onClick={() => !submitting && onClose?.()}
     >
       <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        className="lx-modal-sheet max-h-[90vh] max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -94,6 +92,7 @@ export default function BookingRateModal({
           <ServiceRatingForm onSubmit={handleSubmit} submitting={submitting} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

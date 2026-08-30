@@ -86,18 +86,20 @@ export function formatServicePrice(service, currency, options = {}) {
 
   const type = service?.pricing_type || 'fixed';
   const fmt = formatterFor(currency ?? service);
-  const min = formatAmount(service?.base_price, fmt);
-  const max = formatAmount(service?.price_max, fmt);
+  const baseNum = Number(service?.base_price);
+  const maxNum = Number(service?.price_max);
+  const min = Number.isFinite(baseNum) && baseNum > 0 ? formatAmount(service?.base_price, fmt) : null;
+  const max = Number.isFinite(maxNum) && maxNum > 0 ? formatAmount(service?.price_max, fmt) : null;
 
   if (type === 'range' && min && max) return `${min} – ${max}`;
   if (type === 'range' && min) return `From ${min}`;
+  if (type === 'range' && max) return `Up to ${max}`;
   if (type === 'average' && min) return `About ${min}`;
   if (type === 'quote') {
-    if (min && Number(service?.base_price) > 0) return `About ${min}`;
+    if (min) return `About ${min}`;
     return 'Quote on request';
   }
-  if (min) return min;
-  if (type === 'range' && max) return `Up to ${max}`;
+  if (type === 'fixed' && min) return min;
   return null;
 }
 
@@ -110,7 +112,7 @@ export function serviceRequiresQuote(serviceOrType) {
   return type === 'range' || type === 'average' || type === 'quote';
 }
 
-/** Duration + optional price for public service cards. */
+/** Duration + optional price for detail / checkout rows (not browse cards). */
 export function formatServiceMeta(service, currency, options = {}) {
   const { forceShowPrice = false } = options;
   const parts = [];
@@ -121,6 +123,14 @@ export function formatServiceMeta(service, currency, options = {}) {
   const fulfillment = formatFulfillmentLabel(service);
   if (fulfillment) parts.push(fulfillment);
   return parts.join(' · ');
+}
+
+/** Browse cards: price when fixed and set, otherwise quote hint — no duration or mobile/shop. */
+export function formatServiceCatalogLabel(service, currency, options = {}) {
+  const price = formatServicePrice(service, currency, options);
+  if (price) return price;
+  if (serviceRequiresQuote(service)) return 'Quote on request';
+  return null;
 }
 
 export function isShopService(service) {

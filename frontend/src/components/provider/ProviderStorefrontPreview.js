@@ -8,6 +8,7 @@ import { buildCatalogFromFlat } from '../services/ServiceCatalogView';
 import CustomerServiceRequestForm from '../customer/CustomerServiceRequestForm';
 import { formatProviderServiceArea, providerHasServiceArea } from '../../utils/serviceArea';
 import { providerRequests } from '../../utils/providerPaths';
+import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 /**
  * Read-only customer-facing booking page preview for providers.
@@ -36,6 +37,23 @@ export default function ProviderStorefrontPreview({
   const gallery = organization.gallery || [];
   const hasServices =
     services.length > 0 || serviceCatalog.categories?.some((c) => (c.services || []).length > 0);
+
+  const renderPreviewActions = (svc) => {
+    const needsQuote = serviceRequiresQuote(svc);
+    return (
+      <button
+        type="button"
+        disabled
+        className={
+          needsQuote
+            ? 'rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white opacity-70'
+            : 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 opacity-70'
+        }
+      >
+        {needsQuote ? 'Request quote' : 'Book only this'}
+      </button>
+    );
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -104,6 +122,7 @@ export default function ProviderStorefrontPreview({
               catalog={serviceCatalog}
               orgSlug={orgSlug}
               forceShowPrice
+              renderServiceActions={renderPreviewActions}
               emptyMessage="No services listed yet."
             />
           )}

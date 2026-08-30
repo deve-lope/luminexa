@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { formatServicePrice } from '../../utils/serviceDisplay';
 import { costLinesToBillItems } from '../../utils/jobBillItems';
 import { jobsAPI } from '../../utils/api';
@@ -78,6 +80,8 @@ export default function CompleteBookingInvoiceModal({
   const [error, setError] = useState(null);
   const [taxPreview, setTaxPreview] = useState(null);
   const [taxLoading, setTaxLoading] = useState(false);
+
+  useModalBodyLock(open && Boolean(booking));
 
   React.useEffect(() => {
     if (open) {
@@ -233,13 +237,13 @@ export default function CompleteBookingInvoiceModal({
       ? `Business region: ${liveTax.businessState}`
       : 'Set your business province/state in settings to apply tax automatically.';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+  return createPortal(
+    <div className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-black/40 sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="complete-invoice-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        className="lx-modal-sheet max-h-[92vh] max-w-lg"
       >
         <h2 id="complete-invoice-title" className="text-lg font-semibold text-slate-900">
           Complete & invoice
@@ -515,6 +519,7 @@ export default function CompleteBookingInvoiceModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

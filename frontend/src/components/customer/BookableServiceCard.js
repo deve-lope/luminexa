@@ -1,20 +1,28 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import BusinessTypeIcon from '../icons/BusinessTypeIcon';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
+import ServiceRequestModal from '../services/ServiceRequestModal';
 import ServiceThumb from '../services/ServiceThumb';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   bookService,
+  customerHistory,
   customerProviderService,
   customerProviderServiceDetail,
   serviceDetail,
 } from '../../utils/customerPaths';
 import { formatWhen } from '../../utils/datetime';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
-import { formatServiceMeta } from '../../utils/serviceDisplay';
+import { formatServiceCatalogLabel, serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 export default function BookableServiceCard({ service, bookTo, useCustomerProviderUrls = true }) {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [sentMessage, setSentMessage] = useState(null);
   const providerKey = providerCustomerKey(service);
+  const needsQuote = serviceRequiresQuote(service);
   const defaultBookHref = useCustomerProviderUrls
     ? customerProviderService(providerKey, service.id)
     : bookService(providerKey, service.id);
@@ -23,8 +31,17 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
     ? customerProviderServiceDetail(providerKey, service.id)
     : serviceDetail(providerKey, service.id);
   const types = service.business_types || [];
-  const location = service.location || service.location_short;
   const availability = service.availability;
+  const catalogLabel = formatServiceCatalogLabel(service);
+
+  const openRequest = () => {
+    if (!isAuthenticated) {
+      const next = `${detailHref}${detailHref.includes('?') ? '&' : '?'}action=request`;
+      navigate(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    setRequestOpen(true);
+  };
 
   return (
     <article className="lx-card-interactive">
@@ -40,7 +57,15 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
         />
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold tracking-tight text-slate-900">{service.name}</h3>
-          <p className="text-sm text-slate-600">{service.organization_name}</p>
+          <p className="text-sm text-slate-600">
+            {service.organization_name}
+            {service.distance_miles != null && (
+              <span className="text-slate-500"> · ~{service.distance_miles} mi away</span>
+            )}
+          </p>
+          {catalogLabel && (
+            <p className="mt-1 text-sm font-medium text-slate-800">{catalogLabel}</p>
+          )}
           {service.rating_summary?.count > 0 && (
             <div className="mt-1">
               <ServiceRatingSummary summary={service.rating_summary} compact />
@@ -63,23 +88,7 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
         </p>
       )}
 
-      {location ? (
-        <p className="mt-2 flex items-start gap-1.5 text-sm text-slate-600">
-          <span className="shrink-0 text-base" aria-hidden>
-            📍
-          </span>
-          <span>
-            {location}
-            {service.distance_miles != null && (
-              <span className="text-slate-500"> · ~{service.distance_miles} mi away</span>
-            )}
-          </span>
-        </p>
-      ) : (
-        <p className="mt-2 text-sm text-slate-400">Location not listed</p>
-      )}
-
-      {availability?.open_slot_count > 0 && (
+      {availability?.open_slot_count > 0 && !needsQuote && (
         <p className="mt-3 rounded-xl bg-emerald-50/90 px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100/80">
           {availability.open_slot_count === 1
             ? '1 free slot'
@@ -90,21 +99,47 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-3">
-        {formatServiceMeta(service) && (
-          <p className="text-xs text-slate-500">{formatServiceMeta(service)}</p>
-        )}
+      {sentMessage && (
+        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{sentMessage}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100/80 pt-3">
         <div className="flex shrink-0 gap-2">
           {providerKey && (
             <Link to={detailHref} className="lx-btn-secondary min-h-[40px] px-3">
               Full details
             </Link>
           )}
-          <Link to={bookHref} className="lx-btn-primary min-h-[40px] px-4">
-            Book
-          </Link>
+          {needsQuote ? (
+            <button
+              type="button"
+              onClick={openRequest}
+              className="lx-btn-primary min-h-[40px] px-4"
+            >
+              Request quote
+            </button>
+          ) : (
+            <Link to={bookHref} className="lx-btn-primary min-h-[40px] px-4">
+              Book
+            </Link>
+          )}
         </div>
       </div>
+
+      {requestOpen && (
+        <ServiceRequestModal
+          orgSlug={providerKey}
+          service={service}
+          onClose={() => setRequestOpen(false)}
+          onSuccess={() => {
+            setSentMessage(
+              `Quote request sent. ${service.organization_name || 'The business'} will reply with a price.`
+            );
+            setRequestOpen(false);
+            navigate(customerHistory());
+          }}
+        />
+      )}
     </article>
   );
 }

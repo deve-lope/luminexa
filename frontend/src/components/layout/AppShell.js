@@ -76,7 +76,7 @@ export default function AppShell({
 
         <main
           id="main-content"
-          className="lx-container py-5 pb-28 lg:py-6 lg:pb-8"
+          className="lx-container py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:py-6 lg:pb-8"
           tabIndex={-1}
         >
           <div className="page-enter min-w-0">

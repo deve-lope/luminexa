@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import BookingCalendar from './BookingCalendar';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { formatTimeRange } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
@@ -21,6 +23,8 @@ export default function RescheduleBookingModal({
   const [calendarFetching, setCalendarFetching] = useState(false);
   const [submittingId, setSubmittingId] = useState(null);
   const [error, setError] = useState(null);
+
+  useModalBodyLock(open && Boolean(booking));
 
   const orgSlug = providerCustomerKey(booking);
   const serviceId = booking?.service;
@@ -77,9 +81,9 @@ export default function RescheduleBookingModal({
 
   if (!open || !booking) return null;
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-3 sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl">
+  return createPortal(
+    <div className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-black/40 sm:items-center">
+      <div className="lx-modal-sheet max-h-[90vh] max-w-lg">
         <div className="flex items-start justify-between border-b border-slate-100 p-4">
           <div>
             <h2 className="font-semibold text-slate-900">Reschedule appointment</h2>
@@ -154,6 +158,7 @@ export default function RescheduleBookingModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

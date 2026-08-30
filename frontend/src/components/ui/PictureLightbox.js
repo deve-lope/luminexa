@@ -1,9 +1,13 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 
 /** Full-screen photo overlay. Used by service carousels and storefront logos. */
 export default function PictureLightbox({ slides, index, alt, onClose, onPrev, onNext }) {
   const current = slides[index];
   const hasMultiple = slides.length > 1;
+
+  useModalBodyLock(Boolean(current?.image_url));
 
   useEffect(() => {
     const onKey = (e) => {
@@ -12,18 +16,14 @@ export default function PictureLightbox({ slides, index, alt, onClose, onPrev, o
       if (e.key === 'ArrowRight' && hasMultiple) onNext();
     };
     document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [onClose, onPrev, onNext, hasMultiple]);
 
   if (!current?.image_url) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-center justify-center bg-black/90"
       role="dialog"
       aria-modal="true"
       aria-label="Full size picture"
@@ -32,7 +32,8 @@ export default function PictureLightbox({ slides, index, alt, onClose, onPrev, o
       <button
         type="button"
         onClick={onClose}
-        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition hover:bg-white/20"
+        className="absolute right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition hover:bg-white/20"
+        style={{ top: 'max(1rem, var(--lx-sat))' }}
         aria-label="Close"
       >
         ×
@@ -80,6 +81,7 @@ export default function PictureLightbox({ slides, index, alt, onClose, onPrev, o
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

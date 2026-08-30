@@ -21,6 +21,7 @@ import CheckEmailPage from './pages/CheckEmailPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import CustomerBookingsPage from './pages/customer/CustomerBookingsPage';
 import CustomerBookingDetailPage from './pages/customer/CustomerBookingDetailPage';
+import CustomerInquiryDetailPage from './pages/customer/CustomerInquiryDetailPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
@@ -222,6 +223,7 @@ function AppRoutes() {
           <Route index element={<CustomerHomePage />} />
           <Route path="bookings" element={<CustomerBookingsPage />} />
           <Route path="bookings/:bookingId" element={<CustomerBookingDetailPage />} />
+          <Route path="inquiries/:inquiryId" element={<CustomerInquiryDetailPage />} />
           <Route path="messages" element={<CustomerMessagesPage />} />
           <Route path="notifications" element={<CustomerNotificationsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />

@@ -14,6 +14,7 @@ import ExpandablePhoto from '../components/ui/ExpandablePhoto';
 import ExpandableGallery from '../components/ui/ExpandableGallery';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
 import ServiceRatingSummary from '../components/services/ServiceRatingSummary';
+import ServiceRequestModal from '../components/services/ServiceRequestModal';
 import { buildCatalogFromFlat } from '../components/services/ServiceCatalogView';
 import {
   customerConnectionState,
@@ -23,7 +24,7 @@ import {
 } from '../utils/bookingAccess';
 import { providerHome, providerSchedule } from '../utils/providerPaths';
 import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
-import { isShopService } from '../utils/serviceDisplay';
+import { isShopService, serviceRequiresQuote } from '../utils/serviceDisplay';
 import { getStorefrontCache, setStorefrontCache } from '../utils/storefrontCache';
 import { scrollToHashTarget } from '../components/ScrollToTop';
 
@@ -50,6 +51,7 @@ export default function BookingStorefrontPage() {
   const [editing, setEditing] = useState(false);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [selectionHint, setSelectionHint] = useState(null);
+  const [requestModalService, setRequestModalService] = useState(null);
   const membership = getCustomerMembership(memberships, businessSlug);
   const bookingPolicy = data?.booking_policy;
   const connection = customerConnectionState(bookingPolicy, membership);
@@ -153,6 +155,14 @@ export default function BookingStorefrontPage() {
 
   const toggleServiceSelect = (id) => {
     const key = Number(id);
+    const list = services || [];
+    const target = list.find((s) => Number(s.id) === key);
+    if (target && serviceRequiresQuote(target)) {
+      setSelectionHint(
+        'Services without a fixed price need a quote first — use Request quote on that card.'
+      );
+      return;
+    }
     setSelectedServiceIds((prev) => {
       if (prev.includes(key)) {
         setSelectionHint(null);
@@ -163,7 +173,6 @@ export default function BookingStorefrontPage() {
         setSelectionHint(null);
         return next;
       }
-      const list = services || [];
       const kinds = new Set(
         next.map((sid) => {
           const svc = list.find((s) => Number(s.id) === sid);
@@ -183,13 +192,14 @@ export default function BookingStorefrontPage() {
 
   const renderCatalogActions = (svc) => {
     if (isOwnerView) return null;
+    const needsQuote = serviceRequiresQuote(svc);
     if (isGuest) {
       return (
         <Link
           to={`/login?next=${encodeURIComponent(serviceBookPath(svc.id))}`}
-          className="rounded-lg bg-luminexa-accent px-3 py-2 text-xs font-medium text-white"
+          className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
         >
-          Sign in to book
+          {needsQuote ? 'Sign in to request quote' : 'Sign in to book'}
         </Link>
       );
     }
@@ -199,17 +209,28 @@ export default function BookingStorefrontPage() {
           type="button"
           disabled={connecting}
           onClick={connect}
-          className="rounded-lg border border-luminexa-accent px-3 py-2 text-xs font-medium text-luminexa-accent disabled:opacity-60"
+          className="rounded-lg border border-luminexa-accent px-3 py-2 text-sm font-medium text-luminexa-accent disabled:opacity-60"
         >
           Request access
         </button>
       );
     }
     if (canPickService) {
+      if (needsQuote) {
+        return (
+          <button
+            type="button"
+            onClick={() => setRequestModalService(svc)}
+            className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
+          >
+            Request quote
+          </button>
+        );
+      }
       return (
         <Link
           to={serviceBookPath(svc.id)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:border-luminexa-accent hover:text-luminexa-accent"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-luminexa-accent hover:text-luminexa-accent"
         >
           Book only this
         </Link>
@@ -421,7 +442,7 @@ export default function BookingStorefrontPage() {
             )}
 
             {canPickService && selectedServiceIds.length > 0 && (
-              <div className="sticky bottom-[4.75rem] z-30 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg lg:bottom-3">
+              <div className="lx-sticky-above-tabs z-30 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg lg:bottom-3 lg:static">
                 <p className="text-sm font-medium text-slate-900">
                   {selectedServiceIds.length} service
                   {selectedServiceIds.length === 1 ? '' : 's'} selected
@@ -488,6 +509,20 @@ export default function BookingStorefrontPage() {
           </>
         )}
       </div>
+
+      {requestModalService && (
+        <ServiceRequestModal
+          orgSlug={customerKey}
+          service={requestModalService}
+          onClose={() => setRequestModalService(null)}
+          onSuccess={() => {
+            setMessage(
+              `Request sent! ${organization.name} will send you a quote and suggested times.`
+            );
+            setRequestModalService(null);
+          }}
+        />
+      )}
     </div>
   );
 }

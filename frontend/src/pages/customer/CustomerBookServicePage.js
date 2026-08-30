@@ -18,7 +18,9 @@ import {
 } from '../../utils/bookingAccess';
 import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
-import { serviceDetail, customerBookings } from '../../utils/customerPaths';
+import ServiceRequestModal from '../../components/services/ServiceRequestModal';
+import ServiceAvailabilityPreview from '../../components/booking/ServiceAvailabilityPreview';
+import { serviceDetail, customerBookings, customerHistory } from '../../utils/customerPaths';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
@@ -60,6 +62,7 @@ export default function CustomerBookServicePage() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
   const [alertPopup, setAlertPopup] = useState(null);
+  const [requestOpen, setRequestOpen] = useState(false);
   const confirmPanelRef = useRef(null);
 
   useEffect(() => {
@@ -90,6 +93,7 @@ export default function CustomerBookServicePage() {
     return list.find((s) => String(s.id) === String(serviceId));
   }, [storefront?.services, serviceId]);
 
+  const quoteFirstFromCatalog = serviceRequiresQuote(listedService);
   const serviceIsShop = isShopService(listedService || calendar?.service);
   const shopLocation =
     (listedService || calendar?.service)?.shop_location ||
@@ -143,7 +147,14 @@ export default function CustomerBookServicePage() {
         setError(msg);
       })
       .finally(() => setCalendarFetching(false));
-  }, [mayLoadCalendar, mustConnect, businessSlug, serviceId, year, month]);
+  }, [
+    mayLoadCalendar,
+    mustConnect,
+    businessSlug,
+    serviceId,
+    year,
+    month,
+  ]);
 
   useEffect(() => {
     loadCalendar();
@@ -155,6 +166,7 @@ export default function CustomerBookServicePage() {
     Boolean(bookingCtx?.requires_quote) ||
     serviceRequiresQuote(service) ||
     bookingPolicy === 'quote';
+  const quoteFirst = quoteFirstFromCatalog || requiresQuote;
   const quoteQuestionList = useMemo(() => {
     const fromCtx = bookingCtx?.service_quote_questions;
     const fromService = service?.quote_questions;
@@ -452,7 +464,7 @@ export default function CustomerBookServicePage() {
         </section>
       )}
 
-      {!staffOfOrg && !mustConnect && connection === 'implicit' && (
+      {!staffOfOrg && !mustConnect && connection === 'implicit' && !quoteFirst && (
         <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
           Pick a date and time below, then complete your booking details.
         </p>
@@ -471,7 +483,34 @@ export default function CustomerBookServicePage() {
       )}
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      {!staffOfOrg && !mustConnect && (
+      {!staffOfOrg && !mustConnect && quoteFirst && (
+        <section className="space-y-4">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-5">
+            <h2 className="font-semibold text-violet-950">Get a quote first</h2>
+            <p className="mt-2 text-sm text-violet-900/90">
+              This service doesn&apos;t have a fixed price. Request a quote with a few details — the
+              business will send a price. After you accept it, you&apos;ll pick an open appointment
+              time.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRequestOpen(true)}
+              className="mt-4 w-full min-h-[48px] rounded-xl bg-luminexa-accent text-sm font-semibold text-white"
+            >
+              Request quote
+            </button>
+          </div>
+          {serviceId && (
+            <ServiceAvailabilityPreview
+              orgSlug={businessSlug}
+              serviceId={serviceId}
+              hint="Preview open slots while you wait — nothing is reserved until you accept a quote and confirm a time."
+            />
+          )}
+        </section>
+      )}
+
+      {!staffOfOrg && !mustConnect && !quoteFirst && (
         <>
           {needsContact && (
             <BookingContactForm
@@ -721,6 +760,22 @@ export default function CustomerBookServicePage() {
         onConfirm={() => setAlertPopup(null)}
         onClose={() => setAlertPopup(null)}
       />
+
+      {requestOpen && (service || listedService) && (
+        <ServiceRequestModal
+          orgSlug={businessSlug}
+          service={service || listedService}
+          onClose={() => setRequestOpen(false)}
+          onSuccess={() => {
+            setRequestOpen(false);
+            showToast(
+              'Quote request sent. The business will reply with a price — then you can book a date.',
+              'success'
+            );
+            navigate(customerHistory());
+          }}
+        />
+      )}
     </div>
   );
 }

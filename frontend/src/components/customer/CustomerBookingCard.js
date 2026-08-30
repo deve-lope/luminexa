@@ -90,9 +90,11 @@ export default function CustomerBookingCard({
     statusHint =
       'Answer the questions below so the business can send you an accurate quote.';
   } else if (isQuoted && !past) {
-    statusHint = 'Quote ready — review the price below, then accept or decline.';
+    statusHint =
+      'Quote ready — accept the price to confirm this appointment, or decline.';
   } else if (booking.status === 'requested' && needsQuote && !past) {
-    statusHint = 'Your request is in. The business will send a quote — you can still change the time or cancel.';
+    statusHint =
+      'Waiting for a quote. Once you accept the price, this appointment time is confirmed.';
   } else if (isUntouchedBookingRequest(booking) && !past) {
     statusHint =
       'Waiting for the business to respond. You can reschedule to another day or time, or cancel.';
@@ -422,7 +424,7 @@ export default function CustomerBookingCard({
                 ? 'Saving…'
                 : awaitingTimeChange
                   ? 'Accept quote & new time'
-                  : 'Accept quote'}
+                  : 'Accept quote & confirm'}
             </button>
             <button
               type="button"

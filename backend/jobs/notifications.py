@@ -25,6 +25,10 @@ def provider_request_link_path(org_slug, booking_id):
     return f'/provider/{org_slug}/requests/booking/{booking_id}'
 
 
+def provider_inquiry_request_link_path(org_slug, inquiry_id):
+    return f'/provider/{org_slug}/requests/inquiry/{inquiry_id}'
+
+
 def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None, conversation_id=None):
     """In-app Messages inbox, optionally deep-linked to a conversation."""
     base = f'/provider/{org_slug}/messages'
@@ -414,6 +418,75 @@ def notify_booking_quoted(booking):
         link_path=f'/customer/bookings/{booking.pk}',
     )
     send_booking_email('booking_quoted', booking)
+
+
+def notify_inquiry_quoted(inquiry):
+    service_name = (
+        inquiry.service.name
+        if inquiry.service_id
+        else (inquiry.service_label or 'your request')
+    )
+    amount = inquiry.quote_amount
+    amount_txt = f'${amount}' if amount is not None else 'a price'
+    create_customer_notification(
+        customer=inquiry.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Quote ready — {inquiry.organization.name}',
+        message=(
+            f'{inquiry.organization.name} quoted {amount_txt} for {service_name}. '
+            f'Open your quote request to accept and pick a time.'
+        ),
+        organization=inquiry.organization,
+        inquiry=inquiry,
+        link_path=f'/customer/inquiries/{inquiry.pk}',
+    )
+
+
+def notify_inquiry_quote_accepted(inquiry):
+    service_name = (
+        inquiry.service.name
+        if inquiry.service_id
+        else (inquiry.service_label or 'Custom request')
+    )
+    ProviderNotification.objects.create(
+        organization=inquiry.organization,
+        inquiry=inquiry,
+        kind=ProviderNotification.Kind.QUOTE_ACCEPTED,
+        message=(
+            f'{inquiry.customer.full_name or inquiry.customer.email} accepted your quote for '
+            f'{service_name}. They will pick an appointment time next.'
+        ),
+        link_path=provider_inquiry_request_link_path(inquiry.organization.slug, inquiry.pk),
+    )
+
+
+def notify_inquiry_booked(inquiry, booking):
+    service_name = booking.service.name if booking.service_id else 'Service'
+    when = _format_when(booking.start_at, booking)
+    create_customer_notification(
+        customer=inquiry.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Appointment confirmed — {inquiry.organization.name}',
+        message=(
+            f'Your quote for {service_name} is booked for {when}. '
+            f'Open Bookings for details.'
+        ),
+        organization=inquiry.organization,
+        booking=booking,
+        inquiry=inquiry,
+        link_path=f'/customer/bookings/{booking.pk}',
+    )
+    ProviderNotification.objects.create(
+        organization=inquiry.organization,
+        booking=booking,
+        inquiry=inquiry,
+        kind=ProviderNotification.Kind.NEW_CUSTOMER_BOOKING,
+        message=(
+            f'{inquiry.customer.full_name or inquiry.customer.email} booked {service_name} '
+            f'for {when} after accepting your quote.'
+        ),
+        link_path=provider_request_link_path(inquiry.organization.slug, booking.pk),
+    )
 
 
 def notify_quote_details_requested(booking):

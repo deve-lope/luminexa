@@ -101,7 +101,7 @@ export default function CustomerInvoicePaymentPrompt() {
   if (!confirmedInvoice) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+var(--lx-sab))] z-[60] flex justify-center px-3 sm:bottom-6">
+    <div className="lx-fixed-above-tabs pointer-events-none flex justify-center px-3 lg:bottom-6">
       <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl bg-teal-800 px-4 py-3 text-white shadow-xl ring-1 ring-teal-900/20">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -6,7 +6,6 @@ export default function QuickAddServicePanel({ onCreate, submitting, className =
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('1');
   const [price, setPrice] = useState('0');
-  const [showPrice, setShowPrice] = useState(true);
   const [fulfillmentKind, setFulfillmentKind] = useState('mobile');
 
   const handleSubmit = (e) => {
@@ -18,7 +17,7 @@ export default function QuickAddServicePanel({ onCreate, submitting, className =
       description: description.trim(),
       duration_minutes: minutesFromHours(duration),
       base_price: price || '0',
-      show_price: showPrice,
+      show_price: true,
       fulfillment_kind: fulfillmentKind,
       is_active: true,
     });
@@ -69,8 +68,7 @@ export default function QuickAddServicePanel({ onCreate, submitting, className =
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              disabled={!showPrice}
-              className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 px-3 disabled:bg-slate-100"
+              className="mt-1 block w-full min-h-[44px] rounded-lg border border-slate-200 px-3"
             />
           </label>
         </div>
@@ -97,15 +95,6 @@ export default function QuickAddServicePanel({ onCreate, submitting, className =
             In-shop — customer comes to you
           </label>
         </fieldset>
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          <input
-            type="checkbox"
-            checked={showPrice}
-            onChange={(e) => setShowPrice(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
-          Show rate on public profile
-        </label>
         <button
           type="submit"
           disabled={submitting}

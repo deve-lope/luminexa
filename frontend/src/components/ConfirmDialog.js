@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../hooks/useModalBodyLock';
 
 export default function ConfirmDialog({
   open,
@@ -12,6 +13,8 @@ export default function ConfirmDialog({
   onConfirm,
   onClose,
 }) {
+  useModalBodyLock(open);
+
   if (!open) return null;
 
   const confirmClasses =
@@ -23,7 +26,7 @@ export default function ConfirmDialog({
 
   const dialog = (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       onClick={() => !busy && onClose?.()}

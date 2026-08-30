@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -19,6 +20,7 @@ import {
 import LocationEnablePrompt from './LocationEnablePrompt';
 import useAddressCountry from '../../hooks/useAddressCountry';
 import { useAuth } from '../../contexts/AuthContext';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 
 const DEFAULT_CENTER = [43.6532, -79.3832]; // Toronto
 
@@ -66,6 +68,8 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
   const [error, setError] = useState(null);
   const [gpsErrorKind, setGpsErrorKind] = useState(null);
   const [pendingLabel, setPendingLabel] = useState('');
+
+  useModalBodyLock(open);
 
   const placeMarker = useCallback((lat, lng) => {
     const map = mapRef.current;
@@ -288,9 +292,9 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-3 sm:items-center"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-black/40 sm:items-center"
       role="dialog"
       aria-modal="true"
     >
@@ -390,6 +394,7 @@ export default function MapLocationPicker({ open, onClose, onSelect, country: co
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

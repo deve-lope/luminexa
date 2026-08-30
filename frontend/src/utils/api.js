@@ -229,6 +229,13 @@ export const jobsAPI = {
     }),
   listBookings: (params) => api.get('/api/v1/bookings/', { params }),
   listMyServiceInquiries: () => api.get('/api/v1/me/service-inquiries/'),
+  getMyServiceInquiry: (inquiryId) => api.get(`/api/v1/me/service-inquiries/${inquiryId}/`),
+  acceptInquiryQuote: (inquiryId) =>
+    api.post(`/api/v1/me/service-inquiries/${inquiryId}/accept-quote/`),
+  declineInquiryQuote: (inquiryId) =>
+    api.post(`/api/v1/me/service-inquiries/${inquiryId}/decline-quote/`),
+  bookInquirySlot: (inquiryId, slotId) =>
+    api.post(`/api/v1/me/service-inquiries/${inquiryId}/book-slot/`, { slot_id: slotId }),
   listMyConversations: () => api.get('/api/v1/me/conversations/'),
   listConversationMessages: (conversationId) =>
     api.get(`/api/v1/conversations/${conversationId}/messages/`),
@@ -244,6 +251,8 @@ export const jobsAPI = {
     api.get(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/`),
   patchServiceInquiry: (orgSlug, inquiryId, data) =>
     api.patch(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/`, data),
+  sendInquiryQuote: (orgSlug, inquiryId, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/send-quote/`, data),
   listBookingMessages: (bookingId) => api.get(`/api/v1/bookings/${bookingId}/messages/`),
   sendBookingMessage: (bookingId, body) =>
     api.post(`/api/v1/bookings/${bookingId}/messages/`, { body }),

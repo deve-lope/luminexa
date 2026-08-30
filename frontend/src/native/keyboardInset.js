@@ -329,6 +329,33 @@ export function installKeyboardInset() {
 
   const onViewport = () => syncKeyboardInset({ scrollField: false });
 
+  let detachHeaderObserver = () => {};
+  const attachHeaderObserver = () => {
+    let ro = null;
+    const bind = () => {
+      const el = document.querySelector('.lx-header');
+      if (!el) return false;
+      if (typeof ResizeObserver !== 'undefined') {
+        ro = new ResizeObserver(() => syncHeaderOffset());
+        ro.observe(el);
+      }
+      syncHeaderOffset();
+      return true;
+    };
+    if (bind()) {
+      return () => ro?.disconnect();
+    }
+    const mo = new MutationObserver(() => {
+      if (bind()) mo.disconnect();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      ro?.disconnect();
+    };
+  };
+  detachHeaderObserver = attachHeaderObserver();
+
   const beginFocusSession = () => {
     focusAt = Date.now();
     nativeDismissed = false;
@@ -424,6 +451,7 @@ export function installKeyboardInset() {
       /* ignore */
     }
     stopNativeImePoll();
+    detachHeaderObserver();
     state = { mode: 'idle', inset: 0 };
     applyInset(0);
   };

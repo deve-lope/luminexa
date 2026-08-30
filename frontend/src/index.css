@@ -15,6 +15,8 @@
     --lx-sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
     --lx-sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
     --lx-keyboard-inset: 0px;
+    /* Bottom tab bar: 56px row + safe-area padding (matches BottomTabBar.js). */
+    --lx-bottom-tabs-height: calc(3.5rem + max(0.5rem, var(--lx-sab)));
     /* Sticky header height; JS replaces this with the measured banner bottom. */
     --lx-header-offset: calc(var(--lx-sat) + 5rem);
   }
@@ -238,6 +240,77 @@
 
 .pb-safe {
   padding-bottom: max(0.5rem, var(--lx-sab));
+}
+
+/* Full-screen modals — above bottom tabs (z-50), honor safe areas + keyboard. */
+.lx-modal-overlay {
+  padding-top: max(0.75rem, var(--lx-sat));
+  padding-right: max(0.75rem, var(--lx-sar));
+  padding-bottom: max(0.75rem, calc(var(--lx-sab) + var(--lx-keyboard-inset, 0px)));
+  padding-left: max(0.75rem, var(--lx-sal));
+}
+
+.lx-modal-sheet {
+  @apply w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl;
+  max-height: min(
+    92dvh,
+    calc(100dvh - var(--lx-sat) - var(--lx-sab) - var(--lx-keyboard-inset, 0px) - 1.5rem)
+  );
+  padding-bottom: max(1.25rem, calc(var(--lx-sab) + 0.75rem));
+}
+
+html.lx-modal-open .lx-bottom-tabs {
+  display: none;
+}
+
+.lx-sticky-above-tabs {
+  position: sticky;
+  bottom: calc(var(--lx-bottom-tabs-height) + 0.75rem);
+}
+
+/* Toasts, payment confirmations, PWA prompt — sit above bottom tabs. */
+.lx-fixed-above-tabs {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(var(--lx-bottom-tabs-height) + 0.5rem);
+  z-index: 60;
+}
+
+.lx-toast-stack {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: max(0.75rem, var(--lx-sal));
+  padding-bottom: calc(var(--lx-bottom-tabs-height) + 0.5rem);
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .lx-toast-stack {
+    bottom: 1.5rem;
+    padding-bottom: 0;
+  }
+}
+
+html.lx-keyboard-open .lx-fixed-above-tabs,
+html.lx-keyboard-open .lx-sticky-above-tabs {
+  bottom: calc(var(--lx-keyboard-inset, 0px) + 0.75rem);
+}
+
+html.lx-keyboard-open .lx-toast-stack {
+  padding-bottom: calc(var(--lx-keyboard-inset, 0px) + 0.75rem);
+}
+
+html.lx-modal-open .lx-fixed-above-tabs,
+html.lx-modal-open .lx-toast-stack,
+html.lx-modal-open .lx-pwa-install-prompt {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Pin full-screen sheets and overlays above the keyboard (0px when closed).

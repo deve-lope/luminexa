@@ -81,7 +81,7 @@ class Service(models.Model):
     )
     show_price = models.BooleanField(
         default=True,
-        help_text='When off, price is hidden on the public booking profile.',
+        help_text='Always true — catalog prices are shown on the public booking profile.',
     )
     quote_questions = models.JSONField(
         default=list,
@@ -133,13 +133,8 @@ class Service(models.Model):
                 raise ValidationError({
                     'base_price': 'Enter a typical price so customers see an estimate.',
                 })
-        if self.pricing_type in (
-            self.PricingType.RANGE,
-            self.PricingType.AVERAGE,
-            self.PricingType.QUOTE,
-        ):
-            # Customers should see an indicative price whenever a quote is required.
-            self.show_price = True
+        # Customers always see fixed amounts, ranges, estimates, or “Quote on request”.
+        self.show_price = True
 
     def save(self, *args, **kwargs):
         if self.pricing_type != self.PricingType.RANGE:
@@ -299,6 +294,8 @@ class CustomerServiceInquiry(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
         ACTIVE = 'active', 'Active'
+        QUOTED = 'quoted', 'Quote sent'
+        QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         COMPLETED = 'completed', 'Completed'
         DECLINED = 'declined', 'Declined'
 
@@ -345,6 +342,23 @@ class CustomerServiceInquiry(models.Model):
         null=True,
         blank=True,
         help_text='When provider staff last opened this inquiry conversation.',
+    )
+    quote_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Provider quote amount awaiting customer acceptance.',
+    )
+    quote_message = models.TextField(blank=True, default='')
+    quoted_at = models.DateTimeField(null=True, blank=True)
+    quote_accepted_at = models.DateTimeField(null=True, blank=True)
+    booking = models.ForeignKey(
+        'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_inquiry',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

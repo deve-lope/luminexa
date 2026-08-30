@@ -8,7 +8,7 @@ export default function PwaInstallPrompt() {
   if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[60] p-3 px-safe pb-safe sm:p-4">
+    <div className="lx-pwa-install-prompt lx-fixed-above-tabs p-3 px-safe sm:p-4 lg:bottom-6">
       <div className="mx-auto max-w-md overflow-hidden rounded-3xl border border-white/60 bg-white/95 shadow-lx-elevated backdrop-blur-xl">
         <div className="p-4 sm:p-5">
           <div className="flex items-start gap-3">

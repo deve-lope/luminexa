@@ -7,17 +7,35 @@ import RequestMessageThread from '../../components/provider/RequestMessageThread
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
 import { isHistoryBooking } from '../../utils/customerBookings';
-import { customerBookingDetail, customerFind, customerProviderPage } from '../../utils/customerPaths';
+import { customerBookingDetail, customerFind, customerInquiryDetail, customerProviderPage } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 function inquiryStatusLabel(inquiry) {
-  return inquiry.dismissed_at ? 'Handled by business' : 'Sent — awaiting response';
+  if (inquiry.dismissed_at) return 'Handled by business';
+  const labels = {
+    pending: 'Sent — awaiting response',
+    active: 'In progress',
+    quoted: 'Quote ready',
+    quote_accepted: 'Pick a time',
+    completed: 'Booked',
+    declined: 'Declined',
+  };
+  return labels[inquiry.status] || inquiry.status;
 }
 
 function inquiryStatusClass(inquiry) {
-  return inquiry.dismissed_at
-    ? 'bg-slate-100 text-slate-600'
-    : 'bg-amber-100 text-amber-800';
+  if (inquiry.dismissed_at) {
+    return 'bg-slate-100 text-slate-600';
+  }
+  const tones = {
+    pending: 'bg-amber-100 text-amber-800',
+    active: 'bg-sky-100 text-sky-800',
+    quoted: 'bg-violet-100 text-violet-900',
+    quote_accepted: 'bg-teal-100 text-teal-900',
+    completed: 'bg-slate-100 text-slate-600',
+    declined: 'bg-red-100 text-red-800',
+  };
+  return tones[inquiry.status] || 'bg-amber-100 text-amber-800';
 }
 
 export default function CustomerHistoryPage() {
@@ -115,6 +133,40 @@ export default function CustomerHistoryPage() {
                       {inquiryStatusLabel(inq)}
                     </span>
                     <p className="mt-2 text-sm text-slate-700 line-clamp-3">{inq.message}</p>
+                    {inq.status === 'quoted' && inq.quote_amount != null && (
+                      <p className="mt-2 text-lg font-bold text-violet-900">
+                        ${Number(inq.quote_amount).toFixed(2)}
+                      </p>
+                    )}
+                    {!inq.dismissed_at && inq.status === 'pending' && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        The business will review your request and send a quote.
+                      </p>
+                    )}
+                    {inq.status === 'quoted' && (
+                      <Link
+                        to={customerInquiryDetail(inq.id)}
+                        className="mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-luminexa-accent"
+                      >
+                        Review quote & pick a time →
+                      </Link>
+                    )}
+                    {inq.status === 'quote_accepted' && (
+                      <Link
+                        to={customerInquiryDetail(inq.id)}
+                        className="mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-luminexa-accent"
+                      >
+                        Pick appointment time →
+                      </Link>
+                    )}
+                    {inq.booking && (
+                      <Link
+                        to={customerBookingDetail(inq.booking)}
+                        className="mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-luminexa-accent"
+                      >
+                        View booking →
+                      </Link>
+                    )}
                     {(inq.organization_slug || providerCustomerKey(inq)) && (
                       <RequestMessageThread
                         compact

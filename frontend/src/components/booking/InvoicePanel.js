@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { jobsAPI } from '../../utils/api';
 import { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from './InvoiceStripePayModal';
@@ -182,6 +184,8 @@ export default function InvoicePanel({
   const [error, setError] = useState(null);
   const [paidLocal, setPaidLocal] = useState(null);
 
+  useModalBodyLock(viewOpen);
+
   useEffect(() => {
     if (!viewOpen) return undefined;
     const onKey = (e) => {
@@ -308,18 +312,19 @@ export default function InvoicePanel({
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
 
-      {viewOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invoice-view-title"
-          onClick={() => setViewOpen(false)}
-        >
+      {viewOpen &&
+        createPortal(
           <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-slate-900/50 sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invoice-view-title"
+            onClick={() => setViewOpen(false)}
           >
+            <div
+              className="lx-modal-sheet max-h-[90vh] max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="flex items-start justify-between gap-3">
               <h2 id="invoice-view-title" className="text-lg font-bold text-slate-900">
                 Invoice
@@ -353,9 +358,10 @@ export default function InvoicePanel({
                 Done
               </button>
             </div>
-          </div>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body
+        )}
 
       <InvoiceStripePayModal
         open={payOpen}

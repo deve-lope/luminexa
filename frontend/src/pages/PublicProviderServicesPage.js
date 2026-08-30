@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import CustomerServiceRequestForm from '../components/customer/CustomerServiceRequestForm';
 import ServiceCategoryBrowse from '../components/services/ServiceCategoryBrowse';
 import ServiceRatingSummary from '../components/services/ServiceRatingSummary';
+import ServiceRequestModal from '../components/services/ServiceRequestModal';
 import { buildCatalogFromFlat } from '../components/services/ServiceCatalogView';
 import { useAuth } from '../contexts/AuthContext';
 import { businessesAPI } from '../utils/api';
@@ -12,6 +13,7 @@ import {
   getCustomerMembership,
   needsExplicitConnect,
 } from '../utils/bookingAccess';
+import { serviceRequiresQuote } from '../utils/serviceDisplay';
 
 export default function PublicProviderServicesPage() {
   const { slug } = useParams();
@@ -20,6 +22,8 @@ export default function PublicProviderServicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [connecting, setConnecting] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [requestModalService, setRequestModalService] = useState(null);
 
   const membership = getCustomerMembership(memberships, slug);
   const bookingPolicy = data?.booking_policy;
@@ -58,13 +62,14 @@ export default function PublicProviderServicesPage() {
   const businessTypes = data?.business_types || [];
 
   const renderActions = (svc) => {
+    const needsQuote = serviceRequiresQuote(svc);
     if (!isAuthenticated) {
       return (
         <Link
           to={`/login?next=${encodeURIComponent(bookService(slug, svc.id))}`}
           className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
         >
-          Sign in to book
+          {needsQuote ? 'Sign in to request quote' : 'Sign in to book'}
         </Link>
       );
     }
@@ -80,10 +85,21 @@ export default function PublicProviderServicesPage() {
         </button>
       );
     }
+    if (needsQuote) {
+      return (
+        <button
+          type="button"
+          onClick={() => setRequestModalService(svc)}
+          className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
+        >
+          Request quote
+        </button>
+      );
+    }
     return (
       <Link
         to={bookService(slug, svc.id)}
-        className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
+        className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
       >
         Book
       </Link>
@@ -116,6 +132,10 @@ export default function PublicProviderServicesPage() {
         </div>
       </header>
 
+      {message && (
+        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>
+      )}
+
       <ServiceCategoryBrowse
         catalog={catalog}
         orgSlug={slug}
@@ -130,6 +150,20 @@ export default function PublicProviderServicesPage() {
         isGuest={!isAuthenticated}
         loginNextUrl={businessPage(slug)}
       />
+
+      {requestModalService && (
+        <ServiceRequestModal
+          orgSlug={slug}
+          service={requestModalService}
+          onClose={() => setRequestModalService(null)}
+          onSuccess={() => {
+            setMessage(
+              `Request sent! ${org.name} will send you a quote and suggested times.`
+            );
+            setRequestModalService(null);
+          }}
+        />
+      )}
     </div>
   );
 }

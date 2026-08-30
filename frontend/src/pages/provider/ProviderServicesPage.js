@@ -339,7 +339,6 @@ function ServiceDetailForm({
                 setServiceDraft((d) => ({
                   ...d,
                   pricing_type,
-                  show_price: pricing_type === 'fixed' ? d.show_price : true,
                   base_price: pricing_type === 'quote' ? '' : d.base_price,
                   quote_questions: questionsForPricingType(pricing_type, d.quote_questions),
                 }));
@@ -542,23 +541,15 @@ function ServiceDetailForm({
         </div>
 
         <div className="space-y-2">
-          {serviceDraft.pricing_type === 'fixed' && (
-            <FieldToggle
-              checked={serviceDraft.show_price}
-              onChange={(val) => setServiceDraft((d) => ({ ...d, show_price: val }))}
-              label="Show price on public page"
-              description="Display this service's price to customers browsing your catalog."
-            />
+          {serviceDraft.pricing_type === 'quote' && (
+            <p className="text-xs text-slate-500">
+              Customers see “Quote on request” — no dollar amount until you send one.
+            </p>
           )}
           {(serviceDraft.pricing_type === 'range' ||
             serviceDraft.pricing_type === 'average') && (
             <p className="text-xs text-slate-500">
               Customers always see your range or typical price for these quote services.
-            </p>
-          )}
-          {serviceDraft.pricing_type === 'quote' && (
-            <p className="text-xs text-slate-500">
-              Customers see “Quote on request” — no price until you send one.
             </p>
           )}
           <FieldToggle
@@ -614,7 +605,6 @@ function BulkAddServicesForm({
   const updateRow = (index, patch) => {
     setBulkRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
-  const hasFixedRow = bulkRows.some((r) => r.pricing_type === 'fixed');
 
   return (
     <form
@@ -730,13 +720,6 @@ function BulkAddServicesForm({
         </div>
 
         <div className="space-y-2">
-          {hasFixedRow && (
-            <FieldToggle
-              checked={bulkDefaults.show_price}
-              onChange={(val) => setBulkDefaults((d) => ({ ...d, show_price: val }))}
-              label="Show price on public page (fixed-price rows)"
-            />
-          )}
           <FieldToggle
             checked={bulkDefaults.allow_request}
             onChange={(val) => setBulkDefaults((d) => ({ ...d, allow_request: val }))}
@@ -1296,7 +1279,7 @@ export default function ProviderServicesPage({ embedded = false }) {
           ? serviceDraft.price_max
           : null,
       quote_questions: needsQuote ? cleanedQuestions : [],
-      show_price: needsQuote ? true : serviceDraft.show_price,
+      show_price: true,
       allow_request: serviceDraft.allow_request,
       fulfillment_kind: serviceDraft.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
       is_active: true,
@@ -1397,10 +1380,6 @@ export default function ProviderServicesPage({ embedded = false }) {
     const failures = [];
 
     for (const row of rows) {
-      const needsQuote =
-        row.pricing_type === 'range' ||
-        row.pricing_type === 'average' ||
-        row.pricing_type === 'quote';
       try {
         await jobsAPI.createService({
           organization: orgId,
@@ -1413,7 +1392,7 @@ export default function ProviderServicesPage({ embedded = false }) {
           price_max:
             row.pricing_type === 'range' && row.price_max ? row.price_max : null,
           quote_questions: row.pricing_type === 'quote' ? row.quote_questions : [],
-          show_price: needsQuote ? true : bulkDefaults.show_price,
+          show_price: true,
           allow_request: bulkDefaults.allow_request,
           fulfillment_kind: bulkDefaults.fulfillment_kind === 'shop' ? 'shop' : 'mobile',
           is_active: true,
@@ -1725,7 +1704,7 @@ export default function ProviderServicesPage({ embedded = false }) {
       )}
 
       {showSetupContinue && (
-        <div className="sticky bottom-20 z-30 rounded-2xl border border-teal-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-4">
+        <div className="lx-sticky-above-tabs z-30 rounded-2xl border border-teal-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-4 sm:static">
           <button
             type="button"
             onClick={() => {

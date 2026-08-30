@@ -128,6 +128,8 @@ def _inquiry_card_meta(inquiry):
         'organization_slug': inquiry.organization.slug,
         'organization_name': inquiry.organization.name,
         'summary': (inquiry.message or '')[:200],
+        'quote_amount': str(inquiry.quote_amount) if inquiry.quote_amount is not None else None,
+        'booking_id': inquiry.booking_id,
     }
 
 
@@ -142,6 +144,8 @@ ACTIVE_BOOKING_STATUSES = (
 ACTIVE_INQUIRY_STATUSES = (
     'pending',
     'active',
+    'quoted',
+    'quote_accepted',
 )
 
 

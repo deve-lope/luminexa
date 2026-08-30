@@ -1,25 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import ServicePictureCarousel from '../../components/services/ServicePictureCarousel';
 import ServiceRatingForm from '../../components/services/ServiceRatingForm';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
+import ServiceRequestModal from '../../components/services/ServiceRequestModal';
 import StarRating from '../../components/services/StarRating';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI } from '../../utils/api';
 import {
   bookService,
   businessPage,
+  customerHistory,
   customerProviderPage,
   customerProviderService,
 } from '../../utils/customerPaths';
 import { providerRouteKey } from '../../utils/providerRouteKey';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
+import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 const COMMENT_PREVIEW = 2;
 
 export default function CustomerServiceDetailPage() {
   const params = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { variant = 'customer' } = useOutletContext() || {};
   const isOwnerView = variant === 'owner';
   const providerKey = providerRouteKey(params);
@@ -33,6 +37,9 @@ export default function CustomerServiceDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [editingReview, setEditingReview] = useState(false);
   const [showAllComments, setShowAllComments] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(
+    () => new URLSearchParams(location.search).get('action') === 'request'
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,7 +62,8 @@ export default function CustomerServiceDetailPage() {
   useEffect(() => {
     setEditingReview(false);
     setShowAllComments(false);
-  }, [serviceId]);
+    setRequestOpen(new URLSearchParams(location.search).get('action') === 'request');
+  }, [serviceId, location.search]);
 
   const submitReview = async (payload) => {
     setSubmittingReview(true);
@@ -115,6 +123,15 @@ export default function CustomerServiceDetailPage() {
   const bookPath = isCustomerProviderRoute
     ? customerProviderService(customerKey, service?.id)
     : bookService(customerKey, service?.id);
+  const needsQuote = serviceRequiresQuote(service);
+
+  const openRequest = () => {
+    if (!isAuthenticated) {
+      navigate(`/login?next=${encodeURIComponent(`${location.pathname}?action=request`)}`);
+      return;
+    }
+    setRequestOpen(true);
+  };
 
   if (error && !service) {
     return (
@@ -160,7 +177,11 @@ export default function CustomerServiceDetailPage() {
         )}
       </section>
 
-      <div className="sticky bottom-[4.75rem] z-10 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:py-0 lg:bottom-0">
+      {message && (
+        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>
+      )}
+
+      <div className="lx-sticky-above-tabs z-10 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:py-0 lg:bottom-0">
         {isOwnerView ? (
           <p className="text-center text-sm text-slate-600">
             This is how customers book — share your{' '}
@@ -169,16 +190,25 @@ export default function CustomerServiceDetailPage() {
             </Link>{' '}
             link for them to schedule.
           </p>
+        ) : needsQuote ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={openRequest}
+              className="lx-btn-primary w-full min-h-[48px]"
+            >
+              Request quote
+            </button>
+            <p className="text-center text-xs text-slate-500">
+              Get a price first. After you accept it, you&apos;ll choose a date with the business.
+            </p>
+          </div>
         ) : (
           <Link to={bookPath} className="lx-btn-primary w-full min-h-[48px]">
             Book this service
           </Link>
         )}
       </div>
-
-      {message && (
-        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>
-      )}
       {error && service && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
@@ -291,6 +321,21 @@ export default function CustomerServiceDetailPage() {
           </>
         )}
       </section>
+
+      {requestOpen && !isOwnerView && (
+        <ServiceRequestModal
+          orgSlug={customerKey}
+          service={service}
+          onClose={() => setRequestOpen(false)}
+          onSuccess={() => {
+            setMessage(
+              `Quote request sent to ${service.organization_name}. They'll reply with a price — then you can book a date.`
+            );
+            setRequestOpen(false);
+            navigate(customerHistory());
+          }}
+        />
+      )}
     </div>
   );
 }

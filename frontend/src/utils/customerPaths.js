@@ -24,6 +24,10 @@ export function customerBookingDetail(bookingId) {
   return `/customer/bookings/${bookingId}`;
 }
 
+export function customerInquiryDetail(inquiryId) {
+  return `/customer/inquiries/${inquiryId}`;
+}
+
 export function customerHistory() {
   return '/customer/history';
 }

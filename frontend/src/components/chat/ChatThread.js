@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
 import { withReturnTo } from '../../utils/navigationBack';
@@ -326,6 +327,8 @@ export default function ChatThread({
   const bottomRef = useRef(null);
   const listRef = useRef(null);
 
+  useModalBodyLock(open);
+
   const refresh = useCallback(
     async ({ silent = false } = {}) => {
       if (!silent) {
@@ -413,7 +416,7 @@ export default function ChatThread({
   // On lg+, start after the w-60 sidebar so the composer is never covered.
   const sheet = (
     <div
-      className="lx-ime-sheet fixed inset-0 z-[100] flex flex-col bg-[#eae6df] lg:left-60"
+      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-[#eae6df] lg:left-60"
       role="dialog"
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}

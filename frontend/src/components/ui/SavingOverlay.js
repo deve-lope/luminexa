@@ -1,12 +1,16 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 
 /**
  * Full-screen saving indicator with spinner (blocks interaction while active).
  */
 export default function SavingOverlay({ message = 'Saving…', submessage }) {
-  return (
+  useModalBodyLock(true);
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 backdrop-blur-sm"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/45 backdrop-blur-sm"
       role="status"
       aria-live="polite"
       aria-busy="true"
@@ -24,6 +28,7 @@ export default function SavingOverlay({ message = 'Saving…', submessage }) {
           <p className="mt-1 text-center text-sm text-slate-500">{submessage}</p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

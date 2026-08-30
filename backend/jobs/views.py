@@ -2004,11 +2004,104 @@ class CustomerMyInquiriesAPIView(APIView):
     def get(self, request):
         qs = (
             CustomerServiceInquiry.objects.filter(customer=request.user)
-            .select_related('organization', 'service')
+            .select_related('organization', 'service', 'booking')
             .order_by('-created_at')
         )
         data = CustomerServiceInquirySerializer(qs, many=True).data
         return Response(data)
+
+
+class CustomerMyInquiryDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_inquiry(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service', 'booking')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        return inquiry
+
+    def get(self, request, inquiry_id):
+        inquiry = self._get_inquiry(request, inquiry_id)
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
+class CustomerInquiryAcceptQuoteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        from .inquiry_services import accept_inquiry_quote
+
+        accept_inquiry_quote(inquiry, customer=request.user)
+        from .notifications import notify_inquiry_quote_accepted
+
+        notify_inquiry_quote_accepted(inquiry)
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
+class CustomerInquiryDeclineQuoteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        from .inquiry_services import decline_inquiry_quote
+
+        decline_inquiry_quote(inquiry, customer=request.user)
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
+class CustomerInquiryBookSlotAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        slot_id = request.data.get('slot_id')
+        if not slot_id:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'slot_id': 'Choose an open time slot.'})
+        from .models import AvailabilitySlot
+        from .inquiry_services import book_inquiry_slot
+
+        slot = AvailabilitySlot.objects.filter(pk=slot_id).select_related('organization', 'service').first()
+        if not slot:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'slot_id': 'Slot not found.'})
+        booking = book_inquiry_slot(inquiry, customer=request.user, slot=slot)
+        from .notifications import notify_inquiry_booked
+
+        notify_inquiry_booked(inquiry, booking)
+        from .serializers import BookingSerializer
+
+        return Response({
+            'inquiry': CustomerServiceInquirySerializer(inquiry).data,
+            'booking': BookingSerializer(booking, context={'request': request}).data,
+        })
 
 
 class CustomerConversationsAPIView(APIView):

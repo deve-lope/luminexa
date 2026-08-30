@@ -118,6 +118,12 @@ export default function ProviderRequestDetailPage() {
     }
   }, [data, kind]);
 
+  useEffect(() => {
+    if (!data || kind !== 'inquiry') return;
+    if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
+    if (data.quote_message) setQuoteMessage(data.quote_message);
+  }, [data, kind]);
+
   const sendQuote = async () => {
     const amount = Number(quoteAmount);
     if (!(amount > 0)) {
@@ -128,10 +134,17 @@ export default function ProviderRequestDetailPage() {
       amount,
       message: quoteMessage.trim(),
     };
-    await runBookingAction(
-      () => jobsAPI.sendBookingQuote(id, payload),
-      'Quote sent to customer.'
-    );
+    if (kind === 'inquiry') {
+      await runBookingAction(
+        () => jobsAPI.sendInquiryQuote(orgSlug, id, payload),
+        'Quote sent to customer.'
+      );
+    } else {
+      await runBookingAction(
+        () => jobsAPI.sendBookingQuote(id, payload),
+        'Quote sent to customer.'
+      );
+    }
     setQuoteFormMode(null);
   };
 
@@ -433,6 +446,94 @@ export default function ProviderRequestDetailPage() {
           </button>
         )}
       </header>
+
+      {kind === 'inquiry' &&
+        (status === 'pending' || status === 'active' || status === 'quoted') &&
+        quoteFormMode !== 'quote' &&
+        status !== 'quote_accepted' && (
+        <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-violet-800">Send quote</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Price this request. The customer will accept and pick an open appointment time.
+          </p>
+          <button
+            type="button"
+            onClick={() => setQuoteFormMode('quote')}
+            className="mt-3 min-h-[44px] w-full rounded-xl bg-violet-700 font-semibold text-white"
+          >
+            {status === 'quoted' ? 'Update quote' : 'Send quote to customer'}
+          </button>
+        </section>
+      )}
+
+      {kind === 'inquiry' && quoteFormMode === 'quote' && (
+        <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-violet-800">Send quote</h2>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label htmlFor="inquiry-quote-amount" className="mb-1 block text-xs font-medium text-slate-600">
+                Quote amount
+              </label>
+              <input
+                id="inquiry-quote-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={quoteAmount}
+                onChange={(e) => setQuoteAmount(e.target.value)}
+                className="w-full min-h-[44px] rounded-lg border border-slate-200 px-3 text-sm"
+                placeholder="e.g. 120.00"
+              />
+            </div>
+            <div>
+              <label htmlFor="inquiry-quote-message" className="mb-1 block text-xs font-medium text-slate-600">
+                What&apos;s included
+              </label>
+              <textarea
+                id="inquiry-quote-message"
+                rows={3}
+                value={quoteMessage}
+                onChange={(e) => setQuoteMessage(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Scope, materials, notes…"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={sendQuote}
+              className="min-h-[44px] w-full rounded-xl bg-violet-700 font-semibold text-white disabled:opacity-60"
+            >
+              {actionBusy ? 'Sending…' : 'Send quote to customer'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {kind === 'inquiry' && status === 'quoted' && data.quote_amount != null && quoteFormMode !== 'quote' && (
+        <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Quote sent</h2>
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {currency.format(Number(data.quote_amount))}
+          </p>
+          {data.quote_message && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{data.quote_message}</p>
+          )}
+          <p className="mt-3 text-sm text-slate-500">
+            Waiting for the customer to accept and pick a time.
+          </p>
+        </section>
+      )}
+
+      {kind === 'inquiry' && status === 'quote_accepted' && (
+        <section className="rounded-xl border border-teal-100 bg-teal-50/60 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-teal-800">Quote accepted</h2>
+          <p className="mt-2 text-sm text-teal-950">
+            The customer accepted {currency.format(Number(data.quote_amount))}. They are choosing an
+            appointment time from your open slots.
+          </p>
+        </section>
+      )}
 
       {kind === 'booking' && quoteFormMode === 'ask' && needsQuote && (
         <section className="rounded-xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm">

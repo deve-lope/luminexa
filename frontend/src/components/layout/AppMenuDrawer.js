@@ -1,16 +1,11 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { IconClose, TAB_ICONS } from '../icons/NavIcons';
 
 export default function AppMenuDrawer({ open, onClose, title, items }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useModalBodyLock(open);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -23,8 +18,8 @@ export default function AppMenuDrawer({ open, onClose, title, items }) {
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={title}>
+  return createPortal(
+    <div className="fixed inset-0 z-[110] lg:hidden" role="dialog" aria-modal="true" aria-label={title}>
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
@@ -61,7 +56,8 @@ export default function AppMenuDrawer({ open, onClose, title, items }) {
           </ul>
         </nav>
       </aside>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -538,7 +538,7 @@ export default function CustomerBookMultipleServicesPage() {
           )}
 
           {!needsContact && !mixedFulfillment && (
-            <div className="sticky bottom-[4.75rem] z-30 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl lg:static lg:border-0 lg:bg-transparent lg:py-0 lg:backdrop-blur-none">
+            <div className="lx-sticky-above-tabs z-30 -mx-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur-xl lg:static lg:border-0 lg:bg-transparent lg:py-0 lg:backdrop-blur-none">
               <button
                 type="button"
                 disabled={submitting || !canBook}

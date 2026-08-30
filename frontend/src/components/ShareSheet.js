@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBodyLock } from '../hooks/useModalBodyLock';
 import {
   canNativeShare,
   copyText,
@@ -63,6 +64,8 @@ export default function ShareSheet({
   onClose,
   onCopied,
 }) {
+  useModalBodyLock(open && Boolean(url));
+
   if (!open || !url) return null;
 
   const iOS = isIOSUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
@@ -88,7 +91,7 @@ export default function ShareSheet({
 
   const sheet = (
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-900/40 p-3 sm:items-center"
+      className="lx-modal-overlay fixed inset-0 z-[120] flex items-end justify-center bg-slate-900/40 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-sheet-title"

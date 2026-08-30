@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { IconBell } from '../icons/NavIcons';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
@@ -18,6 +19,8 @@ export default function CustomerNotificationBell({ unreadCount = 0, onCountChang
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
+
+  useModalBodyLock(open);
 
   const loadPreview = useCallback(() => {
     setLoading(true);
@@ -85,7 +88,7 @@ export default function CustomerNotificationBell({ unreadCount = 0, onCountChang
       {open &&
         createPortal(
           <div
-            className="fixed inset-0 z-[110] flex items-start justify-end bg-slate-900/40 p-3 pt-[max(0.75rem,var(--lx-sat))] sm:p-4"
+            className="lx-modal-overlay fixed inset-0 z-[110] flex items-start justify-end bg-slate-900/40 pt-[max(0.75rem,var(--lx-sat))]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="customer-notif-preview-title"

@@ -40,7 +40,11 @@ def _booking_bucket(status):
 def _inquiry_bucket(status):
     if status == CustomerServiceInquiry.Status.PENDING:
         return 'pending'
-    if status == CustomerServiceInquiry.Status.ACTIVE:
+    if status in (
+        CustomerServiceInquiry.Status.ACTIVE,
+        CustomerServiceInquiry.Status.QUOTED,
+        CustomerServiceInquiry.Status.QUOTE_ACCEPTED,
+    ):
         return 'active'
     if status == CustomerServiceInquiry.Status.COMPLETED:
         return 'done'
@@ -191,6 +195,45 @@ class ProviderServiceInquiryDetailAPIView(APIView):
             inquiry.save(update_fields=['status', 'dismissed_at'])
         else:
             raise ValidationError({'action': 'Use accept, complete, or decline.'})
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
+class ProviderInquirySendQuoteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug, inquiry_id):
+        org = Organization.objects.filter(slug=slug).first()
+        if not org:
+            raise NotFound('Organization not found.')
+        if not is_org_staff(request.user, org):
+            raise PermissionDenied('Staff only.')
+        require_provider_subscription(org)
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(organization=org, pk=inquiry_id)
+            .select_related('customer', 'service', 'organization')
+            .first()
+        )
+        if not inquiry:
+            raise NotFound('Request not found.')
+        from .inquiry_services import send_inquiry_quote
+
+        send_inquiry_quote(
+            inquiry,
+            staff_user=request.user,
+            amount=request.data.get('amount'),
+            message=request.data.get('message') or '',
+        )
+        from .message_services import post_inquiry_message
+
+        amount_txt = f'${inquiry.quote_amount}'
+        note = (inquiry.quote_message or '').strip()
+        body = f'Quote sent: {amount_txt}'
+        if note:
+            body = f'{body}\n{note}'
+        post_inquiry_message(inquiry=inquiry, sender=request.user, body=body)
+        from .notifications import notify_inquiry_quoted
+
+        notify_inquiry_quoted(inquiry)
         return Response(CustomerServiceInquirySerializer(inquiry).data)
 
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { jobsAPI } from '../../utils/api';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { calendarProviderOptions } from '../../utils/addToCalendar';
 
 async function downloadIcsFile(bookingId, filename = 'luminexa-booking.ics') {
@@ -30,6 +31,8 @@ export default function AddToCalendarModal({ open, booking, onClose }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
 
+  useModalBodyLock(open && Boolean(booking));
+
   useEffect(() => {
     if (!open) return undefined;
     setError(null);
@@ -38,12 +41,7 @@ export default function AddToCalendarModal({ open, booking, onClose }) {
       if (e.key === 'Escape') onClose?.();
     };
     window.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open || !booking) return null;
@@ -73,7 +71,7 @@ export default function AddToCalendarModal({ open, booking, onClose }) {
 
   const dialog = (
     <div
-      className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-slate-900/40 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-to-calendar-title"

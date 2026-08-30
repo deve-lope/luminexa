@@ -10,7 +10,9 @@ const BOOKING_LABELS = {
 
 const INQUIRY_LABELS = {
   pending: 'Awaiting approval',
-  active: 'Approved',
+  active: 'In progress',
+  quoted: 'Quote ready',
+  quote_accepted: 'Pick a time',
   completed: 'Done',
   declined: 'Declined',
 };
@@ -27,7 +29,9 @@ const BOOKING_TONES = {
 
 const INQUIRY_TONES = {
   pending: 'bg-amber-100 text-amber-900',
-  active: 'bg-emerald-100 text-emerald-900',
+  active: 'bg-sky-100 text-sky-900',
+  quoted: 'bg-violet-100 text-violet-900',
+  quote_accepted: 'bg-teal-100 text-teal-900',
   completed: 'bg-slate-100 text-slate-700',
   declined: 'bg-red-100 text-red-800',
 };

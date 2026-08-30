@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import ServiceLocationInput, {
   formatServiceAddressDisplay,
   validateServiceLocationValue,
@@ -40,6 +42,8 @@ function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  useModalBodyLock(open);
+
   useEffect(() => {
     if (!open) return;
     setOldPassword('');
@@ -68,9 +72,9 @@ function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-black/40 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="change-password-title"
@@ -156,7 +160,8 @@ function ChangePasswordDialog({ open, onClose, onSuccess, teal = false }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -166,6 +171,8 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
   const [deletionDetail, setDeletionDetail] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  useModalBodyLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -219,9 +226,9 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-10 sm:items-center sm:pt-4"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-black/50 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-account-title"
@@ -313,7 +320,8 @@ function DeleteAccountDialog({ open, onClose, onDeleted, isProvider }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

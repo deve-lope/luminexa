@@ -18,6 +18,7 @@ export default function CustomerServiceDetailsForm({
   showAddressPreview = false,
   compact = false,
   requireMessage = false,
+  messagePlaceholder = 'Be specific: e.g. fix kitchen sink leak, full interior detail, install new light fixture…',
 }) {
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
@@ -45,7 +46,7 @@ export default function CustomerServiceDetailsForm({
           id="service-message"
           value={message}
           onChange={(e) => onMessageChange(e.target.value)}
-          placeholder="Be specific: e.g. fix kitchen sink leak, full interior detail, install new light fixture…"
+          placeholder={messagePlaceholder}
           rows={compact ? 3 : 4}
           className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
         />

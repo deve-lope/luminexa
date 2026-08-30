@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Elements,
   ExpressCheckoutElement,
@@ -9,6 +10,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
+import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 
 function formatMoney(amount, currency = 'CAD') {
   try {
@@ -300,6 +302,8 @@ export default function InvoiceStripePayModal({
   const [loading, setLoading] = useState(false);
   const [payConfig, setPayConfig] = useState(null);
 
+  useModalBodyLock(open);
+
   useEffect(() => {
     if (!open || !bookingId) return undefined;
     let cancelled = false;
@@ -341,9 +345,9 @@ export default function InvoiceStripePayModal({
     invoice?.currency || payConfig?.currency || 'CAD'
   );
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
+      className="lx-modal-overlay fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stripe-pay-title"
@@ -429,6 +433,7 @@ export default function InvoiceStripePayModal({
           </Elements>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
