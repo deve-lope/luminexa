@@ -7,7 +7,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from businesses.models import Organization, OrganizationMembership
 
 from .booking_lead import assert_slot_bookable_for_customer
-from .models import AvailabilitySlot, Booking, Service
+from .models import AvailabilitySlot, Booking, BookingStatusEvent, Service
 
 
 def resolve_booking_service_address(*, service, customer_address=''):
@@ -1065,3 +1065,51 @@ def schedule_return_visit(booking, *, new_slot, staff_user, note=''):
     )
     new_slot.refresh_status(save=True)
     return return_booking
+
+
+def booking_needs_attendance_prompt(booking, *, now=None):
+    """After end_at, ask the customer if the provider showed up (confirmed jobs only)."""
+    if booking.status != Booking.Status.CONFIRMED:
+        return False
+    if booking.customer_confirmed_attendance_at or booking.customer_reported_no_show_at:
+        return False
+    now = now or timezone.now()
+    return now > booking.end_at
+
+
+@transaction.atomic
+def customer_report_provider_attendance(booking, *, customer, showed_up):
+    if booking.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can report attendance for this booking.')
+    if booking.status != Booking.Status.CONFIRMED:
+        raise ValidationError({
+            'status': 'Attendance can only be reported for confirmed appointments.',
+        })
+    now = timezone.now()
+    if now <= booking.end_at:
+        raise ValidationError({
+            'status': 'You can report attendance after the scheduled appointment time.',
+        })
+    if booking.customer_confirmed_attendance_at or booking.customer_reported_no_show_at:
+        raise ValidationError({'detail': 'Attendance was already recorded for this appointment.'})
+
+    if showed_up:
+        booking.customer_confirmed_attendance_at = now
+        booking.save(update_fields=['customer_confirmed_attendance_at', 'updated_at'])
+        return booking
+
+    booking.customer_reported_no_show_at = now
+    booking.save(update_fields=['customer_reported_no_show_at', 'updated_at'])
+    from .booking_audit import log_booking_event
+    from .notifications import create_provider_customer_no_show_report_notification
+
+    log_booking_event(
+        booking,
+        action=BookingStatusEvent.Action.CUSTOMER_NO_SHOW_REPORTED,
+        actor=customer,
+        old_status=booking.status,
+        new_status=booking.status,
+        note='Customer reported provider did not show up',
+    )
+    create_provider_customer_no_show_report_notification(booking)
+    return booking

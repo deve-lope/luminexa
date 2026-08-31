@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { formatMonthYear } from '../../utils/datetime';
 import { formatLocalDateKey, isDateKeyInRange, todayKey } from '../../utils/dateRange';
 
-const WEEKDAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAYS_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const WEEKDAYS_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function dayCellClass({
   status,
@@ -78,13 +79,16 @@ export default function BookingCalendar({
 
   const shellClass =
     size === 'compact'
-      ? 'mx-auto w-full max-w-[14rem] rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm'
+      ? 'w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm'
       : 'w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4';
 
-  const cellH = size === 'compact' ? 'h-9 min-h-[36px]' : 'h-11 min-h-[44px] sm:h-11';
-  const cellText = size === 'compact' ? 'text-[11px]' : 'text-sm';
-  const weekText = size === 'compact' ? 'text-[9px]' : 'text-xs';
-  const gridGap = size === 'compact' ? 'gap-px' : 'gap-1';
+  const weekdayLabels = size === 'compact' ? WEEKDAYS_SHORT : WEEKDAYS_FULL;
+  const cellClass =
+    size === 'compact'
+      ? 'aspect-square w-full min-h-[2.35rem] text-xs sm:min-h-[2.5rem] sm:text-sm'
+      : 'aspect-square w-full min-h-[2.5rem] text-sm sm:min-h-[2.75rem]';
+  const weekText = size === 'compact' ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm';
+  const gridGap = 'gap-1 sm:gap-1.5';
 
   const selectDay = (cell) => {
     if (cell.isPast) return;
@@ -92,11 +96,17 @@ export default function BookingCalendar({
     onSelectDay(cell.key);
   };
 
+  /** Prevent mobile browsers from scrolling the page when month nav steals focus. */
+  const keepScrollOnPress = (event) => {
+    event.preventDefault();
+  };
+
   return (
     <div className={shellClass}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
+          onMouseDown={keepScrollOnPress}
           onClick={onPrevMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -114,6 +124,7 @@ export default function BookingCalendar({
         </h3>
         <button
           type="button"
+          onMouseDown={keepScrollOnPress}
           onClick={onNextMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -127,8 +138,8 @@ export default function BookingCalendar({
       <div
         className={`grid grid-cols-7 text-center font-medium leading-none text-slate-500 ${gridGap} ${weekText}`}
       >
-        {WEEKDAYS_SHORT.map((w, i) => (
-          <div key={`${w}-${i}`} className="py-0.5">
+        {weekdayLabels.map((w, i) => (
+          <div key={`${w}-${i}`} className="py-1 font-semibold">
             {w}
           </div>
         ))}
@@ -137,7 +148,7 @@ export default function BookingCalendar({
       <div className={`mt-1 grid grid-cols-7 ${gridGap}`}>
         {cells.map((cell) =>
           cell.pad ? (
-            <div key={cell.key} className={cellH} aria-hidden />
+            <div key={cell.key} className={cellClass} aria-hidden />
           ) : (
             <button
               key={cell.key}
@@ -149,7 +160,7 @@ export default function BookingCalendar({
                 selectedDay === cell.key ? ', selected' : ''
               }${cell.hasOpen ? ', has open slots' : ''}`}
               aria-disabled={cell.isPast || (openOnly && !cell.hasOpen)}
-              className={`relative flex w-full touch-manipulation select-none items-center justify-center rounded-lg font-semibold leading-none transition ${cellH} ${cellText} ${dayCellClass(
+              className={`relative flex touch-manipulation select-none items-center justify-center rounded-lg font-semibold leading-none transition ${cellClass} ${dayCellClass(
                 {
                   status: cell.status,
                   isSelected: selectedDay === cell.key,

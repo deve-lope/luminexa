@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBodyLock } from '../hooks/useModalBodyLock';
+import { useOverlayHistoryBack } from '../hooks/useOverlayHistoryBack';
 
 export default function ConfirmDialog({
   open,
@@ -14,6 +15,7 @@ export default function ConfirmDialog({
   onClose,
 }) {
   useModalBodyLock(open);
+  useOverlayHistoryBack(open, onClose);
 
   if (!open) return null;
 

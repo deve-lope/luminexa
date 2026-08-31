@@ -76,6 +76,7 @@ export default function CustomerLayout({ children }) {
 
   useEffect(() => {
     if (!isAuthenticated || !isCustomerAppRoute) return undefined;
+    jobsAPI.recordAppSeen().catch(() => {});
     loadNotificationCount();
     const id = window.setInterval(loadNotificationCount, 60000);
     const onChanged = () => loadNotificationCount();
@@ -133,6 +134,12 @@ export default function CustomerLayout({ children }) {
     }
     if (location.pathname.endsWith('/customer/notifications')) {
       return { eyebrow: 'Updates', title: 'All notifications' };
+    }
+    if (location.pathname.endsWith('/customer/quotes')) {
+      return { eyebrow: 'Bookings', title: 'Quotes' };
+    }
+    if (location.pathname.endsWith('/customer/completed')) {
+      return { eyebrow: 'Bookings', title: 'Completed' };
     }
     if (location.pathname.endsWith('/customer/history')) {
       return { eyebrow: 'Bookings', title: 'History' };

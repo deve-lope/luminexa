@@ -40,3 +40,11 @@ def send_unpaid_invoice_payment_reminders():
     from .notifications import send_unpaid_invoice_followups
 
     return send_unpaid_invoice_followups()
+
+
+@shared_task
+def send_rate_service_reminders():
+    """Ask customers to rate completed jobs (delayed, awake hours only)."""
+    from .notifications import send_rate_service_reminders as _send
+
+    return _send()

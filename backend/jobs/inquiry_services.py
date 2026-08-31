@@ -73,6 +73,22 @@ def accept_inquiry_quote(inquiry, *, customer):
 
 
 @transaction.atomic
+def cancel_inquiry_request(inquiry, *, customer):
+    """Customer withdraws a quote request before a quote is sent."""
+    if inquiry.status not in (
+        CustomerServiceInquiry.Status.PENDING,
+        CustomerServiceInquiry.Status.ACTIVE,
+    ):
+        raise ValidationError({'status': 'Only open requests can be cancelled.'})
+    if inquiry.customer_id != customer.id:
+        raise PermissionDenied('Only the customer can cancel this request.')
+    inquiry.status = CustomerServiceInquiry.Status.CANCELLED
+    inquiry.dismissed_at = timezone.now()
+    inquiry.save(update_fields=['status', 'dismissed_at'])
+    return inquiry
+
+
+@transaction.atomic
 def decline_inquiry_quote(inquiry, *, customer):
     if inquiry.status not in (
         CustomerServiceInquiry.Status.QUOTED,

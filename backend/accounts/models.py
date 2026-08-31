@@ -70,6 +70,11 @@ class User(AbstractUser):
         blank=True,
         help_text='Set when the account is deleted / anonymized on user request.',
     )
+    app_last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Updated when the customer opens the app (session heartbeat).',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name']

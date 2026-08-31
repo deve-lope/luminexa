@@ -535,6 +535,28 @@ class InquiryQuoteFlowTests(TestCase):
         self.assertIsNotNone(inquiry.booking_id)
         self.assertEqual(inquiry.booking.start_at, self.slot.start_at)
 
+    def test_customer_can_cancel_pending_inquiry(self):
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiry/',
+            {
+                'service_id': self.service.id,
+                'message': 'Need deep cleaning quote',
+                'service_address': '123 Main St',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        inquiry_id = create.data['id']
+        cancelled = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry_id}/cancel/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.data)
+        self.assertEqual(cancelled.data['status'], CustomerServiceInquiry.Status.CANCELLED)
+
 
 class RecurringScheduleSyncTests(TestCase):
     def test_sync_replaces_old_generated_open_slots_when_hours_change(self):

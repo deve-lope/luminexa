@@ -7,7 +7,7 @@ import ServiceThumb from '../services/ServiceThumb';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   bookService,
-  customerHistory,
+  customerInquiryDetail,
   customerProviderService,
   customerProviderServiceDetail,
   serviceDetail,
@@ -131,12 +131,15 @@ export default function BookableServiceCard({ service, bookTo, useCustomerProvid
           orgSlug={providerKey}
           service={service}
           onClose={() => setRequestOpen(false)}
-          onSuccess={() => {
+          onSuccess={(inquiry) => {
+            setRequestOpen(false);
+            if (inquiry?.id) {
+              navigate(customerInquiryDetail(inquiry.id));
+              return;
+            }
             setSentMessage(
               `Quote request sent. ${service.organization_name || 'The business'} will reply with a price.`
             );
-            setRequestOpen(false);
-            navigate(customerHistory());
           }}
         />
       )}

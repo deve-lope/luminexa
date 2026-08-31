@@ -14,6 +14,7 @@ const INQUIRY_LABELS = {
   quoted: 'Quote ready',
   quote_accepted: 'Pick a time',
   completed: 'Done',
+  cancelled: 'Cancelled',
   declined: 'Declined',
 };
 
@@ -33,6 +34,7 @@ const INQUIRY_TONES = {
   quoted: 'bg-violet-100 text-violet-900',
   quote_accepted: 'bg-teal-100 text-teal-900',
   completed: 'bg-slate-100 text-slate-700',
+  cancelled: 'bg-slate-100 text-slate-600',
   declined: 'bg-red-100 text-red-800',
 };
 

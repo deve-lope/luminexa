@@ -66,10 +66,15 @@ export function resolveCustomerBack(pathname, search = '') {
   if (/^\/customer\/bookings\/[^/]+$/.test(path)) {
     return { to: '/customer/bookings' };
   }
+  if (/^\/customer\/inquiries\/[^/]+$/.test(path)) {
+    return { to: '/customer/quotes' };
+  }
   if (path === '/customer/bookings') return { to: '/customer' };
+  if (path === '/customer/completed') return { to: '/customer/bookings' };
+  if (path === '/customer/quotes') return { to: '/customer/bookings' };
   if (path === '/customer/messages') return { to: '/customer' };
   if (path === '/customer/notifications') return { to: '/customer' };
-  if (path === '/customer/history') return { to: '/customer' };
+  if (path === '/customer/history') return { to: '/customer/bookings' };
   if (path === '/customer/about') return { to: '/customer' };
   if (/^\/customer\/provider\/[^/]+\/checkout$/.test(path)) {
     const key = path.split('/')[3];

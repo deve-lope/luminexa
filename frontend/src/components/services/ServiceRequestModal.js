@@ -10,6 +10,7 @@ import {
   isShopService,
   serviceRequiresQuote,
 } from '../../utils/serviceDisplay';
+import { formatTimeRange } from '../../utils/datetime';
 
 function parseError(err) {
   const d = err.response?.data;
@@ -17,6 +18,29 @@ function parseError(err) {
   if (d?.detail) return d.detail;
   const first = d && Object.values(d)[0];
   return Array.isArray(first) ? first[0] : first || 'Could not send your request.';
+}
+
+function formatPlanningDayLabel(dayKey) {
+  return new Date(`${dayKey}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function buildInquiryMessage(baseMessage, needsQuote, planning) {
+  const trimmed = (baseMessage || '').trim();
+  const fallback = needsQuote
+    ? 'Quote request — please send pricing for this job.'
+    : 'Service request';
+  let message = trimmed || fallback;
+  if (!planning?.dayKey) return message;
+  let note = `Preferred date: ${formatPlanningDayLabel(planning.dayKey)}`;
+  if (planning.slot) {
+    note += ` · ${formatTimeRange(planning.slot.start_at, planning.slot.end_at)}`;
+  }
+  note += ' (planning only — not booked yet)';
+  return `${message}\n\n${note}`;
 }
 
 /**
@@ -28,12 +52,12 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
   const { user } = useAuth();
   const needsQuote = serviceRequiresQuote(service);
   const [message, setMessage] = useState('');
-  const [preferredDate, setPreferredDate] = useState('');
   const [serviceAddress, setServiceAddress] = useState(
     () => (user?.default_service_address || '').trim()
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [planningPreference, setPlanningPreference] = useState(null);
 
   const shop = isShopService(service);
   const shopLocation = (service?.shop_location || '').trim();
@@ -58,18 +82,12 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
       const payload = {
         service_id: service?.id,
         service_label: service?.name || '',
-        message:
-          trimmed ||
-          (needsQuote
-            ? 'Quote request — please send pricing for this job.'
-            : 'Service request'),
+        message: buildInquiryMessage(trimmed, needsQuote, planningPreference),
         service_address: shop ? shopLocation : serviceAddress.trim(),
+        preferred_date: planningPreference?.dayKey || null,
       };
-      if (preferredDate) {
-        payload.preferred_date = preferredDate;
-      }
-      await businessesAPI.submitServiceInquiry(orgSlug, payload);
-      onSuccess?.();
+      const res = await businessesAPI.submitServiceInquiry(orgSlug, payload);
+      onSuccess?.(res.data);
       onClose?.();
     } catch (err) {
       setError(parseError(err));
@@ -93,8 +111,8 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
           )}
           {needsQuote && (
             <p className="mt-2 text-sm text-slate-600">
-              Tell the business what you need. They&apos;ll send a price — you pick a date after
-              you accept the quote.
+              Tell the business what you need. They&apos;ll send a price — you&apos;ll pick and
+              confirm a time after you accept the quote.
             </p>
           )}
         </div>
@@ -159,28 +177,13 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
             />
           </>
         )}
-        <div>
-          <label htmlFor="quote-preferred-date" className="mb-1 block text-sm font-medium text-slate-700">
-            Preferred date <span className="font-normal text-slate-500">(optional)</span>
-          </label>
-          <input
-            id="quote-preferred-date"
-            type="date"
-            value={preferredDate}
-            onChange={(e) => setPreferredDate(e.target.value)}
-            min={new Date().toISOString().slice(0, 10)}
-            className="w-full min-h-[44px] rounded-lg border border-slate-200 px-3"
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            A hint for the business — not a reserved appointment.
-          </p>
-        </div>
         {service?.id && orgSlug && (
           <ServiceAvailabilityPreview
             orgSlug={orgSlug}
             serviceId={service.id}
-            compact
-            hint="Open slots shown for planning — your time is not held until you accept a quote and book."
+            planningSelect
+            hint="Tap a date or time you'd prefer — the business sees this when reviewing your request. Nothing is held until you accept a quote and book."
+            onPlanningChange={setPlanningPreference}
           />
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}

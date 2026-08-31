@@ -6,7 +6,7 @@ import Skeleton, { SkeletonList } from '../../components/Skeleton';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
 import { formatWhen } from '../../utils/datetime';
-import { isHistoryBooking } from '../../utils/customerBookings';
+import { isActiveInquiry, isHistoryBooking } from '../../utils/customerBookings';
 import { customerBookingDetail, customerFind, customerInquiryDetail, customerProviderPage } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 
@@ -18,6 +18,7 @@ function inquiryStatusLabel(inquiry) {
     quoted: 'Quote ready',
     quote_accepted: 'Pick a time',
     completed: 'Booked',
+    cancelled: 'Cancelled',
     declined: 'Declined',
   };
   return labels[inquiry.status] || inquiry.status;
@@ -33,6 +34,7 @@ function inquiryStatusClass(inquiry) {
     quoted: 'bg-violet-100 text-violet-900',
     quote_accepted: 'bg-teal-100 text-teal-900',
     completed: 'bg-slate-100 text-slate-600',
+    cancelled: 'bg-slate-100 text-slate-600',
     declined: 'bg-red-100 text-red-800',
   };
   return tones[inquiry.status] || 'bg-amber-100 text-amber-800';
@@ -68,7 +70,19 @@ export default function CustomerHistoryPage() {
     [bookings]
   );
 
-  const hasActivity = historyBookings.length > 0 || inquiries.length > 0;
+  const historyInquiries = useMemo(
+    () =>
+      inquiries.filter(
+        (inq) =>
+          !isActiveInquiry(inq) &&
+          (inq.status === 'declined' ||
+            inq.status === 'cancelled' ||
+            Boolean(inq.dismissed_at))
+      ),
+    [inquiries]
+  );
+
+  const hasActivity = historyBookings.length > 0 || historyInquiries.length > 0;
 
   return (
     <div className="space-y-6">
@@ -86,7 +100,8 @@ export default function CustomerHistoryPage() {
             <div className="lx-empty">
               <p className="text-slate-600">No past activity yet.</p>
               <p className="mt-1 text-sm text-slate-500">
-                Completed bookings, cancelled requests, and custom service messages will appear here.
+                Cancelled requests, declined quotes, and other closed activity appear here.
+                Completed jobs are under Completed.
               </p>
               <Link
                 to={customerFind()}
@@ -107,17 +122,22 @@ export default function CustomerHistoryPage() {
                     booking={b}
                     compact
                     detailTo={customerBookingDetail(b.id)}
+                    onQuoteUpdated={(updated) => {
+                      setBookings((prev) =>
+                        prev.map((row) => (row.id === updated.id ? updated : row)),
+                      );
+                    }}
                   />
                 ))}
               </ul>
             </section>
           )}
 
-          {inquiries.length > 0 && (
+          {historyInquiries.length > 0 && (
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Service requests</h2>
               <ul className="space-y-3">
-                {inquiries.map((inq) => (
+                {historyInquiries.map((inq) => (
                   <li key={inq.id} className="lx-card">
                     <p className="font-semibold text-slate-900">
                       {inq.service_name || inq.service_label || 'Custom service request'}

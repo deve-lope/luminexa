@@ -13,6 +13,7 @@ import {
   wasApprovedByProvider,
   wasDeclinedByProvider,
 } from '../../utils/customerBookings';
+import ProviderAttendancePrompt from './ProviderAttendancePrompt';
 import {
   customerProviderPage,
   customerProviderServiceDetail,
@@ -117,6 +118,7 @@ export default function CustomerBookingCard({
     bookingPolicy: booking.booking_policy,
     servicePricingType: booking.service_pricing_type,
     awaitingCustomerAcceptance: awaitingTimeChange,
+    customerReportedNoShow: Boolean(booking.customer_reported_no_show_at),
   });
 
   if (compact) {
@@ -176,6 +178,11 @@ export default function CustomerBookingCard({
         ) : (
           body
         )}
+        <ProviderAttendancePrompt
+          compact
+          booking={booking}
+          onAnswered={onQuoteUpdated}
+        />
       </li>
     );
   }

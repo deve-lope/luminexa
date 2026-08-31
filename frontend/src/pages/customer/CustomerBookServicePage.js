@@ -20,7 +20,7 @@ import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import ServiceRequestModal from '../../components/services/ServiceRequestModal';
 import ServiceAvailabilityPreview from '../../components/booking/ServiceAvailabilityPreview';
-import { serviceDetail, customerBookings, customerHistory } from '../../utils/customerPaths';
+import { serviceDetail, customerBookings, customerInquiryDetail } from '../../utils/customerPaths';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
@@ -766,13 +766,15 @@ export default function CustomerBookServicePage() {
           orgSlug={businessSlug}
           service={service || listedService}
           onClose={() => setRequestOpen(false)}
-          onSuccess={() => {
+          onSuccess={(inquiry) => {
             setRequestOpen(false);
             showToast(
-              'Quote request sent. The business will reply with a price — then you can book a date.',
+              'Quote request sent. The business will reply with a price — then you can book a time.',
               'success'
             );
-            navigate(customerHistory());
+            if (inquiry?.id) {
+              navigate(customerInquiryDetail(inquiry.id));
+            }
           }}
         />
       )}

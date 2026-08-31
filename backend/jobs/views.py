@@ -1517,6 +1517,23 @@ class BookingViewSet(viewsets.ModelViewSet):
         notify_booking_cancelled(booking, by_user=request.user)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='report-attendance')
+    def report_attendance(self, request, pk=None):
+        from .booking_services import customer_report_provider_attendance
+
+        booking = self.get_object()
+        if booking.customer_id != request.user.id:
+            raise PermissionDenied('Only the customer can report attendance for this booking.')
+        showed_up = request.data.get('showed_up')
+        if showed_up is None:
+            raise ValidationError({'showed_up': 'Required (true or false).'})
+        booking = customer_report_provider_attendance(
+            booking,
+            customer=request.user,
+            showed_up=bool(showed_up),
+        )
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         booking = self.get_object()
@@ -2069,6 +2086,24 @@ class CustomerInquiryDeclineQuoteAPIView(APIView):
         return Response(CustomerServiceInquirySerializer(inquiry).data)
 
 
+class CustomerInquiryCancelAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        from .inquiry_services import cancel_inquiry_request
+
+        cancel_inquiry_request(inquiry, customer=request.user)
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
 class CustomerInquiryBookSlotAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2163,6 +2198,20 @@ class ConversationMessagesAPIView(APIView):
             ServiceRequestMessageSerializer(msg, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class CustomerAppHeartbeatAPIView(APIView):
+    """Record that the customer opened the app (for one-time rate reminders)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        now = timezone.now()
+        User.objects.filter(pk=request.user.pk).update(app_last_seen_at=now)
+        return Response({'ok': True})
 
 
 class CustomerNotificationsAPIView(APIView):

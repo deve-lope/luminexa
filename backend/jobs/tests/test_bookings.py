@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from businesses.models import Organization, OrganizationMembership
-from jobs.models import AvailabilitySlot, Booking, Invoice, Service, ServiceRequestMessage
+from jobs.models import AvailabilitySlot, Booking, BookingStatusEvent, Invoice, ProviderNotification, Service, ServiceRequestMessage
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -902,3 +902,102 @@ class BookingLifecycleTests(TestCase):
 
         missing = self.client.get('/api/v1/public/bookings/not-a-real-token/', HTTP_HOST='localhost')
         self.assertEqual(missing.status_code, 404)
+
+    def test_customer_reports_attendance_after_appointment(self):
+        start = timezone.now() - timedelta(hours=3)
+        end = start + timedelta(hours=1)
+        slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=start,
+            end_at=end,
+            status=AvailabilitySlot.Status.BOOKED,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=slot,
+            start_at=start,
+            end_at=end,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        future_start = timezone.now() + timedelta(hours=1)
+        future_end = future_start + timedelta(hours=1)
+        future_booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            start_at=future_start,
+            end_at=future_end,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+
+        self._auth(self.customer)
+        blocked = self.client.post(
+            f'/api/v1/bookings/{future_booking.id}/report-attendance/',
+            {'showed_up': True},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(blocked.status_code, 400)
+
+        detail = self.client.get(f'/api/v1/bookings/{booking.id}/', HTTP_HOST='localhost')
+        self.assertEqual(detail.status_code, 200)
+        self.assertTrue(detail.data['needs_attendance_prompt'])
+
+        yes = self.client.post(
+            f'/api/v1/bookings/{booking.id}/report-attendance/',
+            {'showed_up': True},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(yes.status_code, 200)
+        booking.refresh_from_db()
+        self.assertIsNotNone(booking.customer_confirmed_attendance_at)
+        self.assertFalse(yes.data['needs_attendance_prompt'])
+
+        booking.customer_confirmed_attendance_at = None
+        booking.save(update_fields=['customer_confirmed_attendance_at', 'updated_at'])
+
+        no = self.client.post(
+            f'/api/v1/bookings/{booking.id}/report-attendance/',
+            {'showed_up': False},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(no.status_code, 200)
+        booking.refresh_from_db()
+        self.assertIsNotNone(booking.customer_reported_no_show_at)
+        self.assertFalse(no.data['needs_attendance_prompt'])
+        self.assertTrue(
+            BookingStatusEvent.objects.filter(
+                booking=booking,
+                action=BookingStatusEvent.Action.CUSTOMER_NO_SHOW_REPORTED,
+            ).exists()
+        )
+        self.assertTrue(
+            ProviderNotification.objects.filter(
+                organization=self.org,
+                booking=booking,
+                kind=ProviderNotification.Kind.CUSTOMER_REPORTED_NO_SHOW,
+            ).exists()
+        )
+
+        completed = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            start_at=start - timedelta(days=1),
+            end_at=end - timedelta(days=1),
+            status=Booking.Status.COMPLETED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        completed_detail = self.client.get(
+            f'/api/v1/bookings/{completed.id}/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(completed_detail.status_code, 200)
+        self.assertFalse(completed_detail.data['needs_attendance_prompt'])

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from businesses.models import Organization
 
-from .datetime_display import format_booking_when
+from .datetime_display import format_booking_when, resolve_display_timezone
 from .models import CustomerNotification, ProviderNotification, Service
 
 logger = logging.getLogger(__name__)
@@ -104,6 +104,7 @@ CUSTOMER_BOOKING_UPDATE_KINDS = (
     CustomerNotification.Kind.BOOKING_CANCELLED,
     CustomerNotification.Kind.BOOKING_RESCHEDULED,
     CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+    CustomerNotification.Kind.BOOKING_REMINDER,
     CustomerNotification.Kind.BOOKING_COMPLETED,
     CustomerNotification.Kind.INVOICE_READY,
     CustomerNotification.Kind.PAYMENT_CONFIRMED,
@@ -277,6 +278,30 @@ def create_provider_customer_cancel_notification(booking):
         org,
         title=f'Booking cancelled — {org.name}',
         body=f'{customer_name} cancelled {service_name}.',
+        link_path=provider_request_link_path(org.slug, booking.pk),
+    )
+
+
+def create_provider_customer_no_show_report_notification(booking):
+    """In-app alert when a customer reports the provider did not show up."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    customer_name = _customer_label(booking)
+    org = booking.organization
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.CUSTOMER_REPORTED_NO_SHOW,
+        message=(
+            f'{customer_name} reported you did not show up for {service_name} '
+            f'({_format_when(booking.start_at, booking)}). '
+            'Open the booking to respond or mark no-show.'
+        ),
+        link_path=provider_request_link_path(org.slug, booking.pk),
+    )
+    _push_org_staff(
+        org,
+        title=f'No-show reported — {org.name}',
+        body=f'{customer_name} reported a no-show for {service_name}.',
         link_path=provider_request_link_path(org.slug, booking.pk),
     )
 
@@ -1004,8 +1029,32 @@ def _send_to(recipients, subject, body_lines, attachments=None):
         logger.exception('Failed to send email to %s: %s', recipients, subject)
 
 
+def notify_booking_day_before_reminder(booking):
+    """In-app + push reminder ~24 hours before a confirmed appointment."""
+    from django.utils import dateformat
+
+    service_name = booking.service.name if booking.service_id else 'Service'
+    local = timezone.localtime(
+        booking.start_at,
+        resolve_display_timezone(booking),
+    )
+    time_label = dateformat.format(local, 'g:i A')
+    return create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_REMINDER,
+        title=f'Ready for tomorrow — {booking.organization.name}',
+        message=(
+            f'Your {service_name} appointment is tomorrow at {time_label}. '
+            f'Open Bookings for details.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+        link_path=f'/customer/bookings/{booking.pk}',
+    )
+
+
 def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
-    """Email customers with confirmed bookings starting in ~24 hours (once per booking)."""
+    """Remind customers ~24 hours before confirmed appointments (email + in-app + push)."""
     from datetime import timedelta
 
     from .models import Booking
@@ -1022,6 +1071,7 @@ def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
     ).select_related('organization', 'service', 'customer')
     for booking in bookings:
         send_booking_email('booking_reminder', booking)
+        notify_booking_day_before_reminder(booking)
         booking.reminder_sent_at = now
         booking.save(update_fields=['reminder_sent_at'])
         sent += 1
@@ -1090,4 +1140,68 @@ def send_unpaid_invoice_followups():
             inv.last_payment_reminder_at = now
             inv.save(update_fields=['payment_reminder_count', 'last_payment_reminder_at', 'updated_at'])
             sent += 1
+    return sent
+
+
+def notify_rate_service(booking):
+    """Ask the customer to rate a completed job (in-app + push when allowed)."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    return create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.RATE_SERVICE,
+        title=f'Rate your visit — {booking.organization.name}',
+        message=(
+            f'How was your {service_name} appointment? '
+            f'Take a moment to rate {booking.organization.name}.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+        link_path=f'/customer/bookings/{booking.pk}',
+    )
+
+
+def send_rate_service_reminders():
+    """
+    One-time rate nudge the day after completion if the customer did not open the app.
+
+    Runs hourly via Celery. Skips when the in-app rate prompt already had a chance
+    (customer opened the app on or after the next calendar day).
+    """
+    from .models import Booking
+    from .rate_reminder import should_send_rate_service_reminder, should_skip_rate_reminder_as_handled
+    from .ratings import customer_can_rate_service
+
+    now = timezone.now()
+    sent = 0
+
+    bookings = Booking.objects.filter(
+        status=Booking.Status.COMPLETED,
+        rate_reminder_sent_at__isnull=True,
+        service__isnull=False,
+    ).select_related('service', 'customer', 'organization')
+
+    for booking in bookings:
+        if not customer_can_rate_service(booking.service, booking.customer):
+            Booking.objects.filter(pk=booking.pk).update(
+                rate_reminder_sent_at=now,
+                updated_at=now,
+            )
+            continue
+
+        if should_skip_rate_reminder_as_handled(booking, now=now):
+            Booking.objects.filter(pk=booking.pk).update(
+                rate_reminder_sent_at=now,
+                updated_at=now,
+            )
+            continue
+
+        if not should_send_rate_service_reminder(booking, now=now):
+            continue
+
+        notify_rate_service(booking)
+        Booking.objects.filter(pk=booking.pk).update(
+            rate_reminder_sent_at=now,
+            updated_at=now,
+        )
+        sent += 1
     return sent

@@ -28,6 +28,14 @@ export function customerInquiryDetail(inquiryId) {
   return `/customer/inquiries/${inquiryId}`;
 }
 
+export function customerQuotes() {
+  return '/customer/quotes';
+}
+
+export function customerCompleted() {
+  return '/customer/completed';
+}
+
 export function customerHistory() {
   return '/customer/history';
 }

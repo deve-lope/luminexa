@@ -788,6 +788,9 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     profit = serializers.SerializerMethodField()
     customer_view_url = serializers.SerializerMethodField()
     customer_view_token = serializers.CharField(read_only=True)
+    customer_confirmed_attendance_at = serializers.DateTimeField(read_only=True)
+    customer_reported_no_show_at = serializers.DateTimeField(read_only=True)
+    needs_attendance_prompt = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -806,12 +809,23 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'customer_view_token', 'customer_view_url',
+            'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
+            'needs_attendance_prompt',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
 
     def get_customer_view_url(self, obj):
         return obj.customer_view_url()
+
+    def get_needs_attendance_prompt(self, obj):
+        from .booking_services import booking_needs_attendance_prompt
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated or obj.customer_id != user.id:
+            return False
+        return booking_needs_attendance_prompt(obj)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -926,6 +940,7 @@ class BookingSerializer(serializers.ModelSerializer):
     profit = serializers.SerializerMethodField()
     customer_view_url = serializers.SerializerMethodField()
     customer_view_token = serializers.CharField(read_only=True)
+    needs_attendance_prompt = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -945,6 +960,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'customer_view_token', 'customer_view_url',
+            'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
+            'needs_attendance_prompt',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -961,6 +978,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'cost_lines', 'profit',
             'customer_view_token', 'customer_view_url',
+            'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
+            'needs_attendance_prompt',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -998,8 +1017,31 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_customer_view_url(self, obj):
         return obj.customer_view_url()
 
+    def get_needs_attendance_prompt(self, obj):
+        from .booking_services import booking_needs_attendance_prompt
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated or obj.customer_id != user.id:
+            return False
+        return booking_needs_attendance_prompt(obj)
+
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
+
+    def get_requires_quote(self, obj):
+        from .booking_services import booking_requires_quote
+
+        return booking_requires_quote(obj.organization, obj.service)
+
+    def get_awaiting_quote_details(self, obj):
+        from .booking_services import booking_awaiting_quote_details
+
+        return booking_awaiting_quote_details(obj)
+
+    def get_profit(self, obj):
+        from .job_costing_services import booking_profit_summary
+        return booking_profit_summary(obj)
 
     def get_job_location(self, obj):
         addr = (obj.service_address or '').strip()

@@ -2,10 +2,12 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
+import { useOverlayHistoryBack } from '../../hooks/useOverlayHistoryBack';
 import { IconClose, TAB_ICONS } from '../icons/NavIcons';
 
 export default function AppMenuDrawer({ open, onClose, title, items }) {
   useModalBodyLock(open);
+  useOverlayHistoryBack(open, onClose);
 
   useEffect(() => {
     if (!open) return undefined;

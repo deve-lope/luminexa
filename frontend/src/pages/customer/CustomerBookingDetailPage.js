@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import ProviderAttendancePrompt from '../../components/customer/ProviderAttendancePrompt';
 import CustomerBookingCard from '../../components/customer/CustomerBookingCard';
 import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
@@ -121,6 +122,13 @@ export default function CustomerBookingDetailPage() {
 
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      )}
+
+      {booking && (
+        <ProviderAttendancePrompt
+          booking={booking}
+          onAnswered={(updated) => setBooking(updated)}
+        />
       )}
 
       {canPayOnline && (

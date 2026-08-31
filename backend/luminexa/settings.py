@@ -214,6 +214,7 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
 CELERY_BEAT_SCHEDULE = {
     'sync-recurring-slots-nightly': {
         'task': 'jobs.tasks.sync_all_recurring_slots',
@@ -225,6 +226,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     'invoice-payment-reminders-hourly': {
         'task': 'jobs.tasks.send_unpaid_invoice_payment_reminders',
+        'schedule': 3600.0,
+    },
+    'rate-service-reminders-hourly': {
+        'task': 'jobs.tasks.send_rate_service_reminders',
         'schedule': 3600.0,
     },
 }

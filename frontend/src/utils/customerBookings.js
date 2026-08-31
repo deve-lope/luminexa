@@ -1,6 +1,6 @@
 import { providerCustomerKey } from './providerRouteKey';
 
-export function bookingStatusLabel(status, { isPast = false, bookingPolicy, servicePricingType, awaitingCustomerAcceptance } = {}) {
+export function bookingStatusLabel(status, { isPast = false, bookingPolicy, servicePricingType, awaitingCustomerAcceptance, customerReportedNoShow = false } = {}) {
   const needsQuote = bookingPolicy === 'quote' || servicePricingType === 'quote'
     || servicePricingType === 'range' || servicePricingType === 'average';
   if (awaitingCustomerAcceptance && status === 'requested' && !needsQuote) {
@@ -22,7 +22,10 @@ export function bookingStatusLabel(status, { isPast = false, bookingPolicy, serv
         ? 'Review new time & quote'
         : 'Quote ready — review & accept';
   }
-  if (status === 'confirmed') return isPast ? 'Confirmed (past)' : 'Confirmed';
+  if (status === 'confirmed') {
+    if (customerReportedNoShow) return 'No-show reported';
+    return isPast ? 'Confirmed (past)' : 'Confirmed';
+  }
   if (status === 'in_progress') return 'In progress';
   if (status === 'needs_return') return 'Needs return visit';
   if (status === 'cancelled') return 'Cancelled';
@@ -58,8 +61,47 @@ export function isUpcomingBooking(booking, now = new Date()) {
   return !isPastBooking(booking, now);
 }
 
+/** Confirmed by both sides — real upcoming appointment (not awaiting quote/approval). */
+export function isConfirmedUpcomingBooking(booking, now = new Date()) {
+  if (booking.status === 'completed' || booking.status === 'cancelled') return false;
+  if (booking.customer_reported_no_show_at) return false;
+  if (!['confirmed', 'in_progress', 'needs_return'].includes(booking.status)) return false;
+  if (booking.status === 'in_progress') return true;
+  return !isPastBooking(booking, now);
+}
+
+export function needsAttendancePrompt(booking, now = new Date()) {
+  if (typeof booking?.needs_attendance_prompt === 'boolean') {
+    return booking.needs_attendance_prompt;
+  }
+  if (booking.status !== 'confirmed') return false;
+  if (booking.customer_confirmed_attendance_at || booking.customer_reported_no_show_at) {
+    return false;
+  }
+  return isPastBooking(booking, now);
+}
+
+/** Booking still waiting on a quote or provider/customer acceptance. */
+export function isPendingQuoteBooking(booking, now = new Date()) {
+  if (booking.status !== 'requested' && booking.status !== 'quoted') return false;
+  return !isPastBooking(booking, now);
+}
+
+export const ACTIVE_INQUIRY_STATUSES = new Set(['pending', 'active', 'quoted', 'quote_accepted']);
+
+export function isActiveInquiry(inquiry) {
+  return ACTIVE_INQUIRY_STATUSES.has(inquiry?.status);
+}
+
+export function isCompletedBooking(booking) {
+  return booking?.status === 'completed';
+}
+
 export function isHistoryBooking(booking, now = new Date()) {
-  return !isUpcomingBooking(booking, now);
+  if (isCompletedBooking(booking)) return false;
+  if (isConfirmedUpcomingBooking(booking, now)) return false;
+  if (isPendingQuoteBooking(booking, now)) return false;
+  return true;
 }
 
 /** Booking request still waiting on the provider (not approved or declined). */

@@ -232,7 +232,7 @@ export default function BookingStorefrontPage() {
           to={serviceBookPath(svc.id)}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-luminexa-accent hover:text-luminexa-accent"
         >
-          Book only this
+          Book now
         </Link>
       );
     }

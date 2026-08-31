@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
+import { useOverlayHistoryBack } from '../../hooks/useOverlayHistoryBack';
 
 /**
  * Full-screen modal shell above bottom tabs (z-110), safe areas, and keyboard inset.
@@ -16,6 +17,7 @@ export default function ModalOverlay({
   asSheet = true,
 }) {
   useModalBodyLock();
+  useOverlayHistoryBack(Boolean(onClose), onClose);
 
   useEffect(() => {
     if (!onClose) return undefined;

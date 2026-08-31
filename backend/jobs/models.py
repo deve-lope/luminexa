@@ -203,6 +203,7 @@ class ProviderNotification(models.Model):
         NEW_MESSAGE = 'new_message', 'New message'
         PROMO_OFFER = 'promo_offer', 'Promo offer'
         QUOTE_ANSWERS_RECEIVED = 'quote_answers_received', 'Quote answers received'
+        CUSTOMER_REPORTED_NO_SHOW = 'customer_reported_no_show', 'Customer reported no-show'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -242,7 +243,9 @@ class CustomerNotification(models.Model):
         BOOKING_CANCELLED = 'booking_cancelled', 'Booking cancelled'
         BOOKING_RESCHEDULED = 'booking_rescheduled', 'Booking rescheduled'
         BOOKING_TIME_CHANGE = 'booking_time_change', 'Provider proposed a new time'
+        BOOKING_REMINDER = 'booking_reminder', 'Appointment reminder'
         BOOKING_COMPLETED = 'booking_completed', 'Booking completed'
+        RATE_SERVICE = 'rate_service', 'Rate your service'
         INVOICE_READY = 'invoice_ready', 'Invoice ready'
         PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
         NEW_MESSAGE = 'new_message', 'New message'
@@ -297,6 +300,7 @@ class CustomerServiceInquiry(models.Model):
         QUOTED = 'quoted', 'Quote sent'
         QUOTE_ACCEPTED = 'quote_accepted', 'Quote accepted'
         COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
         DECLINED = 'declined', 'Declined'
 
     organization = models.ForeignKey(
@@ -644,6 +648,21 @@ class Booking(models.Model):
         blank=True,
         help_text='When provider staff last opened this booking conversation.',
     )
+    customer_confirmed_attendance_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Customer confirmed the provider showed up for this appointment.',
+    )
+    customer_reported_no_show_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Customer reported the provider did not show up.',
+    )
+    rate_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer was nudged to rate this completed job.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -885,6 +904,7 @@ class BookingStatusEvent(models.Model):
         COMPLETED = 'completed', 'Completed'
         RESCHEDULED = 'rescheduled', 'Rescheduled'
         NO_SHOW = 'no_show', 'No-show'
+        CUSTOMER_NO_SHOW_REPORTED = 'customer_no_show_reported', 'Customer reported no-show'
         INCOMPLETE = 'incomplete', 'Marked incomplete'
         RETURN_SCHEDULED = 'return_scheduled', 'Return visit scheduled'
 
@@ -896,7 +916,7 @@ class BookingStatusEvent(models.Model):
         blank=True,
         related_name='booking_status_events',
     )
-    action = models.CharField(max_length=24, choices=Action.choices)
+    action = models.CharField(max_length=32, choices=Action.choices)
     old_status = models.CharField(max_length=20, blank=True, default='')
     new_status = models.CharField(max_length=20, blank=True, default='')
     note = models.CharField(max_length=500, blank=True, default='')

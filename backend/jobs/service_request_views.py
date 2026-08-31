@@ -48,7 +48,7 @@ def _inquiry_bucket(status):
         return 'active'
     if status == CustomerServiceInquiry.Status.COMPLETED:
         return 'done'
-    # Declined — only visible under All
+    # Cancelled / declined — only visible under All
     return 'other'
 
 
@@ -187,6 +187,7 @@ class ProviderServiceInquiryDetailAPIView(APIView):
         elif action == 'decline':
             if inquiry.status in (
                 CustomerServiceInquiry.Status.COMPLETED,
+                CustomerServiceInquiry.Status.CANCELLED,
                 CustomerServiceInquiry.Status.DECLINED,
             ):
                 raise ValidationError({'action': 'This request is already closed.'})

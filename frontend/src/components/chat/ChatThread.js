@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
+import { useOverlayHistoryBack } from '../../hooks/useOverlayHistoryBack';
 import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
 import { withReturnTo } from '../../utils/navigationBack';
@@ -328,6 +329,7 @@ export default function ChatThread({
   const listRef = useRef(null);
 
   useModalBodyLock(open);
+  useOverlayHistoryBack(open, onClose);
 
   const refresh = useCallback(
     async ({ silent = false } = {}) => {

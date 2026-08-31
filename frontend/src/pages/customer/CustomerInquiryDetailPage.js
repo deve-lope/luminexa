@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import ServiceAvailabilityPreview from '../../components/booking/ServiceAvailabilityPreview';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
-import { customerBookings, customerBookingDetail, customerHistory, customerProviderPage } from '../../utils/customerPaths';
+import { customerQuotes, customerBookingDetail, customerHistory, customerProviderPage } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 function statusLabel(status) {
@@ -29,6 +30,7 @@ export default function CustomerInquiryDetailPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!inquiryId) return;
@@ -101,6 +103,26 @@ export default function CustomerInquiryDetailPage() {
     }
   };
 
+  const cancelRequest = async () => {
+    setBusy(true);
+    setActionError('');
+    try {
+      if (inquiry.status === 'pending' || inquiry.status === 'active') {
+        const res = await jobsAPI.cancelInquiryRequest(inquiryId);
+        setInquiry(res.data);
+      } else {
+        const res = await jobsAPI.declineInquiryQuote(inquiryId);
+        setInquiry(res.data);
+      }
+      setCancelOpen(false);
+      navigate(customerQuotes());
+    } catch (err) {
+      setActionError(parseApiError(err, 'Could not cancel this request.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading && !inquiry) {
     return <p className="py-8 text-center text-slate-500">Loading…</p>;
   }
@@ -119,11 +141,16 @@ export default function CustomerInquiryDetailPage() {
   const isQuoted = inquiry.status === 'quoted';
   const quoteAccepted = inquiry.status === 'quote_accepted';
   const canBook = quoteAccepted && inquiry.service && !inquiry.booking;
+  const canCancel =
+    !inquiry.booking &&
+    (inquiry.status === 'pending' ||
+      inquiry.status === 'active' ||
+      inquiry.status === 'quote_accepted');
 
   return (
     <div className="space-y-4">
-      <Link to={customerBookings()} className="lx-link inline-flex min-h-[40px] items-center">
-        ← Bookings
+      <Link to={customerQuotes()} className="lx-link inline-flex min-h-[40px] items-center">
+        ← Quotes
       </Link>
 
       <div className="lx-card space-y-3">
@@ -212,7 +239,7 @@ export default function CustomerInquiryDetailPage() {
                   : 'These are open slots while you wait for a quote — nothing is held yet.'
             }
             selectable={canBook}
-            selectedSlotId={selectedSlot?.id}
+            selectedSlotId={selectedSlot?.id ?? null}
             onSelectSlot={setSelectedSlot}
           />
         )}
@@ -222,7 +249,7 @@ export default function CustomerInquiryDetailPage() {
           {actionError && <p className="text-sm text-red-700">{actionError}</p>}
           <button
             type="button"
-            disabled={busy || !selectedSlot}
+            disabled={busy || !selectedSlot?.id}
             onClick={bookSlot}
             className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
           >
@@ -230,6 +257,29 @@ export default function CustomerInquiryDetailPage() {
           </button>
         </>
       )}
+
+      {canCancel && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setCancelOpen(true)}
+          className="w-full min-h-[48px] rounded-xl border border-red-200 bg-white text-sm font-semibold text-red-700 disabled:opacity-60"
+        >
+          Cancel quote request
+        </button>
+      )}
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Cancel quote request?"
+        message="The business will no longer see this as an open request. You can send a new quote request anytime."
+        confirmLabel="Yes, cancel"
+        cancelLabel="Keep request"
+        tone="danger"
+        busy={busy}
+        onConfirm={cancelRequest}
+        onClose={() => setCancelOpen(false)}
+      />
 
       {inquiry.booking && (
         <Link

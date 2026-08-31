@@ -23,6 +23,8 @@ import CustomerBookingsPage from './pages/customer/CustomerBookingsPage';
 import CustomerBookingDetailPage from './pages/customer/CustomerBookingDetailPage';
 import CustomerInquiryDetailPage from './pages/customer/CustomerInquiryDetailPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
+import CustomerCompletedPage from './pages/customer/CustomerCompletedPage';
+import CustomerQuotesPage from './pages/customer/CustomerQuotesPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
 import CustomerBookServicePage from './pages/customer/CustomerBookServicePage';
@@ -74,6 +76,7 @@ import PwaInstallPrompt from './components/PwaInstallPrompt';
 import { bootstrapNativeApp, isNativeApp } from './native/capacitorNative';
 import ScrollToTop from './components/ScrollToTop';
 import InAppNavTracker from './components/InAppNavTracker';
+import AppBackHandler from './components/AppBackHandler';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -226,6 +229,8 @@ function AppRoutes() {
           <Route path="inquiries/:inquiryId" element={<CustomerInquiryDetailPage />} />
           <Route path="messages" element={<CustomerMessagesPage />} />
           <Route path="notifications" element={<CustomerNotificationsPage />} />
+          <Route path="quotes" element={<CustomerQuotesPage />} />
+          <Route path="completed" element={<CustomerCompletedPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />
           <Route path="account" element={<CustomerAccountPage />} />
           <Route path="about" element={<AboutPage embedded />} />
@@ -266,6 +271,7 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <InAppNavTracker />
+        <AppBackHandler />
         <ToastProvider>
           <ApiHealthProvider>
             <AuthProvider>

@@ -234,9 +234,12 @@ export const jobsAPI = {
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/accept-quote/`),
   declineInquiryQuote: (inquiryId) =>
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/decline-quote/`),
+  cancelInquiryRequest: (inquiryId) =>
+    api.post(`/api/v1/me/service-inquiries/${inquiryId}/cancel/`),
   bookInquirySlot: (inquiryId, slotId) =>
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/book-slot/`, { slot_id: slotId }),
   listMyConversations: () => api.get('/api/v1/me/conversations/'),
+  recordAppSeen: () => api.post('/api/v1/me/app-seen/'),
   listConversationMessages: (conversationId) =>
     api.get(`/api/v1/conversations/${conversationId}/messages/`),
   sendConversationMessage: (conversationId, body) =>
@@ -279,6 +282,7 @@ export const jobsAPI = {
   declineBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/decline-time-change/`),
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
   cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
+  reportBookingAttendance: (id, data) => api.post(`/api/v1/bookings/${id}/report-attendance/`, data),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
   completeBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/complete/`, data),
   getBookingInvoice: (id) => api.get(`/api/v1/bookings/${id}/invoice/`),
