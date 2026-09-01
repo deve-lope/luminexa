@@ -106,7 +106,7 @@ export function ApiHealthProvider({ children }) {
 
   const retry = useCallback(async () => {
     try {
-      const res = await api.get('/accounts/api/profile/', {
+      const res = await api.get('/accounts/api/session/', {
         timeout: 8000,
         validateStatus: () => true,
       });

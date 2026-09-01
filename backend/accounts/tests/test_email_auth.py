@@ -313,3 +313,27 @@ class EmailVerificationTests(TestCase):
         self.assertEqual(verify.status_code, 200, verify.data)
         from django.conf import settings as dj_settings
         self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, verify.cookies)
+
+
+class SessionAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_guest_session_returns_200_not_401(self):
+        res = self.client.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertFalse(res.data['authenticated'])
+        self.assertIsNone(res.data['user'])
+
+    def test_authenticated_session_returns_user(self):
+        user = User.objects.create_user(
+            email='session@example.com',
+            full_name='Session User',
+            password='password123',
+            email_verified=True,
+        )
+        self.client.force_authenticate(user=user)
+        res = self.client.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertTrue(res.data['authenticated'])
+        self.assertEqual(res.data['user']['email'], 'session@example.com')

@@ -18,8 +18,15 @@ export function AuthProvider({ children }) {
   const loadSession = useCallback(async () => {
     clearLegacyTokenStorage();
     try {
-      const { data: profile } = await userAPI.getProfile();
-      setUser(profile);
+      const { data } = await userAPI.getSession();
+      if (data?.authenticated && data.user) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+        setMemberships([]);
+        setLoading(false);
+        return;
+      }
       try {
         const { data: mem } = await businessesAPI.getMyMemberships();
         setMemberships(Array.isArray(mem) ? mem : []);

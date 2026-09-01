@@ -243,6 +243,17 @@ class ChangePasswordAPIView(APIView):
         return Response({'detail': 'Password updated.'})
 
 
+class SessionAPIView(APIView):
+    """Lightweight auth probe — 200 for guests and signed-in users (no 401 noise on public pages)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return Response({'authenticated': True, 'user': UserSerializer(request.user).data})
+        return Response({'authenticated': False, 'user': None})
+
+
 class ProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

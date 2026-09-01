@@ -128,6 +128,7 @@ api.interceptors.response.use(
 );
 
 export const userAPI = {
+  getSession: () => api.get('/accounts/api/session/'),
   getProfile: () => api.get('/accounts/api/profile/'),
   updateProfile: (data) => api.put('/accounts/api/profile/', data),
   login: (credentials) => api.post('/accounts/api/login/', credentials),

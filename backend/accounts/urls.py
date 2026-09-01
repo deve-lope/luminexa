@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/login/otp/request/', api_views.LoginOtpRequestAPIView.as_view(), name='login_otp_request_api'),
     path('api/login/otp/verify/', api_views.LoginOtpVerifyAPIView.as_view(), name='login_otp_verify_api'),
     path('api/logout/', api_views.LogoutAPIView.as_view(), name='logout_api'),
+    path('api/session/', api_views.SessionAPIView.as_view(), name='session_api'),
     path('api/profile/', api_views.ProfileAPIView.as_view(), name='profile_api'),
     path(
         'api/onboarding/complete/',

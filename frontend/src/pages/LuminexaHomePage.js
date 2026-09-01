@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
+import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
 import { citySeo } from '../seo/citySeo';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
@@ -235,18 +236,31 @@ function Hero({ embedded = false, findPath = '/services' }) {
   );
 }
 
-function NeedPrompts({ findPath = '/services' }) {
+function NeedPrompts({ findPath = '/services', inZone = false }) {
   return (
-    <section id="needs" className="bg-luminexa-canvas py-20 md:py-28">
-      <div className="mx-auto max-w-6xl px-4 md:px-8">
+    <section
+      id="needs"
+      className={inZone ? 'bg-transparent py-12 md:py-20' : 'bg-luminexa-canvas py-20 md:py-28'}
+    >
+      <div className={inZone ? 'w-full' : 'mx-auto max-w-6xl px-4 md:px-8'}>
         <motion.div {...fadeUp}>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700 md:text-sm">
             Ask yourself
           </p>
-          <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl md:text-[2.75rem]">
+          <h2
+            className={`mt-3 font-extrabold tracking-tight text-slate-900 ${
+              inZone
+                ? 'max-w-4xl text-3xl sm:text-4xl md:text-[2.85rem] md:leading-tight'
+                : 'max-w-2xl text-3xl sm:text-4xl md:text-[2.75rem]'
+            }`}
+          >
             What do you need done this week?
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
+          <p
+            className={`mt-4 leading-relaxed text-slate-600 ${
+              inZone ? 'max-w-3xl text-base sm:text-lg md:text-xl' : 'max-w-xl text-base sm:text-lg'
+            }`}
+          >
             Start with the job. Luminexa helps you find local people who do gig-style and small
             business work — then book them with prices and schedules you can trust.
           </p>
@@ -263,28 +277,29 @@ function NeedPrompts({ findPath = '/services' }) {
             <motion.li key={item.q} variants={staggerChild}>
               <Link
                 to={findPath}
-                className="group flex flex-col gap-2 py-7 transition sm:flex-row sm:items-end sm:justify-between sm:gap-8 sm:py-9"
+                className="group block py-7 transition sm:py-9"
               >
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-600">
                     {item.hint}
                   </p>
-                  <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 transition group-hover:text-teal-700 sm:text-3xl md:text-[2rem]">
+                  <p
+                    className={`mt-2 font-bold tracking-tight text-slate-900 transition group-hover:text-teal-700 ${
+                      inZone
+                        ? 'text-2xl sm:text-3xl md:text-[2.1rem] md:leading-snug'
+                        : 'text-2xl sm:text-3xl md:text-[2rem]'
+                    }`}
+                  >
                     {item.q}
                   </p>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
+                  <p
+                    className={`mt-2 leading-relaxed text-slate-600 ${
+                      inZone ? 'max-w-3xl text-base md:text-lg' : 'max-w-xl text-sm sm:text-base'
+                    }`}
+                  >
                     {item.a}
                   </p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-teal-700">
-                  Browse providers
-                  <span
-                    aria-hidden
-                    className="transition-transform group-hover:translate-x-1"
-                  >
-                    →
-                  </span>
-                </span>
               </Link>
             </motion.li>
           ))}
@@ -561,12 +576,17 @@ function SiteFooter() {
   );
 }
 
+/** Resolve browse/find links for public vs embedded customer About view. */
+export function resolveHomeFindPath({ embedded, pathname = '' }) {
+  return embedded && pathname.startsWith('/customer') ? '/customer/find' : '/services';
+}
+
 /** Public marketing homepage (Calian-inspired structure, teal Luminexa brand). */
 export default function LuminexaHomePage({ embedded = false }) {
-  const findPath =
-    embedded && typeof window !== 'undefined' && window.location.pathname.startsWith('/customer')
-      ? '/customer/find'
-      : '/services';
+  const findPath = resolveHomeFindPath({
+    embedded,
+    pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+  });
 
   return (
     <div className="bg-luminexa-canvas text-slate-900">
@@ -588,7 +608,9 @@ export default function LuminexaHomePage({ embedded = false }) {
       )}
       {!embedded && <SiteHeader />}
       <Hero embedded={embedded} findPath={findPath} />
-      <NeedPrompts findPath={findPath} />
+      <HomeJourneyScrollZone>
+        <NeedPrompts findPath={findPath} inZone />
+      </HomeJourneyScrollZone>
       <HowItWorks />
       <PlatformBand findPath={findPath} />
       <SplitShowcase />
