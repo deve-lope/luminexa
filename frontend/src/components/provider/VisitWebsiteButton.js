@@ -1,6 +1,6 @@
 import React from 'react';
-import { isNativeApp } from '../native/capacitorNative';
-import { normalizeExternalWebsiteUrl, openExternalWebsite } from '../utils/openExternalWebsite';
+import { isNativeApp } from '../../native/capacitorNative';
+import { normalizeExternalWebsiteUrl, openExternalWebsite } from '../../utils/openExternalWebsite';
 
 /**
  * Button-styled link to a provider’s own website.

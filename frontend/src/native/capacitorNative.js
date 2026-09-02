@@ -33,21 +33,55 @@ export function watchNativeDocument() {
 }
 
 /**
- * If Android still has 0 inset after bridge load, force a Pixel-safe top inset.
+ * If native still has 0 inset after bridge load, force a Pixel-safe top inset.
  * Used until / alongside native EdgeToEdge WebView padding.
  */
 export function ensureAndroidSafeAreaFallback() {
   try {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
-    const root = document.documentElement;
-    const top = getComputedStyle(root).getPropertyValue('--safe-area-inset-top').trim();
-    if (!top || top === '0px') {
-      root.style.setProperty('--safe-area-inset-top', '48px');
-    }
-    const bottom = getComputedStyle(root).getPropertyValue('--safe-area-inset-bottom').trim();
-    if (!bottom || bottom === '0px') {
-      root.style.setProperty('--safe-area-inset-bottom', '24px');
-    }
+    applySafeAreaFallback({ topFallback: '48px', bottomFallback: '24px' });
+  } catch {
+    /* ignore */
+  }
+}
+
+function readCssLength(root, varName) {
+  const raw = getComputedStyle(root).getPropertyValue(varName).trim();
+  if (!raw || raw === '0px') return '';
+  return raw;
+}
+
+function probeEnvInset(edge) {
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;pointer-events:none;' +
+    `padding-${edge}:env(safe-area-inset-${edge});`;
+  document.body.appendChild(probe);
+  const value = getComputedStyle(probe).getPropertyValue(`padding-${edge}`).trim();
+  document.body.removeChild(probe);
+  return value && value !== '0px' ? value : '';
+}
+
+function applySafeAreaFallback({ topFallback, bottomFallback }) {
+  const root = document.documentElement;
+  if (!readCssLength(root, '--lx-sat')) {
+    const envTop = probeEnvInset('top');
+    root.style.setProperty('--safe-area-inset-top', envTop || topFallback);
+  }
+  if (!readCssLength(root, '--lx-sab')) {
+    const envBottom = probeEnvInset('bottom');
+    root.style.setProperty('--safe-area-inset-bottom', envBottom || bottomFallback);
+  }
+}
+
+/**
+ * Capacitor iOS loads the remote SPA with contentInset never, so env() can stay
+ * 0 until we seed CSS vars (full-screen chat sheets otherwise sit under the notch).
+ */
+export function ensureIosSafeAreaFallback() {
+  try {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'ios') return;
+    applySafeAreaFallback({ topFallback: '47px', bottomFallback: '34px' });
   } catch {
     /* ignore */
   }
@@ -63,8 +97,23 @@ function nativePlatform() {
   return 'web';
 }
 
+function looksLikeApnsHexToken(token) {
+  return (
+    typeof token === 'string' &&
+    token.length === 64 &&
+    /^[0-9A-Fa-f]+$/.test(token)
+  );
+}
+
 export async function syncPushTokenWithServer(token) {
   if (!token) return;
+  if (Capacitor.getPlatform() === 'ios' && looksLikeApnsHexToken(token)) {
+    // FirebaseMessaging must be linked in Xcode; otherwise AppDelegate posts raw APNs.
+    console.warn(
+      '[Luminexa] iOS push token is APNs-only. Add FirebaseMessaging + GoogleService-Info.plist in Xcode, then reinstall.',
+    );
+    return;
+  }
   try {
     await userAPI.registerPushToken({ token, platform: nativePlatform() });
     window.sessionStorage.removeItem(PENDING_TOKEN_KEY);
@@ -154,6 +203,12 @@ export async function bootstrapNativeApp() {
   if (!window.__LX_EDGE_TO_EDGE__) {
     window.setTimeout(ensureAndroidSafeAreaFallback, 400);
     window.setTimeout(ensureAndroidSafeAreaFallback, 1200);
+  }
+
+  if (Capacitor.getPlatform() === 'ios') {
+    ensureIosSafeAreaFallback();
+    window.setTimeout(ensureIosSafeAreaFallback, 400);
+    window.setTimeout(ensureIosSafeAreaFallback, 1200);
   }
 
   try {

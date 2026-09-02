@@ -320,6 +320,16 @@ html.lx-modal-open .lx-pwa-install-prompt {
   bottom: var(--lx-keyboard-inset, 0px);
 }
 
+html.capacitor-native .lx-ime-sheet.fixed.inset-0 {
+  top: var(--lx-sat);
+  bottom: calc(var(--lx-sab) + var(--lx-keyboard-inset, 0px));
+}
+
+html.capacitor-native .lx-ime-sheet .lx-header {
+  top: 0;
+  padding-top: 0;
+}
+
 html.lx-keyboard-open .lx-bottom-tabs {
   visibility: hidden;
   pointer-events: none;
