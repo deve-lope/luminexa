@@ -161,7 +161,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can update organization settings.')
         allowed = {
-            'tagline', 'description', 'profile_public', 'booking_policy', 'name',
+            'tagline', 'description', 'external_website_url', 'profile_public', 'booking_policy', 'name',
             'logo', 'banner', 'scheduling_mode', 'cancel_cutoff_hours',
             'concurrent_capacity',
             'schedule_valid_from', 'schedule_valid_until',

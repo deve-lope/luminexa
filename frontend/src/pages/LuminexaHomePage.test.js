@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { resolveHomeFindPath } from './LuminexaHomePage';
-import MimeDuoStory from '../components/marketing/MimeDuoStory';
+import { resolveAboutAppBack, resolveHomeFindPath } from './LuminexaHomePage';
+import MimeDuoStory, { MimeDuoStoryAutoplay } from '../components/marketing/MimeDuoStory';
 
 jest.mock('framer-motion', () => {
   const React = require('react');
@@ -24,18 +24,28 @@ jest.mock('framer-motion', () => {
 });
 
 describe('resolveHomeFindPath', () => {
-  test('embedded customer about uses customer find', () => {
-    expect(resolveHomeFindPath({ embedded: true, pathname: '/customer/about' })).toBe(
+  test('in-app customer about uses customer find', () => {
+    expect(resolveHomeFindPath({ inAppShell: true, pathname: '/customer/about' })).toBe(
       '/customer/find',
     );
   });
 
-  test('embedded provider about keeps services browse', () => {
-    expect(resolveHomeFindPath({ embedded: true, pathname: '/provider/about' })).toBe('/services');
+  test('in-app provider about keeps services browse', () => {
+    expect(resolveHomeFindPath({ inAppShell: true, pathname: '/provider/about' })).toBe('/services');
   });
 
   test('public home uses services browse', () => {
-    expect(resolveHomeFindPath({ embedded: false, pathname: '/' })).toBe('/services');
+    expect(resolveHomeFindPath({ inAppShell: false, pathname: '/' })).toBe('/services');
+  });
+});
+
+describe('resolveAboutAppBack', () => {
+  test('customer about returns to customer home', () => {
+    expect(resolveAboutAppBack('/customer/about')).toBe('/customer');
+  });
+
+  test('provider about returns to that org home', () => {
+    expect(resolveAboutAppBack('/provider/anu-garden/about')).toBe('/provider/anu-garden');
   });
 });
 
@@ -58,5 +68,10 @@ describe('MimeDuoStory', () => {
 
     expect(html).toContain('Elbow grease');
     expect(html).not.toMatch(/Act \d of \d/);
+  });
+
+  test('autoplay wrapper renders the opening act on phones', () => {
+    const html = renderToStaticMarkup(<MimeDuoStoryAutoplay />);
+    expect(html).toContain("Who&#x27;s nearby?");
   });
 });

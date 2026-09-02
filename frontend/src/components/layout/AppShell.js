@@ -18,6 +18,8 @@ export default function AppShell({
   backLabel = 'Back',
   homeTo,
   showBack = Boolean(backTo),
+  mainFullBleed = false,
+  hideMobileChrome = false,
   children,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -41,7 +43,7 @@ export default function AppShell({
       />
 
       <div className={`w-full ${hasTabs ? 'lg:pl-60' : ''}`}>
-        <header className="lx-header">
+        <header className={`lx-header ${hideMobileChrome ? 'max-lg:hidden' : ''}`}>
           <div className="lx-container flex items-center gap-2 py-3 lg:py-4">
             {hasMenu && (
               <button
@@ -76,7 +78,13 @@ export default function AppShell({
 
         <main
           id="main-content"
-          className="lx-container py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:py-6 lg:pb-8"
+          className={
+            mainFullBleed
+              ? hideMobileChrome
+                ? 'lg:pb-8'
+                : 'pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:pb-8'
+              : 'lx-container py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:py-6 lg:pb-8'
+          }
           tabIndex={-1}
         >
           <div className="page-enter min-w-0">
@@ -85,7 +93,7 @@ export default function AppShell({
         </main>
       </div>
 
-      {hasTabs && <BottomTabBar tabs={tabs} />}
+      {hasTabs && !hideMobileChrome && <BottomTabBar tabs={tabs} />}
 
       {hasMenu && (
         <AppMenuDrawer

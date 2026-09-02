@@ -57,6 +57,12 @@ class Organization(models.Model):
     slug = models.SlugField(max_length=80, unique=True, db_index=True)
     tagline = models.CharField(max_length=300, blank=True)
     description = models.TextField(blank=True)
+    external_website_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text='Optional link to the provider’s own website (shown on their public page).',
+    )
     logo = models.ImageField(upload_to='orgs/logos/', blank=True, null=True)
     banner = models.ImageField(upload_to='orgs/banners/', blank=True, null=True)
     profile_public = models.BooleanField(default=True)

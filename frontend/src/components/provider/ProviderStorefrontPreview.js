@@ -9,6 +9,7 @@ import CustomerServiceRequestForm from '../customer/CustomerServiceRequestForm';
 import { formatProviderServiceArea, providerHasServiceArea } from '../../utils/serviceArea';
 import { providerRequests } from '../../utils/providerPaths';
 import { serviceRequiresQuote } from '../../utils/serviceDisplay';
+import VisitWebsiteButton from './VisitWebsiteButton';
 
 /**
  * Read-only customer-facing booking page preview for providers.
@@ -95,6 +96,7 @@ export default function ProviderStorefrontPreview({
               <span>{formatProviderServiceArea(organization)}</span>
             </p>
           )}
+          <VisitWebsiteButton url={organization.external_website_url} className="mt-3" />
           {bookingPolicy && (
             <p className="mt-2 text-xs text-slate-500">{policyLabel(bookingPolicy)}</p>
           )}

@@ -4,6 +4,7 @@ import BookingPolicySettings from '../../components/provider/BookingPolicySettin
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
+import ProviderWebsiteSettings from '../../components/provider/ProviderWebsiteSettings';
 import SettingsSectionOverlay from '../../components/provider/SettingsSectionOverlay';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
@@ -48,6 +49,11 @@ const SETTINGS_SECTIONS = [
     id: 'locations',
     title: 'Service locations',
     hint: 'Addresses and how far you travel',
+  },
+  {
+    id: 'website',
+    title: 'Your website',
+    hint: 'Optional link to your own site',
   },
 ];
 
@@ -391,6 +397,10 @@ export default function ProviderSettingsPage() {
 
         {openSection === 'locations' && (
           <ProviderServiceAreaSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
+        )}
+
+        {openSection === 'website' && (
+          <ProviderWebsiteSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
         )}
       </SettingsSectionOverlay>
     </div>

@@ -118,6 +118,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         model = Organization
         fields = (
             'id', 'name', 'public_ref', 'slug', 'tagline', 'description',
+            'external_website_url',
             'logo', 'banner', 'profile_public', 'is_active', 'booking_policy',
             'cancel_cutoff_hours', 'concurrent_capacity',
             'scheduling_mode', 'schedule_valid_from', 'schedule_valid_until',
@@ -158,6 +159,26 @@ class OrganizationSerializer(serializers.ModelSerializer):
             return value
         from luminexa.uploads import validate_uploaded_image_django
         return validate_uploaded_image_django(value)
+
+    def validate_external_website_url(self, value):
+        from urllib.parse import urlparse
+
+        raw = (value or '').strip()
+        if not raw:
+            return ''
+        lowered = raw.lower()
+        if lowered.startswith(('javascript:', 'data:', 'vbscript:')):
+            raise serializers.ValidationError('Enter a web address starting with http:// or https://.')
+        if ':' in raw.split('/')[0] and not lowered.startswith(('http://', 'https://')):
+            raise serializers.ValidationError('Enter a web address starting with http:// or https://.')
+        if not lowered.startswith(('http://', 'https://')):
+            raw = f'https://{raw}'
+        parsed = urlparse(raw)
+        if parsed.scheme not in ('http', 'https'):
+            raise serializers.ValidationError('Enter a web address starting with http:// or https://.')
+        if not parsed.netloc:
+            raise serializers.ValidationError('Enter a valid website URL.')
+        return raw[:500]
 
     def validate_service_postal_code(self, value):
         if not (value or '').strip():
@@ -1449,6 +1470,7 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
         model = Organization
         fields = (
             'id', 'name', 'public_ref', 'slug', 'tagline', 'description', 'logo_url', 'banner_url',
+            'external_website_url',
             'booking_policy', 'gallery', 'rating_summary',
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
 import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
 import { citySeo } from '../seo/citySeo';
@@ -86,7 +86,7 @@ const staggerChild = {
   },
 };
 
-function SiteHeader() {
+function SiteHeader({ appBackTo = null }) {
   const [solid, setSolid] = React.useState(false);
 
   React.useEffect(() => {
@@ -96,9 +96,13 @@ function SiteHeader() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const navLinkClass = `inline-flex min-h-[44px] items-center px-3 text-sm font-medium transition ${
+    solid ? 'text-slate-700 hover:text-teal-700' : 'text-white/90 hover:text-white'
+  }`;
+
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-30 pt-safe transition duration-300 ${
+      className={`fixed inset-x-0 top-0 z-40 pt-safe transition duration-300 ${
         solid
           ? 'border-b border-teal-900/10 bg-white/90 shadow-sm backdrop-blur-xl'
           : 'bg-transparent'
@@ -106,7 +110,7 @@ function SiteHeader() {
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
         <Link
-          to="/"
+          to={appBackTo ? '.' : '/'}
           className={`text-xl font-extrabold tracking-tight transition ${
             solid ? 'text-slate-900' : 'text-white'
           }`}
@@ -130,31 +134,34 @@ function SiteHeader() {
           >
             How it works
           </a>
-          <Link
-            to="/login"
-            className={`inline-flex min-h-[44px] items-center px-3 text-sm font-medium transition ${
-              solid ? 'text-slate-700 hover:text-teal-700' : 'text-white/90 hover:text-white'
-            }`}
-          >
-            Sign in
-          </Link>
-          <Link
-            to="/register/business"
-            className={`inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-semibold shadow-lg transition ${
-              solid
-                ? 'bg-luminexa-accent text-white shadow-teal-600/20 hover:bg-luminexa-accent-dark'
-                : 'bg-white text-teal-800 shadow-teal-950/20 hover:bg-teal-50'
-            }`}
-          >
-            Offer services
-          </Link>
+          {appBackTo ? (
+            <Link to={appBackTo} className={navLinkClass}>
+              Back to app
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" className={navLinkClass}>
+                Sign in
+              </Link>
+              <Link
+                to="/register/business"
+                className={`inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-semibold shadow-lg transition ${
+                  solid
+                    ? 'bg-luminexa-accent text-white shadow-teal-600/20 hover:bg-luminexa-accent-dark'
+                    : 'bg-white text-teal-800 shadow-teal-950/20 hover:bg-teal-50'
+                }`}
+              >
+                Offer services
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>
   );
 }
 
-function Hero({ embedded = false, findPath = '/services' }) {
+function Hero({ inAppShell = false, findPath = '/services' }) {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -164,12 +171,14 @@ function Hero({ embedded = false, findPath = '/services' }) {
   const contentY = useTransform(scrollYProgress, [0, 1], ['0%', '10%']);
   const opacity = useTransform(scrollYProgress, [0, 0.75], [1, 0.35]);
 
+  const heroMinH = inAppShell
+    ? 'min-h-[100svh] lg:min-h-[calc(100svh-var(--lx-header-offset))]'
+    : 'min-h-[100svh]';
+
   return (
     <section
       ref={ref}
-      className={`relative overflow-hidden bg-teal-950 text-white ${
-        embedded ? 'min-h-[70svh] rounded-3xl' : 'min-h-[100svh]'
-      }`}
+      className={`relative overflow-hidden bg-teal-950 text-white ${heroMinH}`}
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
@@ -183,8 +192,8 @@ function Hero({ embedded = false, findPath = '/services' }) {
 
       <motion.div
         style={{ y: contentY, opacity }}
-        className={`relative z-10 mx-auto flex max-w-6xl flex-col justify-end px-4 pb-12 md:px-8 md:pb-16 ${
-          embedded ? 'min-h-[70svh] pt-16' : 'min-h-[100svh] pt-28 pb-16 md:pb-24'
+        className={`relative z-10 mx-auto flex max-w-6xl flex-col justify-end px-4 md:px-8 ${heroMinH} ${
+          inAppShell ? 'pt-28 pb-16 lg:pt-16 lg:pb-12' : 'pt-28 pb-16 md:pb-24'
         }`}
       >
         <motion.p
@@ -496,7 +505,7 @@ function SplitShowcase() {
   );
 }
 
-function FinalCta({ embedded = false, findPath = '/services' }) {
+function FinalCta({ inAppShell = false, findPath = '/services' }) {
   return (
     <section className="relative overflow-hidden bg-teal-900 py-20 text-white md:py-24">
       <motion.div
@@ -530,7 +539,7 @@ function FinalCta({ embedded = false, findPath = '/services' }) {
           >
             Find help near you
           </Link>
-          {!embedded && (
+          {!inAppShell && (
             <Link
               to="/register"
               className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border border-white/25 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto"
@@ -544,7 +553,7 @@ function FinalCta({ embedded = false, findPath = '/services' }) {
   );
 }
 
-function SiteFooter() {
+function SiteFooter({ findPath = '/services', inApp = false }) {
   return (
     <footer className="border-t border-teal-900/10 bg-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between md:px-8">
@@ -555,15 +564,19 @@ function SiteFooter() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm font-medium text-slate-600">
-          <Link to="/services" className="hover:text-teal-700">
+          <Link to={findPath} className="hover:text-teal-700">
             Find help
           </Link>
-          <Link to="/register/business" className="hover:text-teal-700">
-            Offer services
-          </Link>
-          <Link to="/login" className="hover:text-teal-700">
-            Sign in
-          </Link>
+          {!inApp && (
+            <>
+              <Link to="/register/business" className="hover:text-teal-700">
+                Offer services
+              </Link>
+              <Link to="/login" className="hover:text-teal-700">
+                Sign in
+              </Link>
+            </>
+          )}
           <Link to="/privacy" className="hover:text-teal-700">
             Privacy
           </Link>
@@ -576,21 +589,31 @@ function SiteFooter() {
   );
 }
 
-/** Resolve browse/find links for public vs embedded customer About view. */
-export function resolveHomeFindPath({ embedded, pathname = '' }) {
-  return embedded && pathname.startsWith('/customer') ? '/customer/find' : '/services';
+/** Resolve browse/find links for public vs in-app About view. */
+export function resolveHomeFindPath({ inAppShell, pathname = '' }) {
+  return inAppShell && pathname.startsWith('/customer') ? '/customer/find' : '/services';
+}
+
+/** In-app About → customer or provider home (phone marketing header). */
+export function resolveAboutAppBack(pathname = '') {
+  const path = pathname.replace(/\/$/, '') || '/';
+  if (path === '/customer/about') return '/customer';
+  const match = path.match(/^(\/provider\/[^/]+)\/about$/);
+  return match ? match[1] : null;
 }
 
 /** Public marketing homepage (Calian-inspired structure, teal Luminexa brand). */
-export default function LuminexaHomePage({ embedded = false }) {
+export default function LuminexaHomePage({ inAppShell = false }) {
+  const location = useLocation();
   const findPath = resolveHomeFindPath({
-    embedded,
-    pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+    inAppShell,
+    pathname: location.pathname,
   });
+  const appBackTo = inAppShell ? resolveAboutAppBack(location.pathname) : null;
 
   return (
     <div className="bg-luminexa-canvas text-slate-900">
-      {!embedded && (
+      {!inAppShell && (
         <SeoHead
           title="Luminexa | Book local services"
           description="Book local services — snow removal, car detailing, cleaning, repairs, and more — with prices and real time slots."
@@ -606,20 +629,25 @@ export default function LuminexaHomePage({ embedded = false }) {
           }}
         />
       )}
-      {!embedded && <SiteHeader />}
-      <Hero embedded={embedded} findPath={findPath} />
+      {!inAppShell && <SiteHeader />}
+      {inAppShell && appBackTo && (
+        <div className="lg:hidden">
+          <SiteHeader appBackTo={appBackTo} />
+        </div>
+      )}
+      <Hero inAppShell={inAppShell} findPath={findPath} />
       <HomeJourneyScrollZone>
         <NeedPrompts findPath={findPath} inZone />
       </HomeJourneyScrollZone>
       <HowItWorks />
       <PlatformBand findPath={findPath} />
       <SplitShowcase />
-      <FinalCta embedded={embedded} findPath={findPath} />
-      {!embedded && <SiteFooter />}
-      {embedded && (
-        <p className="px-4 pb-8 text-center text-xs text-slate-500">
-          © {new Date().getFullYear()} Luminexa
-        </p>
+      <FinalCta inAppShell={inAppShell} findPath={findPath} />
+      {!inAppShell && <SiteFooter />}
+      {inAppShell && (
+        <div className="lg:hidden">
+          <SiteFooter findPath={findPath} inApp />
+        </div>
       )}
     </div>
   );

@@ -206,6 +206,8 @@ export default function CustomerLayout({ children }) {
     if (path) return <Navigate to={path} replace />;
   }
 
+  const isAboutPage = location.pathname.endsWith('/customer/about');
+
   return (
     <>
       <AppShell
@@ -219,6 +221,8 @@ export default function CustomerLayout({ children }) {
         backTo={backNav?.to}
         homeTo={customerHomePath}
         headerActions={headerActions}
+        mainFullBleed={isAboutPage}
+        hideMobileChrome={isAboutPage}
       >
         {children ?? <Outlet />}
       </AppShell>

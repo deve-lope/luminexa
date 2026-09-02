@@ -291,6 +291,8 @@ function ProviderShell() {
     return <Navigate to={providerSubscribe(orgSlug)} replace />;
   }
 
+  const isAboutPage = location.pathname.endsWith('/about');
+
   return (
     <AppShell
       brand="Luminexa"
@@ -304,6 +306,8 @@ function ProviderShell() {
       showBack={!isProviderHome && Boolean(backNav?.to)}
       backTo={backNav?.to}
       homeTo={providerHomePath}
+      mainFullBleed={isAboutPage}
+      hideMobileChrome={isAboutPage}
     >
       <Outlet />
     </AppShell>

@@ -27,6 +27,7 @@ import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serv
 import { isShopService, serviceRequiresQuote } from '../utils/serviceDisplay';
 import { getStorefrontCache, setStorefrontCache } from '../utils/storefrontCache';
 import { scrollToHashTarget } from '../components/ScrollToTop';
+import VisitWebsiteButton from '../components/provider/VisitWebsiteButton';
 
 /**
  * Public booking profile at /book/:slug
@@ -355,6 +356,7 @@ export default function BookingStorefrontPage() {
                   <span>{formatProviderServiceArea(organization)}</span>
                 </p>
               )}
+              <VisitWebsiteButton url={organization.external_website_url} className="mt-3" />
               {isOwnerView && bookingPolicy && (
                 <p className="mt-2 text-xs text-slate-500">{policyLabel(bookingPolicy)}</p>
               )}
