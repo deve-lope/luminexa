@@ -135,6 +135,7 @@ export const TAB_ICONS = {
   schedule: IconSchedule,
   services: IconServices,
   requests: IconRequests,
+  jobs: IconBookings,
   messages: IconMessages,
   notifications: IconBell,
   share: IconShare,

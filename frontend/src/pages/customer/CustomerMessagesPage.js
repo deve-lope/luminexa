@@ -164,7 +164,7 @@ export default function CustomerMessagesPage() {
           peerSubtitle="Provider"
           onClose={closeConversation}
           loadMessages={loadMessagesAndRefreshBadge}
-          sendMessage={(body) => jobsAPI.sendConversationMessage(selected.id, body)}
+          sendMessage={(body, file) => jobsAPI.sendConversationMessage(selected.id, body, file)}
           bookingDetailHref={(bookingId) => `/customer/bookings/${bookingId}`}
           returnTo={chatReturnTo}
         />

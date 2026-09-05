@@ -1,4 +1,4 @@
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -7,7 +7,8 @@ from rest_framework.views import APIView
 
 from businesses.models import Organization
 
-from .models import Booking, CustomerServiceInquiry
+from .datetime_display import resolve_display_timezone
+from .models import Booking, CustomerServiceInquiry, Task
 from .permissions import is_org_staff, require_provider_subscription
 from .serializers import (
     CustomerServiceInquirySerializer,
@@ -22,18 +23,30 @@ from .message_services import (
 )
 
 
-def _booking_bucket(status):
+def _booking_day_is_past(booking):
+    """True when the job's local calendar day is before today (org timezone)."""
+    if not booking.start_at:
+        return False
+    tz = resolve_display_timezone(booking.organization)
+    job_day = timezone.localtime(booking.start_at, tz).date()
+    today = timezone.localtime(timezone.now(), tz).date()
+    return job_day < today
+
+
+def _booking_bucket(booking):
+    status = booking.status
     if status in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
         return 'pending'
-    if status in (
-        Booking.Status.CONFIRMED,
-        Booking.Status.IN_PROGRESS,
-        Booking.Status.NEEDS_RETURN,
-    ):
-        return 'active'
     if status == Booking.Status.COMPLETED:
         return 'done'
-    # Cancelled / declined — only visible under All
+    if status in (Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS):
+        # Approved / started but the appointment day ended with no complete/cancel/no-show.
+        if _booking_day_is_past(booking):
+            return 'archive'
+        return 'active'
+    if status == Booking.Status.NEEDS_RETURN:
+        return 'active'
+    # Cancelled / declined / no-show — only visible under All
     return 'other'
 
 
@@ -75,14 +88,40 @@ class ProviderServiceRequestsAPIView(APIView):
             Booking.objects.filter(organization=org)
             .exclude(source=Booking.Source.PROVIDER_DIRECT)
             .select_related('service', 'customer', 'invoice', 'organization')
-            .annotate(message_count=Count('request_messages'))
+            .annotate(
+                message_count=Count('request_messages', distinct=True),
+                open_task_count=Count(
+                    'tasks',
+                    filter=Q(tasks__is_done=False),
+                    distinct=True,
+                ),
+            )
+            .prefetch_related(
+                Prefetch(
+                    'tasks',
+                    queryset=Task.objects.filter(is_done=False).order_by(
+                        '-priority', 'due_at', 'id',
+                    ),
+                    to_attr='open_task_list',
+                ),
+            )
             .order_by('-created_at')
         )
         for booking in bookings:
-            bucket = _booking_bucket(booking.status)
+            bucket = _booking_bucket(booking)
             if filter_key != 'all' and bucket != filter_key:
                 continue
             invoice = getattr(booking, 'invoice', None)
+            open_tasks = [
+                {
+                    'id': t.id,
+                    'title': t.title,
+                    'due_at': t.due_at,
+                    'priority': t.priority,
+                    'is_done': False,
+                }
+                for t in getattr(booking, 'open_task_list', [])[:8]
+            ]
             items.append({
                 'kind': 'booking',
                 'id': booking.id,
@@ -96,6 +135,8 @@ class ProviderServiceRequestsAPIView(APIView):
                 'preferred_date': None,
                 'summary': (booking.customer_notes or '').strip() or None,
                 'message_count': booking.message_count,
+                'open_task_count': booking.open_task_count,
+                'open_tasks': open_tasks,
                 'created_at': booking.created_at,
                 'updated_at': booking.updated_at,
                 'invoice': invoice,
@@ -125,6 +166,8 @@ class ProviderServiceRequestsAPIView(APIView):
                 'preferred_date': inquiry.preferred_date,
                 'summary': (inquiry.message or '').strip() or None,
                 'message_count': inquiry.message_count,
+                'open_task_count': 0,
+                'open_tasks': [],
                 'created_at': inquiry.created_at,
                 'updated_at': inquiry.created_at,
                 'invoice': None,
@@ -253,28 +296,42 @@ class ServiceInquiryMessagesAPIView(APIView):
         return inquiry
 
     def get(self, request, slug, inquiry_id):
-        from .message_services import mark_inquiry_messages_read
+        from .message_services import (
+            conversation_for_inquiry,
+            mark_inquiry_messages_read,
+            message_serializer_context,
+        )
 
         inquiry = self._get_inquiry(slug, inquiry_id, request.user)
         messages = list_inquiry_messages(inquiry)
         mark_inquiry_messages_read(inquiry=inquiry, user=request.user)
+        conv = conversation_for_inquiry(inquiry)
         return Response(
             ServiceRequestMessageSerializer(
-                messages, many=True, context={'request': request},
+                messages,
+                many=True,
+                context=message_serializer_context(request=request, conversation=conv),
             ).data,
         )
 
     def post(self, request, slug, inquiry_id):
-        inquiry = self._get_inquiry(slug, inquiry_id, request.user)
+        from .message_services import conversation_for_inquiry, message_serializer_context
         from .permissions import is_org_staff, require_provider_subscription
+
+        inquiry = self._get_inquiry(slug, inquiry_id, request.user)
         if is_org_staff(request.user, inquiry.organization):
             require_provider_subscription(inquiry.organization)
         message = post_inquiry_message(
             inquiry=inquiry,
             sender=request.user,
             body=request.data.get('body', ''),
+            attachment=request.FILES.get('attachment'),
         )
+        conv = conversation_for_inquiry(inquiry)
         return Response(
-            ServiceRequestMessageSerializer(message, context={'request': request}).data,
+            ServiceRequestMessageSerializer(
+                message,
+                context=message_serializer_context(request=request, conversation=conv),
+            ).data,
             status=201,
         )

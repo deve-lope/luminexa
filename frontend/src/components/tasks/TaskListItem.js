@@ -7,10 +7,10 @@ import {
   jobPrepLabel,
 } from '../../utils/taskDisplay';
 
-export default function TaskListItem({ task, onToggle }) {
+export default function TaskListItem({ task, onToggle, hideJobLabel = false }) {
   const overdue = isTaskOverdue(task);
   const dueLabel = formatTaskDue(task);
-  const prep = isJobPrepTask(task);
+  const prep = !hideJobLabel && isJobPrepTask(task);
 
   return (
     <li

@@ -221,6 +221,17 @@ export const orgProfileAPI = {
     api.delete(`/api/v1/organizations/${orgSlug}/gallery/${imageId}/`),
 };
 
+function postChatMessage(url, body, file) {
+  const text = typeof body === 'string' ? body : body?.body || '';
+  if (file) {
+    const fd = new FormData();
+    if (text) fd.append('body', text);
+    fd.append('attachment', file);
+    return api.post(url, fd, { timeout: 60000 });
+  }
+  return api.post(url, { body: text });
+}
+
 export const jobsAPI = {
   getProviderDashboard: (organizationSlug) =>
     api.get('/api/v1/provider-dashboard/', { params: { organization: organizationSlug } }),
@@ -237,14 +248,16 @@ export const jobsAPI = {
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/decline-quote/`),
   cancelInquiryRequest: (inquiryId) =>
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/cancel/`),
+  removeInquiry: (inquiryId) =>
+    api.post(`/api/v1/me/service-inquiries/${inquiryId}/remove/`),
   bookInquirySlot: (inquiryId, slotId) =>
     api.post(`/api/v1/me/service-inquiries/${inquiryId}/book-slot/`, { slot_id: slotId }),
   listMyConversations: () => api.get('/api/v1/me/conversations/'),
   recordAppSeen: () => api.post('/api/v1/me/app-seen/'),
   listConversationMessages: (conversationId) =>
     api.get(`/api/v1/conversations/${conversationId}/messages/`),
-  sendConversationMessage: (conversationId, body) =>
-    api.post(`/api/v1/conversations/${conversationId}/messages/`, { body }),
+  sendConversationMessage: (conversationId, body, file) =>
+    postChatMessage(`/api/v1/conversations/${conversationId}/messages/`, body, file),
   listMyNotifications: (params) => api.get('/api/v1/me/notifications/', { params }),
   dismissMyNotification: (notificationId) =>
     api.post(`/api/v1/me/notifications/${notificationId}/dismiss/`),
@@ -258,12 +271,16 @@ export const jobsAPI = {
   sendInquiryQuote: (orgSlug, inquiryId, data) =>
     api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/send-quote/`, data),
   listBookingMessages: (bookingId) => api.get(`/api/v1/bookings/${bookingId}/messages/`),
-  sendBookingMessage: (bookingId, body) =>
-    api.post(`/api/v1/bookings/${bookingId}/messages/`, { body }),
+  sendBookingMessage: (bookingId, body, file) =>
+    postChatMessage(`/api/v1/bookings/${bookingId}/messages/`, body, file),
   listInquiryMessages: (orgSlug, inquiryId) =>
     api.get(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`),
-  sendInquiryMessage: (orgSlug, inquiryId, body) =>
-    api.post(`/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`, { body }),
+  sendInquiryMessage: (orgSlug, inquiryId, body, file) =>
+    postChatMessage(
+      `/api/v1/organizations/${orgSlug}/service-inquiries/${inquiryId}/messages/`,
+      body,
+      file,
+    ),
   getBooking: (id) => api.get(`/api/v1/bookings/${id}/`),
   getPublicBooking: (token) => api.get(`/api/v1/public/bookings/${encodeURIComponent(token)}/`),
   getSlot: (id) => api.get(`/api/v1/availability-slots/${id}/`),
@@ -282,7 +299,7 @@ export const jobsAPI = {
   acceptBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/accept-time-change/`),
   declineBookingTimeChange: (id) => api.post(`/api/v1/bookings/${id}/decline-time-change/`),
   declineBooking: (id) => api.post(`/api/v1/bookings/${id}/decline/`),
-  cancelBooking: (id) => api.post(`/api/v1/bookings/${id}/cancel/`),
+  cancelBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/cancel/`, data),
   reportBookingAttendance: (id, data) => api.post(`/api/v1/bookings/${id}/report-attendance/`, data),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
   completeBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/complete/`, data),
@@ -326,8 +343,8 @@ export const jobsAPI = {
     api.post(`/api/v1/bookings/${id}/incomplete/`, data),
   scheduleReturnVisit: (id, data) =>
     api.post(`/api/v1/bookings/${id}/return-visit/`, data),
-  rescheduleBooking: (id, slotId) =>
-    api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId }),
+  rescheduleBooking: (id, slotId, data = {}) =>
+    api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId, ...data }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),
   bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
   downloadBookingIcal: (id) =>

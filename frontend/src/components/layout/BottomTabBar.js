@@ -12,9 +12,13 @@ export default function BottomTabBar({ tabs }) {
 
   return (
     <nav
-      className="lx-bottom-tabs fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/90 bg-white/95 backdrop-blur-xl lg:hidden"
+      className="lx-bottom-tabs fixed inset-x-0 bottom-0 z-50 border-t backdrop-blur-xl lg:hidden"
       aria-label="Primary"
-      style={{ paddingBottom: 'max(0.5rem, var(--lx-sab))' }}
+      style={{
+        paddingBottom: 'max(0.5rem, var(--lx-sab))',
+        borderColor: 'rgb(var(--lx-border) / 0.9)',
+        backgroundColor: 'rgb(var(--lx-tab-bg) / 0.95)',
+      }}
     >
       <div className="flex w-full px-safe">
         {tabs.map((tab) => {

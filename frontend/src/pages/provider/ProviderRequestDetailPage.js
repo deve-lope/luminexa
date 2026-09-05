@@ -5,6 +5,7 @@ import AddToCalendarModal from '../../components/booking/AddToCalendarModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
@@ -43,6 +44,7 @@ export default function ProviderRequestDetailPage() {
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [quoteAmount, setQuoteAmount] = useState('');
   const [quoteMessage, setQuoteMessage] = useState('');
   const [quoteQuestions, setQuoteQuestions] = useState(['']);
@@ -183,7 +185,50 @@ export default function ProviderRequestDetailPage() {
     try {
       await jobsAPI.patchServiceInquiry(orgSlug, id, { action });
       showToast(successMessage, 'success');
+      setConfirmAction(null);
       await load();
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runApproveBooking = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.acceptBooking(id);
+      showToast('Request approved.', 'success');
+      setConfirmAction(null);
+      await load();
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runDeclineBooking = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.declineBooking(id);
+      setConfirmAction(null);
+      navigate(providerRequests(orgSlug));
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runCancelBooking = async (reason = '') => {
+    setActionBusy(true);
+    try {
+      const payload = reason ? { reason } : {};
+      await jobsAPI.cancelBooking(id, payload);
+      showToast('Booking cancelled.', 'success');
+      setConfirmAction(null);
+      navigate(providerRequests(orgSlug));
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -260,7 +305,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() => runBookingAction(() => jobsAPI.acceptBooking(id), 'Request approved.')}
+              onClick={() => setConfirmAction('approve')}
               className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
             >
               Approve
@@ -276,12 +321,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() =>
-                runBookingAction(async () => {
-                  await jobsAPI.declineBooking(id);
-                  navigate(providerRequests(orgSlug));
-                }, null)
-              }
+              onClick={() => setConfirmAction('decline')}
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Decline
@@ -301,12 +341,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() =>
-                runBookingAction(async () => {
-                  await jobsAPI.declineBooking(id);
-                  navigate(providerRequests(orgSlug));
-                }, null)
-              }
+              onClick={() => setConfirmAction('cancel')}
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Cancel request
@@ -357,12 +392,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() =>
-                runBookingAction(async () => {
-                  await jobsAPI.declineBooking(id);
-                  navigate(providerRequests(orgSlug));
-                }, null)
-              }
+              onClick={() => setConfirmAction('decline')}
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Decline
@@ -420,7 +450,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() => runInquiryAction('accept', 'Request approved.')}
+              onClick={() => setConfirmAction('inquiry_accept')}
               className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
             >
               Approve
@@ -428,7 +458,7 @@ export default function ProviderRequestDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={() => runInquiryAction('decline', 'Request declined.')}
+              onClick={() => setConfirmAction('inquiry_decline')}
               className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
               Decline
@@ -439,7 +469,7 @@ export default function ProviderRequestDetailPage() {
           <button
             type="button"
             disabled={actionBusy}
-            onClick={() => runInquiryAction('complete', 'Marked as done.')}
+            onClick={() => setConfirmAction('inquiry_complete')}
             className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
           >
             Mark done
@@ -839,10 +869,10 @@ export default function ProviderRequestDetailPage() {
             ? jobsAPI.listBookingMessages(id)
             : jobsAPI.listInquiryMessages(orgSlug, id)
         }
-        sendMessage={(body) =>
+        sendMessage={(body, file) =>
           kind === 'booking'
-            ? jobsAPI.sendBookingMessage(id, body)
-            : jobsAPI.sendInquiryMessage(orgSlug, id, body)
+            ? jobsAPI.sendBookingMessage(id, body, file)
+            : jobsAPI.sendInquiryMessage(orgSlug, id, body, file)
         }
       />
 
@@ -895,6 +925,72 @@ export default function ProviderRequestDetailPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmAction === 'approve'}
+        title="Approve this request?"
+        message="The customer will be notified that their booking is confirmed."
+        confirmLabel="Approve"
+        cancelLabel="Back"
+        tone="success"
+        busy={actionBusy}
+        onConfirm={runApproveBooking}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'decline'}
+        title="Decline this request?"
+        message="The slot will be freed and the customer will be notified. This can't be undone."
+        confirmLabel="Decline request"
+        cancelLabel="Back"
+        busy={actionBusy}
+        onConfirm={runDeclineBooking}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'cancel'}
+        title="Cancel this request?"
+        message="This cancels the booking, frees the slot, and notifies the customer. This can't be undone."
+        confirmLabel="Cancel request"
+        cancelLabel="Keep request"
+        busy={actionBusy}
+        noteLabel="Reason for customer (optional)"
+        notePlaceholder="e.g. Emergency — we need to cancel this appointment"
+        onConfirm={runCancelBooking}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'inquiry_accept'}
+        title="Approve this custom request?"
+        message="The customer will be notified that you accepted their request."
+        confirmLabel="Approve"
+        cancelLabel="Back"
+        tone="success"
+        busy={actionBusy}
+        onConfirm={() => runInquiryAction('accept', 'Request approved.')}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'inquiry_decline'}
+        title="Decline this custom request?"
+        message="The customer will be notified. This can't be undone."
+        confirmLabel="Decline"
+        cancelLabel="Back"
+        busy={actionBusy}
+        onConfirm={() => runInquiryAction('decline', 'Request declined.')}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'inquiry_complete'}
+        title="Mark this request as done?"
+        message="This closes the custom request."
+        confirmLabel="Mark done"
+        cancelLabel="Back"
+        tone="default"
+        busy={actionBusy}
+        onConfirm={() => runInquiryAction('complete', 'Marked as done.')}
+        onClose={() => setConfirmAction(null)}
+      />
 
     </div>
   );

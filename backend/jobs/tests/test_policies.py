@@ -557,6 +557,39 @@ class InquiryQuoteFlowTests(TestCase):
         self.assertEqual(cancelled.status_code, 200, cancelled.data)
         self.assertEqual(cancelled.data['status'], CustomerServiceInquiry.Status.CANCELLED)
 
+    def test_customer_can_remove_quoted_inquiry(self):
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiry/',
+            {
+                'service_id': self.service.id,
+                'message': 'Need deep cleaning quote',
+                'service_address': '123 Main St',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        inquiry_id = create.data['id']
+
+        self.client.force_authenticate(user=self.owner)
+        self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiries/{inquiry_id}/send-quote/',
+            {'amount': '250.00', 'message': 'Includes supplies'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        removed = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry_id}/remove/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(removed.status_code, 200, removed.data)
+        self.assertEqual(removed.data['status'], CustomerServiceInquiry.Status.DECLINED)
+        self.assertIsNotNone(removed.data['dismissed_at'])
+
 
 class RecurringScheduleSyncTests(TestCase):
     def test_sync_replaces_old_generated_open_slots_when_hours_change(self):

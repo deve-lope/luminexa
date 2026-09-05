@@ -8,7 +8,7 @@ import { providerRequestDetail } from '../../utils/providerPaths';
 import { requestFilterLabel, requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
 import parseApiError from '../../utils/parseApiError';
 
-const FILTERS = ['all', 'pending', 'active', 'done'];
+const FILTERS = ['all', 'pending', 'active', 'done', 'archive'];
 
 function StatusBadge({ kind, status }) {
   return (
@@ -95,7 +95,9 @@ export default function ProviderRequestsPage() {
                 ? 'Approved jobs will show up here.'
                 : filter === 'done'
                   ? 'Completed jobs will show up here.'
-                  : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
+                  : filter === 'archive'
+                    ? 'Past approved jobs with no complete, cancel, or no-show action land here.'
+                    : `No ${requestFilterLabel(filter).toLowerCase()} requests right now.`}
           </p>
         </div>
       )}
@@ -112,6 +114,11 @@ export default function ProviderRequestsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-slate-900">{item.title}</p>
                     <StatusBadge kind={item.kind} status={item.status} />
+                    {item.bucket === 'archive' && (
+                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Past date
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-sm text-slate-600">
                     {item.customer_name}
@@ -139,6 +146,12 @@ export default function ProviderRequestsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
                 </svg>
               </Link>
+
+              {item.bucket === 'archive' && (
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Appointment day passed without complete, cancel, or no-show. Open to finish or close it out.
+                </p>
+              )}
 
               {item.invoice && (
                 <InvoicePanel

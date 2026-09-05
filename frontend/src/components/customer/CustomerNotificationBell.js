@@ -43,11 +43,8 @@ export default function CustomerNotificationBell({ unreadCount = 0, onCountChang
       if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
     };
   }, [open, loadPreview]);
 

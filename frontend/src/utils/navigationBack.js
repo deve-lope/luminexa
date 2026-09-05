@@ -125,6 +125,7 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
 
   if (path === `${base}/schedule`) return { to: base };
   if (path === `${base}/requests`) return { to: base };
+  if (path === `${base}/jobs`) return { to: base };
   if (path === `${base}/services`) return { to: base };
   if (path === `${base}/settings`) return { to: base };
   if (path === `${base}/account`) return { to: base };

@@ -12,6 +12,7 @@ import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
+import BookingTasksSection from '../../components/tasks/BookingTasksSection';
 import { getCustomerAppointmentUrl } from '../../utils/bookingLink';
 import LinkShareBar from '../../components/LinkShareBar';
 import { providerSchedule, providerScheduleDetail, providerRequestDetail } from '../../utils/providerPaths';
@@ -66,11 +67,40 @@ export default function ProviderScheduleDetailPage() {
     }
   };
 
-  const runCancel = async () => {
+  const runCancel = async (reason = '') => {
     setActionBusy(true);
     try {
-      await jobsAPI.cancelBooking(id);
+      const payload = reason ? { reason } : {};
+      await jobsAPI.cancelBooking(id, payload);
       showToast('Booking cancelled.', 'success');
+      navigate(providerSchedule(orgSlug));
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runApprove = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.acceptBooking(id);
+      showToast('Request approved.', 'success');
+      setConfirmAction(null);
+      load();
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const runDecline = async () => {
+    setActionBusy(true);
+    try {
+      await jobsAPI.declineBooking(id);
+      showToast('Request declined.', 'success');
+      setConfirmAction(null);
       navigate(providerSchedule(orgSlug));
     } catch (e) {
       setError(parseApiError(e));
@@ -273,6 +303,8 @@ export default function ProviderScheduleDetailPage() {
           )}
         </section>
 
+        <BookingTasksSection orgSlug={orgSlug} bookingId={data.id} />
+
         {kind === 'booking' && (
           <JobCostPanel
             bookingId={data.id}
@@ -334,24 +366,22 @@ export default function ProviderScheduleDetailPage() {
           </div>
         </section>
 
+        {data.awaiting_customer_acceptance && (
+          <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
+            Waiting for the customer to accept the new time
+            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+            You can propose a different time, or cancel the booking.
+          </p>
+        )}
+
         {data.status === 'requested' &&
+          !data.awaiting_customer_acceptance &&
           !(data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                try {
-                  await jobsAPI.acceptBooking(data.id);
-                  showToast('Request approved.', 'success');
-                  load();
-                } catch (e) {
-                  setError(parseApiError(e));
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
+              onClick={() => setConfirmAction('approve')}
               className="lx-btn-primary min-h-[48px] disabled:opacity-60"
             >
               Approve
@@ -367,18 +397,33 @@ export default function ProviderScheduleDetailPage() {
             <button
               type="button"
               disabled={actionBusy}
-              onClick={async () => {
-                setActionBusy(true);
-                try {
-                  await jobsAPI.declineBooking(data.id);
-                  navigate(providerSchedule(orgSlug));
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
+              onClick={() => setConfirmAction('decline')}
               className="min-h-[48px] rounded-xl border border-slate-200 font-medium text-slate-700 disabled:opacity-60"
             >
               Decline
+            </button>
+          </div>
+        )}
+
+        {data.status === 'requested' &&
+          data.awaiting_customer_acceptance &&
+          !(data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={actionBusy || new Date(data.start_at) <= new Date()}
+              onClick={() => setRescheduleOpen(true)}
+              className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
+            >
+              Change time again
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setConfirmAction('cancel')}
+              className="min-h-[48px] rounded-xl border border-red-200 font-medium text-red-700 disabled:opacity-60"
+            >
+              Cancel booking
             </button>
           </div>
         )}
@@ -557,6 +602,27 @@ export default function ProviderScheduleDetailPage() {
         />
 
         <ConfirmDialog
+          open={confirmAction === 'approve'}
+          title="Approve this request?"
+          message="The customer will be notified that their booking is confirmed."
+          confirmLabel="Approve"
+          cancelLabel="Back"
+          tone="success"
+          busy={actionBusy}
+          onConfirm={runApprove}
+          onClose={() => setConfirmAction(null)}
+        />
+        <ConfirmDialog
+          open={confirmAction === 'decline'}
+          title="Decline this request?"
+          message="The slot will be freed and the customer will be notified. This can't be undone."
+          confirmLabel="Decline request"
+          cancelLabel="Back"
+          busy={actionBusy}
+          onConfirm={runDecline}
+          onClose={() => setConfirmAction(null)}
+        />
+        <ConfirmDialog
           open={confirmAction === 'noshow'}
           title="Mark customer as no-show?"
           message="This cancels the booking and frees the slot. Use this when the customer didn't show up."
@@ -574,6 +640,8 @@ export default function ProviderScheduleDetailPage() {
           confirmLabel="Cancel booking"
           cancelLabel="Keep booking"
           busy={actionBusy}
+          noteLabel="Reason for customer (optional)"
+          notePlaceholder="e.g. Emergency — we need to cancel this appointment"
           onConfirm={runCancel}
           onClose={() => setConfirmAction(null)}
         />

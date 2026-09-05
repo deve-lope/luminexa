@@ -10,9 +10,10 @@ import { businessesAPI } from '../../utils/api';
 import {
   bookService,
   businessPage,
-  customerHistory,
+  customerCompleted,
   customerProviderPage,
   customerProviderService,
+  customerQuotes,
 } from '../../utils/customerPaths';
 import { providerRouteKey } from '../../utils/providerRouteKey';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
@@ -332,7 +333,7 @@ export default function CustomerServiceDetailPage() {
               `Quote request sent to ${service.organization_name}. They'll reply with a price — then you can book a date.`
             );
             setRequestOpen(false);
-            navigate(customerHistory());
+            navigate(customerQuotes());
           }}
         />
       )}

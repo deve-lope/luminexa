@@ -35,6 +35,14 @@ def send_upcoming_booking_reminders():
 
 
 @shared_task
+def send_incomplete_job_task_reminders():
+    """Remind providers ~48h before jobs that still have incomplete tasks."""
+    from .notifications import send_incomplete_job_task_reminders_for_window
+
+    return send_incomplete_job_task_reminders_for_window()
+
+
+@shared_task
 def send_unpaid_invoice_payment_reminders():
     """Send email follow-ups for unpaid issued invoices."""
     from .notifications import send_unpaid_invoice_followups
@@ -48,3 +56,19 @@ def send_rate_service_reminders():
     from .notifications import send_rate_service_reminders as _send
 
     return _send()
+
+
+@shared_task
+def send_subscription_ending_reminders():
+    """Remind providers 30 / 7 / 2 days before trial or promo Pro access ends."""
+    from .subscription_reminder_services import send_subscription_ending_reminders as _send
+
+    return _send()
+
+
+@shared_task
+def purge_stale_quotes():
+    """Delete quote requests and unconfirmed quote bookings older than one year."""
+    from .quote_cleanup_services import purge_stale_quotes as _purge
+
+    return _purge()

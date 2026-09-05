@@ -57,6 +57,29 @@ class BookingNotificationTests(TestCase):
             status=AvailabilitySlot.Status.OPEN,
         )
 
+    def test_provider_time_change_push_links_to_booking_detail(self):
+        from jobs.models import CustomerNotification
+        from jobs.notifications import notify_booking_rescheduled_by_provider
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.REQUESTED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            service_address='123 Main St',
+        )
+        notify_booking_rescheduled_by_provider(booking)
+        note = CustomerNotification.objects.filter(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+            booking=booking,
+        ).latest('created_at')
+        self.assertEqual(note.link_path, f'/customer/bookings/{booking.pk}')
+
     def test_provider_receives_email_when_customer_books(self):
         self.client.force_authenticate(user=self.customer)
         with patch('jobs.notifications.notify_customer_booking_created') as notify:
@@ -279,6 +302,107 @@ class BookingNotificationTests(TestCase):
         ).first()
         self.assertIsNotNone(msg)
         self.assertIn('cancelled', msg.body.lower())
+
+    def test_provider_cancel_with_reason_reaches_customer(self):
+        from django.core import mail
+
+        from jobs.models import CustomerNotification, ServiceRequestMessage
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save(update_fields=['status'])
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/cancel/',
+            {'reason': 'Staff illness — please rebook when convenient.'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+
+        note = CustomerNotification.objects.filter(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_CANCELLED,
+        ).first()
+        self.assertIsNotNone(note)
+        self.assertIn('Staff illness', note.message)
+
+        msg = ServiceRequestMessage.objects.filter(
+            booking=booking, kind=ServiceRequestMessage.Kind.SYSTEM,
+        ).first()
+        self.assertIsNotNone(msg)
+        self.assertIn('Staff illness', msg.body)
+
+        customer_mails = [m for m in mail.outbox if m.to == ['customer@test.local']]
+        self.assertTrue(any('Staff illness' in m.body for m in customer_mails), mail.outbox)
+
+    def test_provider_reschedule_with_reason_reaches_customer(self):
+        from django.core import mail
+
+        from jobs.models import CustomerNotification, ServiceRequestMessage
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save(update_fields=['status'])
+
+        new_start = self.slot.start_at + timedelta(days=2)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+
+        self.client.force_authenticate(user=self.provider)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {
+                'slot_id': new_slot.id,
+                'reason': 'Earlier crew conflict — does this time work?',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+
+        note = CustomerNotification.objects.filter(
+            customer=self.customer,
+            kind=CustomerNotification.Kind.BOOKING_TIME_CHANGE,
+        ).first()
+        self.assertIsNotNone(note)
+        self.assertIn('crew conflict', note.message)
+
+        msg = ServiceRequestMessage.objects.filter(
+            booking=booking, kind=ServiceRequestMessage.Kind.SYSTEM,
+        ).order_by('-id').first()
+        self.assertIsNotNone(msg)
+        self.assertIn('crew conflict', msg.body)
+
+        customer_mails = [m for m in mail.outbox if m.to == ['customer@test.local']]
+        self.assertTrue(
+            any('crew conflict' in m.body for m in customer_mails),
+            [m.body for m in customer_mails],
+        )
 
     def test_opening_booking_thread_dismisses_related_new_message_notifications(self):
         """Reading a conversation clears new_message alerts for that booking only."""

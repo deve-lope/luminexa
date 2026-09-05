@@ -54,6 +54,7 @@ export function requestFilterLabel(filter) {
     pending: 'Pending',
     active: 'Jobs',
     done: 'Completed',
+    archive: 'Archive',
   };
   return labels[filter] || filter;
 }

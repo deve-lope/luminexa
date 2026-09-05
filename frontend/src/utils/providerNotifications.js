@@ -1,6 +1,7 @@
 import { jobsAPI } from './api';
 import {
   providerBilling,
+  providerJobs,
   providerMessages,
   providerRequestDetail,
   providerRequests,
@@ -22,6 +23,7 @@ export const BOOKING_ACTION_KINDS = new Set([
 export const PROVIDER_BOOKING_UPDATE_KINDS = new Set([
   ...BOOKING_ACTION_KINDS,
   'payment_received',
+  'incomplete_job_tasks',
 ]);
 
 export function isProviderBookingUpdateNotification(notification) {
@@ -50,6 +52,14 @@ export function providerNotificationDestination(orgSlug, n) {
     return providerBilling(orgSlug);
   }
 
+  if (n?.kind === 'subscription_ending') {
+    return providerBilling(orgSlug);
+  }
+
+  if (n?.kind === 'incomplete_job_tasks') {
+    return providerJobs(orgSlug);
+  }
+
   if (n?.kind === 'new_message') {
     if (n.booking_id) return `${providerMessages(orgSlug)}?booking=${n.booking_id}`;
     if (n.inquiry_id) return `${providerMessages(orgSlug)}?inquiry=${n.inquiry_id}`;
@@ -67,7 +77,9 @@ export function providerNotificationDestination(orgSlug, n) {
 /** Short CTA label for Today / alert cards. */
 export function providerNotificationCtaLabel(n) {
   if (n?.kind === 'promo_offer') return 'Redeem on Billing';
+  if (n?.kind === 'subscription_ending') return 'Renew on Billing';
   if (n?.kind === 'payment_received') return 'View booking';
+  if (n?.kind === 'incomplete_job_tasks') return 'Review tasks';
   if (n?.kind === 'quote_answers_received') return 'Send quote';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';

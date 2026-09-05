@@ -872,6 +872,40 @@ class BookingLifecycleTests(TestCase):
         self.assertFalse(booking.awaiting_customer_acceptance)
         self.assertIsNone(booking.prior_start_at)
 
+        # Provider may propose another time after the customer accepted.
+        later_start = timezone.now() + timedelta(days=8)
+        later_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=later_start,
+            end_at=later_start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        self._auth(self.provider)
+        again = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': later_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(again.status_code, 200, getattr(again, 'data', again.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.availability_slot_id, later_slot.id)
+
+        # Staff must not "Approve" their own pending time proposal.
+        blocked = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept/',
+            HTTP_HOST='localhost',
+            secure=True,
+        )
+        self.assertEqual(blocked.status_code, 400, getattr(blocked, 'data', blocked.content))
+        booking.refresh_from_db()
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+
     def test_public_customer_view_token_shows_booking_without_login(self):
         self._auth(self.provider)
         res = self.client.post(

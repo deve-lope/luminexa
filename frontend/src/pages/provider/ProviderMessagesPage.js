@@ -223,7 +223,7 @@ export default function ProviderMessagesPage() {
           peerSubtitle="Customer"
           onClose={closeConversation}
           loadMessages={loadMessagesAndRefreshBadge}
-          sendMessage={(body) => jobsAPI.sendConversationMessage(selected.id, body)}
+          sendMessage={(body, file) => jobsAPI.sendConversationMessage(selected.id, body, file)}
           bookingDetailHref={(bookingId) =>
             providerScheduleDetail(orgSlug, 'booking', bookingId)
           }

@@ -18,8 +18,8 @@ export default function CustomerQuotesPage() {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [cancelTarget, setCancelTarget] = useState(null);
-  const [cancelling, setCancelling] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,23 +47,32 @@ export default function CustomerQuotesPage() {
   );
   const hasItems = pendingBookings.length > 0 || activeInquiries.length > 0;
 
-  const cancelInquiry = async () => {
-    if (!cancelTarget) return;
-    setCancelling(true);
+  const confirmRemove = async () => {
+    if (!removeTarget) return;
+    setRemoving(true);
     try {
-      if (cancelTarget.status === 'pending' || cancelTarget.status === 'active') {
-        await jobsAPI.cancelInquiryRequest(cancelTarget.id);
+      if (removeTarget.type === 'inquiry') {
+        await jobsAPI.removeInquiry(removeTarget.item.id);
       } else {
-        await jobsAPI.declineInquiryQuote(cancelTarget.id);
+        await jobsAPI.cancelBooking(removeTarget.item.id);
       }
-      setCancelTarget(null);
+      setRemoveTarget(null);
       load();
     } catch {
-      setError('Could not cancel that quote request.');
+      setError(
+        removeTarget.type === 'inquiry'
+          ? 'Could not remove that quote request.'
+          : 'Could not remove that booking request.',
+      );
     } finally {
-      setCancelling(false);
+      setRemoving(false);
     }
   };
+
+  const removeDialogMessage =
+    removeTarget?.type === 'booking'
+      ? 'This booking request will be cancelled and removed from your quotes.'
+      : 'This quote request will be removed. The business will no longer see it as open.';
 
   return (
     <div className="space-y-4">
@@ -91,6 +100,9 @@ export default function CustomerQuotesPage() {
         </div>
       ) : (
         <>
+          <p className="text-sm text-slate-600">
+            Bookings waiting on a price, your approval, or the business to respond.
+          </p>
           {activeInquiries.length > 0 && (
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Quote requests</h2>
@@ -114,29 +126,27 @@ export default function CustomerQuotesPage() {
                           ? 'Quote accepted — choose an appointment time.'
                           : 'Waiting for the business to send a quote.'}
                     </p>
-                    <Link
-                      to={customerInquiryDetail(inq.id)}
-                      className={`mt-4 inline-flex min-h-[44px] items-center text-sm font-semibold ${
-                        inquiryNeedsAttention(inq) ? 'text-luminexa-accent' : 'text-slate-700'
-                      }`}
-                    >
-                      {inq.status === 'quoted'
-                        ? 'Review quote →'
-                        : inq.status === 'quote_accepted'
-                          ? 'Pick a time →'
-                          : 'View request →'}
-                    </Link>
-                    {(inq.status === 'pending' ||
-                      inq.status === 'active' ||
-                      inq.status === 'quote_accepted') && (
+                    <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+                      <Link
+                        to={customerInquiryDetail(inq.id)}
+                        className={`inline-flex min-h-[44px] items-center text-sm font-semibold ${
+                          inquiryNeedsAttention(inq) ? 'text-luminexa-accent' : 'text-slate-700'
+                        }`}
+                      >
+                        {inq.status === 'quoted'
+                          ? 'Review quote →'
+                          : inq.status === 'quote_accepted'
+                            ? 'Pick a time →'
+                            : 'View request →'}
+                      </Link>
                       <button
                         type="button"
-                        onClick={() => setCancelTarget(inq)}
-                        className="mt-2 block text-sm font-medium text-red-600 hover:underline"
+                        onClick={() => setRemoveTarget({ type: 'inquiry', item: inq })}
+                        className="inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold text-red-600 hover:underline"
                       >
-                        Cancel request
+                        Delete quote
                       </button>
-                    )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -155,6 +165,7 @@ export default function CustomerQuotesPage() {
                     booking={booking}
                     compact
                     detailTo={customerBookingDetail(booking.id)}
+                    onCompactDelete={() => setRemoveTarget({ type: 'booking', item: booking })}
                   />
                 ))}
               </ul>
@@ -164,15 +175,15 @@ export default function CustomerQuotesPage() {
       )}
 
       <ConfirmDialog
-        open={Boolean(cancelTarget)}
-        title="Cancel quote request?"
-        message="The business will no longer see this as an open request."
-        confirmLabel="Yes, cancel"
-        cancelLabel="Keep request"
+        open={Boolean(removeTarget)}
+        title="Delete quote?"
+        message={removeDialogMessage}
+        confirmLabel="Yes, delete"
+        cancelLabel="Keep"
         tone="danger"
-        busy={cancelling}
-        onConfirm={cancelInquiry}
-        onClose={() => setCancelTarget(null)}
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => setRemoveTarget(null)}
       />
     </div>
   );

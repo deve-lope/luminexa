@@ -27,7 +27,8 @@ const config: CapacitorConfig = {
     // EdgeToEdge plugin owns WebView insets on Android 15+.
     SystemBars: {
       insetsHandling: 'disable',
-      style: 'DARK',
+      // LIGHT = dark icons for our light frosted header (DARK was white-on-white).
+      style: 'LIGHT',
     },
     EdgeToEdge: {
       backgroundColor: '#0D9488',

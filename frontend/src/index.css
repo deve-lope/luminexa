@@ -9,6 +9,13 @@
     --lx-accent: 13 148 136;
     --lx-surface: 255 255 255;
     --lx-border: 228 231 235;
+    --lx-bg: 246 247 245;
+    --lx-text: 28 39 51;
+    --lx-muted: 100 116 139;
+    --lx-header-bg: 255 255 255;
+    --lx-header-bg-alpha: 0.86;
+    --lx-tab-bg: 255 255 255;
+    --lx-native-frame: #0d9488;
     /* Capacitor SystemBars injects --safe-area-inset-* on Android (env() is often wrong). */
     --lx-sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --lx-sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
@@ -19,6 +26,7 @@
     --lx-bottom-tabs-height: calc(3.5rem + max(0.5rem, var(--lx-sab)));
     /* Sticky header height; JS replaces this with the measured banner bottom. */
     --lx-header-offset: calc(var(--lx-sat) + 5rem);
+    color-scheme: light only;
   }
 
   body {
@@ -27,7 +35,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    color: #1c2733;
+    color: rgb(var(--lx-text));
     letter-spacing: -0.006em;
     /* clip (not hidden) so position:sticky on .lx-header still works */
     overflow-x: clip;
@@ -38,6 +46,7 @@
     padding-right: var(--lx-sar);
     padding-bottom: var(--lx-keyboard-inset);
     box-sizing: border-box;
+    background-color: rgb(var(--lx-bg));
   }
 
   html {
@@ -53,13 +62,23 @@
     scroll-margin-bottom: calc(var(--lx-keyboard-inset) + 1.5rem);
   }
 
+  /* iOS zooms the WebView when a focused field is under 16px.
+     Zero scroll-margin so Safari does not yank the page on focus. */
+  html.capacitor-ios input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  html.capacitor-ios textarea,
+  html.capacitor-ios select {
+    font-size: 16px;
+    scroll-margin-top: 0;
+    scroll-margin-bottom: 0;
+  }
+
   html.capacitor-native {
-    background-color: #0d9488;
+    background-color: var(--lx-native-frame);
   }
 
   html.capacitor-native body {
     min-height: 100%;
-    background-color: #f8fafc;
+    background-color: rgb(var(--lx-bg));
   }
 
   html.capacitor-native #root {
@@ -79,8 +98,9 @@
 
 @layer components {
   .lx-app-bg {
-    @apply min-h-[100dvh] w-full bg-luminexa-canvas bg-lx-mesh;
+    @apply min-h-[100dvh] w-full bg-lx-mesh;
     overflow-x: clip;
+    background-color: rgb(var(--lx-bg));
   }
 
   .lx-container {
@@ -118,7 +138,9 @@
   }
 
   .lx-header {
-    @apply sticky top-0 z-40 border-b border-luminexa-line bg-white/95 backdrop-blur-xl backdrop-saturate-150;
+    @apply sticky top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150;
+    border-color: rgb(var(--lx-border));
+    background-color: rgb(var(--lx-header-bg) / 0.95);
     /* Body already padded on Capacitor; keep env/var for browser PWA only */
     padding-top: env(safe-area-inset-top, 0px);
   }
@@ -137,12 +159,68 @@
     padding-top: 0;
   }
 
+  /*
+   * iOS Instagram-style chrome: translucent fixed bar stays put (Messages name
+   * bar must not hide). Content scrolls underneath toward the notch.
+   */
+  html.capacitor-ios body {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  html.capacitor-ios .lx-app-bg {
+    padding-top: 0;
+  }
+
+  html.capacitor-ios {
+    scroll-padding-top: 0;
+    scroll-padding-bottom: 0;
+  }
+
+  html.capacitor-ios .lx-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding-top: var(--lx-sat);
+    border-bottom-color: rgb(var(--lx-border) / 0.55);
+    /* Solid enough under the status bar so dark icons stay readable. */
+    background-color: rgb(var(--lx-header-bg) / var(--lx-header-bg-alpha));
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    transform: translateZ(0);
+  }
+
+  /* Scrollable top inset — content can pass under the frosted bar. */
+  html.capacitor-ios .lx-main-under-header {
+    padding-top: max(0.75rem, var(--lx-header-offset));
+  }
+
+  html.capacitor-ios .lx-ime-sheet .lx-header {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: auto;
+    padding-top: 0;
+    border-bottom-color: transparent;
+    background-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transform: none;
+  }
+
   .lx-card {
-    @apply rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-card;
+    @apply rounded-2xl border p-4 shadow-lx-card;
+    border-color: rgb(var(--lx-border));
+    background-color: rgb(var(--lx-surface));
   }
 
   .lx-card-lg {
-    @apply rounded-3xl border border-luminexa-line bg-white p-5 shadow-lx-card sm:p-6;
+    @apply rounded-3xl border p-5 shadow-lx-card sm:p-6;
+    border-color: rgb(var(--lx-border));
+    background-color: rgb(var(--lx-surface));
   }
 
   .lx-card-interactive {
@@ -150,7 +228,9 @@
   }
 
   .lx-panel {
-    @apply rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft;
+    @apply rounded-2xl border p-4 shadow-lx-soft;
+    border-color: rgb(var(--lx-border));
+    background-color: rgb(var(--lx-surface));
   }
 
   .lx-section-band {
@@ -182,15 +262,24 @@
   }
 
   .lx-input {
-    @apply w-full rounded-xl border border-luminexa-line bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-luminexa-accent focus:ring-2 focus:ring-luminexa-accent/20;
+    @apply w-full rounded-xl border px-4 py-3 text-base shadow-sm outline-none transition focus:border-luminexa-accent focus:ring-2 focus:ring-luminexa-accent/20;
+    border-color: rgb(var(--lx-border));
+    background-color: rgb(var(--lx-surface));
+    color: rgb(var(--lx-text));
+  }
+
+  .lx-input::placeholder {
+    color: rgb(var(--lx-muted));
   }
 
   .lx-section-title {
-    @apply text-base font-bold tracking-tight text-slate-900 lg:text-lg;
+    @apply text-base font-bold tracking-tight lg:text-lg;
+    color: rgb(var(--lx-text));
   }
 
   .lx-muted {
-    @apply text-sm leading-relaxed text-slate-500;
+    @apply text-sm leading-relaxed;
+    color: rgb(var(--lx-muted));
   }
 
   .lx-eyebrow {
@@ -322,7 +411,14 @@ html.lx-modal-open .lx-pwa-install-prompt {
 
 html.capacitor-native .lx-ime-sheet.fixed.inset-0 {
   top: var(--lx-sat);
-  bottom: calc(var(--lx-sab) + var(--lx-keyboard-inset, 0px));
+  /* Extend to the physical bottom so beige fills the home-indicator strip. */
+  bottom: var(--lx-keyboard-inset, 0px);
+  background-color: #eae6df;
+}
+
+/* Composer (not the sheet) clears the home indicator. */
+html.capacitor-native .lx-chat-composer {
+  padding-bottom: max(0.5rem, var(--lx-sab));
 }
 
 html.capacitor-native .lx-ime-sheet .lx-header {

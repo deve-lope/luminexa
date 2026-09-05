@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { userAPI } from '../utils/api';
+import { installLightThemeSync, syncLightTheme } from './systemTheme';
 
 const PENDING_TOKEN_KEY = 'luminexa.pendingFcmToken';
 
@@ -11,8 +12,16 @@ export function isNativeApp() {
 /** Mark the document as soon as Cap is available (safe-area CSS hooks). */
 export function markNativeDocument() {
   try {
-    if (Capacitor.isNativePlatform()) {
-      document.documentElement.classList.add('capacitor-native');
+    if (!Capacitor.isNativePlatform()) return;
+    const root = document.documentElement;
+    root.classList.add('capacitor-native');
+    const platform = Capacitor.getPlatform();
+    if (platform === 'ios') {
+      root.classList.add('capacitor-ios');
+      root.classList.remove('capacitor-android');
+    } else if (platform === 'android') {
+      root.classList.add('capacitor-android');
+      root.classList.remove('capacitor-ios');
     }
   } catch {
     /* ignore */
@@ -82,6 +91,26 @@ export function ensureIosSafeAreaFallback() {
   try {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'ios') return;
     applySafeAreaFallback({ topFallback: '47px', bottomFallback: '34px' });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Stop iOS focus-zoom and layout "zoom" when the keyboard opens.
+ * - maximum-scale=1 blocks Safari's auto-zoom on <16px fields
+ * - drop interactive-widget=resizes-content so the layout viewport does not
+ *   shrink on top of our own --lx-keyboard-inset handling
+ */
+export function ensureIosKeyboardViewport() {
+  try {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'ios') return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    meta.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover',
+    );
   } catch {
     /* ignore */
   }
@@ -171,6 +200,9 @@ export async function bootstrapNativeApp() {
     await App.addListener('appUrlOpen', (event) => {
       if (event?.url) navigateToAppUrl(event.url);
     });
+    await App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) syncLightTheme();
+    });
   } catch {
     /* plugin missing in older AAB */
   }
@@ -187,17 +219,8 @@ export async function bootstrapNativeApp() {
     /* plugin missing in older AAB — CSS fallback still applies */
   }
 
-  try {
-    const { SystemBars, SystemBarsStyle } = await import('@capacitor/core');
-    await SystemBars.setStyle({ style: SystemBarsStyle.Dark });
-  } catch {
-    try {
-      const { StatusBar, Style } = await import('@capacitor/status-bar');
-      await StatusBar.setStyle({ style: Style.Dark });
-    } catch {
-      /* ignore */
-    }
-  }
+  installLightThemeSync();
+  await syncLightTheme();
 
   // Only force CSS insets when native EdgeToEdge plugin is absent (older AAB).
   if (!window.__LX_EDGE_TO_EDGE__) {
@@ -206,6 +229,7 @@ export async function bootstrapNativeApp() {
   }
 
   if (Capacitor.getPlatform() === 'ios') {
+    ensureIosKeyboardViewport();
     ensureIosSafeAreaFallback();
     window.setTimeout(ensureIosSafeAreaFallback, 400);
     window.setTimeout(ensureIosSafeAreaFallback, 1200);
@@ -228,9 +252,15 @@ export async function bootstrapNativeApp() {
       /* google-services.json missing or FCM misconfigured */
     });
     await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
-      const path = event?.notification?.data?.link_path;
+      const data = event?.notification?.data || {};
+      const path = data.link_path || data.linkPath;
       if (path && typeof path === 'string' && path.startsWith('/')) {
         window.location.assign(path);
+        return;
+      }
+      // Older payloads may only include ids — recover a useful destination.
+      if (data.booking_id) {
+        window.location.assign(`/customer/bookings/${data.booking_id}`);
       }
     });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 
 export const MIME_ACTS = [
@@ -16,7 +16,7 @@ const ARRIVE_FRACTION = MIME_ACTS.findIndex((a) => a.id === 'arrive') / MIME_ACT
 /** Hold act 1 until the user has scrolled this far into the zone (0–1). */
 const STORY_LATE_START = 0.14;
 
-export function useZoneScrollProgress(containerRef, stepCount, reduceMotionOverride) {
+export function useZoneScrollProgress(containerRef, stepCount, reduceMotionOverride, enabled = true) {
   const reduceMotionHook = useReducedMotion();
   const reduceMotion = reduceMotionOverride ?? reduceMotionHook;
 
@@ -24,6 +24,8 @@ export function useZoneScrollProgress(containerRef, stepCount, reduceMotionOverr
   const [activeIndex, setActiveIndex] = useState(reduceMotion ? stepCount - 1 : 0);
 
   useLayoutEffect(() => {
+    if (!enabled) return undefined;
+
     const el = containerRef?.current;
     if (!el) return undefined;
 
@@ -61,9 +63,35 @@ export function useZoneScrollProgress(containerRef, stepCount, reduceMotionOverr
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };
-  }, [containerRef, reduceMotion, stepCount]);
+  }, [containerRef, reduceMotion, stepCount, enabled]);
 
   return { progress, activeIndex };
+}
+
+const AUTOPLAY_ACT_MS = 3800;
+
+/** Cycle acts on a timer — for narrow screens where scroll-synced story does not fit. */
+export function useAutoplayStory(stepCount, reduceMotion, playing = true, intervalMs = AUTOPLAY_ACT_MS) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setActiveIndex(stepCount - 1);
+      return undefined;
+    }
+    if (!playing) return undefined;
+
+    const id = window.setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % stepCount);
+    }, intervalMs);
+
+    return () => window.clearInterval(id);
+  }, [reduceMotion, stepCount, playing, intervalMs]);
+
+  const index = reduceMotion ? stepCount - 1 : activeIndex;
+  const progress = reduceMotion ? 1 : (index + 0.65) / stepCount;
+
+  return { progress, activeIndex: index };
 }
 
 /** Loose clock so the mimes keep performing even when the page is still. */
@@ -481,7 +509,7 @@ export default function MimeDuoStory({ progress = 0, activeIndex = 0, compact = 
 
       <svg
         viewBox={compact ? '14 140 200 126' : '44 140 148 126'}
-        className={compact ? 'mx-auto mt-2 w-full max-w-[300px]' : 'mt-3 w-full'}
+        className={compact ? 'mx-auto mt-2 h-44 w-full max-w-sm sm:max-w-md' : 'mt-3 w-full'}
         role="img"
         aria-label="Two stick-figure mimes act out a booking: search, reminder, knock, quote, work, pay, applause"
       >
@@ -513,5 +541,35 @@ export default function MimeDuoStory({ progress = 0, activeIndex = 0, compact = 
         />
       </svg>
     </figure>
+  );
+}
+
+/** Full-width auto-advancing story for phones (below need prompts, no scroll required). */
+export function MimeDuoStoryAutoplay() {
+  const reduceMotion = useReducedMotion();
+  const rootRef = useRef(null);
+  const [inView, setInView] = useState(false);
+  const { progress, activeIndex } = useAutoplayStory(
+    MIME_ACTS.length,
+    reduceMotion,
+    inView && !reduceMotion,
+  );
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.2, rootMargin: '0px 0px -8% 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={rootRef} className="mx-auto max-w-md" aria-label="How a booking plays out">
+      <MimeDuoStory compact progress={progress} activeIndex={activeIndex} />
+    </div>
   );
 }

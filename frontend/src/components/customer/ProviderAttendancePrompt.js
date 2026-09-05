@@ -7,10 +7,12 @@ import { needsAttendancePrompt } from '../../utils/customerBookings';
 export default function ProviderAttendancePrompt({ booking, onAnswered, compact = false }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!needsAttendancePrompt(booking)) return null;
+  if (dismissed || !needsAttendancePrompt(booking)) return null;
 
   const submit = async (showedUp) => {
+    setDismissed(true);
     setBusy(true);
     try {
       const res = await jobsAPI.reportBookingAttendance(booking.id, { showed_up: showedUp });
@@ -20,6 +22,7 @@ export default function ProviderAttendancePrompt({ booking, onAnswered, compact 
       );
       onAnswered?.(res.data);
     } catch (err) {
+      setDismissed(false);
       showToast(parseApiError(err, 'Could not save your response.'), 'error');
     } finally {
       setBusy(false);

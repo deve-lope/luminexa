@@ -353,6 +353,10 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
     sender_role = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     card = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
+    attachment_name = serializers.SerializerMethodField()
+    attachment_is_image = serializers.SerializerMethodField()
+    read_status = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequestMessage
@@ -362,6 +366,10 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
             'body',
             'meta',
             'card',
+            'attachment_url',
+            'attachment_name',
+            'attachment_is_image',
+            'read_status',
             'sender',
             'sender_name',
             'sender_role',
@@ -371,6 +379,36 @@ class ServiceRequestMessageSerializer(serializers.ModelSerializer):
             'inquiry',
         )
         read_only_fields = fields
+
+    def get_attachment_url(self, obj):
+        return _absolute_media_url(self.context.get('request'), getattr(obj, 'attachment', None))
+
+    def get_attachment_name(self, obj):
+        attachment = getattr(obj, 'attachment', None)
+        if not attachment or not getattr(attachment, 'name', None):
+            return None
+        from pathlib import Path
+
+        return Path(attachment.name).name
+
+    def get_attachment_is_image(self, obj):
+        from luminexa.uploads import chat_attachment_is_image
+
+        return chat_attachment_is_image(getattr(obj, 'attachment', None))
+
+    def get_read_status(self, obj):
+        """For the sender: 'sent' once stored, 'read' after the peer opened the thread."""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        if obj.sender_id != request.user.id:
+            return None
+        if obj.kind != ServiceRequestMessage.Kind.TEXT:
+            return None
+        peer_read_at = self.context.get('peer_read_at')
+        if peer_read_at and obj.created_at and obj.created_at <= peer_read_at:
+            return 'read'
+        return 'sent'
 
     def get_sender_role(self, obj):
         conversation = getattr(obj, 'conversation', None)
@@ -441,6 +479,14 @@ class CustomerConversationSummarySerializer(serializers.Serializer):
     has_unread = serializers.BooleanField(required=False, default=False)
 
 
+class ProviderServiceRequestOpenTaskSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    due_at = serializers.DateTimeField(allow_null=True)
+    priority = serializers.IntegerField()
+    is_done = serializers.BooleanField()
+
+
 class ProviderServiceRequestListSerializer(serializers.Serializer):
     kind = serializers.CharField()
     id = serializers.IntegerField()
@@ -454,6 +500,8 @@ class ProviderServiceRequestListSerializer(serializers.Serializer):
     preferred_date = serializers.DateField(allow_null=True)
     summary = serializers.CharField(allow_null=True)
     message_count = serializers.IntegerField()
+    open_task_count = serializers.IntegerField(required=False, default=0)
+    open_tasks = ProviderServiceRequestOpenTaskSerializer(many=True, required=False)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     invoice = InvoiceSerializer(allow_null=True, required=False)

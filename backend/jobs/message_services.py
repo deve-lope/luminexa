@@ -20,12 +20,17 @@ def booking_approval_message_body(booking):
     return f'Your request for {service_name} has been approved.'
 
 
-def booking_cancellation_message_body(booking):
+def booking_cancellation_message_body(booking, *, reason=''):
     service_name = booking.service.name if booking.service_id else 'your service'
     when = _format_when(booking.start_at, booking)
     if when:
-        return f'Your booking for {service_name} on {when} has been cancelled.'
-    return f'Your booking for {service_name} has been cancelled.'
+        body = f'Your booking for {service_name} on {when} has been cancelled.'
+    else:
+        body = f'Your booking for {service_name} has been cancelled.'
+    reason_text = (reason or '').strip()
+    if reason_text:
+        body = f'{body}\n\nReason: {reason_text}'
+    return body
 
 
 def booking_incomplete_message_body(booking, *, note='', return_booking=None):
@@ -300,6 +305,16 @@ def _preview_body(msg, *, max_len=140):
         text = msg.body or 'Service request'
     else:
         text = ' '.join((msg.body or '').split())
+        if not text and getattr(msg, 'attachment', None):
+            from pathlib import Path
+
+            from luminexa.uploads import chat_attachment_is_image
+
+            if chat_attachment_is_image(msg.attachment):
+                text = 'Photo'
+            else:
+                name = Path(getattr(msg.attachment, 'name', '') or '').name
+                text = name or 'Attachment'
     if len(text) <= max_len:
         return text
     return f'{text[: max_len - 1].rstrip()}…'
@@ -339,6 +354,22 @@ def mark_conversation_messages_read(*, conversation, user):
         )
 
 
+def peer_messages_read_at(*, conversation, viewer):
+    """When the other party last opened this conversation (for read receipts)."""
+    if not conversation or not viewer:
+        return None
+    if viewer.id == conversation.customer_id:
+        return conversation.provider_messages_read_at
+    return conversation.customer_messages_read_at
+
+
+def message_serializer_context(*, request, conversation):
+    return {
+        'request': request,
+        'peer_read_at': peer_messages_read_at(conversation=conversation, viewer=request.user),
+    }
+
+
 def mark_booking_messages_read(*, booking, user):
     conv = conversation_for_booking(booking)
     mark_conversation_messages_read(conversation=conv, user=user)
@@ -364,10 +395,95 @@ def mark_inquiry_messages_read(*, inquiry, user):
         inquiry.save(update_fields=['provider_messages_read_at'])
 
 
+def _provider_new_message_notification_qs(*, organization, customer, link_path=''):
+    """Undismissed provider new_message alerts for this org↔customer conversation."""
+    from .models import ProviderNotification
+
+    qs = ProviderNotification.objects.filter(
+        organization=organization,
+        kind=ProviderNotification.Kind.NEW_MESSAGE,
+        dismissed_at__isnull=True,
+    )
+    customer_match = (
+        Q(booking__customer_id=customer.id)
+        | Q(inquiry__customer_id=customer.id)
+    )
+    if link_path:
+        return qs.filter(customer_match | Q(link_path=link_path))
+    return qs.filter(customer_match)
+
+
+def _unread_customer_text_message_count(*, conversation, customer):
+    """How many customer text messages the provider has not opened yet."""
+    qs = ServiceRequestMessage.objects.filter(
+        conversation=conversation,
+        sender_id=customer.id,
+        kind=ServiceRequestMessage.Kind.TEXT,
+    )
+    read_at = conversation.provider_messages_read_at
+    if read_at is not None:
+        qs = qs.filter(created_at__gt=read_at)
+    return qs.count()
+
+
+def _upsert_provider_new_message_notification(
+    *,
+    organization,
+    customer,
+    conversation,
+    booking=None,
+    inquiry=None,
+    link_path='',
+):
+    """Keep one undismissed new_message alert per conversation; bump time on each message."""
+    from .models import ProviderNotification
+
+    now = timezone.now()
+    customer_name = customer.full_name or customer.email
+    unread = _unread_customer_text_message_count(
+        conversation=conversation, customer=customer,
+    )
+    if unread <= 1:
+        body = f'{customer_name} sent you a message. Open Messages to reply.'
+    else:
+        body = f'{customer_name} sent you {unread} messages. Open Messages to reply.'
+
+    existing_qs = _provider_new_message_notification_qs(
+        organization=organization,
+        customer=customer,
+        link_path=link_path,
+    )
+    existing = existing_qs.order_by('-created_at').first()
+    if existing:
+        existing_qs.exclude(pk=existing.pk).update(dismissed_at=now)
+        existing.message = body[:500]
+        existing.link_path = link_path or existing.link_path
+        if booking is not None:
+            existing.booking = booking
+        if inquiry is not None:
+            existing.inquiry = inquiry
+        existing.created_at = now
+        existing.save(
+            update_fields=['message', 'link_path', 'booking', 'inquiry', 'created_at'],
+        )
+        return existing
+
+    return ProviderNotification.objects.create(
+        organization=organization,
+        booking=booking,
+        inquiry=inquiry,
+        kind=ProviderNotification.Kind.NEW_MESSAGE,
+        message=body[:500],
+        link_path=link_path,
+        created_at=now,
+    )
+
+
 def _dismiss_conversation_new_message_notifications(
     *, conversation, for_customer=False, for_provider=False,
 ):
-    from .models import CustomerNotification, ProviderNotification
+    from .models import CustomerNotification
+    from .notifications import provider_messages_link_path
 
     now = timezone.now()
     if for_customer:
@@ -378,13 +494,14 @@ def _dismiss_conversation_new_message_notifications(
             dismissed_at__isnull=True,
         ).update(dismissed_at=now)
     if for_provider:
-        ProviderNotification.objects.filter(
-            organization_id=conversation.organization_id,
-            kind=ProviderNotification.Kind.NEW_MESSAGE,
-            dismissed_at__isnull=True,
-        ).filter(
-            Q(booking__customer_id=conversation.customer_id)
-            | Q(inquiry__customer_id=conversation.customer_id)
+        link_path = provider_messages_link_path(
+            conversation.organization.slug,
+            conversation_id=conversation.pk,
+        )
+        _provider_new_message_notification_qs(
+            organization=conversation.organization,
+            customer=conversation.customer,
+            link_path=link_path,
         ).update(dismissed_at=now)
 
 
@@ -548,11 +665,12 @@ def _notify_new_message(message, *, create_in_app=True):
     CHAT_EMAIL_COOLDOWN (in-app + push still fire every time).
     Customer→provider: in-app ProviderNotification only (no email — chat spam).
     """
-    from .models import CustomerNotification, ProviderNotification
+    from .models import CustomerNotification
     from .notifications import (
         _send_to,
         _public_app_url,
         create_customer_notification,
+        customer_messages_link_path,
         provider_messages_link_path,
     )
 
@@ -571,6 +689,7 @@ def _notify_new_message(message, *, create_in_app=True):
     customer = conversation.customer
     sender_is_staff = is_org_staff(sender, org)
     messages_path = provider_messages_link_path(org.slug, conversation_id=conversation.pk)
+    customer_messages_path = customer_messages_link_path(conversation_id=conversation.pk)
 
     if sender_is_staff:
         if customer.email and not _staff_chat_email_recently_sent(
@@ -585,7 +704,7 @@ def _notify_new_message(message, *, create_in_app=True):
                     f'{org.name} sent you a message.',
                     f'"{message.body}"' if message.body else preview,
                     '',
-                    f'Reply at: {_public_app_url()}/customer/messages',
+                    f'Reply at: {_public_app_url()}{customer_messages_path}',
                 ],
             )
         if create_in_app:
@@ -597,28 +716,46 @@ def _notify_new_message(message, *, create_in_app=True):
                 organization=org,
                 booking=message.booking if message.booking_id else None,
                 inquiry=message.inquiry if message.inquiry_id else None,
-                link_path='/customer/messages',
+                link_path=customer_messages_path,
             )
     else:
         if create_in_app:
-            customer_name = customer.full_name or customer.email
-            ProviderNotification.objects.create(
+            _upsert_provider_new_message_notification(
                 organization=org,
+                customer=customer,
+                conversation=conversation,
                 booking=message.booking if message.booking_id else None,
                 inquiry=message.inquiry if message.inquiry_id else None,
-                kind=ProviderNotification.Kind.NEW_MESSAGE,
-                message=(
-                    f'{customer_name} sent you a message. Open Messages to reply.'
-                ),
+                link_path=messages_path,
+            )
+            from .notifications import _push_org_staff
+
+            _push_org_staff(
+                org,
+                title=f'New message — {customer.full_name or customer.email}',
+                body=preview,
                 link_path=messages_path,
             )
 
 
-def post_conversation_message(*, conversation, sender, body, create_in_app=True, booking=None, inquiry=None):
+def post_conversation_message(
+    *,
+    conversation,
+    sender,
+    body='',
+    attachment=None,
+    create_in_app=True,
+    booking=None,
+    inquiry=None,
+):
     if not can_access_conversation(sender, conversation):
         raise PermissionDenied('You cannot message in this conversation.')
     text = (body or '').strip()
-    if len(text) < 1:
+    if attachment:
+        from luminexa.uploads import validate_chat_attachment
+
+        attachment = validate_chat_attachment(attachment)
+    if len(text) < 1 and not attachment:
         raise ValidationError({'body': 'Message cannot be empty.'})
     msg = ServiceRequestMessage.objects.create(
         conversation=conversation,
@@ -627,6 +764,7 @@ def post_conversation_message(*, conversation, sender, body, create_in_app=True,
         sender=sender,
         kind=ServiceRequestMessage.Kind.TEXT,
         body=text,
+        attachment=attachment,
     )
     OrgCustomerConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
     mark_conversation_messages_read(conversation=conversation, user=sender)
@@ -634,7 +772,7 @@ def post_conversation_message(*, conversation, sender, body, create_in_app=True,
     return msg
 
 
-def post_booking_message(*, booking, sender, body, create_in_app=True):
+def post_booking_message(*, booking, sender, body='', attachment=None, create_in_app=True):
     if not can_access_booking_messages(sender, booking):
         raise PermissionDenied('You cannot message on this booking.')
     conv = conversation_for_booking(booking)
@@ -643,12 +781,13 @@ def post_booking_message(*, booking, sender, body, create_in_app=True):
         conversation=conv,
         sender=sender,
         body=body,
+        attachment=attachment,
         create_in_app=create_in_app,
         booking=booking,
     )
 
 
-def post_inquiry_message(*, inquiry, sender, body, create_in_app=True):
+def post_inquiry_message(*, inquiry, sender, body='', attachment=None, create_in_app=True):
     if not can_access_inquiry_messages(sender, inquiry):
         raise PermissionDenied('You cannot message on this request.')
     conv = conversation_for_inquiry(inquiry)
@@ -657,6 +796,7 @@ def post_inquiry_message(*, inquiry, sender, body, create_in_app=True):
         conversation=conv,
         sender=sender,
         body=body,
+        attachment=attachment,
         create_in_app=create_in_app,
         inquiry=inquiry,
     )
@@ -672,7 +812,7 @@ def post_booking_approval_message(*, booking, sender):
     )
 
 
-def post_booking_cancellation_message(*, booking, sender):
+def post_booking_cancellation_message(*, booking, sender, reason=''):
     """
     Record a cancellation note in the booking thread.
     Does not send a separate message email — the cancel email already notifies the customer.
@@ -686,7 +826,46 @@ def post_booking_cancellation_message(*, booking, sender):
         booking=booking,
         sender=sender,
         kind=ServiceRequestMessage.Kind.SYSTEM,
-        body=booking_cancellation_message_body(booking),
+        body=booking_cancellation_message_body(booking, reason=reason),
+    )
+    msg.save()
+    OrgCustomerConversation.objects.filter(pk=conv.pk).update(updated_at=timezone.now())
+    return msg
+
+
+def booking_provider_reschedule_message_body(booking, *, reason=''):
+    service_name = booking.service.name if booking.service_id else 'your service'
+    new_when = _format_when(booking.start_at, booking)
+    if booking.prior_start_at:
+        old_when = _format_when(booking.prior_start_at, booking)
+        body = (
+            f'{booking.organization.name} proposed a new time for {service_name}: '
+            f'{new_when} (was {old_when}).'
+        )
+    elif new_when:
+        body = (
+            f'{booking.organization.name} proposed a new time for {service_name}: {new_when}.'
+        )
+    else:
+        body = f'{booking.organization.name} proposed a new time for {service_name}.'
+    reason_text = (reason or '').strip()
+    if reason_text:
+        body = f'{body}\n\nReason: {reason_text}'
+    return body
+
+
+def post_booking_provider_reschedule_message(*, booking, sender, reason=''):
+    """Leave an in-thread note when staff proposes a new time (optional reason)."""
+    if not can_access_booking_messages(sender, booking):
+        raise PermissionDenied('You cannot message on this booking.')
+    conv = conversation_for_booking(booking)
+    ensure_booking_card(booking=booking, sender=booking.customer)
+    msg = ServiceRequestMessage(
+        conversation=conv,
+        booking=booking,
+        sender=sender,
+        kind=ServiceRequestMessage.Kind.SYSTEM,
+        body=booking_provider_reschedule_message_body(booking, reason=reason),
     )
     msg.save()
     OrgCustomerConversation.objects.filter(pk=conv.pk).update(updated_at=timezone.now())

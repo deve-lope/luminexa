@@ -43,6 +43,7 @@ import CustomerServiceDetailPage from './pages/customer/CustomerServiceDetailPag
 import ProviderSchedulePage from './pages/provider/ProviderSchedulePage';
 import ProviderScheduleDetailPage from './pages/provider/ProviderScheduleDetailPage';
 import ProviderRequestsPage from './pages/provider/ProviderRequestsPage';
+import ProviderJobsPage from './pages/provider/ProviderJobsPage';
 import ProviderRequestDetailPage from './pages/provider/ProviderRequestDetailPage';
 import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 import ProviderSubscribePage from './pages/provider/ProviderSubscribePage';
@@ -200,6 +201,7 @@ function AppRoutes() {
           <Route path="schedule/:kind/:id" element={<ProviderScheduleDetailPage />} />
           <Route path="requests" element={<ProviderRequestsPage />} />
           <Route path="requests/:kind/:id" element={<ProviderRequestDetailPage />} />
+          <Route path="jobs" element={<ProviderJobsPage />} />
           <Route path="messages" element={<ProviderMessagesPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
           <Route path="notifications/all" element={<ProviderNotificationsAllPage />} />

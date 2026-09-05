@@ -1,6 +1,8 @@
 from datetime import timedelta
+import tempfile
 
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -217,6 +219,92 @@ class CustomerConversationsAPITests(TestCase):
         self.assertEqual(len(cards_after), 1)
         self.assertEqual(cards_after[0]['card']['status'], Booking.Status.COMPLETED)
 
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    def test_conversation_message_with_file_attachment(self):
+        from jobs.message_services import ensure_booking_card
+        from jobs.models import OrgCustomerConversation
+
+        ensure_booking_card(booking=self.booking, sender=self.customer)
+        conv = OrgCustomerConversation.objects.get(
+            organization=self.org,
+            customer=self.customer,
+        )
+        self.client.force_authenticate(user=self.customer)
+        upload = SimpleUploadedFile(
+            'notes.txt',
+            b'hello from chat',
+            content_type='text/plain',
+        )
+        res = self.client.post(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            {'body': 'See attached', 'attachment': upload},
+            format='multipart',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertTrue(res.data.get('attachment_url'))
+        self.assertEqual(res.data.get('attachment_name'), 'notes.txt')
+        self.assertFalse(res.data.get('attachment_is_image'))
+        self.assertEqual(res.data.get('body'), 'See attached')
+
+        # Attachment-only is allowed.
+        img = SimpleUploadedFile(
+            'photo.png',
+            (
+                b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+                b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00'
+                b'\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18'
+                b'\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+            ),
+            content_type='image/png',
+        )
+        res_img = self.client.post(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            {'attachment': img},
+            format='multipart',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res_img.status_code, 201, res_img.data)
+        self.assertTrue(res_img.data.get('attachment_is_image'))
+        self.assertTrue(res_img.data.get('attachment_url'))
+
+    def test_own_message_read_status_updates_when_peer_opens(self):
+        from jobs.message_services import ensure_booking_card
+        from jobs.models import OrgCustomerConversation
+
+        ensure_booking_card(booking=self.booking, sender=self.customer)
+        conv = OrgCustomerConversation.objects.get(
+            organization=self.org,
+            customer=self.customer,
+        )
+        self.client.force_authenticate(user=self.customer)
+        sent = self.client.post(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            {'body': 'Are you free tomorrow?'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(sent.status_code, 201, sent.data)
+        self.assertEqual(sent.data.get('read_status'), 'sent')
+
+        # Provider opens the thread → customer should see Read on refresh.
+        self.client.force_authenticate(user=self.owner)
+        opened = self.client.get(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(opened.status_code, 200, opened.data)
+
+        self.client.force_authenticate(user=self.customer)
+        refreshed = self.client.get(
+            f'/api/v1/conversations/{conv.id}/messages/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(refreshed.status_code, 200, refreshed.data)
+        mine = [m for m in refreshed.data['results'] if m.get('body') == 'Are you free tomorrow?']
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(mine[0].get('read_status'), 'read')
+
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -330,6 +418,64 @@ class ProviderConversationsAPITests(TestCase):
         )
         self.assertFalse(inbox_after.data['results'][0]['has_unread'])
         self.assertEqual(inbox_after.data['unread_count'], 0)
+
+    def test_repeat_customer_messages_coalesce_provider_notification(self):
+        """One undismissed new_message alert per conversation; text + time refresh."""
+        from jobs.models import ProviderNotification
+
+        self.client.force_authenticate(user=self.customer)
+        first = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'First ping'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(first.status_code, 201, first.data)
+        note = ProviderNotification.objects.get(
+            organization=self.org,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        )
+        first_created = note.created_at
+        self.assertIn('sent you a message', note.message)
+
+        ProviderNotification.objects.filter(pk=note.pk).update(
+            created_at=timezone.now() - timedelta(hours=3),
+        )
+        note.refresh_from_db()
+        aged_created = note.created_at
+
+        second = self.client.post(
+            f'/api/v1/bookings/{self.booking.id}/messages/',
+            {'body': 'Second ping'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(second.status_code, 201, second.data)
+
+        open_notes = ProviderNotification.objects.filter(
+            organization=self.org,
+            kind=ProviderNotification.Kind.NEW_MESSAGE,
+            dismissed_at__isnull=True,
+        )
+        self.assertEqual(open_notes.count(), 1)
+        note.refresh_from_db()
+        self.assertIn('sent you 2 messages', note.message)
+        self.assertGreater(note.created_at, aged_created)
+        self.assertGreaterEqual(note.created_at, first_created)
+
+        for i in range(3, 11):
+            res = self.client.post(
+                f'/api/v1/bookings/{self.booking.id}/messages/',
+                {'body': f'Ping {i}'},
+                format='json',
+                HTTP_HOST='localhost',
+            )
+            self.assertEqual(res.status_code, 201, res.data)
+
+        self.assertEqual(open_notes.count(), 1)
+        note.refresh_from_db()
+        self.assertIn('sent you 10 messages', note.message)
 
     def test_provider_message_creates_customer_notification(self):
         from jobs.models import CustomerNotification

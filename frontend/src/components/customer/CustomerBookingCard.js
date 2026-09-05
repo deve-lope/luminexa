@@ -4,6 +4,7 @@ import BookingStatusTimeline from '../booking/BookingStatusTimeline';
 import BookingRateModal from '../booking/BookingRateModal';
 import AddToCalendarModal from '../booking/AddToCalendarModal';
 import InvoicePanel from '../booking/InvoicePanel';
+import ConfirmDialog from '../ConfirmDialog';
 import { formatWhen } from '../../utils/datetime';
 import {
   bookingStatusClass,
@@ -56,11 +57,16 @@ export default function CustomerBookingCard({
   cancelling = false,
   onReviewSubmitted,
   onQuoteUpdated,
+  onAttendanceAnswered,
+  /** Quotes tab: show delete control inside the compact card footer. */
+  onCompactDelete,
+  compactDeleteLabel = 'Delete quote',
 }) {
   const [rateOpen, setRateOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
   const [answers, setAnswers] = useState(() =>
     (booking.quote_questions || []).map((q) => ({ id: q.id, answer: q.answer || '' }))
   );
@@ -158,12 +164,35 @@ export default function CustomerBookingCard({
           </p>
         )}
         {compactHint && <p className="mt-2 text-xs font-medium text-amber-800">{compactHint}</p>}
-        {detailTo && (
-          <p className="mt-3 text-sm font-medium text-teal-700">
-            Full details →
-          </p>
-        )}
       </>
+    );
+
+    const footer = (detailTo || onCompactDelete) && (
+      <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+        {detailTo ? (
+          <Link
+            to={detailTo}
+            className="text-sm font-medium text-teal-700 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+          >
+            Full details →
+          </Link>
+        ) : (
+          <span />
+        )}
+        {onCompactDelete ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCompactDelete();
+            }}
+            className="shrink-0 text-sm font-semibold text-red-600 hover:underline"
+          >
+            {compactDeleteLabel}
+          </button>
+        ) : null}
+      </div>
     );
 
     return (
@@ -178,10 +207,11 @@ export default function CustomerBookingCard({
         ) : (
           body
         )}
+        {footer}
         <ProviderAttendancePrompt
           compact
           booking={booking}
-          onAnswered={onQuoteUpdated}
+          onAnswered={onAttendanceAnswered}
         />
       </li>
     );
@@ -192,6 +222,7 @@ export default function CustomerBookingCard({
     setQuoteError('');
     try {
       await jobsAPI.acceptBookingTimeChange(booking.id);
+      setConfirmAction(null);
       onQuoteUpdated?.();
     } catch (e) {
       const d = e.response?.data;
@@ -206,6 +237,7 @@ export default function CustomerBookingCard({
     setQuoteError('');
     try {
       await jobsAPI.declineBookingTimeChange(booking.id);
+      setConfirmAction(null);
       onQuoteUpdated?.();
     } catch (e) {
       const d = e.response?.data;
@@ -220,6 +252,7 @@ export default function CustomerBookingCard({
     setQuoteError('');
     try {
       await jobsAPI.acceptBookingQuote(booking.id, { answers });
+      setConfirmAction(null);
       onQuoteUpdated?.();
     } catch (e) {
       const d = e.response?.data;
@@ -250,6 +283,7 @@ export default function CustomerBookingCard({
     setQuoteError('');
     try {
       await jobsAPI.declineBooking(booking.id);
+      setConfirmAction(null);
       onQuoteUpdated?.();
     } catch (e) {
       const d = e.response?.data;
@@ -311,15 +345,15 @@ export default function CustomerBookingCard({
                 <button
                   type="button"
                   disabled={quoteBusy}
-                  onClick={acceptTimeChange}
+                  onClick={() => setConfirmAction('accept_time')}
                   className="min-h-[44px] flex-1 rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  {quoteBusy ? 'Saving…' : 'Accept new time'}
+                  Accept new time
                 </button>
                 <button
                   type="button"
                   disabled={quoteBusy}
-                  onClick={declineTimeChange}
+                  onClick={() => setConfirmAction('decline_time')}
                   className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-60"
                 >
                   Decline change
@@ -424,19 +458,17 @@ export default function CustomerBookingCard({
             <button
               type="button"
               disabled={quoteBusy}
-              onClick={acceptQuote}
+              onClick={() => setConfirmAction('accept_quote')}
               className="min-h-[44px] flex-1 rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
             >
-              {quoteBusy
-                ? 'Saving…'
-                : awaitingTimeChange
-                  ? 'Accept quote & new time'
-                  : 'Accept quote & confirm'}
+              {awaitingTimeChange
+                ? 'Accept quote & new time'
+                : 'Accept quote & confirm'}
             </button>
             <button
               type="button"
               disabled={quoteBusy}
-              onClick={declineQuote}
+              onClick={() => setConfirmAction('decline_quote')}
               className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-60"
             >
               Decline
@@ -485,7 +517,7 @@ export default function CustomerBookingCard({
         emptyHint="Opens your chat with this business — booking details appear in the thread."
         idleOpenLabel="Message business"
         loadMessages={() => jobsAPI.listBookingMessages(booking.id)}
-        sendMessage={(body) => jobsAPI.sendBookingMessage(booking.id, body)}
+        sendMessage={(body, file) => jobsAPI.sendBookingMessage(booking.id, body, file)}
       />
 
       {booking.status_events?.length > 0 && (
@@ -580,6 +612,52 @@ export default function CustomerBookingCard({
         open={calendarOpen}
         booking={booking}
         onClose={() => setCalendarOpen(false)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'accept_time'}
+        title="Accept the new time?"
+        message={`Confirm your appointment for ${formatWhen(booking.start_at)}.`}
+        confirmLabel="Accept new time"
+        cancelLabel="Back"
+        tone="success"
+        busy={quoteBusy}
+        onConfirm={acceptTimeChange}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'decline_time'}
+        title="Decline this time change?"
+        message="We'll try to keep your previous time if that slot is still open. Otherwise the booking may be cancelled."
+        confirmLabel="Decline change"
+        cancelLabel="Back"
+        busy={quoteBusy}
+        onConfirm={declineTimeChange}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'accept_quote'}
+        title={awaitingTimeChange ? 'Accept quote and new time?' : 'Accept this quote?'}
+        message={
+          awaitingTimeChange
+            ? `Confirm $${Number(booking.quote_amount).toFixed(2)} and the new appointment time.`
+            : `Confirm this booking at $${Number(booking.quote_amount).toFixed(2)}.`
+        }
+        confirmLabel={awaitingTimeChange ? 'Accept quote & new time' : 'Accept quote & confirm'}
+        cancelLabel="Back"
+        tone="success"
+        busy={quoteBusy}
+        onConfirm={acceptQuote}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'decline_quote'}
+        title="Decline this quote?"
+        message="This cancels the booking request. You can book again later if you change your mind."
+        confirmLabel="Decline quote"
+        cancelLabel="Back"
+        busy={quoteBusy}
+        onConfirm={declineQuote}
+        onClose={() => setConfirmAction(null)}
       />
     </li>
   );

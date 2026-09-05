@@ -1,5 +1,7 @@
 import React from 'react';
+import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
+import { downloadInvoicePdf, downloadSuccessMessage } from '../../utils/downloadFile';
 
 function formatMoney(amount, currency = 'CAD') {
   try {
@@ -12,25 +14,11 @@ function formatMoney(amount, currency = 'CAD') {
   }
 }
 
-async function downloadInvoicePdf(invoice) {
-  const url = invoice.download_url || jobsAPI.bookingInvoiceDownloadUrl(invoice.bookingId);
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error('Could not download invoice');
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = objectUrl;
-  a.download = `${invoice.number || 'invoice'}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
 /**
  * Shared invoice summary + PDF download for customer and provider views.
  */
 export default function InvoiceDownloadButton({ invoice, bookingId, className = '' }) {
+  const { showToast } = useToast();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(null);
 
@@ -46,15 +34,18 @@ export default function InvoiceDownloadButton({ invoice, bookingId, className = 
     setBusy(true);
     setError(null);
     try {
+      const resolvedBookingId = bookingId || invoice.booking_id;
       await downloadInvoicePdf({
-        ...invoice,
-        bookingId: bookingId || invoice.booking_id,
-        download_url:
-          invoice.download_url ||
-          (bookingId ? jobsAPI.bookingInvoiceDownloadUrl(bookingId) : null),
+        url: invoice.download_url,
+        number: invoice.number,
+        bookingId: resolvedBookingId,
+        downloadUrlBuilder: resolvedBookingId
+          ? () => jobsAPI.bookingInvoiceDownloadUrl(resolvedBookingId)
+          : null,
       });
-    } catch {
-      setError('Download failed. Try again.');
+      showToast(downloadSuccessMessage(), 'success');
+    } catch (err) {
+      setError(err?.message || 'Download failed. Try again.');
     } finally {
       setBusy(false);
     }

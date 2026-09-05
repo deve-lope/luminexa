@@ -6,6 +6,7 @@ import { useOverlayHistoryBack } from '../../hooks/useOverlayHistoryBack';
 import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
 import { withReturnTo } from '../../utils/navigationBack';
+import PictureLightbox from '../ui/PictureLightbox';
 
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'declined']);
 const ACTIVE_BOOKING_STATUSES = new Set([
@@ -48,6 +49,48 @@ function timeLabel(iso) {
   } catch {
     return '';
   }
+}
+
+function ReceiptTicks({ status }) {
+  if (!status) return null;
+  const read = status === 'read';
+  const label = read ? 'Read' : 'Delivered';
+  return (
+    <span
+      className={`ml-1 inline-flex items-center align-middle ${read ? 'text-sky-600' : 'text-teal-900/45'}`}
+      title={label}
+      aria-label={label}
+    >
+      {read ? (
+        <svg className="h-3.5 w-3.5" viewBox="0 0 24 16" fill="none" aria-hidden>
+          <path
+            d="M1.5 8.5l3.5 3.5L12 4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M8 8.5l3.5 3.5L19.5 4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path
+            d="M2 8.5l3.5 3.5L14 3.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </span>
+  );
 }
 
 function statusLabel(status) {
@@ -233,25 +276,71 @@ function PinnedContextStrip({
   );
 }
 
-function TextBubble({ msg }) {
+function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
   const mine = Boolean(msg.is_mine);
+  const hasImage = Boolean(msg.attachment_is_image && msg.attachment_url);
+  const hasFile = Boolean(msg.attachment_url && !msg.attachment_is_image);
+  const showBody = Boolean((msg.body || '').trim());
+  const receipt = mine ? msg.read_status : null;
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
       <div
-        className={`relative max-w-[78%] px-3 py-2 text-[15px] leading-snug shadow-sm ${
+        className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug shadow-sm ${
           mine
             ? 'rounded-2xl rounded-br-md bg-[#d1f4e0] text-slate-900'
             : 'rounded-2xl rounded-bl-md bg-white text-slate-900 ring-1 ring-black/5'
-        }`}
+        } ${hasImage && !showBody && !hasFile ? 'p-1' : 'px-3 py-2'}`}
       >
         {!mine && msg.sender_role !== 'system' && msg.sender_name ? (
-          <p className="mb-0.5 text-[11px] font-semibold text-teal-800">{msg.sender_name}</p>
+          <p className={`mb-0.5 text-[11px] font-semibold text-teal-800 ${hasImage ? 'px-2 pt-1' : ''}`}>
+            {msg.sender_name}
+          </p>
         ) : null}
-        <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-        <p className={`mt-1 text-right text-[10px] ${mine ? 'text-teal-900/50' : 'text-slate-400'}`}>
-          {timeLabel(msg.created_at)}
+        {hasImage ? (
+          <button
+            type="button"
+            onClick={() => onOpenImage?.(msg.attachment_url)}
+            className="block w-full overflow-hidden rounded-xl text-left"
+            aria-label="View photo"
+          >
+            <img
+              src={msg.attachment_url}
+              alt={msg.attachment_name || 'Photo'}
+              className="max-h-64 w-full object-cover"
+              loading="lazy"
+            />
+          </button>
+        ) : null}
+        {hasFile ? (
+          <a
+            href={msg.attachment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`mb-1 flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium ${
+              mine ? 'bg-teal-900/10 text-teal-950' : 'bg-slate-100 text-slate-800'
+            }`}
+          >
+            <svg className="h-5 w-5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L18.5 9H15z" />
+            </svg>
+            <span className="min-w-0 truncate">{msg.attachment_name || 'Attachment'}</span>
+          </a>
+        ) : null}
+        {showBody ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
+        <p
+          className={`mt-1 flex items-center justify-end gap-0.5 text-[10px] ${
+            mine ? 'text-teal-900/50' : 'text-slate-400'
+          } ${hasImage && !showBody ? 'px-2 pb-1' : ''}`}
+        >
+          <span>{timeLabel(msg.created_at)}</span>
+          {receipt ? <ReceiptTicks status={receipt} /> : null}
         </p>
       </div>
+      {showReceiptLabel && receipt ? (
+        <p className={`mt-0.5 px-1 text-[11px] ${receipt === 'read' ? 'text-sky-700' : 'text-slate-500'}`}>
+          {receipt === 'read' ? 'Read' : 'Delivered'}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -272,6 +361,8 @@ function MessageRow({
   inquiryDetailHref,
   pinnedBookingIds,
   returnTo,
+  showReceiptLabel,
+  onOpenImage,
 }) {
   if (msg.kind === 'booking_card') {
     const base =
@@ -300,7 +391,9 @@ function MessageRow({
   if (msg.kind === 'system') {
     return <SystemBubble msg={msg} />;
   }
-  return <TextBubble msg={msg} />;
+  return (
+    <TextBubble msg={msg} showReceiptLabel={showReceiptLabel} onOpenImage={onOpenImage} />
+  );
 }
 
 /**
@@ -324,9 +417,13 @@ export default function ChatThread({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [body, setBody] = useState('');
+  const [file, setFile] = useState(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
   const [sending, setSending] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const bottomRef = useRef(null);
   const listRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useModalBodyLock(open);
   useOverlayHistoryBack(open, onClose);
@@ -364,27 +461,55 @@ export default function ChatThread({
 
   useEffect(() => {
     if (!open) return;
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const list = listRef.current;
+    if (!list) return;
+    // Prefer scrolling the thread list only. scrollIntoView() also pans the
+    // document and jumps the iOS WebView when the composer is focused.
+    list.scrollTop = list.scrollHeight;
   }, [open, messages.length]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setLightboxIndex(null);
+      return undefined;
+    }
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (lightboxIndex != null) {
+        setLightboxIndex(null);
+        return;
+      }
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, lightboxIndex]);
+
+  useEffect(() => {
+    if (!file || !file.type?.startsWith('image/')) {
+      setFilePreviewUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(file);
+    setFilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const clearAttachment = () => {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const submit = async (event) => {
     event.preventDefault();
     const text = body.trim();
-    if (!text || sending) return;
+    if ((!text && !file) || sending) return;
     setSending(true);
     setError(null);
     try {
-      await sendMessage(text);
+      await sendMessage(text, file || undefined);
       setBody('');
+      clearAttachment();
       await refresh({ silent: true });
     } catch (e) {
       setError(parseApiError(e));
@@ -396,6 +521,30 @@ export default function ChatThread({
   const pinnedBookingIds = useMemo(
     () => new Set(activeBookings.map((b) => b.booking_id).filter(Boolean)),
     [activeBookings],
+  );
+
+  const lastMineTextId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.is_mine && (m.kind === 'text' || !m.kind)) return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  const imageSlides = useMemo(
+    () =>
+      messages
+        .filter((m) => m?.attachment_is_image && m?.attachment_url)
+        .map((m) => ({ image_url: m.attachment_url, id: m.id })),
+    [messages],
+  );
+
+  const openImage = useCallback(
+    (url) => {
+      const idx = imageSlides.findIndex((s) => s.image_url === url);
+      setLightboxIndex(idx >= 0 ? idx : 0);
+    },
+    [imageSlides],
   );
 
   const rows = useMemo(() => {
@@ -423,11 +572,11 @@ export default function ChatThread({
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}
     >
-      <header className="flex shrink-0 items-center gap-3 border-b border-black/5 bg-teal-800 px-3 py-2.5 text-white shadow-sm">
+      <header className="flex shrink-0 items-center gap-3 border-b border-slate-200/60 bg-white/80 px-3 py-2.5 text-slate-900 shadow-sm backdrop-blur-xl backdrop-saturate-150">
         <button
           type="button"
           onClick={onClose}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white/90 hover:bg-white/10"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100/80"
           aria-label="Back to conversations"
         >
           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -435,15 +584,15 @@ export default function ChatThread({
           </svg>
         </button>
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800"
           aria-hidden
         >
           {initials(peerName)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-tight">{peerName || 'Chat'}</p>
+          <p className="truncate font-semibold leading-tight text-slate-900">{peerName || 'Chat'}</p>
           {peerSubtitle ? (
-            <p className="truncate text-xs text-teal-100/80">{peerSubtitle}</p>
+            <p className="truncate text-xs text-slate-500">{peerSubtitle}</p>
           ) : null}
         </div>
       </header>
@@ -487,23 +636,77 @@ export default function ChatThread({
               inquiryDetailHref={inquiryDetailHref}
               pinnedBookingIds={pinnedBookingIds}
               returnTo={returnTo}
+              showReceiptLabel={row.msg.id === lastMineTextId}
+              onOpenImage={openImage}
             />
           ),
         )}
         <div ref={bottomRef} />
       </div>
 
-      <div className="shrink-0 border-t border-black/5 bg-[#f0f2f5] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
+      <div className="lx-chat-composer shrink-0 border-t border-black/5 bg-[#eae6df] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
+        {file ? (
+          <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/90 px-2 py-2 shadow-sm ring-1 ring-black/5">
+            {filePreviewUrl ? (
+              <img src={filePreviewUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L18.5 9H15z" />
+                </svg>
+              </div>
+            )}
+            <p className="min-w-0 flex-1 truncate text-sm text-slate-700">{file.name}</p>
+            <button
+              type="button"
+              onClick={clearAttachment}
+              className="rounded-full px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Remove
+            </button>
+          </div>
+        ) : null}
         <form onSubmit={submit} className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
+            className="hidden"
+            onChange={(e) => {
+              const next = e.target.files?.[0] || null;
+              setFile(next);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-black/5 disabled:opacity-50"
+            aria-label="Attach photo or file"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+              />
+            </svg>
+          </button>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={1}
             placeholder="Message"
-            className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[22px] border-0 bg-white px-4 py-2.5 text-[15px] text-slate-900 shadow-sm ring-1 ring-black/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600"
+            className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[22px] border-0 bg-white px-4 py-2.5 text-base text-slate-900 shadow-sm ring-1 ring-black/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600"
+            onFocus={() => {
+              const y = window.scrollY || 0;
+              window.requestAnimationFrame(() => window.scrollTo(0, y));
+              const list = listRef.current;
+              if (list) list.scrollTop = list.scrollHeight;
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -513,7 +716,7 @@ export default function ChatThread({
           />
           <button
             type="submit"
-            disabled={sending || !body.trim()}
+            disabled={sending || (!body.trim() && !file)}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-700 text-white shadow-sm disabled:opacity-50"
             aria-label="Send"
           >
@@ -526,7 +729,25 @@ export default function ChatThread({
     </div>
   );
 
-  return createPortal(sheet, document.body);
+  return (
+    <>
+      {createPortal(sheet, document.body)}
+      {lightboxIndex != null && imageSlides.length > 0 ? (
+        <PictureLightbox
+          slides={imageSlides}
+          index={lightboxIndex}
+          alt="Chat photo"
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() =>
+            setLightboxIndex((i) => (i <= 0 ? imageSlides.length - 1 : i - 1))
+          }
+          onNext={() =>
+            setLightboxIndex((i) => (i >= imageSlides.length - 1 ? 0 : i + 1))
+          }
+        />
+      ) : null}
+    </>
+  );
 }
 
 /**

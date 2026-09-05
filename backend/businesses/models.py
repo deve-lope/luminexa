@@ -186,6 +186,22 @@ class Organization(models.Model):
         default='none',
         help_text='none | stripe | promo — how Pro access was granted',
     )
+    # Dedup keys: period_end value each ending-reminder tier was sent for
+    subscription_ending_reminder_30d_for = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Period end this ~30-day subscription-ending reminder was sent for.',
+    )
+    subscription_ending_reminder_7d_for = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Period end this ~7-day subscription-ending reminder was sent for.',
+    )
+    subscription_ending_reminder_2d_for = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Period end this ~2-day subscription-ending reminder was sent for.',
+    )
     # QuickBooks Online (one-way push of customers / invoices / payments)
     qbo_realm_id = models.CharField(max_length=64, blank=True, default='')
     qbo_access_token = models.TextField(blank=True, default='')

@@ -140,6 +140,14 @@ function isEditable(el) {
 }
 
 let appliedInset = -1;
+let iosHeaderOffsetFrozen = false;
+
+function isCapacitorIos() {
+  return (
+    typeof document !== 'undefined' &&
+    document.documentElement.classList.contains('capacitor-ios')
+  );
+}
 
 function applyInset(px) {
   const inset = Math.max(0, Math.round(Number(px) || 0));
@@ -148,13 +156,39 @@ function applyInset(px) {
   const root = document.documentElement;
   root.style.setProperty('--lx-keyboard-inset', `${inset}px`);
   root.classList.toggle('lx-keyboard-open', inset > KEYBOARD_OPEN_PX);
+  // After the keyboard closes, allow one fresh header measure on iOS.
+  if (isCapacitorIos() && inset <= KEYBOARD_OPEN_PX) {
+    iosHeaderOffsetFrozen = false;
+  }
 }
 
 function syncHeaderOffset() {
   const header = document.querySelector('.lx-header');
   const bottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
-  document.documentElement.style.setProperty('--lx-header-offset', `${bottom}px`);
+  const root = document.documentElement;
+  // iOS uses --lx-header-offset as page padding-top. Rewriting it while the
+  // keyboard opens (visualViewport jitter) jumps Book / Messages on focus.
+  if (isCapacitorIos()) {
+    if (!iosHeaderOffsetFrozen && bottom > 0 && appliedInset <= KEYBOARD_OPEN_PX) {
+      root.style.setProperty('--lx-header-offset', `${bottom}px`);
+      iosHeaderOffsetFrozen = true;
+    }
+    const frozen = Number.parseInt(root.style.getPropertyValue('--lx-header-offset'), 10);
+    return Number.isFinite(frozen) && frozen > 0 ? frozen : bottom;
+  }
+  root.style.setProperty('--lx-header-offset', `${bottom}px`);
   return bottom;
+}
+
+/** Undo WKWebView's automatic scroll-on-focus without fighting Android. */
+function restoreScrollAfterIosFocus() {
+  if (!isCapacitorIos()) return;
+  const x = window.scrollX || 0;
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  window.requestAnimationFrame(() => {
+    window.scrollTo(x, y);
+    window.requestAnimationFrame(() => window.scrollTo(x, y));
+  });
 }
 
 function visibleBottomPx(keyboardInset) {
@@ -180,6 +214,15 @@ function scrollParentOf(el) {
 function scrollFocusedIntoView() {
   const el = document.activeElement;
   if (!isEditable(el)) return;
+  // Full-screen sheets / modal lock already manage the keyboard; window.scrollBy
+  // fights WKWebView and jumps the page (chat composer, etc.).
+  if (el.closest?.('.lx-ime-sheet')) return;
+  if (document.documentElement.classList.contains('lx-modal-open')) return;
+  if (document.body.style.position === 'fixed') return;
+  // iOS pans the visual viewport itself; our scrollBy reads mixed coordinate
+  // spaces and "rolls" Book / form pages toward the top on every keystroke.
+  if (document.documentElement.classList.contains('capacitor-ios')) return;
+
   const rect = el.getBoundingClientRect();
   const headerBottom = syncHeaderOffset();
   const delta = scrollDeltaToReveal({
@@ -377,6 +420,7 @@ export function installKeyboardInset() {
     // Moving between fields while the keyboard is already up keeps the current
     // lift, so the layout does not collapse and re-expand between taps.
     if (state.mode === 'idle' || state.mode === 'dismissed') beginFocusSession();
+    restoreScrollAfterIosFocus();
     syncAcrossKeyboardAnimation();
   };
 

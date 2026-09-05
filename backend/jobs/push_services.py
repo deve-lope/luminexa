@@ -62,7 +62,7 @@ def _ensure_firebase():
         return None
 
 
-def send_push_to_user(user, *, title: str, body: str, link_path: str = '') -> int:
+def send_push_to_user(user, *, title: str, body: str, link_path: str = '', extra_data=None) -> int:
     """Send data+notification push to all registered devices for a user. Returns send count."""
     if not user:
         return 0
@@ -75,10 +75,16 @@ def send_push_to_user(user, *, title: str, body: str, link_path: str = '') -> in
     )
     if not tokens:
         return 0
-    return _send_to_tokens(tokens, title=title, body=body, link_path=link_path or '')
+    return _send_to_tokens(
+        tokens,
+        title=title,
+        body=body,
+        link_path=link_path or '',
+        extra_data=extra_data,
+    )
 
 
-def send_push_to_org_staff(organization, *, title: str, body: str, link_path: str = '') -> int:
+def send_push_to_org_staff(organization, *, title: str, body: str, link_path: str = '', extra_data=None) -> int:
     from businesses.models import OrganizationMembership
 
     user_ids = list(
@@ -99,10 +105,16 @@ def send_push_to_org_staff(organization, *, title: str, body: str, link_path: st
     )
     if not tokens:
         return 0
-    return _send_to_tokens(tokens, title=title, body=body, link_path=link_path or '')
+    return _send_to_tokens(
+        tokens,
+        title=title,
+        body=body,
+        link_path=link_path or '',
+        extra_data=extra_data,
+    )
 
 
-def _send_to_tokens(tokens, *, title: str, body: str, link_path: str) -> int:
+def _send_to_tokens(tokens, *, title: str, body: str, link_path: str, extra_data=None) -> int:
     if not _ensure_firebase():
         return 0
     try:
@@ -111,6 +123,11 @@ def _send_to_tokens(tokens, *, title: str, body: str, link_path: str) -> int:
         return 0
 
     data = {'link_path': link_path or '/'}
+    if extra_data:
+        for key, value in extra_data.items():
+            if value is None:
+                continue
+            data[str(key)] = str(value)
     sent = 0
     stale = []
     for token in tokens:

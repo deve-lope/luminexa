@@ -49,15 +49,20 @@ export default function CustomerCompletedPage() {
     load();
   }, [load]);
 
-  const completed = useMemo(() => {
-    return bookings
-      .filter(isCompletedBooking)
-      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-  }, [bookings]);
+  const completed = useMemo(
+    () =>
+      bookings
+        .filter(isCompletedBooking)
+        .sort((a, b) => new Date(b.start_at) - new Date(a.start_at)),
+    [bookings],
+  );
 
   return (
     <div className="space-y-4">
       <BookingsSubNav />
+      <p className="text-sm text-slate-600">
+        Jobs that were finished — view bills, pay online, and leave a review.
+      </p>
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {loading ? (
@@ -67,9 +72,10 @@ export default function CustomerCompletedPage() {
         </div>
       ) : completed.length === 0 ? (
         <div className="lx-empty">
-          <p className="text-slate-600">No completed services yet.</p>
+          <p className="text-slate-600">No completed jobs yet.</p>
           <p className="mt-1 text-sm text-slate-500">
-            Finished jobs and paid invoices will show up here after your appointment is done.
+            When a provider marks your appointment as done, it appears here with the invoice and
+            rating options.
           </p>
           <Link
             to={customerFind()}
@@ -80,7 +86,9 @@ export default function CustomerCompletedPage() {
         </div>
       ) : (
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Completed services</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Jobs done
+          </h2>
           <ul className="space-y-3">
             {completed.map((booking) => {
               const payment = invoicePaymentLabel(booking.invoice);
@@ -100,8 +108,16 @@ export default function CustomerCompletedPage() {
                         {payment.text}
                       </span>
                       {amount && (
-                        <span className="text-xs font-medium text-slate-600 tabular-nums">{amount}</span>
+                        <span className="text-xs font-medium tabular-nums text-slate-600">
+                          {amount}
+                        </span>
                       )}
+                      <Link
+                        to={customerBookingDetail(booking.id)}
+                        className="text-xs font-medium text-teal-700"
+                      >
+                        View bill →
+                      </Link>
                     </div>
                   )}
                 </li>

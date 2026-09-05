@@ -100,6 +100,7 @@ export function buildProviderMenuItems({
   providerSharePath,
   providerAnalyticsPath,
   providerClientsPath,
+  providerJobsPath,
   providerNotificationsPath,
   notificationsBadgeCount = 0,
   isStaff,
@@ -110,6 +111,14 @@ export function buildProviderMenuItems({
   // Messages lives in primary tabs (desktop sidebar + mobile bottom bar) — do not
   // duplicate it here or the PC sidebar shows Messages twice.
   items.push({ id: 'section-business', divider: true, label: 'Business' });
+  if (providerJobsPath) {
+    items.push({
+      id: 'jobs',
+      label: 'Jobs',
+      to: providerJobsPath,
+      iconId: 'jobs',
+    });
+  }
   if (providerAnalyticsPath) {
     items.push({
       id: 'analytics',
@@ -186,7 +195,7 @@ export function buildCustomerMenuItems({ logout, messagesBadgeCount = 0 } = {}) 
     iconId: 'messages',
     badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
   });
-  items.push({ id: 'history', label: 'History', to: '/customer/history' });
+  items.push({ id: 'completed', label: 'Completed jobs', to: '/customer/completed' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
   return items;

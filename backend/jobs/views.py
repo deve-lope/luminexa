@@ -39,6 +39,7 @@ from .message_services import (
     can_access_conversation,
     conversation_active_bookings,
     conversation_active_inquiries,
+    conversation_for_booking,
     count_unread_summaries,
     ensure_conversation_context_cards,
     list_booking_messages,
@@ -46,6 +47,7 @@ from .message_services import (
     list_customer_conversation_summaries,
     list_provider_conversation_summaries,
     mark_conversation_messages_read,
+    message_serializer_context,
     post_booking_incomplete_message,
     post_booking_message,
     post_conversation_message,
@@ -1503,7 +1505,10 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
+        from .booking_services import parse_optional_action_reason
+
         booking = self.get_object()
+        reason = parse_optional_action_reason(request.data)
         old = booking.status
         cancel_booking(booking, by_user=request.user)
         log_booking_status_change(
@@ -1512,9 +1517,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             action=BookingStatusEvent.Action.CANCELLED,
             old_status=old,
             new_status=booking.status,
+            note=reason[:500] if reason else '',
         )
         from .notifications import notify_booking_cancelled
-        notify_booking_cancelled(booking, by_user=request.user)
+        notify_booking_cancelled(booking, by_user=request.user, reason=reason)
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='report-attendance')
@@ -1693,6 +1699,8 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reschedule(self, request, pk=None):
+        from .booking_services import parse_optional_action_reason
+
         booking = self.get_object()
         slot_id = request.data.get('slot_id')
         if not slot_id:
@@ -1700,6 +1708,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         slot = AvailabilitySlot.objects.filter(pk=slot_id).first()
         if not slot:
             raise ValidationError({'slot_id': 'Slot not found.'})
+        reason = parse_optional_action_reason(request.data)
         old_status = booking.status
         prior_when = format_booking_when(booking.start_at, tz=booking)
         reschedule_booking(booking, new_slot=slot, by_user=request.user)
@@ -1709,6 +1718,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             if prior_when and prior_when != new_when
             else f'New time: {new_when}'
         )
+        if reason:
+            note = f'{note}. Reason: {reason}'
         log_booking_status_change(
             booking,
             actor=request.user,
@@ -1727,7 +1738,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             create_provider_customer_reschedule_notification(booking)
             send_booking_email('booking_reschedule_requested', booking)
         else:
-            notify_booking_rescheduled_by_provider(booking)
+            notify_booking_rescheduled_by_provider(
+                booking, by_user=request.user, reason=reason,
+            )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='no-show')
@@ -1887,9 +1900,12 @@ class BookingViewSet(viewsets.ModelViewSet):
         if request.method == 'GET':
             messages = list_booking_messages(booking)
             mark_booking_messages_read(booking=booking, user=request.user)
+            conv = conversation_for_booking(booking)
             return Response(
                 ServiceRequestMessageSerializer(
-                    messages, many=True, context={'request': request},
+                    messages,
+                    many=True,
+                    context=message_serializer_context(request=request, conversation=conv),
                 ).data,
             )
         if is_org_staff(request.user, booking.organization):
@@ -1898,9 +1914,14 @@ class BookingViewSet(viewsets.ModelViewSet):
             booking=booking,
             sender=request.user,
             body=request.data.get('body', ''),
+            attachment=request.FILES.get('attachment'),
         )
+        conv = conversation_for_booking(booking)
         return Response(
-            ServiceRequestMessageSerializer(message, context={'request': request}).data,
+            ServiceRequestMessageSerializer(
+                message,
+                context=message_serializer_context(request=request, conversation=conv),
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -2104,6 +2125,24 @@ class CustomerInquiryCancelAPIView(APIView):
         return Response(CustomerServiceInquirySerializer(inquiry).data)
 
 
+class CustomerInquiryRemoveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, inquiry_id):
+        inquiry = (
+            CustomerServiceInquiry.objects.filter(customer=request.user, pk=inquiry_id)
+            .select_related('organization', 'service')
+            .first()
+        )
+        if not inquiry:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Request not found.')
+        from .inquiry_services import remove_inquiry_for_customer
+
+        remove_inquiry_for_customer(inquiry, customer=request.user)
+        return Response(CustomerServiceInquirySerializer(inquiry).data)
+
+
 class CustomerInquiryBookSlotAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2176,9 +2215,10 @@ class ConversationMessagesAPIView(APIView):
         mark_conversation_messages_read(conversation=conversation, user=request.user)
         ensure_conversation_context_cards(conversation)
         messages = list_conversation_messages(conversation)
+        ctx = message_serializer_context(request=request, conversation=conversation)
         return Response({
             'results': ServiceRequestMessageSerializer(
-                messages, many=True, context={'request': request},
+                messages, many=True, context=ctx,
             ).data,
             'active_bookings': conversation_active_bookings(conversation),
             'active_inquiries': conversation_active_inquiries(conversation),
@@ -2193,9 +2233,13 @@ class ConversationMessagesAPIView(APIView):
             conversation=conversation,
             sender=request.user,
             body=body,
+            attachment=request.FILES.get('attachment'),
         )
         return Response(
-            ServiceRequestMessageSerializer(msg, context={'request': request}).data,
+            ServiceRequestMessageSerializer(
+                msg,
+                context=message_serializer_context(request=request, conversation=conversation),
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -2281,6 +2325,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         slug = self.request.query_params.get('organization')
         if slug:
             qs = qs.filter(organization__slug=slug)
+        job_id = self.request.query_params.get('job')
+        if job_id:
+            qs = qs.filter(job_id=job_id)
         is_done = self.request.query_params.get('is_done')
         if is_done is not None:
             if is_done.lower() in ('1', 'true', 'yes'):

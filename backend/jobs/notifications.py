@@ -25,6 +25,11 @@ def provider_request_link_path(org_slug, booking_id):
     return f'/provider/{org_slug}/requests/booking/{booking_id}'
 
 
+def provider_jobs_link_path(org_slug):
+    """In-app path to accepted jobs (shows incomplete tasks per booking)."""
+    return f'/provider/{org_slug}/jobs'
+
+
 def provider_inquiry_request_link_path(org_slug, inquiry_id):
     return f'/provider/{org_slug}/requests/inquiry/{inquiry_id}'
 
@@ -39,6 +44,20 @@ def provider_messages_link_path(org_slug, *, booking_id=None, inquiry_id=None, c
     if inquiry_id:
         return f'{base}?inquiry={inquiry_id}'
     return base
+
+
+def customer_messages_link_path(*, conversation_id=None):
+    """Customer Messages inbox, optionally deep-linked to a conversation."""
+    if conversation_id:
+        return f'/customer/messages?conversation={conversation_id}'
+    return '/customer/messages'
+
+
+def customer_booking_link_path(booking):
+    """Deep link to a specific customer booking detail page."""
+    if booking is None:
+        return '/customer/bookings'
+    return f'/customer/bookings/{booking.pk}'
 
 
 def customer_appointment_url(booking):
@@ -119,6 +138,7 @@ PROVIDER_BOOKING_UPDATE_KINDS = (
     ProviderNotification.Kind.QUOTE_ACCEPTED,
     ProviderNotification.Kind.QUOTE_ANSWERS_RECEIVED,
     ProviderNotification.Kind.PAYMENT_RECEIVED,
+    ProviderNotification.Kind.INCOMPLETE_JOB_TASKS,
 )
 
 
@@ -177,7 +197,18 @@ def create_customer_notification(
     try:
         from .push_services import send_push_to_user
 
-        send_push_to_user(customer, title=n.title, body=n.message, link_path=n.link_path)
+        extra = {}
+        if booking is not None:
+            extra['booking_id'] = booking.pk
+        if inquiry is not None:
+            extra['inquiry_id'] = inquiry.pk
+        send_push_to_user(
+            customer,
+            title=n.title,
+            body=n.message,
+            link_path=n.link_path,
+            extra_data=extra or None,
+        )
     except Exception:
         logger.exception('Customer push failed for notification %s', n.pk)
     return n
@@ -324,7 +355,7 @@ def create_provider_customer_reschedule_notification(booking):
     )
 
 
-def notify_booking_cancelled(booking, *, by_user=None):
+def notify_booking_cancelled(booking, *, by_user=None, reason=''):
     """
     Notify parties when a booking is cancelled.
     Always emails the customer; emails provider staff as well.
@@ -333,20 +364,25 @@ def notify_booking_cancelled(booking, *, by_user=None):
     """
     from .permissions import is_org_staff
 
+    reason_text = (reason or '').strip()
+    service_name = booking.service.name if booking.service_id else 'a service'
+    when = _format_when(booking.start_at, booking)
+    cancel_message = (
+        f'Your appointment for {service_name} on {when} was cancelled.'
+    )
+    if reason_text:
+        cancel_message = f'{cancel_message} Reason: {reason_text}'
+
     create_customer_notification(
         customer=booking.customer,
         kind=CustomerNotification.Kind.BOOKING_CANCELLED,
         title=f'Booking cancelled — {booking.organization.name}',
-        message=(
-            f'Your appointment for '
-            f'{booking.service.name if booking.service_id else "a service"} '
-            f'on {_format_when(booking.start_at, booking)} was cancelled.'
-        ),
+        message=cancel_message,
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/history',
+        link_path=customer_booking_link_path(booking),
     )
-    send_booking_email('booking_cancelled', booking)
+    send_booking_email('booking_cancelled', booking, reason=reason_text)
 
     if by_user is None:
         return
@@ -361,7 +397,9 @@ def notify_booking_cancelled(booking, *, by_user=None):
     try:
         from .message_services import post_booking_cancellation_message
 
-        post_booking_cancellation_message(booking=booking, sender=by_user)
+        post_booking_cancellation_message(
+            booking=booking, sender=by_user, reason=reason_text,
+        )
     except Exception:
         logger.exception(
             'Failed to post cancellation message for booking %s', booking.pk
@@ -561,14 +599,15 @@ def notify_booking_declined(booking):
         ),
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/history',
+        link_path=customer_booking_link_path(booking),
     )
     send_booking_email('booking_declined', booking)
 
 
-def notify_booking_rescheduled_by_provider(booking):
+def notify_booking_rescheduled_by_provider(booking, *, by_user=None, reason=''):
     service_name = booking.service.name if booking.service_id else 'Service'
     new_when = _format_when(booking.start_at, booking)
+    reason_text = (reason or '').strip()
     if booking.prior_start_at:
         old_when = _format_when(booking.prior_start_at, booking)
         change_line = f'New time: {new_when} (was {old_when}).'
@@ -587,19 +626,38 @@ def notify_booking_rescheduled_by_provider(booking):
         if needs_quote:
             quote_line = ' A quote will follow before you can confirm.'
 
+    reason_line = f' Reason: {reason_text}' if reason_text else ''
+
     create_customer_notification(
         customer=booking.customer,
         kind=CustomerNotification.Kind.BOOKING_TIME_CHANGE,
         title=f'New time proposed — {booking.organization.name}',
         message=(
             f'{booking.organization.name} proposed a new time for {service_name}. '
-            f'{change_line}{quote_line} Review and accept in Bookings.'
+            f'{change_line}{quote_line}{reason_line} Review and accept in Bookings.'
         ),
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/bookings',
+        link_path=customer_booking_link_path(booking),
     )
-    send_booking_email('booking_time_change_proposed', booking)
+    send_booking_email('booking_time_change_proposed', booking, reason=reason_text)
+
+    if by_user is None:
+        return
+    from .permissions import is_org_staff
+
+    if not is_org_staff(by_user, booking.organization):
+        return
+    try:
+        from .message_services import post_booking_provider_reschedule_message
+
+        post_booking_provider_reschedule_message(
+            booking=booking, sender=by_user, reason=reason_text,
+        )
+    except Exception:
+        logger.exception(
+            'Failed to post reschedule message for booking %s', booking.pk
+        )
 
 
 def notify_booking_completed(booking):
@@ -614,7 +672,7 @@ def notify_booking_completed(booking):
         ),
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/history',
+        link_path=customer_booking_link_path(booking),
     )
     send_booking_email('booking_completed', booking)
 
@@ -637,7 +695,7 @@ def notify_invoice_ready(booking):
     if existing:
         existing.title = title
         existing.message = message
-        existing.link_path = '/customer/history'
+        existing.link_path = customer_booking_link_path(booking)
         existing.save(update_fields=['title', 'message', 'link_path'])
         return existing
     return create_customer_notification(
@@ -647,7 +705,7 @@ def notify_invoice_ready(booking):
         message=message,
         organization=booking.organization,
         booking=booking,
-        link_path='/customer/history',
+        link_path=customer_booking_link_path(booking),
     )
 
 
@@ -669,7 +727,7 @@ def notify_invoice_paid(invoice):
             'organization': booking.organization,
             'title': f'Payment confirmed — {booking.organization.name}',
             'message': f'Your payment of {amount} for invoice {invoice.number} was successful.',
-            'link_path': '/customer/history',
+            'link_path': customer_booking_link_path(booking),
         },
     )
     if created:
@@ -680,7 +738,7 @@ def notify_invoice_paid(invoice):
                 booking.customer,
                 title=f'Payment confirmed — {booking.organization.name}',
                 body=f'Your payment of {amount} for invoice {invoice.number} was successful.',
-                link_path='/customer/history',
+                link_path=customer_booking_link_path(booking),
             )
         except Exception:
             logger.exception('Customer payment push failed for booking %s', booking.pk)
@@ -712,7 +770,7 @@ def send_invoice_email(booking):
     send_booking_email('booking_completed', booking)
 
 
-def send_booking_email(event, booking):
+def send_booking_email(event, booking, *, reason=''):
     """Send booking lifecycle email; failures are logged, not raised."""
     org = booking.organization
     service_name = booking.service.name if booking.service_id else 'Service'
@@ -720,6 +778,7 @@ def send_booking_email(event, booking):
     provider_url = provider_booking_detail_url(org.slug, booking.id)
     bookings_url = customer_bookings_url()
     history_url = customer_history_url()
+    reason_text = (reason or '').strip()
 
     recipients = []
     subject = ''
@@ -861,6 +920,8 @@ def send_booking_email(event, booking):
         ]
         if booking.prior_start_at:
             body_lines.append(f'Previous time: {_format_when(booking.prior_start_at, booking)}')
+        if reason_text:
+            body_lines.extend(['', 'Reason from the business:', reason_text])
         if booking.quote_amount is not None:
             body_lines.append(f'Quote: ${booking.quote_amount}')
             if (booking.quote_message or '').strip():
@@ -897,24 +958,28 @@ def send_booking_email(event, booking):
         staff = _provider_staff_emails(org)
         customer_email = booking.customer.email
         if customer_email:
+            customer_lines = [
+                f'Your appointment for {service_name} has been cancelled.',
+                f'When: {when}',
+                f'Business: {org.name}',
+            ]
+            if reason_text:
+                customer_lines.extend(['', 'Reason from the business:', reason_text])
+            customer_lines.extend(['', f'View your bookings: {bookings_url}'])
             _send_to(
                 customer_email,
                 f'Booking cancelled — {org.name}',
-                [
-                    f'Your appointment for {service_name} has been cancelled.',
-                    f'When: {when}',
-                    f'Business: {org.name}',
-                    '',
-                    f'View your bookings: {bookings_url}',
-                ],
+                customer_lines,
             )
         recipients = staff
         subject = f'Booking cancelled — {service_name}'
         body_lines = [
             f'The booking for {service_name} on {when} was cancelled.',
             f'Customer: {booking.customer.full_name or booking.customer.email}',
-            f'View: {provider_url}',
         ]
+        if reason_text:
+            body_lines.append(f'Reason: {reason_text}')
+        body_lines.extend([f'View: {provider_url}'])
     elif event == 'booking_completed':
         ref = f'BK-{booking.pk:05d}'
         review_url = (
@@ -1074,6 +1139,68 @@ def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
         notify_booking_day_before_reminder(booking)
         booking.reminder_sent_at = now
         booking.save(update_fields=['reminder_sent_at'])
+        sent += 1
+    return sent
+
+
+def notify_provider_incomplete_job_tasks(booking, *, open_count):
+    """In-app + push when a confirmed job still has unfinished prep tasks ~48h out."""
+    service_name = booking.service.name if booking.service_id else 'Service'
+    customer_name = _customer_label(booking)
+    org = booking.organization
+    task_label = 'task' if open_count == 1 else 'tasks'
+    when = _format_when(booking.start_at, booking)
+    link_path = provider_jobs_link_path(org.slug)
+    message = (
+        f'{service_name} with {customer_name} is in 2 days ({when}) and still has '
+        f'{open_count} incomplete {task_label}. Finish them on Jobs before the appointment.'
+    )
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.INCOMPLETE_JOB_TASKS,
+        message=message[:500],
+        link_path=link_path,
+    )
+    _push_org_staff(
+        org,
+        title=f'Tasks still open — {org.name}',
+        body=f'{open_count} incomplete {task_label} for {service_name} in 2 days.',
+        link_path=link_path,
+    )
+
+
+def send_incomplete_job_task_reminders_for_window(*, hours_ahead=48, window_hours=1):
+    """Notify provider staff ~48 hours before jobs that still have incomplete tasks."""
+    from datetime import timedelta
+
+    from django.db.models import Count, Q
+
+    from .models import Booking
+
+    now = timezone.now()
+    window_start = now + timedelta(hours=hours_ahead)
+    window_end = window_start + timedelta(hours=window_hours)
+    sent = 0
+    bookings = (
+        Booking.objects.filter(
+            status=Booking.Status.CONFIRMED,
+            incomplete_tasks_reminder_sent_at__isnull=True,
+            start_at__gte=window_start,
+            start_at__lt=window_end,
+            tasks__is_done=False,
+        )
+        .annotate(
+            open_task_count=Count('tasks', filter=Q(tasks__is_done=False), distinct=True),
+        )
+        .filter(open_task_count__gt=0)
+        .select_related('organization', 'service', 'customer')
+        .distinct()
+    )
+    for booking in bookings:
+        notify_provider_incomplete_job_tasks(booking, open_count=booking.open_task_count)
+        booking.incomplete_tasks_reminder_sent_at = now
+        booking.save(update_fields=['incomplete_tasks_reminder_sent_at'])
         sent += 1
     return sent
 

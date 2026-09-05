@@ -23,7 +23,7 @@ export default function PictureLightbox({ slides, index, alt, onClose, onPrev, o
 
   return createPortal(
     <div
-      className="lx-modal-overlay fixed inset-0 z-[110] flex items-center justify-center bg-black/90"
+      className="lx-modal-overlay fixed inset-0 z-[130] flex items-center justify-center bg-black/90"
       role="dialog"
       aria-modal="true"
       aria-label="Full size picture"

@@ -204,6 +204,8 @@ class ProviderNotification(models.Model):
         PROMO_OFFER = 'promo_offer', 'Promo offer'
         QUOTE_ANSWERS_RECEIVED = 'quote_answers_received', 'Quote answers received'
         CUSTOMER_REPORTED_NO_SHOW = 'customer_reported_no_show', 'Customer reported no-show'
+        INCOMPLETE_JOB_TASKS = 'incomplete_job_tasks', 'Incomplete job tasks'
+        SUBSCRIPTION_ENDING = 'subscription_ending', 'Subscription ending'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -597,6 +599,11 @@ class Booking(models.Model):
         null=True,
         blank=True,
         help_text='When the 24h reminder email was sent.',
+    )
+    incomplete_tasks_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were reminded about incomplete tasks ~48h before the job.',
     )
     quote_amount = models.DecimalField(
         max_digits=10,
@@ -1012,6 +1019,11 @@ class ServiceRequestMessage(models.Model):
         default=Kind.TEXT,
     )
     body = models.TextField(blank=True)
+    attachment = models.FileField(
+        upload_to='chat/attachments/%Y/%m/',
+        blank=True,
+        null=True,
+    )
     meta = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -17,6 +17,7 @@ import {
   providerAbout,
   providerAnalytics,
   providerClients,
+  providerJobs,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -167,6 +168,7 @@ function ProviderShell() {
         providerSharePath: providerShare(orgSlug),
         providerAnalyticsPath: providerAnalytics(orgSlug),
         providerClientsPath: providerClients(orgSlug),
+        providerJobsPath: providerJobs(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
@@ -214,6 +216,9 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/requests`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Service requests' };
+    }
+    if (location.pathname.startsWith(`${base}/jobs`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Jobs' };
     }
     if (location.pathname.startsWith(`${base}/my-page`) || location.pathname.startsWith(`${base}/share`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My page' };

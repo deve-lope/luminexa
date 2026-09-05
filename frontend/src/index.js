@@ -3,10 +3,12 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import { markNativeDocument, isNativeApp } from './native/capacitorNative';
 import { installKeyboardInset } from './native/keyboardInset';
+import { installLightThemeSync } from './native/systemTheme';
 import App from './App';
 
 markNativeDocument();
 installKeyboardInset();
+installLightThemeSync();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

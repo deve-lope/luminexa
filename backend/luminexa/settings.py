@@ -224,6 +224,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_upcoming_booking_reminders',
         'schedule': 3600.0,
     },
+    'incomplete-job-task-reminders-hourly': {
+        'task': 'jobs.tasks.send_incomplete_job_task_reminders',
+        'schedule': 3600.0,
+    },
     'invoice-payment-reminders-hourly': {
         'task': 'jobs.tasks.send_unpaid_invoice_payment_reminders',
         'schedule': 3600.0,
@@ -231,6 +235,14 @@ CELERY_BEAT_SCHEDULE = {
     'rate-service-reminders-hourly': {
         'task': 'jobs.tasks.send_rate_service_reminders',
         'schedule': 3600.0,
+    },
+    'subscription-ending-reminders-hourly': {
+        'task': 'jobs.tasks.send_subscription_ending_reminders',
+        'schedule': 3600.0,
+    },
+    'purge-stale-quotes-daily': {
+        'task': 'jobs.tasks.purge_stale_quotes',
+        'schedule': 86400.0,
     },
 }
 

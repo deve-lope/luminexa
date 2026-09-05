@@ -29,6 +29,10 @@ urlpatterns = [
         views.CustomerInquiryCancelAPIView.as_view(),
     ),
     path(
+        'me/service-inquiries/<int:inquiry_id>/remove/',
+        views.CustomerInquiryRemoveAPIView.as_view(),
+    ),
+    path(
         'me/service-inquiries/<int:inquiry_id>/book-slot/',
         views.CustomerInquiryBookSlotAPIView.as_view(),
     ),

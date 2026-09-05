@@ -44,6 +44,10 @@ export function providerRequests(orgSlug) {
   return `/provider/${orgSlug}/requests`;
 }
 
+export function providerJobs(orgSlug) {
+  return `/provider/${orgSlug}/jobs`;
+}
+
 export function providerRequestDetail(orgSlug, kind, id) {
   return `/provider/${orgSlug}/requests/${kind}/${id}`;
 }

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
-import { providerHome } from '../../utils/providerPaths';
+import { providerHome, providerScheduleDetail } from '../../utils/providerPaths';
+import { parseReturnTo } from '../../utils/navigationBack';
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen, toDatetimeLocalValue } from '../../utils/datetime';
 import { RECURRENCE_OPTIONS, parseApiError } from '../../utils/taskDisplay';
@@ -16,10 +17,13 @@ function defaultDueLocal() {
 export default function ProviderAddTaskPage() {
   const { orgSlug, activeOrg } = useProviderOrg();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const preselectedJobId = searchParams.get('job');
+  const jobLocked = Boolean(preselectedJobId);
 
   const [jobs, setJobs] = useState([]);
+  const [linkedBooking, setLinkedBooking] = useState(null);
   const [title, setTitle] = useState('');
   const [taskDue, setTaskDue] = useState(defaultDueLocal);
   const [recurrence, setRecurrence] = useState('none');
@@ -35,32 +39,60 @@ export default function ProviderAddTaskPage() {
     setLoading(true);
     try {
       const res = await jobsAPI.getProviderDashboard(orgSlug);
-      setJobs(res.data?.upcoming_jobs || []);
+      const upcoming = res.data?.upcoming_jobs || [];
+      setJobs(upcoming);
+
+      if (preselectedJobId) {
+        const fromDash = upcoming.find((j) => String(j.id) === preselectedJobId);
+        if (fromDash) {
+          setLinkedBooking(fromDash);
+          setJobId(preselectedJobId);
+          setTaskDue(toDatetimeLocalValue(fromDash.start_at));
+          setRecurrence('none');
+        } else {
+          try {
+            const bookingRes = await jobsAPI.getBooking(preselectedJobId);
+            const b = bookingRes.data;
+            const asJob = {
+              id: b.id,
+              service_name: b.service_name,
+              customer_name: b.customer_name,
+              start_at: b.start_at,
+            };
+            setLinkedBooking(asJob);
+            setJobs((prev) => (prev.some((j) => String(j.id) === String(b.id)) ? prev : [asJob, ...prev]));
+            setJobId(String(b.id));
+            setTaskDue(toDatetimeLocalValue(b.start_at));
+            setRecurrence('none');
+          } catch {
+            setLinkedBooking(null);
+          }
+        }
+      }
     } catch {
       setJobs([]);
     } finally {
       setLoading(false);
     }
-  }, [orgSlug]);
+  }, [orgSlug, preselectedJobId]);
 
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
 
-  useEffect(() => {
-    if (!preselectedJobId || !jobs.length) return;
-    const job = jobs.find((j) => String(j.id) === preselectedJobId);
-    if (job) {
-      setJobId(preselectedJobId);
-      setTaskDue(toDatetimeLocalValue(job.start_at));
-      setRecurrence('none');
-    }
-  }, [preselectedJobId, jobs]);
+  const selectedJob = useMemo(() => {
+    if (jobLocked && linkedBooking) return linkedBooking;
+    return jobId ? jobs.find((j) => String(j.id) === jobId) : null;
+  }, [jobId, jobs, jobLocked, linkedBooking]);
 
-  const selectedJob = useMemo(
-    () => (jobId ? jobs.find((j) => String(j.id) === jobId) : null),
-    [jobId, jobs]
-  );
+  const afterSavePath = () => {
+    const returnTo = parseReturnTo(location.search);
+    if (returnTo) return returnTo;
+    if (preselectedJobId) {
+      return providerScheduleDetail(orgSlug, 'booking', preselectedJobId);
+    }
+    return providerHome(orgSlug);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -79,21 +111,23 @@ export default function ProviderAddTaskPage() {
       return;
     }
 
+    const linkedJobId = jobLocked
+      ? Number(preselectedJobId) || preselectedJobId
+      : selectedJob?.id ?? null;
+
     setSaving(true);
     try {
       await jobsAPI.createTask({
         organization: orgId,
         title: trimmed,
-        priority: selectedJob ? 3 : 2,
-        job: selectedJob ? selectedJob.id : null,
-        recurrence: selectedJob ? 'none' : recurrence,
+        priority: linkedJobId ? 3 : 2,
+        job: linkedJobId,
+        recurrence: linkedJobId ? 'none' : recurrence,
         due_at: taskDue
           ? new Date(taskDue).toISOString()
-          : selectedJob
-            ? selectedJob.start_at
-            : null,
+          : selectedJob?.start_at || linkedBooking?.start_at || null,
       });
-      navigate(providerHome(orgSlug));
+      navigate(afterSavePath());
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -106,7 +140,9 @@ export default function ProviderAddTaskPage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900">New task</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Optional: link to a job so you remember to finish before you leave.
+          {jobLocked
+            ? 'This task will be linked to the current job.'
+            : 'Optional: link to a job so you remember to finish before you leave.'}
         </p>
       </div>
 
@@ -125,40 +161,57 @@ export default function ProviderAddTaskPage() {
             />
           </label>
 
-          <label className="block text-sm font-medium text-slate-700">
-            Link to job (optional)
-            <select
-              value={jobId}
-              onChange={(e) => {
-                const id = e.target.value;
-                setJobId(id);
-                if (id) {
-                  const j = jobs.find((job) => String(job.id) === id);
-                  if (j) {
-                    setTaskDue(toDatetimeLocalValue(j.start_at));
-                    setRecurrence('none');
+          {jobLocked ? (
+            <div className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+              <p className="font-medium">
+                Linked to job
+                {selectedJob?.service_name ? `: ${selectedJob.service_name}` : ''}
+              </p>
+              {selectedJob?.customer_name && (
+                <p className="mt-0.5 text-xs text-indigo-800">{selectedJob.customer_name}</p>
+              )}
+              {selectedJob?.start_at && (
+                <p className="mt-1 text-xs text-indigo-900">
+                  Finish before <strong>{formatWhen(selectedJob.start_at)}</strong>
+                </p>
+              )}
+            </div>
+          ) : (
+            <label className="block text-sm font-medium text-slate-700">
+              Link to job (optional)
+              <select
+                value={jobId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setJobId(id);
+                  if (id) {
+                    const j = jobs.find((job) => String(job.id) === id);
+                    if (j) {
+                      setTaskDue(toDatetimeLocalValue(j.start_at));
+                      setRecurrence('none');
+                    }
                   }
-                }
-              }}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm"
-            >
-              <option value="">None — general task</option>
-              {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.service_name} · {job.customer_name} ({formatTime(job.start_at)})
-                </option>
-              ))}
-            </select>
-          </label>
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">None — general task</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.service_name} · {job.customer_name} ({formatTime(job.start_at)})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-          {selectedJob && (
+          {!jobLocked && selectedJob && (
             <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
               Finish before <strong>{formatWhen(selectedJob.start_at)}</strong>
             </p>
           )}
 
           <label className="block text-sm font-medium text-slate-700">
-            {selectedJob ? 'Complete by' : 'Deadline (optional)'}
+            {selectedJob || jobLocked ? 'Complete by' : 'Deadline (optional)'}
             <input
               type="datetime-local"
               value={taskDue}
@@ -167,7 +220,7 @@ export default function ProviderAddTaskPage() {
             />
           </label>
 
-          {!selectedJob && (
+          {!selectedJob && !jobLocked && (
             <label className="block text-sm font-medium text-slate-700">
               Repeats
               <select

@@ -70,6 +70,10 @@ powers the **Open settings** button on the location prompt. Until a user updates
 `canOpenLocationSettings()` returns false and they get written steps instead, so
 the button never appears dead.
 
+**Invoice PDF downloads** fetch the file in-app and save it with
+`@capacitor/filesystem` (silent save + “Invoice downloaded” toast). That requires a
+new AAB with `npx cap sync android` so the Filesystem and Share plugins are bundled.
+
 ## After install
 
 Uninstall the old TWA first, then install from the **tester opt-in link**.

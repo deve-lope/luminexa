@@ -19,7 +19,7 @@ export default function GuestPageShell({
           </div>
         </div>
       </header>
-      <main className="lx-container py-5 pb-12">
+      <main className="lx-main-under-header lx-container py-5 pb-12">
         <div className="min-w-0">{children}</div>
       </main>
     </div>

@@ -346,6 +346,9 @@ screenshots must be iPhone 6.7" (1290×2796). Account deletion and Stripe for
 real-world services are already handled in the product. See
 [`CAPACITOR_IOS.md`](CAPACITOR_IOS.md) § App Review.
 
+**Paste-ready listing copy, privacy answers, and screenshots:**
+[`APP_STORE_LISTING.md`](APP_STORE_LISTING.md).
+
 ---
 
 ## Quick checklist (print this)

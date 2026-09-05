@@ -80,10 +80,8 @@ export default function AppShell({
           id="main-content"
           className={
             mainFullBleed
-              ? hideMobileChrome
-                ? 'lg:pb-8'
-                : 'pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:pb-8'
-              : 'lx-container py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:py-6 lg:pb-8'
+              ? `lx-main-under-header ${hideMobileChrome ? 'lg:pb-8' : 'pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:pb-8'}`
+              : 'lx-main-under-header lx-container py-5 pb-[calc(var(--lx-bottom-tabs-height)+1.25rem)] lg:py-6 lg:pb-8'
           }
           tabIndex={-1}
         >

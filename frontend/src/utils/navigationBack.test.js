@@ -55,6 +55,12 @@ describe('resolveProviderBack', () => {
       to: '/provider/anu-garden/clients',
     });
   });
+
+  test('jobs tab returns to provider home', () => {
+    expect(resolveProviderBack('/provider/anu-garden/jobs', 'anu-garden')).toEqual({
+      to: '/provider/anu-garden',
+    });
+  });
 });
 
 describe('resolveCustomerBack', () => {

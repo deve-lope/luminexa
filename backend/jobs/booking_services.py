@@ -9,6 +9,23 @@ from businesses.models import Organization, OrganizationMembership
 from .booking_lead import assert_slot_bookable_for_customer
 from .models import AvailabilitySlot, Booking, BookingStatusEvent, Service
 
+ACTION_REASON_MAX_LEN = 500
+
+
+def parse_optional_action_reason(data):
+    """Optional free-text reason from cancel/reschedule. Accepts `reason` or `note`."""
+    if not isinstance(data, dict):
+        return ''
+    raw = data.get('reason')
+    if raw is None or raw == '':
+        raw = data.get('note')
+    reason = (raw or '').strip() if isinstance(raw, str) else str(raw or '').strip()
+    if len(reason) > ACTION_REASON_MAX_LEN:
+        raise ValidationError(
+            {'reason': f'Maximum {ACTION_REASON_MAX_LEN} characters.'}
+        )
+    return reason
+
 
 def resolve_booking_service_address(*, service, customer_address=''):
     """
@@ -391,6 +408,13 @@ def customer_request_slots_batch(*, items, customer):
 def accept_booking_request(booking, staff_user):
     if booking.status != Booking.Status.REQUESTED:
         raise ValidationError({'status': 'Only requested bookings can be accepted.'})
+    if booking.awaiting_customer_acceptance:
+        raise ValidationError({
+            'status': (
+                'This booking is waiting for the customer to accept your proposed time. '
+                'Propose a different time, or wait for them to accept or decline.'
+            ),
+        })
     if booking_requires_quote(booking.organization, booking.service):
         raise ValidationError({
             'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
@@ -823,6 +847,7 @@ def reschedule_booking(booking, *, new_slot, by_user):
     booking.start_at = new_slot.start_at
     booking.end_at = new_slot.end_at
     booking.reminder_sent_at = None
+    booking.incomplete_tasks_reminder_sent_at = None
     # Customer reschedules always go back to the provider for approval, even if the
     # original booking was already confirmed or the business uses instant booking.
     if is_customer:
@@ -833,6 +858,7 @@ def reschedule_booking(booking, *, new_slot, by_user):
         booking.prior_availability_slot = None
         booking.save(update_fields=[
             'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
+            'incomplete_tasks_reminder_sent_at',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])
@@ -852,6 +878,7 @@ def reschedule_booking(booking, *, new_slot, by_user):
             booking.status = Booking.Status.REQUESTED
         booking.save(update_fields=[
             'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
+            'incomplete_tasks_reminder_sent_at',
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])

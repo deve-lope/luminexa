@@ -6,7 +6,7 @@ import RequestMessageThread from '../../components/provider/RequestMessageThread
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
-import { customerQuotes, customerBookingDetail, customerHistory, customerProviderPage } from '../../utils/customerPaths';
+import { customerQuotes, customerBookingDetail, customerCompleted, customerProviderPage } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 
 function statusLabel(status) {
@@ -31,6 +31,7 @@ export default function CustomerInquiryDetailPage() {
   const [actionError, setActionError] = useState('');
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const load = useCallback(() => {
     if (!inquiryId) return;
@@ -61,6 +62,7 @@ export default function CustomerInquiryDetailPage() {
     try {
       const res = await jobsAPI.acceptInquiryQuote(inquiryId);
       setInquiry(res.data);
+      setConfirmAction(null);
     } catch (err) {
       setActionError(parseApiError(err, 'Could not accept quote.'));
     } finally {
@@ -74,6 +76,7 @@ export default function CustomerInquiryDetailPage() {
     try {
       const res = await jobsAPI.declineInquiryQuote(inquiryId);
       setInquiry(res.data);
+      setConfirmAction(null);
     } catch (err) {
       setActionError(parseApiError(err, 'Could not decline quote.'));
     } finally {
@@ -91,6 +94,7 @@ export default function CustomerInquiryDetailPage() {
     try {
       const res = await jobsAPI.bookInquirySlot(inquiryId, selectedSlot.id);
       const bookingId = res.data?.booking?.id;
+      setConfirmAction(null);
       if (bookingId) {
         navigate(customerBookingDetail(bookingId));
         return;
@@ -107,17 +111,12 @@ export default function CustomerInquiryDetailPage() {
     setBusy(true);
     setActionError('');
     try {
-      if (inquiry.status === 'pending' || inquiry.status === 'active') {
-        const res = await jobsAPI.cancelInquiryRequest(inquiryId);
-        setInquiry(res.data);
-      } else {
-        const res = await jobsAPI.declineInquiryQuote(inquiryId);
-        setInquiry(res.data);
-      }
+      const res = await jobsAPI.removeInquiry(inquiryId);
+      setInquiry(res.data);
       setCancelOpen(false);
       navigate(customerQuotes());
     } catch (err) {
-      setActionError(parseApiError(err, 'Could not cancel this request.'));
+      setActionError(parseApiError(err, 'Could not delete this quote.'));
     } finally {
       setBusy(false);
     }
@@ -131,8 +130,8 @@ export default function CustomerInquiryDetailPage() {
     return (
       <div className="space-y-4 py-6 text-center">
         <p className="text-red-600">{error}</p>
-        <Link to={customerHistory()} className="lx-link inline-block">
-          ← History
+        <Link to={customerCompleted()} className="lx-link inline-block">
+          ← Completed
         </Link>
       </div>
     );
@@ -141,10 +140,11 @@ export default function CustomerInquiryDetailPage() {
   const isQuoted = inquiry.status === 'quoted';
   const quoteAccepted = inquiry.status === 'quote_accepted';
   const canBook = quoteAccepted && inquiry.service && !inquiry.booking;
-  const canCancel =
+  const canDelete =
     !inquiry.booking &&
     (inquiry.status === 'pending' ||
       inquiry.status === 'active' ||
+      inquiry.status === 'quoted' ||
       inquiry.status === 'quote_accepted');
 
   return (
@@ -198,15 +198,15 @@ export default function CustomerInquiryDetailPage() {
             <button
               type="button"
               disabled={busy}
-              onClick={acceptQuote}
+              onClick={() => setConfirmAction('accept_quote')}
               className="lx-btn-primary min-h-[48px] flex-1 disabled:opacity-60"
             >
-              {busy ? 'Saving…' : 'Accept quote & pick a time'}
+              Accept quote & pick a time
             </button>
             <button
               type="button"
               disabled={busy}
-              onClick={declineQuote}
+              onClick={() => setConfirmAction('decline_quote')}
               className="min-h-[48px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-60"
             >
               Decline
@@ -250,35 +250,71 @@ export default function CustomerInquiryDetailPage() {
           <button
             type="button"
             disabled={busy || !selectedSlot?.id}
-            onClick={bookSlot}
+            onClick={() => setConfirmAction('book_slot')}
             className="lx-btn-primary w-full min-h-[48px] disabled:opacity-60"
           >
-            {busy ? 'Booking…' : 'Confirm appointment'}
+            Confirm appointment
           </button>
         </>
       )}
 
-      {canCancel && (
+      {canDelete && (
         <button
           type="button"
           disabled={busy}
           onClick={() => setCancelOpen(true)}
           className="w-full min-h-[48px] rounded-xl border border-red-200 bg-white text-sm font-semibold text-red-700 disabled:opacity-60"
         >
-          Cancel quote request
+          Delete quote
         </button>
       )}
 
       <ConfirmDialog
         open={cancelOpen}
-        title="Cancel quote request?"
-        message="The business will no longer see this as an open request. You can send a new quote request anytime."
-        confirmLabel="Yes, cancel"
+        title="Delete quote?"
+        message="This quote will be removed from your list. The business will no longer see it as open."
+        confirmLabel="Yes, delete"
         cancelLabel="Keep request"
         tone="danger"
         busy={busy}
         onConfirm={cancelRequest}
         onClose={() => setCancelOpen(false)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'accept_quote'}
+        title="Accept this quote?"
+        message={`Accept $${Number(inquiry.quote_amount).toFixed(2)} and then pick an appointment time.`}
+        confirmLabel="Accept quote"
+        cancelLabel="Back"
+        tone="success"
+        busy={busy}
+        onConfirm={acceptQuote}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'decline_quote'}
+        title="Decline this quote?"
+        message="The business will be notified. You can request a quote again later if you change your mind."
+        confirmLabel="Decline quote"
+        cancelLabel="Back"
+        busy={busy}
+        onConfirm={declineQuote}
+        onClose={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'book_slot'}
+        title="Confirm this appointment?"
+        message={
+          selectedSlot?.start_at
+            ? `Book ${formatWhen(selectedSlot.start_at)} at $${Number(inquiry.quote_amount).toFixed(2)}.`
+            : 'Book the selected time for this quote.'
+        }
+        confirmLabel="Confirm appointment"
+        cancelLabel="Back"
+        tone="success"
+        busy={busy}
+        onConfirm={bookSlot}
+        onClose={() => setConfirmAction(null)}
       />
 
       {inquiry.booking && (
@@ -297,7 +333,7 @@ export default function CustomerInquiryDetailPage() {
           emptyHint="Message the business about this quote request."
           idleOpenLabel="Message business"
           loadMessages={() => jobsAPI.listInquiryMessages(orgKey, inquiry.id)}
-          sendMessage={(body) => jobsAPI.sendInquiryMessage(orgKey, inquiry.id, { body })}
+          sendMessage={(body, file) => jobsAPI.sendInquiryMessage(orgKey, inquiry.id, body, file)}
         />
       )}
     </div>

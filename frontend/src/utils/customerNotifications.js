@@ -1,4 +1,4 @@
-import { customerBookingDetail, customerBookings } from './customerPaths';
+import { customerBookingDetail, customerBookings, customerInquiryDetail } from './customerPaths';
 import { jobsAPI } from './api';
 
 export const NOTIFICATIONS_CHANGED_EVENT = 'luminexa:notifications-changed';
@@ -31,12 +31,29 @@ export function countBookingUpdateNotifications(notifications) {
   ).length;
 }
 
-/** Prefer the booking detail page when the alert is tied to a booking. */
+const GENERIC_CUSTOMER_LIST_PATHS = new Set([
+  '/customer/bookings',
+  '/customer/history',
+  '/customer/messages',
+  '/customer/quotes',
+  '/customer/completed',
+  '/customer/notifications',
+]);
+
+/** Prefer a specific deep link; fall back to booking/inquiry detail over list pages. */
 export function notificationDestination(notification) {
+  const path = String(notification?.link_path || '').trim();
+  const isSpecificPath = path && !GENERIC_CUSTOMER_LIST_PATHS.has(path.split('?')[0]);
+  if (isSpecificPath || (path.includes('?') && path.startsWith('/customer/'))) {
+    return path;
+  }
   if (notification?.booking_id) {
     return customerBookingDetail(notification.booking_id);
   }
-  return notification?.link_path || customerBookings();
+  if (notification?.inquiry_id) {
+    return customerInquiryDetail(notification.inquiry_id);
+  }
+  return path || customerBookings();
 }
 
 export function emitNotificationsChanged() {

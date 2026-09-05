@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBodyLock } from '../hooks/useModalBodyLock';
 import { useOverlayHistoryBack } from '../hooks/useOverlayHistoryBack';
@@ -13,9 +13,17 @@ export default function ConfirmDialog({
   busy = false,
   onConfirm,
   onClose,
+  noteLabel = null,
+  notePlaceholder = '',
+  noteMaxLength = 500,
 }) {
+  const [note, setNote] = useState('');
   useModalBodyLock(open);
   useOverlayHistoryBack(open, onClose);
+
+  useEffect(() => {
+    if (open) setNote('');
+  }, [open]);
 
   if (!open) return null;
 
@@ -28,7 +36,7 @@ export default function ConfirmDialog({
 
   const dialog = (
     <div
-      className="lx-modal-overlay fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+      className="lx-modal-overlay fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       onClick={() => !busy && onClose?.()}
@@ -65,11 +73,27 @@ export default function ConfirmDialog({
             {message}
           </p>
         )}
+        {noteLabel && (
+          <div className="mt-4">
+            <label htmlFor="confirm-dialog-note" className="mb-1 block text-sm font-medium text-slate-700">
+              {noteLabel}
+            </label>
+            <textarea
+              id="confirm-dialog-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, noteMaxLength))}
+              rows={3}
+              placeholder={notePlaceholder}
+              disabled={busy}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 disabled:opacity-60"
+            />
+          </div>
+        )}
         <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
           <button
             type="button"
             disabled={busy}
-            onClick={onConfirm}
+            onClick={() => onConfirm?.(noteLabel ? note.trim() : undefined)}
             className={`min-h-[48px] flex-1 rounded-xl font-semibold disabled:opacity-60 ${confirmClasses}`}
           >
             {busy ? 'Working…' : confirmLabel}

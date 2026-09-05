@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
+import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
+import { downloadInvoicePdf, downloadSuccessMessage } from '../../utils/downloadFile';
 import { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from './InvoiceStripePayModal';
 
@@ -20,23 +22,6 @@ function statusLabel(status) {
   if (status === 'paid') return 'Paid';
   if (status === 'void') return 'Void';
   return 'Issued';
-}
-
-async function downloadInvoicePdf(invoice, bookingId) {
-  const url =
-    invoice.download_url ||
-    jobsAPI.bookingInvoiceDownloadUrl(bookingId || invoice.booking_id);
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error('Could not download invoice');
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = objectUrl;
-  a.download = `${invoice.number || 'invoice'}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(objectUrl);
 }
 
 function lineItemDetail(item) {
@@ -183,6 +168,7 @@ export default function InvoicePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [paidLocal, setPaidLocal] = useState(null);
+  const { showToast } = useToast();
 
   useModalBodyLock(viewOpen);
 
@@ -210,9 +196,18 @@ export default function InvoicePanel({
     setBusy(true);
     setError(null);
     try {
-      await downloadInvoicePdf(displayInvoice, bookingId);
-    } catch {
-      setError('Download failed. Try again.');
+      const resolvedBookingId = bookingId || displayInvoice.booking_id;
+      await downloadInvoicePdf({
+        url: displayInvoice.download_url,
+        number: displayInvoice.number,
+        bookingId: resolvedBookingId,
+        downloadUrlBuilder: resolvedBookingId
+          ? () => jobsAPI.bookingInvoiceDownloadUrl(resolvedBookingId)
+          : null,
+      });
+      showToast(downloadSuccessMessage(), 'success');
+    } catch (err) {
+      setError(err?.message || 'Download failed. Try again.');
     } finally {
       setBusy(false);
     }
