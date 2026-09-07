@@ -389,6 +389,8 @@ export const jobsAPI = {
     api.get(`/api/v1/organizations/${orgSlug}/customers/${userId}/`),
   patchOrgCustomer: (orgSlug, userId, data) =>
     api.patch(`/api/v1/organizations/${orgSlug}/customers/${userId}/`, data),
+  removeOrgCustomer: (orgSlug, userId) =>
+    api.delete(`/api/v1/organizations/${orgSlug}/customers/${userId}/`),
   approveCustomer: (orgSlug, userId) =>
     api.post(`/api/v1/organizations/${orgSlug}/approve-customer/`, { user_id: userId }),
   blockCustomer: (orgSlug, userId) =>

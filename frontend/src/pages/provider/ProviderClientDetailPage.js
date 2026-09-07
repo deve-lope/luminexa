@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
@@ -24,10 +25,14 @@ function money(amount, currency = 'CAD') {
 export default function ProviderClientDetailPage() {
   const { orgSlug } = useProviderOrg();
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -63,6 +68,39 @@ export default function ProviderClientDetailPage() {
       setError(parseApiError(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!orgSlug || !userId || removing) return;
+    setRemoving(true);
+    setError('');
+    try {
+      await jobsAPI.removeOrgCustomer(orgSlug, userId);
+      setRemoveOpen(false);
+      navigate(providerClients(orgSlug), { replace: true });
+    } catch (e) {
+      setError(parseApiError(e) || 'Could not remove this client.');
+      setRemoving(false);
+    }
+  };
+
+  const confirmBlockToggle = async () => {
+    if (!orgSlug || !userId || removing || !data) return;
+    setRemoving(true);
+    setError('');
+    try {
+      if (data.customer_status === 'blocked') {
+        await jobsAPI.unblockCustomer(orgSlug, userId);
+      } else {
+        await jobsAPI.blockCustomer(orgSlug, userId);
+      }
+      setBlockOpen(false);
+      await load();
+    } catch (e) {
+      setError(parseApiError(e) || 'Could not update block status.');
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -154,6 +192,68 @@ export default function ProviderClientDetailPage() {
           </ul>
         )}
       </section>
+
+      <section className="rounded-2xl bg-white p-5 shadow-lx-soft ring-1 ring-slate-100 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-900">Client access</h3>
+        <p className="text-sm text-slate-600">
+          Block stops new bookings. Remove only drops them from this list (history stays).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {data.customer_status === 'blocked' ? (
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => setBlockOpen(true)}
+              className="min-h-[44px] rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-800"
+            >
+              Unblock client
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => setBlockOpen(true)}
+              className="min-h-[44px] rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-900"
+            >
+              Block client
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setRemoveOpen(true)}
+            className="min-h-[44px] rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700"
+          >
+            Remove from clients
+          </button>
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={removeOpen}
+        title="Remove this client?"
+        message={`Remove ${data.full_name || data.email} from your client list? Booking history is kept. They can connect or book again later unless you block them.`}
+        confirmLabel="Remove client"
+        cancelLabel="Cancel"
+        tone="danger"
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => !removing && setRemoveOpen(false)}
+      />
+      <ConfirmDialog
+        open={blockOpen}
+        title={data.customer_status === 'blocked' ? 'Unblock this client?' : 'Block this client?'}
+        message={
+          data.customer_status === 'blocked'
+            ? `Unblock ${data.full_name || data.email}? They will be able to book with you again.`
+            : `Block ${data.full_name || data.email}? They will not be able to book with you until you unblock them.`
+        }
+        confirmLabel={data.customer_status === 'blocked' ? 'Unblock' : 'Block'}
+        cancelLabel="Cancel"
+        tone={data.customer_status === 'blocked' ? 'default' : 'danger'}
+        busy={removing}
+        onConfirm={confirmBlockToggle}
+        onClose={() => !removing && setBlockOpen(false)}
+      />
     </div>
   );
 }

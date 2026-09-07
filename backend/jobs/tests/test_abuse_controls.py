@@ -225,3 +225,51 @@ class AbuseControlsTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(res.status_code, 403)
+
+    def test_blocked_customer_cannot_connect_or_request_access(self):
+        self.membership.customer_status = OrganizationMembership.CustomerStatus.BLOCKED
+        self.membership.save(update_fields=['customer_status'])
+        self.client.force_authenticate(user=self.customer)
+        connect = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/connect/',
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(connect.status_code, 403)
+        self.membership.refresh_from_db()
+        self.assertEqual(
+            self.membership.customer_status,
+            OrganizationMembership.CustomerStatus.BLOCKED,
+        )
+
+    def test_blocked_customer_cannot_create_service_inquiry(self):
+        self.membership.customer_status = OrganizationMembership.CustomerStatus.BLOCKED
+        self.membership.save(update_fields=['customer_status'])
+        self.client.force_authenticate(user=self.customer)
+        res = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/service-inquiry/',
+            {
+                'service': self.service.id,
+                'message': 'Please quote me anyway',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_approve_does_not_silently_unblock(self):
+        self.membership.customer_status = OrganizationMembership.CustomerStatus.BLOCKED
+        self.membership.save(update_fields=['customer_status'])
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/approve-customer/',
+            {'user_id': self.customer.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.membership.refresh_from_db()
+        self.assertEqual(
+            self.membership.customer_status,
+            OrganizationMembership.CustomerStatus.BLOCKED,
+        )

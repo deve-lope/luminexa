@@ -69,12 +69,15 @@ def ensure_customer_membership(org, customer, *, approve=False):
             'customer_status': status,
         },
     )
-    if not created and approve and membership.role == OrganizationMembership.Role.CUSTOMER:
+    if not created and membership.role == OrganizationMembership.Role.CUSTOMER:
+        # Blocked stays blocked until staff explicitly unblocks — never flip via connect/book.
         if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
-            raise ValidationError({
-                'customer': 'This customer is blocked. Unblock them before booking.',
-            })
-        if membership.customer_status != OrganizationMembership.CustomerStatus.APPROVED:
+            if approve:
+                raise ValidationError({
+                    'customer': 'This customer is blocked. Unblock them before booking.',
+                })
+            return membership
+        if approve and membership.customer_status != OrganizationMembership.CustomerStatus.APPROVED:
             membership.customer_status = OrganizationMembership.CustomerStatus.APPROVED
             membership.save(update_fields=['customer_status'])
     return membership

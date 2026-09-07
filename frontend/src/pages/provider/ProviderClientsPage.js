@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import CustomerImportConfirmModal from '../../components/provider/CustomerImportConfirmModal';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
@@ -20,6 +21,8 @@ export default function ProviderClientsPage() {
   const [importResult, setImportResult] = useState(null);
   const [preview, setPreview] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
+  const [actionBusyId, setActionBusyId] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
   const fileInputRef = useRef(null);
   const statusParam = searchParams.get('status');
   const status = STATUS_TABS.includes(statusParam) ? statusParam : 'approved';
@@ -139,6 +142,52 @@ export default function ProviderClientsPage() {
     }
   };
 
+  const runClientAction = async () => {
+    if (!orgSlug || !confirmAction || actionBusyId) return;
+    const { type, customer } = confirmAction;
+    setActionBusyId(customer.id);
+    setError('');
+    try {
+      if (type === 'remove') {
+        await jobsAPI.removeOrgCustomer(orgSlug, customer.id);
+      } else if (type === 'block') {
+        await jobsAPI.blockCustomer(orgSlug, customer.id);
+      } else if (type === 'unblock') {
+        await jobsAPI.unblockCustomer(orgSlug, customer.id);
+      }
+      setConfirmAction(null);
+      load();
+    } catch (e) {
+      setError(parseApiError(e) || 'Action failed.');
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  const confirmCopy = (() => {
+    if (!confirmAction) return {};
+    const name = confirmAction.customer.full_name || confirmAction.customer.email;
+    if (confirmAction.type === 'remove') {
+      return {
+        title: 'Remove this client?',
+        message: `Remove ${name} from your client list? Booking history is kept. Their account is not deleted.`,
+        confirmLabel: 'Remove',
+      };
+    }
+    if (confirmAction.type === 'block') {
+      return {
+        title: 'Block this client?',
+        message: `Block ${name}? They will not be able to book with you until you unblock them.`,
+        confirmLabel: 'Block',
+      };
+    }
+    return {
+      title: 'Unblock this client?',
+      message: `Unblock ${name}? They will be able to book with you again.`,
+      confirmLabel: 'Unblock',
+    };
+  })();
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -220,28 +269,59 @@ export default function ProviderClientsPage() {
         </p>
       ) : (
         <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-lx-soft ring-1 ring-slate-100">
-          {customers.map((c) => (
-            <li key={c.id}>
-              <Link
-                to={providerClientDetail(orgSlug, c.id)}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
-              >
-                <div className="min-w-0">
+          {customers.map((c) => {
+            const blocked = c.customer_status === 'blocked';
+            const busy = actionBusyId === c.id;
+            return (
+              <li key={c.id} className="flex items-stretch gap-2 px-3 py-2.5 sm:px-4">
+                <Link
+                  to={providerClientDetail(orgSlug, c.id)}
+                  className="min-w-0 flex-1 py-0.5 hover:opacity-90"
+                >
                   <p className="truncate font-semibold text-slate-900">
                     {c.full_name || c.email}
                   </p>
                   <p className="truncate text-xs text-slate-500">{c.email}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
+                    <span className="capitalize">{c.customer_status || '—'}</span>
+                    {' · '}
+                    {c.cancel_count || 0} cancel{(c.cancel_count || 0) === 1 ? '' : 's'}
+                    {' · '}
                     {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
                   </p>
+                </Link>
+                <div className="flex shrink-0 flex-col justify-center gap-1 sm:flex-row sm:items-center">
+                  {blocked ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirmAction({ type: 'unblock', customer: c })}
+                      className="min-h-[36px] rounded-lg px-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:opacity-50"
+                    >
+                      Unblock
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirmAction({ type: 'block', customer: c })}
+                      className="min-h-[36px] rounded-lg px-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      Block
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmAction({ type: 'remove', customer: c })}
+                    className="min-h-[36px] rounded-lg px-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <span className="shrink-0 text-xs font-medium capitalize text-slate-400">
-                  {c.customer_status || '—'}
-                </span>
-              </Link>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -252,6 +332,18 @@ export default function ProviderClientsPage() {
         busy={confirmBusy}
         onConfirm={confirmImport}
         onClose={closePreview}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmCopy.title}
+        message={confirmCopy.message}
+        confirmLabel={confirmCopy.confirmLabel}
+        cancelLabel="Cancel"
+        tone={confirmAction?.type === 'unblock' ? 'default' : 'danger'}
+        busy={Boolean(actionBusyId)}
+        onConfirm={runClientAction}
+        onClose={() => !actionBusyId && setConfirmAction(null)}
       />
     </div>
   );

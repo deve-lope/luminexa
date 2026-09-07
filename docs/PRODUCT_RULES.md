@@ -172,6 +172,10 @@ Customers and providers can **Report** (reason + written details) and **Block** 
 - Do not auto-suspend on a single report.
 - Keep chat Block separate from org `customer_status=blocked` (booking gate).
 
+### Org customer block (Clients list)
+
+`customer_status=blocked` stops the customer from **booking**, **rescheduling**, **connect / request access**, and **service inquiries**. Staff must **Unblock** (not Approve) to restore access. Separate from chat Block.
+
 ---
 
 ## Customer CSV import (provider Clients)

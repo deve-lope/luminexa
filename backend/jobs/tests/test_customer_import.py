@@ -144,3 +144,28 @@ class CustomerImportTests(TestCase):
         )
         self.assertEqual(res.status_code, 200)
         self.assertIn(b'full_name,email,phone', res.content)
+
+    def test_remove_customer_from_client_list(self):
+        customer = User.objects.create_user(
+            email='remove-me@import.test',
+            full_name='Remove Me',
+            password=None,
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=customer,
+            role=OrganizationMembership.Role.CUSTOMER,
+            customer_status=OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        res = self.client.delete(
+            f'/api/v1/organizations/{self.org.slug}/customers/{customer.id}/',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertFalse(
+            OrganizationMembership.objects.filter(
+                organization=self.org,
+                user=customer,
+                role=OrganizationMembership.Role.CUSTOMER,
+            ).exists()
+        )
+        self.assertTrue(User.objects.filter(pk=customer.pk).exists())

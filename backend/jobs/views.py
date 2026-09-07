@@ -488,16 +488,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise ValidationError('This business is not available.')
         membership = ensure_customer_membership(org, request.user)
         if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
-            return Response({
-                'detail': (
-                    'You cannot book with this business. '
-                    'Contact them if you think this is a mistake.'
-                ),
-                'organization_slug': org.slug,
-                'customer_status': membership.customer_status,
-                'booking_policy': org.booking_policy,
-                'is_blocked': True,
-            })
+            raise PermissionDenied(
+                'You cannot book with this business. '
+                'Contact them if you think this is a mistake.'
+            )
         if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
             msg = (
                 'Connection requested. You can view the calendar while waiting for approval.'
@@ -515,9 +509,16 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='service-inquiry')
     def service_inquiry(self, request, slug=None):
+        from .booking_services import customer_is_blocked
+
         org = self.get_object()
         if not org.profile_public or not org.is_active:
             raise ValidationError('This business is not available.')
+        if customer_is_blocked(org, request.user):
+            raise PermissionDenied(
+                'You cannot book with this business. '
+                'Contact them if you think this is a mistake.'
+            )
         membership = OrganizationMembership.objects.filter(
             organization=org,
             user=request.user,
@@ -527,6 +528,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             if org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY:
                 raise PermissionDenied('Request access to this business before sending a service request.')
             membership = ensure_customer_membership(org, request.user)
+        if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
+            raise PermissionDenied(
+                'You cannot book with this business. '
+                'Contact them if you think this is a mistake.'
+            )
         if (
             org.booking_policy == Organization.BookingPolicy.CLIENTS_ONLY
             and membership.customer_status != OrganizationMembership.CustomerStatus.APPROVED
@@ -681,11 +687,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['get', 'patch'],
+        methods=['get', 'patch', 'delete'],
         url_path=r'customers/(?P<user_id>[0-9]+)',
     )
     def customer_detail(self, request, slug=None, user_id=None):
-        """Clients lite: profile, notes, balance, recent bookings."""
+        """Clients lite: profile, notes, balance, recent bookings. DELETE removes from this org's list."""
         from django.db.models import F, Sum
 
         from .models import Booking, BookingStatusEvent, Invoice
@@ -699,6 +705,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         ).select_related('user').first()
         if not membership:
             raise ValidationError({'detail': 'Customer not found.'})
+
+        if request.method == 'DELETE':
+            membership.delete()
+            return Response({
+                'detail': 'Customer removed from your client list.',
+                'removed_user_id': int(user_id),
+            })
 
         if request.method == 'PATCH':
             notes = request.data.get('provider_notes')
@@ -779,6 +792,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         ).first()
         if not membership:
             raise ValidationError({'detail': 'Customer not found.'})
+        if membership.customer_status == OrganizationMembership.CustomerStatus.BLOCKED:
+            raise ValidationError({
+                'detail': 'This customer is blocked. Unblock them before approving.',
+            })
         membership.customer_status = OrganizationMembership.CustomerStatus.APPROVED
         membership.save(update_fields=['customer_status'])
         return Response({'detail': 'Customer approved.', 'user_id': int(user_id)})
