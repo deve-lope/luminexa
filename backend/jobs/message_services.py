@@ -747,9 +747,17 @@ def post_conversation_message(
     create_in_app=True,
     booking=None,
     inquiry=None,
+    enforce_chat_block=True,
 ):
     if not can_access_conversation(sender, conversation):
         raise PermissionDenied('You cannot message in this conversation.')
+    if enforce_chat_block:
+        from accounts.safety import assert_messaging_allowed
+
+        assert_messaging_allowed(
+            organization=conversation.organization,
+            customer=conversation.customer,
+        )
     text = (body or '').strip()
     if attachment:
         from luminexa.uploads import validate_chat_attachment
@@ -772,7 +780,7 @@ def post_conversation_message(
     return msg
 
 
-def post_booking_message(*, booking, sender, body='', attachment=None, create_in_app=True):
+def post_booking_message(*, booking, sender, body='', attachment=None, create_in_app=True, enforce_chat_block=True):
     if not can_access_booking_messages(sender, booking):
         raise PermissionDenied('You cannot message on this booking.')
     conv = conversation_for_booking(booking)
@@ -784,10 +792,11 @@ def post_booking_message(*, booking, sender, body='', attachment=None, create_in
         attachment=attachment,
         create_in_app=create_in_app,
         booking=booking,
+        enforce_chat_block=enforce_chat_block,
     )
 
 
-def post_inquiry_message(*, inquiry, sender, body='', attachment=None, create_in_app=True):
+def post_inquiry_message(*, inquiry, sender, body='', attachment=None, create_in_app=True, enforce_chat_block=True):
     if not can_access_inquiry_messages(sender, inquiry):
         raise PermissionDenied('You cannot message on this request.')
     conv = conversation_for_inquiry(inquiry)
@@ -799,6 +808,7 @@ def post_inquiry_message(*, inquiry, sender, body='', attachment=None, create_in
         attachment=attachment,
         create_in_app=create_in_app,
         inquiry=inquiry,
+        enforce_chat_block=enforce_chat_block,
     )
 
 
@@ -809,6 +819,7 @@ def post_booking_approval_message(*, booking, sender):
         sender=sender,
         body=booking_approval_message_body(booking),
         create_in_app=False,  # BOOKING_CONFIRMED notification already covers this
+        enforce_chat_block=False,
     )
 
 
@@ -880,6 +891,7 @@ def post_booking_incomplete_message(*, booking, sender, note='', return_booking=
         body=booking_incomplete_message_body(
             booking, note=note, return_booking=return_booking,
         ),
+        enforce_chat_block=False,
     )
 
 
@@ -890,4 +902,5 @@ def post_inquiry_approval_message(*, inquiry, sender):
         sender=sender,
         body=inquiry_approval_message_body(inquiry),
         create_in_app=False,
+        enforce_chat_block=False,
     )

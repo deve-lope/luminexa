@@ -189,6 +189,7 @@ PUBLIC_APP_URL = config('PUBLIC_APP_URL', default='http://localhost:3000')
 CUSTOMER_BOOKING_LEAD_HOURS = config('CUSTOMER_BOOKING_LEAD_HOURS', default=2, cast=int)
 
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@luminexa.local')
+SUPPORT_EMAIL = config('SUPPORT_EMAIL', default='support@luminex-a.com')
 # Prefer Brevo HTTPS API when BREVO_API_KEY is set (no SMTP IP allowlist).
 # Otherwise fall back to EMAIL_* SMTP (Mailpit locally, or legacy SMTP).
 BREVO_API_KEY = config('BREVO_API_KEY', default='')

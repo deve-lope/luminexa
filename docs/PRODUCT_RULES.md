@@ -155,3 +155,18 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 3. Multi-location any-branch match; primary sync; 2nd-location choice UX.
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
+6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
+
+---
+
+## Safety — report and chat block (v1)
+
+### What it means
+
+Customers and providers can **Report** (reason + written details) and **Block** messaging from the chat ⋯ menu. Reports land in Django admin (`SafetyReport`) and email `SUPPORT_EMAIL`. Blocking stops human messages both ways for that org↔customer pair (`ChatBlock`). Staff remove or pause accounts manually (`Organization.is_active` / `profile_public`, or user `is_active`) — no auto-pause from report volume in v1.
+
+### What NOT to simplify away
+
+- Do not call `beforeinstallprompt` / PWA install as a substitute for safety controls.
+- Do not auto-suspend on a single report.
+- Keep chat Block separate from org `customer_status=blocked` (booking gate).

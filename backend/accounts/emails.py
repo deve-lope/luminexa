@@ -128,3 +128,39 @@ def send_password_reset_email(user, reset_url: str) -> bool:
     except Exception:
         logger.exception('Failed to send password reset email to %s', user.email)
         return False
+
+
+def send_safety_report_alert(report) -> bool:
+    """Notify support inbox when a user files an in-app safety report."""
+    to = getattr(settings, 'SUPPORT_EMAIL', None) or 'support@luminex-a.com'
+    org = report.reported_organization
+    if report.reported_user_id:
+        reported = report.reported_user
+        target = (
+            f'Customer #{report.reported_user_id} '
+            f'({getattr(reported, "email", "") or "n/a"} / {getattr(reported, "full_name", "") or ""}) '
+            f'via org {org.slug}'
+        )
+    else:
+        target = f'Organization {org.slug} ({org.name})'
+    try:
+        send_mail(
+            subject=f'[Luminexa] Safety report #{report.pk}: {report.get_reason_display()}',
+            message=(
+                f'New safety report #{report.pk}\n\n'
+                f'Reason: {report.get_reason_display()}\n'
+                f'Reporter: #{report.reporter_id} ({report.reporter.email})\n'
+                f'Target: {target}\n'
+                f'Conversation id: {report.conversation_id or "—"}\n\n'
+                f'Details:\n{report.detail}\n\n'
+                'Review in Django admin → Accounts → Safety reports. '
+                'To remove a business from Find, set Organization is_active / profile_public off.\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[to],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception('Failed to send safety report alert for #%s', report.pk)
+        return False

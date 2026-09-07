@@ -518,6 +518,9 @@ export default function CustomerBookingCard({
         idleOpenLabel="Message business"
         loadMessages={() => jobsAPI.listBookingMessages(booking.id)}
         sendMessage={(body, file) => jobsAPI.sendBookingMessage(booking.id, body, file)}
+        safety={{
+          organizationSlug: booking.organization_slug || providerKey,
+        }}
       />
 
       {booking.status_events?.length > 0 && (

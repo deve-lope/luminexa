@@ -154,9 +154,11 @@ class CustomerConversationsAPITests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(open_res.status_code, 200)
-        bodies = [m['body'] for m in open_res.data if m.get('kind') == 'text']
+        messages = open_res.data['results'] if isinstance(open_res.data, dict) else open_res.data
+        bodies = [m['body'] for m in messages if m.get('kind') == 'text']
         self.assertIn('Older booking note', bodies)
         self.assertIn('Newer inquiry reply with enough text for a preview', bodies)
+        self.assertIn('messaging_blocked', open_res.data)
 
     def test_opening_messages_marks_customer_thread_read(self):
         ServiceRequestMessage.objects.create(

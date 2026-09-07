@@ -18,9 +18,22 @@ from .emails import (
     send_email_verification_otp,
     send_login_otp_email,
     send_password_reset_email,
+    send_safety_report_alert,
 )
 from .models import DevicePushToken, User
-from .otp import issue_login_code, normalize_email, user_uses_password_login, verify_login_code
+from .safety import (
+    chat_block_payload,
+    create_chat_block,
+    create_safety_report,
+    remove_chat_block,
+)
+from .otp import (
+    is_play_store_demo_user,
+    issue_login_code,
+    normalize_email,
+    user_uses_password_login,
+    verify_login_code,
+)
 from .serializers import (
     EmailVerifySerializer,
     LoginOtpRequestSerializer,
@@ -126,10 +139,15 @@ class LoginStartAPIView(APIView):
                 'code': 'no_login',
             })
         if user_uses_password_login(user):
+            detail = (
+                'Enter your password.'
+                if is_play_store_demo_user(user)
+                else 'Enter your business account password.'
+            )
             return Response({
                 'auth_method': 'password',
                 'email': email,
-                'detail': 'Enter your business account password.',
+                'detail': detail,
             })
         _send_customer_otp(email, full_name=user.full_name)
         return Response({
@@ -565,3 +583,82 @@ class DevicePushTokenAPIView(APIView):
             qs = qs.filter(token=token)
         deleted, _ = qs.delete()
         return Response({'deleted': deleted})
+
+
+class SafetyReportCreateAPIView(APIView):
+    """Customer or provider staff files a text report for admin review."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        report = create_safety_report(
+            reporter=request.user,
+            organization_slug=request.data.get('organization_slug', ''),
+            reason=request.data.get('reason', ''),
+            detail=request.data.get('detail', ''),
+            reported_user_id=request.data.get('reported_user_id'),
+            conversation_id=request.data.get('conversation_id'),
+        )
+        send_safety_report_alert(report)
+        return Response(
+            {
+                'id': report.pk,
+                'status': report.status,
+                'detail': 'Thanks — we received your report and will review it.',
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ChatBlockAPIView(APIView):
+    """Block / unblock messaging for an org↔customer pair."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from businesses.models import Organization
+        from jobs.permissions import is_org_staff
+
+        slug = (request.query_params.get('organization_slug') or '').strip()
+        org = Organization.objects.filter(slug=slug).first()
+        if not org:
+            raise ValidationError({'organization_slug': 'Organization not found.'})
+        if is_org_staff(request.user, org):
+            customer_id = request.query_params.get('customer_id')
+            if customer_id is None:
+                raise ValidationError({'customer_id': 'customer_id is required.'})
+            from .models import User as UserModel
+
+            try:
+                customer = UserModel.objects.get(pk=int(customer_id))
+            except (UserModel.DoesNotExist, TypeError, ValueError) as exc:
+                raise ValidationError({'customer_id': 'Customer not found.'}) from exc
+        else:
+            customer = request.user
+        return Response(chat_block_payload(organization=org, customer=customer, viewer=request.user))
+
+    def post(self, request):
+        block = create_chat_block(
+            blocker=request.user,
+            organization_slug=request.data.get('organization_slug', ''),
+            customer_id=request.data.get('customer_id'),
+        )
+        return Response(
+            {
+                'id': block.pk,
+                'messaging_blocked': True,
+                'blocked_by_me': True,
+                'detail': 'Messaging is blocked for this conversation.',
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def delete(self, request):
+        data = request.data if hasattr(request, 'data') else {}
+        removed = remove_chat_block(
+            actor=request.user,
+            organization_slug=data.get('organization_slug')
+            or request.query_params.get('organization_slug', ''),
+            customer_id=data.get('customer_id') or request.query_params.get('customer_id'),
+        )
+        return Response({'removed': removed, 'messaging_blocked': False})

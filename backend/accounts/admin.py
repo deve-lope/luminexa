@@ -1,7 +1,72 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import ProviderDeletionFeedback, User
+from .models import ChatBlock, ProviderDeletionFeedback, SafetyReport, User
+
+
+@admin.register(SafetyReport)
+class SafetyReportAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'created_at',
+        'status',
+        'reason',
+        'reported_organization',
+        'reported_user',
+        'reporter',
+    )
+    list_filter = ('status', 'reason', 'created_at')
+    search_fields = (
+        'detail',
+        'admin_notes',
+        'reporter__email',
+        'reported_user__email',
+        'reported_organization__slug',
+        'reported_organization__name',
+    )
+    readonly_fields = (
+        'reporter',
+        'reported_organization',
+        'reported_user',
+        'reason',
+        'detail',
+        'conversation_id',
+        'created_at',
+        'updated_at',
+    )
+    ordering = ('-created_at',)
+    list_editable = ('status',)
+    fields = (
+        'status',
+        'admin_notes',
+        'reason',
+        'detail',
+        'reporter',
+        'reported_organization',
+        'reported_user',
+        'conversation_id',
+        'created_at',
+        'updated_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(ChatBlock)
+class ChatBlockAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created_at', 'organization', 'customer', 'blocker')
+    search_fields = (
+        'organization__slug',
+        'organization__name',
+        'customer__email',
+        'blocker__email',
+    )
+    readonly_fields = ('organization', 'customer', 'blocker', 'created_at')
+    ordering = ('-created_at',)
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ProviderDeletionFeedback)

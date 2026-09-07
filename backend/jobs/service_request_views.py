@@ -274,7 +274,12 @@ class ProviderInquirySendQuoteAPIView(APIView):
         body = f'Quote sent: {amount_txt}'
         if note:
             body = f'{body}\n{note}'
-        post_inquiry_message(inquiry=inquiry, sender=request.user, body=body)
+        post_inquiry_message(
+            inquiry=inquiry,
+            sender=request.user,
+            body=body,
+            enforce_chat_block=False,
+        )
         from .notifications import notify_inquiry_quoted
 
         notify_inquiry_quoted(inquiry)
@@ -306,13 +311,21 @@ class ServiceInquiryMessagesAPIView(APIView):
         messages = list_inquiry_messages(inquiry)
         mark_inquiry_messages_read(inquiry=inquiry, user=request.user)
         conv = conversation_for_inquiry(inquiry)
-        return Response(
-            ServiceRequestMessageSerializer(
+        from accounts.safety import chat_block_payload
+
+        block_info = chat_block_payload(
+            organization=inquiry.organization,
+            customer=inquiry.customer,
+            viewer=request.user,
+        )
+        return Response({
+            'results': ServiceRequestMessageSerializer(
                 messages,
                 many=True,
                 context=message_serializer_context(request=request, conversation=conv),
             ).data,
-        )
+            **block_info,
+        })
 
     def post(self, request, slug, inquiry_id):
         from .message_services import conversation_for_inquiry, message_serializer_context

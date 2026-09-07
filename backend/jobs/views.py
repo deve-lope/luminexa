@@ -1901,13 +1901,21 @@ class BookingViewSet(viewsets.ModelViewSet):
             messages = list_booking_messages(booking)
             mark_booking_messages_read(booking=booking, user=request.user)
             conv = conversation_for_booking(booking)
-            return Response(
-                ServiceRequestMessageSerializer(
+            from accounts.safety import chat_block_payload
+
+            block_info = chat_block_payload(
+                organization=booking.organization,
+                customer=booking.customer,
+                viewer=request.user,
+            )
+            return Response({
+                'results': ServiceRequestMessageSerializer(
                     messages,
                     many=True,
                     context=message_serializer_context(request=request, conversation=conv),
                 ).data,
-            )
+                **block_info,
+            })
         if is_org_staff(request.user, booking.organization):
             require_provider_subscription(booking.organization)
         message = post_booking_message(
@@ -2216,12 +2224,20 @@ class ConversationMessagesAPIView(APIView):
         ensure_conversation_context_cards(conversation)
         messages = list_conversation_messages(conversation)
         ctx = message_serializer_context(request=request, conversation=conversation)
+        from accounts.safety import chat_block_payload
+
+        block_info = chat_block_payload(
+            organization=conversation.organization,
+            customer=conversation.customer,
+            viewer=request.user,
+        )
         return Response({
             'results': ServiceRequestMessageSerializer(
                 messages, many=True, context=ctx,
             ).data,
             'active_bookings': conversation_active_bookings(conversation),
             'active_inquiries': conversation_active_inquiries(conversation),
+            **block_info,
         })
 
     def post(self, request, conversation_id):

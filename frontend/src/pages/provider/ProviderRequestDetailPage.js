@@ -874,6 +874,10 @@ export default function ProviderRequestDetailPage() {
             ? jobsAPI.sendBookingMessage(id, body, file)
             : jobsAPI.sendInquiryMessage(orgSlug, id, body, file)
         }
+        safety={{
+          organizationSlug: orgSlug,
+          customerId: data.customer || data.customer_id,
+        }}
       />
 
       {kind === 'booking' && (

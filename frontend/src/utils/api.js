@@ -155,6 +155,10 @@ export const userAPI = {
     token
       ? api.delete('/accounts/api/push-tokens/', { data: { token } })
       : api.delete('/accounts/api/push-tokens/'),
+  createSafetyReport: (data) => api.post('/accounts/api/safety/reports/', data),
+  getChatBlock: (params) => api.get('/accounts/api/safety/chat-blocks/', { params }),
+  createChatBlock: (data) => api.post('/accounts/api/safety/chat-blocks/', data),
+  removeChatBlock: (data) => api.delete('/accounts/api/safety/chat-blocks/', { data }),
 };
 
 export const businessesAPI = {

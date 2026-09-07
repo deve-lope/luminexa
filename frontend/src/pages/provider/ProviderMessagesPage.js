@@ -231,6 +231,11 @@ export default function ProviderMessagesPage() {
             providerRequestDetail(orgSlug, 'inquiry', inquiryId)
           }
           returnTo={chatReturnTo}
+          safety={{
+            organizationSlug: orgSlug,
+            customerId: selected.customer_id,
+            conversationId: selected.id,
+          }}
         />
       )}
     </div>

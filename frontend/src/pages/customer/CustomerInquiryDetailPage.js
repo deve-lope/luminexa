@@ -334,6 +334,7 @@ export default function CustomerInquiryDetailPage() {
           idleOpenLabel="Message business"
           loadMessages={() => jobsAPI.listInquiryMessages(orgKey, inquiry.id)}
           sendMessage={(body, file) => jobsAPI.sendInquiryMessage(orgKey, inquiry.id, body, file)}
+          safety={{ organizationSlug: orgKey }}
         />
       )}
     </div>

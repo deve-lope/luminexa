@@ -166,6 +166,112 @@ class ProviderDeletionFeedback(models.Model):
         return f'{self.get_reason_display()} · {self.organization_slug or self.user_id_snapshot}'
 
 
+class SafetyReport(models.Model):
+    """User-submitted report about a provider org or customer (admin review queue)."""
+
+    class Reason(models.TextChoices):
+        SCAM = 'scam', 'Scam or fraud'
+        HARASSMENT = 'harassment', 'Harassment or threats'
+        INAPPROPRIATE = 'inappropriate', 'Inappropriate content or behavior'
+        SPAM = 'spam', 'Spam'
+        SAFETY = 'safety', 'Safety concern'
+        OTHER = 'other', 'Other'
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        REVIEWING = 'reviewing', 'Reviewing'
+        ACTIONED = 'actioned', 'Actioned'
+        DISMISSED = 'dismissed', 'Dismissed'
+
+    reporter = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='safety_reports_filed',
+    )
+    reported_organization = models.ForeignKey(
+        'businesses.Organization',
+        on_delete=models.CASCADE,
+        related_name='safety_reports',
+    )
+    reported_user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='safety_reports_against',
+        help_text='Set when a provider reports a customer; null when a customer reports a business.',
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    detail = models.TextField(max_length=2000)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    conversation_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Optional OrgCustomerConversation pk for context.',
+    )
+    admin_notes = models.TextField(blank=True, default='', max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['reported_organization', '-created_at']),
+        ]
+
+    def __str__(self):
+        target = (
+            f'user:{self.reported_user_id}'
+            if self.reported_user_id
+            else f'org:{self.reported_organization_id}'
+        )
+        return f'SafetyReport<{self.reason} → {target} [{self.status}]>'
+
+
+class ChatBlock(models.Model):
+    """
+    Blocks messaging for an org↔customer conversation pair.
+    Either party may create one; either direction of messaging is then rejected.
+    """
+
+    organization = models.ForeignKey(
+        'businesses.Organization',
+        on_delete=models.CASCADE,
+        related_name='chat_blocks',
+    )
+    customer = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='chat_blocks_as_customer',
+    )
+    blocker = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='chat_blocks_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'customer'],
+                name='uniq_chat_block_org_customer',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['organization', 'customer']),
+        ]
+
+    def __str__(self):
+        return f'ChatBlock org={self.organization_id} customer={self.customer_id}'
+
+
 class DevicePushToken(models.Model):
     """FCM device token for Capacitor / native push (outside-app notifications)."""
 

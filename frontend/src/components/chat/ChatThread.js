@@ -7,6 +7,9 @@ import parseApiError from '../../utils/parseApiError';
 import { formatWhen } from '../../utils/datetime';
 import { withReturnTo } from '../../utils/navigationBack';
 import PictureLightbox from '../ui/PictureLightbox';
+import ConfirmDialog from '../ConfirmDialog';
+import ReportUserModal from '../safety/ReportUserModal';
+import { userAPI } from '../../utils/api';
 
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'declined']);
 const ACTIVE_BOOKING_STATUSES = new Set([
@@ -112,16 +115,30 @@ function statusLabel(status) {
 
 function parseThreadPayload(data) {
   if (Array.isArray(data)) {
-    return { messages: data, activeBookings: [], activeInquiries: [] };
+    return {
+      messages: data,
+      activeBookings: [],
+      activeInquiries: [],
+      messagingBlocked: false,
+      blockedByMe: false,
+    };
   }
   if (data && typeof data === 'object') {
     return {
       messages: Array.isArray(data.results) ? data.results : [],
       activeBookings: Array.isArray(data.active_bookings) ? data.active_bookings : [],
       activeInquiries: Array.isArray(data.active_inquiries) ? data.active_inquiries : [],
+      messagingBlocked: Boolean(data.messaging_blocked),
+      blockedByMe: Boolean(data.blocked_by_me),
     };
   }
-  return { messages: [], activeBookings: [], activeInquiries: [] };
+  return {
+    messages: [],
+    activeBookings: [],
+    activeInquiries: [],
+    messagingBlocked: false,
+    blockedByMe: false,
+  };
 }
 
 function CompactHistoryTile({ card, detailHref }) {
@@ -410,6 +427,8 @@ export default function ChatThread({
   inquiryDetailHref,
   /** Path to reopen this chat after visiting a booking/request detail (e.g. /provider/x/messages?conversation=1). */
   returnTo,
+  /** Safety: enable Report / Block in the header menu. */
+  safety = null,
 }) {
   const [messages, setMessages] = useState([]);
   const [activeBookings, setActiveBookings] = useState([]);
@@ -421,6 +440,12 @@ export default function ChatThread({
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
   const [sending, setSending] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [messagingBlocked, setMessagingBlocked] = useState(false);
+  const [blockedByMe, setBlockedByMe] = useState(false);
   const bottomRef = useRef(null);
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -440,6 +465,8 @@ export default function ChatThread({
         setMessages(parsed.messages);
         setActiveBookings(parsed.activeBookings);
         setActiveInquiries(parsed.activeInquiries);
+        setMessagingBlocked(parsed.messagingBlocked);
+        setBlockedByMe(parsed.blockedByMe);
       } catch (e) {
         if (!silent) setError(parseApiError(e));
       } finally {
@@ -498,6 +525,38 @@ export default function ChatThread({
   const clearAttachment = () => {
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const safetyEnabled = Boolean(safety?.organizationSlug);
+  const canUnblock = messagingBlocked && blockedByMe;
+
+  const confirmBlock = async () => {
+    if (!safetyEnabled || blockBusy) return;
+    setBlockBusy(true);
+    setError(null);
+    try {
+      if (canUnblock) {
+        await userAPI.removeChatBlock({
+          organization_slug: safety.organizationSlug,
+          ...(safety.customerId != null ? { customer_id: safety.customerId } : {}),
+        });
+        setMessagingBlocked(false);
+        setBlockedByMe(false);
+      } else {
+        await userAPI.createChatBlock({
+          organization_slug: safety.organizationSlug,
+          ...(safety.customerId != null ? { customer_id: safety.customerId } : {}),
+        });
+        setMessagingBlocked(true);
+        setBlockedByMe(true);
+      }
+      setBlockConfirmOpen(false);
+      setMenuOpen(false);
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setBlockBusy(false);
+    }
   };
 
   const submit = async (event) => {
@@ -595,6 +654,55 @@ export default function ChatThread({
             <p className="truncate text-xs text-slate-500">{peerSubtitle}</p>
           ) : null}
         </div>
+        {safetyEnabled ? (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100/80"
+              aria-label="Conversation options"
+              aria-expanded={menuOpen}
+            >
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <circle cx="12" cy="5" r="1.75" />
+                <circle cx="12" cy="12" r="1.75" />
+                <circle cx="12" cy="19" r="1.75" />
+              </svg>
+            </button>
+            {menuOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-[1] cursor-default"
+                  aria-label="Close menu"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-[2] mt-1 min-w-[11rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200">
+                  <button
+                    type="button"
+                    className="block w-full px-4 py-2.5 text-left text-sm text-slate-800 hover:bg-slate-50"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setReportOpen(true);
+                    }}
+                  >
+                    Report
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full px-4 py-2.5 text-left text-sm text-red-700 hover:bg-red-50"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setBlockConfirmOpen(true);
+                    }}
+                  >
+                    {canUnblock ? 'Unblock' : 'Block'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       <PinnedContextStrip
@@ -648,6 +756,16 @@ export default function ChatThread({
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
+        {messagingBlocked ? (
+          <div className="mb-2 rounded-xl bg-white/90 px-3 py-3 text-center text-sm text-slate-600 shadow-sm ring-1 ring-black/5">
+            <p className="font-medium text-slate-800">Messaging is blocked</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {canUnblock
+                ? 'You blocked this conversation. Unblock from the menu to send messages again.'
+                : 'You can’t send messages in this conversation. You can still report from the menu.'}
+            </p>
+          </div>
+        ) : null}
         {file ? (
           <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/90 px-2 py-2 shadow-sm ring-1 ring-black/5">
             {filePreviewUrl ? (
@@ -669,62 +787,64 @@ export default function ChatThread({
             </button>
           </div>
         ) : null}
-        <form onSubmit={submit} className="flex items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
-            className="hidden"
-            onChange={(e) => {
-              const next = e.target.files?.[0] || null;
-              setFile(next);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-black/5 disabled:opacity-50"
-            aria-label="Attach photo or file"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-              />
-            </svg>
-          </button>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={1}
-            placeholder="Message"
-            className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[22px] border-0 bg-white px-4 py-2.5 text-base text-slate-900 shadow-sm ring-1 ring-black/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600"
-            onFocus={() => {
-              const y = window.scrollY || 0;
-              window.requestAnimationFrame(() => window.scrollTo(0, y));
-              const list = listRef.current;
-              if (list) list.scrollTop = list.scrollHeight;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit(e);
-              }
-            }}
-          />
-          <button
-            type="submit"
-            disabled={sending || (!body.trim() && !file)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-700 text-white shadow-sm disabled:opacity-50"
-            aria-label="Send"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
-        </form>
+        {!messagingBlocked ? (
+          <form onSubmit={submit} className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
+              className="hidden"
+              onChange={(e) => {
+                const next = e.target.files?.[0] || null;
+                setFile(next);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-black/5 disabled:opacity-50"
+              aria-label="Attach photo or file"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                />
+              </svg>
+            </button>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={1}
+              placeholder="Message"
+              className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[22px] border-0 bg-white px-4 py-2.5 text-base text-slate-900 shadow-sm ring-1 ring-black/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600"
+              onFocus={() => {
+                const y = window.scrollY || 0;
+                window.requestAnimationFrame(() => window.scrollTo(0, y));
+                const list = listRef.current;
+                if (list) list.scrollTop = list.scrollHeight;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  submit(e);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              disabled={sending || (!body.trim() && !file)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-700 text-white shadow-sm disabled:opacity-50"
+              aria-label="Send"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );
@@ -746,6 +866,31 @@ export default function ChatThread({
           }
         />
       ) : null}
+      {safetyEnabled ? (
+        <ReportUserModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          organizationSlug={safety.organizationSlug}
+          reportedUserId={safety.customerId ?? null}
+          conversationId={safety.conversationId ?? null}
+          peerLabel={peerName || 'this account'}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={blockConfirmOpen}
+        title={canUnblock ? 'Unblock messaging?' : 'Block messaging?'}
+        message={
+          canUnblock
+            ? `You’ll be able to message ${peerName || 'this contact'} again.`
+            : `Neither of you will be able to send messages until you unblock. You can still report ${peerName || 'them'}.`
+        }
+        confirmLabel={canUnblock ? 'Unblock' : 'Block'}
+        cancelLabel="Cancel"
+        tone={canUnblock ? 'default' : 'danger'}
+        busy={blockBusy}
+        onConfirm={confirmBlock}
+        onClose={() => !blockBusy && setBlockConfirmOpen(false)}
+      />
     </>
   );
 }
@@ -763,6 +908,7 @@ export function ChatEntryCard({
   bookingDetailHref,
   inquiryDetailHref,
   returnTo,
+  safety = null,
 }) {
   const [open, setOpen] = useState(false);
 
@@ -810,6 +956,7 @@ export function ChatEntryCard({
         bookingDetailHref={bookingDetailHref}
         inquiryDetailHref={inquiryDetailHref}
         returnTo={returnTo}
+        safety={safety}
       />
     </>
   );

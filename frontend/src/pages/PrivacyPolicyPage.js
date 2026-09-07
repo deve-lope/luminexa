@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-const UPDATED = 'July 14, 2026';
+const UPDATED = 'September 7, 2026';
 const CONTACT = 'support@luminex-a.com';
 const APP_URL = 'https://app.luminex-a.com';
 
@@ -163,6 +163,19 @@ export default function PrivacyPolicyPage() {
             We may update this policy from time to time. The “Last updated” date at the top will
             change when we do. Continued use of Luminexa after an update means you accept the revised
             policy.
+          </p>
+        </Section>
+
+        <Section title="Safety and reporting">
+          <p>
+            Customers and service providers can report accounts and block messaging from the
+            in-app chat menu. Reports include a reason and written details and are reviewed by
+            Luminexa. To remove a business from Find after review, we may deactivate the
+            organization profile. Contact{' '}
+            <a className="font-medium text-teal-700 hover:underline" href={`mailto:${CONTACT}`}>
+              {CONTACT}
+            </a>{' '}
+            for urgent safety concerns.
           </p>
         </Section>
 

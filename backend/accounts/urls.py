@@ -73,4 +73,14 @@ urlpatterns = [
         api_views.DevicePushTokenAPIView.as_view(),
         name='push_tokens_api',
     ),
+    path(
+        'api/safety/reports/',
+        api_views.SafetyReportCreateAPIView.as_view(),
+        name='safety_report_create_api',
+    ),
+    path(
+        'api/safety/chat-blocks/',
+        api_views.ChatBlockAPIView.as_view(),
+        name='chat_block_api',
+    ),
 ]

@@ -18,6 +18,7 @@ export default function RequestMessageThread({
   onClose,
   bookingDetailHref,
   inquiryDetailHref,
+  safety = null,
 }) {
   const displayName = peerName || customerName || '';
 
@@ -31,6 +32,7 @@ export default function RequestMessageThread({
         sendMessage={sendMessage}
         bookingDetailHref={bookingDetailHref}
         inquiryDetailHref={inquiryDetailHref}
+        safety={safety}
       />
     );
   }
@@ -45,6 +47,7 @@ export default function RequestMessageThread({
       compact={compact}
       bookingDetailHref={bookingDetailHref}
       inquiryDetailHref={inquiryDetailHref}
+      safety={safety}
     />
   );
 }

@@ -167,6 +167,10 @@ export default function CustomerMessagesPage() {
           sendMessage={(body, file) => jobsAPI.sendConversationMessage(selected.id, body, file)}
           bookingDetailHref={(bookingId) => `/customer/bookings/${bookingId}`}
           returnTo={chatReturnTo}
+          safety={{
+            organizationSlug: selected.organization_slug,
+            conversationId: selected.id,
+          }}
         />
       )}
     </div>
