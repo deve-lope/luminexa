@@ -653,8 +653,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='customers/import')
     def customers_import(self, request, slug=None):
-        """Import customers from CSV (full_name, email, phone[, provider_notes]). Silent — no invite emails."""
-        from .customer_import_services import import_customers_from_csv
+        """Preview (dry_run=1) or import customers from CSV. Silent — no invite emails."""
+        from .customer_import_services import (
+            import_customers_from_csv,
+            preview_customers_from_csv,
+        )
 
         org = self.get_object()
         require_staff_ops(request.user, org)
@@ -666,7 +669,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise ValidationError({'file': 'Uploaded file is empty.'})
         if len(raw) > 2 * 1024 * 1024:
             raise ValidationError({'file': 'CSV must be 2 MB or smaller.'})
+        dry_run = str(
+            request.data.get('dry_run') or request.query_params.get('dry_run') or ''
+        ).lower() in ('1', 'true', 'yes')
+        if dry_run:
+            return Response(preview_customers_from_csv(organization=org, file_bytes=raw))
         result = import_customers_from_csv(organization=org, file_bytes=raw)
+        if result.get('ok') is False:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
     @action(

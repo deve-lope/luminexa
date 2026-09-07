@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Skeleton from '../../components/Skeleton';
+import CustomerImportConfirmModal from '../../components/provider/CustomerImportConfirmModal';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
 import { providerClientDetail } from '../../utils/providerPaths';
@@ -15,7 +16,10 @@ export default function ProviderClientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importBusy, setImportBusy] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [pendingFile, setPendingFile] = useState(null);
   const fileInputRef = useRef(null);
   const statusParam = searchParams.get('status');
   const status = STATUS_TABS.includes(statusParam) ? statusParam : 'approved';
@@ -51,23 +55,87 @@ export default function ProviderClientsPage() {
     }
   };
 
+  const closePreview = () => {
+    if (confirmBusy) return;
+    setPreview(null);
+    setPendingFile(null);
+  };
+
   const onImportFile = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !orgSlug || importBusy) return;
+    if (!file || !orgSlug || importBusy || confirmBusy) return;
     setImportBusy(true);
     setImportResult(null);
     setError('');
+    setPreview(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('dry_run', '1');
       const res = await jobsAPI.importOrgCustomers(orgSlug, formData);
-      setImportResult(res.data || null);
-      load();
+      setPendingFile(file);
+      setPreview(res.data || null);
     } catch (e) {
-      setError(parseApiError(e) || 'Import failed.');
+      const data = e?.response?.data;
+      const fileMsg = data?.file;
+      const msg = Array.isArray(fileMsg)
+        ? fileMsg[0]
+        : typeof fileMsg === 'string'
+          ? fileMsg
+          : parseApiError(e) || 'Could not read this CSV.';
+      setError(msg);
+      if (Array.isArray(data?.errors) && data.errors.length) {
+        setPreview({
+          ready_count: 0,
+          will_create: 0,
+          will_link: 0,
+          will_skip: data.error_count || data.errors.length,
+          can_import: false,
+          errors: data.errors,
+          error_count: data.error_count || data.errors.length,
+          preview: [],
+        });
+        setPendingFile(null);
+      }
     } finally {
       setImportBusy(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!orgSlug || !pendingFile || confirmBusy) return;
+    setConfirmBusy(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', pendingFile);
+      const res = await jobsAPI.importOrgCustomers(orgSlug, formData);
+      setImportResult(res.data || null);
+      setPreview(null);
+      setPendingFile(null);
+      load();
+    } catch (e) {
+      const data = e?.response?.data;
+      const fileMsg = data?.file;
+      setError(
+        Array.isArray(fileMsg)
+          ? fileMsg[0]
+          : typeof fileMsg === 'string'
+            ? fileMsg
+            : parseApiError(e) || 'Import failed.',
+      );
+      if (Array.isArray(data?.errors) && data.errors.length) {
+        setPreview((prev) => ({
+          ...(prev || {}),
+          ready_count: 0,
+          can_import: false,
+          errors: data.errors,
+          error_count: data.error_count || data.errors.length,
+        }));
+      }
+    } finally {
+      setConfirmBusy(false);
     }
   };
 
@@ -88,11 +156,11 @@ export default function ProviderClientsPage() {
           </button>
           <button
             type="button"
-            disabled={importBusy}
+            disabled={importBusy || confirmBusy}
             onClick={() => fileInputRef.current?.click()}
             className="min-h-[40px] rounded-xl bg-teal-700 px-3 text-sm font-medium text-white disabled:opacity-50"
           >
-            {importBusy ? 'Importing…' : 'Import CSV'}
+            {importBusy ? 'Checking file…' : 'Import CSV'}
           </button>
           <input
             ref={fileInputRef}
@@ -111,15 +179,16 @@ export default function ProviderClientsPage() {
             Created {importResult.created || 0}, linked existing {importResult.linked || 0},
             skipped {importResult.skipped || 0}.
             {importResult.error_count
-              ? ` ${importResult.error_count} row issue(s) (no invite emails were sent).`
-              : ' No invite emails were sent — customers can sign in later with their email.'}
+              ? ` ${importResult.error_count} row issue(s).`
+              : ' No invite emails were sent.'}
           </p>
           {Array.isArray(importResult.errors) && importResult.errors.length > 0 ? (
-            <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-teal-800">
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-teal-800">
               {importResult.errors.slice(0, 5).map((err) => (
                 <li key={`${err.row}-${err.email}`}>
                   Row {err.row}
                   {err.email ? ` (${err.email})` : ''}: {err.detail}
+                  {err.fix ? ` — Fix: ${err.fix}` : ''}
                 </li>
               ))}
             </ul>
@@ -175,6 +244,15 @@ export default function ProviderClientsPage() {
           ))}
         </ul>
       )}
+
+      <CustomerImportConfirmModal
+        open={Boolean(preview)}
+        preview={preview}
+        fileName={pendingFile?.name || ''}
+        busy={confirmBusy}
+        onConfirm={confirmImport}
+        onClose={closePreview}
+      />
     </div>
   );
 }

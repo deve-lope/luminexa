@@ -42,6 +42,24 @@ class CustomerImportTests(TestCase):
             'Ada Lovelace,ada@import.test,555-1000\n'
             'Grace Hopper,grace@import.test,555-1001\n'
         )
+        preview = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/customers/import/',
+            {'file': raw, 'dry_run': '1'},
+            format='multipart',
+        )
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview.data['ready_count'], 2)
+        self.assertEqual(preview.data['will_create'], 2)
+        self.assertTrue(preview.data['can_import'])
+        self.assertEqual(
+            OrganizationMembership.objects.filter(
+                organization=self.org,
+                role=OrganizationMembership.Role.CUSTOMER,
+            ).count(),
+            0,
+        )
+
+        raw.seek(0)
         res = self.client.post(
             f'/api/v1/organizations/{self.org.slug}/customers/import/',
             {'file': raw},
@@ -101,14 +119,24 @@ class CustomerImportTests(TestCase):
             'full_name,email,phone\n'
             'Owner Again,owner-import@test.local,555-3000\n'
         )
+        preview = self.client.post(
+            f'/api/v1/organizations/{self.org.slug}/customers/import/',
+            {'file': raw, 'dry_run': '1'},
+            format='multipart',
+        )
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview.data['will_skip'], 1)
+        self.assertFalse(preview.data['can_import'])
+        self.assertIn('fix', preview.data['errors'][0])
+
+        raw.seek(0)
         res = self.client.post(
             f'/api/v1/organizations/{self.org.slug}/customers/import/',
             {'file': raw},
             format='multipart',
         )
-        self.assertEqual(res.status_code, 200, res.content)
-        self.assertEqual(res.data['skipped'], 1)
-        self.assertEqual(res.data['created'], 0)
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.data.get('error_count'), 1)
 
     def test_import_template_download(self):
         res = self.client.get(
