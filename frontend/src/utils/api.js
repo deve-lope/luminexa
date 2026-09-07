@@ -379,6 +379,12 @@ export const jobsAPI = {
     api.delete(`/api/v1/services/${serviceId}/gallery/${imageId}/`),
   listOrgCustomers: (orgSlug, params) =>
     api.get(`/api/v1/organizations/${orgSlug}/customers/`, { params }),
+  downloadCustomerImportTemplate: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/customers/import-template/`, {
+      responseType: 'blob',
+    }),
+  importOrgCustomers: (orgSlug, formData) =>
+    api.post(`/api/v1/organizations/${orgSlug}/customers/import/`, formData),
   getOrgCustomer: (orgSlug, userId) =>
     api.get(`/api/v1/organizations/${orgSlug}/customers/${userId}/`),
   patchOrgCustomer: (orgSlug, userId, data) =>

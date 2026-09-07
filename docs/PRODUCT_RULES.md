@@ -156,6 +156,7 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
+7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
 
 ---
 
@@ -170,3 +171,17 @@ Customers and providers can **Report** (reason + written details) and **Block** 
 - Do not call `beforeinstallprompt` / PWA install as a substitute for safety controls.
 - Do not auto-suspend on a single report.
 - Keep chat Block separate from org `customer_status=blocked` (booking gate).
+
+---
+
+## Customer CSV import (provider Clients)
+
+### What it means
+
+Providers can **Import CSV** on Clients (`full_name`, `email`, `phone`, optional `provider_notes`) to seed My customers from Excel or another tool. Creates or links real `User` rows + `OrganizationMembership` (`approved`). **No invite / OTP emails.** Cap **500** rows per upload. Template: `GET …/customers/import-template/`.
+
+### What NOT to simplify away
+
+- Do not blast welcome emails on import.
+- Do not invent membership-only stubs without a User (Clients and bookings need `user_id`).
+- Existing platform users with the same email are **linked** to the org, not duplicated.

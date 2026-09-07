@@ -638,10 +638,41 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         ]
         return Response(OrgCustomerSerializer(data, many=True).data)
 
+    @action(detail=True, methods=['get'], url_path='customers/import-template')
+    def customers_import_template(self, request, slug=None):
+        """Download a CSV template for bulk customer import."""
+        from django.http import HttpResponse
+
+        from .customer_import_services import import_template_csv
+
+        org = self.get_object()
+        require_staff_ops(request.user, org)
+        response = HttpResponse(import_template_csv(), content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="luminexa-customers-import.csv"'
+        return response
+
+    @action(detail=True, methods=['post'], url_path='customers/import')
+    def customers_import(self, request, slug=None):
+        """Import customers from CSV (full_name, email, phone[, provider_notes]). Silent — no invite emails."""
+        from .customer_import_services import import_customers_from_csv
+
+        org = self.get_object()
+        require_staff_ops(request.user, org)
+        upload = request.FILES.get('file')
+        if not upload:
+            raise ValidationError({'file': 'Upload a CSV file as "file".'})
+        raw = upload.read()
+        if not raw:
+            raise ValidationError({'file': 'Uploaded file is empty.'})
+        if len(raw) > 2 * 1024 * 1024:
+            raise ValidationError({'file': 'CSV must be 2 MB or smaller.'})
+        result = import_customers_from_csv(organization=org, file_bytes=raw)
+        return Response(result)
+
     @action(
         detail=True,
         methods=['get', 'patch'],
-        url_path=r'customers/(?P<user_id>[^/.]+)',
+        url_path=r'customers/(?P<user_id>[0-9]+)',
     )
     def customer_detail(self, request, slug=None, user_id=None):
         """Clients lite: profile, notes, balance, recent bookings."""
