@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
+import { isNativeApp } from '../../native/capacitorNative';
 import { providerBilling } from '../../utils/providerPaths';
 import { subscriptionDaysRemaining } from '../../utils/providerSubscription';
 
@@ -73,11 +74,17 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
     detail = statusLabel(sub.status);
   }
 
+  const storeShell = isNativeApp();
+
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-semibold uppercase text-slate-500">Manage subscription</h2>
+      <h2 className="text-sm font-semibold uppercase text-slate-500">
+        {storeShell ? 'Subscription' : 'Manage subscription'}
+      </h2>
       <p className="mt-1 text-sm text-slate-600">
-        Luminexa Pro for this business. Billing, promo codes, and payouts are on the next screen.
+        {storeShell
+          ? 'Luminexa Pro status for this business. Full billing details are on the website.'
+          : 'Luminexa Pro for this business. Billing, promo codes, and payouts are on the next screen.'}
       </p>
 
       {loading ? (
@@ -98,7 +105,7 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
         to={providerBilling(orgSlug)}
         className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
       >
-        <span>Manage billing</span>
+        <span>{storeShell ? 'View billing status' : 'Manage billing'}</span>
         <span className="text-slate-400" aria-hidden>
           →
         </span>

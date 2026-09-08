@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { useAuth } from '../../contexts/AuthContext';
+import { isNativeApp } from '../../native/capacitorNative';
 import { subscriptionDaysRemaining } from '../../utils/providerSubscription';
+
+/** Play/App Store: Pro SaaS must not open Stripe Checkout/Portal from the store shell. */
+const BILLING_WEB_HOST = 'app.luminex-a.com';
 
 function statusCopy(status) {
   if (status === 'trialing') return 'Free trial';
@@ -202,7 +206,11 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
   const planLabel =
     sub.plan && sub.plan !== 'free' ? sub.plan.replace(/_/g, ' ') : 'Luminexa Pro';
 
-  let subDetail = 'Subscribe to use the provider dashboard.';
+  const storeShell = isNativeApp();
+
+  let subDetail = storeShell
+    ? 'Pro plan status for this business.'
+    : 'Subscribe to use the provider dashboard.';
   if (sub.source === 'promo' && endDate) {
     subDetail =
       daysLeft === 0
@@ -211,13 +219,17 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
   } else if (sub.status === 'trialing' && endDate) {
     subDetail =
       daysLeft === 0
-        ? `Trial ends today (${endDate}). Add a card to keep Pro.`
+        ? storeShell
+          ? `Trial ends today (${endDate}).`
+          : `Trial ends today (${endDate}). Add a card to keep Pro.`
         : `Trial until ${endDate} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left.`;
   } else if (sub.active && endDate) {
     subDetail = `Renews ${endDate}${daysLeft != null ? ` · ${daysLeft} days left` : ''}.`;
   } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
-    subDetail = 'Payment failed. Update your card to keep Pro.';
-  } else if (sub.trial_days > 0) {
+    subDetail = storeShell
+      ? 'Payment issue on this plan. Check billing details in a web browser.'
+      : 'Payment failed. Update your card to keep Pro.';
+  } else if (sub.trial_days > 0 && !storeShell) {
     subDetail = `${sub.trial_days}-day free trial — no card needed to start. Then $9.99 CAD / month.`;
   }
 
@@ -305,99 +317,111 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
           <li className="rounded-xl bg-slate-50 px-3 py-2">Customers use Luminexa free</li>
         </ul>
 
-        {isOwner && configured && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {canStartMonthly && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  redirectTo(() =>
-                    jobsAPI.startSubscription(orgSlug, {
-                      plan: 'pro_monthly',
-                      success_path: subscribeSuccessPath,
-                      cancel_path: subscribeSuccessPath,
-                    })
-                  )
-                }
-                className="lx-btn-primary min-h-[48px] flex-1 sm:flex-none sm:px-6"
-              >
-                {busy
-                  ? 'Opening Stripe…'
-                  : sub.source === 'promo'
-                    ? 'Upgrade to paid monthly'
-                    : sub.trial_days > 0
-                      ? 'Start free trial'
-                      : 'Subscribe monthly'}
-              </button>
+        {storeShell ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
+            Plan status is shown here. For full billing details, renewals, and card management,
+            open Luminexa in a web browser ({BILLING_WEB_HOST}).
+          </p>
+        ) : (
+          <>
+            {isOwner && configured && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {canStartMonthly && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      redirectTo(() =>
+                        jobsAPI.startSubscription(orgSlug, {
+                          plan: 'pro_monthly',
+                          success_path: subscribeSuccessPath,
+                          cancel_path: subscribeSuccessPath,
+                        })
+                      )
+                    }
+                    className="lx-btn-primary min-h-[48px] flex-1 sm:flex-none sm:px-6"
+                  >
+                    {busy
+                      ? 'Opening Stripe…'
+                      : sub.source === 'promo'
+                        ? 'Upgrade to paid monthly'
+                        : sub.trial_days > 0
+                          ? 'Start free trial'
+                          : 'Subscribe monthly'}
+                  </button>
+                )}
+                {canStartYearly && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      redirectTo(() =>
+                        jobsAPI.startSubscription(orgSlug, {
+                          plan: 'pro_yearly',
+                          success_path: subscribeSuccessPath,
+                          cancel_path: subscribeSuccessPath,
+                        })
+                      )
+                    }
+                    className="lx-btn-secondary min-h-[48px]"
+                  >
+                    {sub.source === 'promo' ? 'Upgrade to paid yearly' : 'Subscribe yearly'}
+                  </button>
+                )}
+                {sub.has_customer && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      redirectTo(() =>
+                        jobsAPI.openBillingPortal(orgSlug, {
+                          return_path: stripeReturnPath,
+                        })
+                      )
+                    }
+                    className="lx-btn-secondary min-h-[48px]"
+                  >
+                    Manage card & invoices
+                  </button>
+                )}
+              </div>
             )}
-            {canStartYearly && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  redirectTo(() =>
-                    jobsAPI.startSubscription(orgSlug, {
-                      plan: 'pro_yearly',
-                      success_path: subscribeSuccessPath,
-                      cancel_path: subscribeSuccessPath,
-                    })
-                  )
-                }
-                className="lx-btn-secondary min-h-[48px]"
-              >
-                {sub.source === 'promo' ? 'Upgrade to paid yearly' : 'Subscribe yearly'}
-              </button>
+
+            {!isOwner && (
+              <p className="text-sm text-amber-800">Only the business owner can change the plan.</p>
             )}
-            {sub.has_customer && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  redirectTo(() =>
-                    jobsAPI.openBillingPortal(orgSlug, {
-                      return_path: stripeReturnPath,
-                    })
-                  )
-                }
-                className="lx-btn-secondary min-h-[48px]"
-              >
-                Manage card & invoices
-              </button>
+
+            {isOwner &&
+              configured &&
+              !sub.prices_configured?.pro_monthly &&
+              !sub.prices_configured?.pro_yearly && (
+                <p className="text-sm text-amber-800">Subscription price is not configured yet.</p>
+              )}
+
+            {isOwner && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-700">Have a promo code?</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                    placeholder="e.g. LAUNCH4W"
+                    autoCapitalize="characters"
+                    className="min-h-[44px] min-w-[10rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={promoBusy || busy}
+                    onClick={applyPromo}
+                    className="lx-btn-secondary min-h-[44px]"
+                  >
+                    {promoBusy ? 'Applying…' : 'Apply code'}
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
-        )}
-
-        {!isOwner && (
-          <p className="text-sm text-amber-800">Only the business owner can change the plan.</p>
-        )}
-
-        {isOwner && configured && !sub.prices_configured?.pro_monthly && !sub.prices_configured?.pro_yearly && (
-          <p className="text-sm text-amber-800">Subscription price is not configured yet.</p>
-        )}
-
-        {isOwner && (
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs font-semibold text-slate-700">Have a promo code?</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <input
-                type="text"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value)}
-                placeholder="e.g. LAUNCH4W"
-                autoCapitalize="characters"
-                className="min-h-[44px] min-w-[10rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              />
-              <button
-                type="button"
-                disabled={promoBusy || busy}
-                onClick={applyPromo}
-                className="lx-btn-secondary min-h-[44px]"
-              >
-                {promoBusy ? 'Applying…' : 'Apply code'}
-              </button>
-            </div>
-          </div>
+          </>
         )}
       </section>
 

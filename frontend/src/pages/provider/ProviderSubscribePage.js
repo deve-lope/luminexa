@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import ProviderBillingSettings from '../../components/provider/ProviderBillingSettings';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
+import { isNativeApp } from '../../native/capacitorNative';
 import { providerHome } from '../../utils/providerPaths';
 import { orgHasActiveSubscription } from '../../utils/providerSubscription';
 
@@ -13,6 +14,7 @@ export default function ProviderSubscribePage() {
   const { orgSlug, activeOrg, providerOrgs } = useProviderOrg();
   const { memberships, refreshSession } = useAuth();
   const [params] = useSearchParams();
+  const storeShell = isNativeApp();
   const isOwner = memberships?.some(
     (m) => m.organization_slug === orgSlug && m.role === 'owner'
   );
@@ -33,16 +35,25 @@ export default function ProviderSubscribePage() {
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Start your Luminexa Pro trial</h1>
+        <h1 className="text-2xl font-bold text-slate-900">
+          {storeShell ? 'Luminexa Pro required' : 'Start your Luminexa Pro trial'}
+        </h1>
         <p className="mt-2 text-sm text-slate-600">
           {activeOrg?.organization_name || 'Your business'} needs an active Pro plan to use the
           provider dashboard — including analytics, job profit, invoice follow-ups, and books
           export. Customers always use Luminexa for free.
         </p>
-        <p className="mt-2 text-sm text-slate-600">
-          Start with a free trial — no card required. Add a payment method later before the trial
-          ends if you want to keep Pro.
-        </p>
+        {storeShell ? (
+          <p className="mt-2 text-sm text-slate-600">
+            Plan status is below. For full billing details and to start or renew Pro, open Luminexa
+            in a web browser (app.luminex-a.com).
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate-600">
+            Start with a free trial — no card required. Add a payment method later before the trial
+            ends if you want to keep Pro.
+          </p>
+        )}
       </div>
       {!isOwner && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
