@@ -83,12 +83,13 @@ export default function BookingCalendar({
       : 'w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4';
 
   const weekdayLabels = size === 'compact' ? WEEKDAYS_SHORT : WEEKDAYS_FULL;
+  // Fixed row heights (not aspect-square) so wide laptop columns stay short and full-width.
   const cellClass =
     size === 'compact'
-      ? 'aspect-square w-full min-h-[2.35rem] text-xs sm:min-h-[2.5rem] sm:text-sm'
-      : 'aspect-square w-full min-h-[2.5rem] text-sm sm:min-h-[2.75rem]';
+      ? 'h-9 w-full text-xs sm:h-10 sm:text-sm'
+      : 'h-10 w-full text-sm sm:h-11 lg:h-12';
   const weekText = size === 'compact' ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm';
-  const gridGap = 'gap-1 sm:gap-1.5';
+  const gridGap = size === 'compact' ? 'gap-0.5 sm:gap-1' : 'gap-1 sm:gap-1.5';
 
   const selectDay = (cell) => {
     if (cell.isPast) return;
