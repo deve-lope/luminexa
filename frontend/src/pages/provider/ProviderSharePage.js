@@ -10,6 +10,10 @@ import { getCustomerBookingUrl } from '../../utils/bookingLink';
 import LinkShareBar from '../../components/LinkShareBar';
 import { providerClients, providerSettings } from '../../utils/providerPaths';
 import { providerHasServiceArea } from '../../utils/serviceArea';
+import parseApiError from '../../utils/parseApiError';
+
+/** Matches OrganizationMembership.MAX_STAFF_PER_ORGANIZATION (base plan). */
+const MAX_STAFF = 3;
 
 export default function ProviderSharePage() {
   const { orgSlug, activeOrg } = useProviderOrg();
@@ -147,7 +151,7 @@ export default function ProviderSharePage() {
             <section className="lx-card">
               <h2 className="text-sm font-semibold uppercase text-slate-500">Invite staff</h2>
               <p className="mt-1 text-sm text-slate-600">
-                Add team members who can manage schedule and bookings for{' '}
+                Add up to {MAX_STAFF} team members who can manage schedule and bookings for{' '}
                 {activeOrg?.organization_name}.
               </p>
               <div className="mt-4 flex gap-2">
@@ -170,9 +174,7 @@ export default function ProviderSharePage() {
                       setStaffEmail('');
                     } catch (err) {
                       setStaffMessage(
-                        err.response?.data?.email?.[0] ||
-                          err.response?.data?.detail ||
-                          'Could not send invitation.'
+                        parseApiError(err) || 'Could not send invitation.'
                       );
                     } finally {
                       setInvitingStaff(false);

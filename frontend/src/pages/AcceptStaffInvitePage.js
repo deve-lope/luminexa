@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { jobsAPI } from '../utils/api';
 import { providerHome } from '../utils/providerPaths';
+import parseApiError from '../utils/parseApiError';
 
 export default function AcceptStaffInvitePage() {
   const { isAuthenticated, loading } = useAuth();
@@ -26,7 +27,7 @@ export default function AcceptStaffInvitePage() {
         }
       })
       .catch((err) => {
-        setError(err.response?.data?.detail || 'Could not accept invitation.');
+        setError(parseApiError(err) || 'Could not accept invitation.');
       })
       .finally(() => setBusy(false));
   }, [loading, isAuthenticated, token, navigate]);

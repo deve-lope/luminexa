@@ -24,8 +24,26 @@ class AcceptStaffInviteAPIView(APIView):
             raise ValidationError({'detail': 'Invalid or expired invitation.'})
         if request.user.email.lower() != invite.email.lower():
             raise PermissionDenied('Sign in with the email address that received the invitation.')
+        org = invite.organization
+        already_staff = OrganizationMembership.objects.filter(
+            organization=org,
+            user=request.user,
+            role=OrganizationMembership.Role.STAFF,
+        ).exists()
+        if (
+            not already_staff
+            and OrganizationMembership.staff_count(org)
+            >= OrganizationMembership.MAX_STAFF_PER_ORGANIZATION
+        ):
+            raise ValidationError({
+                'detail': (
+                    f'This business has reached its limit of '
+                    f'{OrganizationMembership.MAX_STAFF_PER_ORGANIZATION} staff members.'
+                ),
+                'code': 'staff_limit_reached',
+            })
         OrganizationMembership.objects.update_or_create(
-            organization=invite.organization,
+            organization=org,
             user=request.user,
             defaults={'role': OrganizationMembership.Role.STAFF},
         )

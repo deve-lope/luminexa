@@ -869,6 +869,23 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         ).exists()
         if existing:
             raise ValidationError({'email': 'This person is already on your team.'})
+        pending_for_email = StaffInvitation.objects.filter(
+            organization=org,
+            email=email,
+            accepted_at__isnull=True,
+        ).exists()
+        if (
+            not pending_for_email
+            and OrganizationMembership.staff_seats_used(org)
+            >= OrganizationMembership.MAX_STAFF_PER_ORGANIZATION
+        ):
+            raise ValidationError({
+                'detail': (
+                    f'Your plan allows up to {OrganizationMembership.MAX_STAFF_PER_ORGANIZATION} '
+                    'staff members. Remove someone or contact support to add more.'
+                ),
+                'code': 'staff_limit_reached',
+            })
         invite, created = StaffInvitation.objects.get_or_create(
             organization=org,
             email=email,

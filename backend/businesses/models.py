@@ -345,6 +345,9 @@ class OrganizationMembership(models.Model):
         APPROVED = 'approved', 'Approved'
         BLOCKED = 'blocked', 'Blocked'
 
+    # Base Pro plan seat limit (owner is separate). Higher tiers can raise this later.
+    MAX_STAFF_PER_ORGANIZATION = 3
+
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='memberships'
     )
@@ -391,6 +394,19 @@ class OrganizationMembership(models.Model):
     @property
     def can_manage_schedule(self):
         return self.role in (self.Role.OWNER, self.Role.STAFF)
+
+    @classmethod
+    def staff_count(cls, organization) -> int:
+        return cls.objects.filter(
+            organization=organization,
+            role=cls.Role.STAFF,
+        ).count()
+
+    @classmethod
+    def staff_seats_used(cls, organization) -> int:
+        """Accepted staff plus pending invites (owner does not consume a seat)."""
+        pending = organization.staff_invitations.filter(accepted_at__isnull=True).count()
+        return cls.staff_count(organization) + pending
 
     def __str__(self):
         return f'{self.user_id} @ {self.organization.slug} ({self.role})'
