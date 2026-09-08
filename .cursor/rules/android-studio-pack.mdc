@@ -1,0 +1,25 @@
+---
+description: Android Studio zip packs must include Capacitor node_modules (never android-only)
+alwaysApply: true
+---
+
+# Android Studio download packs
+
+When packaging Android for Android Studio / Play AAB (zip download, handoff, “give me the file”):
+
+## Binding rules
+
+- **Never** zip only `frontend/android`. Capacitor plugins resolve via `../node_modules/...` in `capacitor.settings.gradle`. An android-only zip causes `No matching variant of project :capacitor-*` / `No variants exist`.
+- Always pack **`frontend/android` + the Capacitor plugin `node_modules`** as siblings under `frontend/`.
+- Tell the user to open **`frontend/android`** inside the unzipped pack (not a lone `android` folder).
+- Prefer the script: `frontend/scripts/pack-android-studio.sh` (bumps nothing; syncs if needed; publishes under a new filename to avoid CDN cache).
+- Signing: key alias `luminexa`; passwords live only in `_keystore-backup-DO-NOT-COMMIT/` — do not commit them.
+
+## Required node_modules (match `capacitor.settings.gradle`)
+
+- `@capacitor/android`, `app`, `filesystem`, `geolocation`, `push-notifications`, `share`, `splash-screen`, `status-bar`
+- `@capawesome/capacitor-android-edge-to-edge-support`
+- `capacitor-native-settings`
+
+Exclude `.gradle`, `**/build`, `local.properties`, `.idea` from the zip.
+---

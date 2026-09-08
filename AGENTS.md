@@ -31,6 +31,7 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 | Multi-location / branches | [`.cursor/rules/provider-locations.mdc`](.cursor/rules/provider-locations.mdc) + PRODUCT_RULES § Locations |
 | Test plan & high-value cases | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) |
 | Play Store / Android release | [`docs/PLAY_STORE_RELEASE.md`](docs/PLAY_STORE_RELEASE.md) |
+| Capacitor Android / AAB | [`docs/CAPACITOR_ANDROID.md`](docs/CAPACITOR_ANDROID.md) — Studio zip via `frontend/scripts/pack-android-studio.sh` (never android-only) |
 | App install (Play only, never PWA) | [`.cursor/rules/app-install.mdc`](.cursor/rules/app-install.mdc) + PRODUCT_RULES § App install |
 | App Store / iOS release (Mac required) | [`docs/CAPACITOR_IOS.md`](docs/CAPACITOR_IOS.md) |
 | iOS work split with a Mac collaborator | [`docs/IOS_MAC_COLLABORATOR.md`](docs/IOS_MAC_COLLABORATOR.md) |

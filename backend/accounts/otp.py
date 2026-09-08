@@ -20,8 +20,23 @@ def normalize_email(email: str) -> str:
     return (email or '').strip().lower()
 
 
+def play_store_demo_emails() -> set[str]:
+    """Emails that Play Console review accounts may use (password, never OTP)."""
+    emails = {
+        (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_EMAIL', '') or '').strip().lower(),
+        (getattr(settings, 'PLAY_STORE_DEMO_PROVIDER_EMAIL', '') or '').strip().lower(),
+    }
+    return {email for email in emails if email}
+
+
+def is_play_store_demo_user(user: User | None) -> bool:
+    if not user:
+        return False
+    return normalize_email(user.email) in play_store_demo_emails()
+
+
 def play_store_demo_otp(email: str) -> str | None:
-    """Return fixed Play Store OTP for the configured demo customer, else None."""
+    """Legacy fixed OTP — unused when demo emails use password login."""
     demo_email = (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_EMAIL', '') or '').strip().lower()
     demo_otp = (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_OTP', '') or '').strip()
     if not demo_email or not demo_otp:
@@ -32,9 +47,11 @@ def play_store_demo_otp(email: str) -> str | None:
 
 
 def user_uses_password_login(user: User) -> bool:
-    """Providers (and Django staff) keep email + password; customers use OTP."""
+    """Providers, Django staff, and Play Store demo accounts use email + password."""
     if not user:
         return False
+    if is_play_store_demo_user(user):
+        return True
     if user.is_staff or user.is_superuser:
         return True
     return OrganizationMembership.objects.filter(

@@ -274,11 +274,15 @@ QUICKBOOKS_ENABLED = bool(QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET)
 FIREBASE_CREDENTIALS_FILE = config('FIREBASE_CREDENTIALS_FILE', default='').strip()
 FIREBASE_CREDENTIALS_JSON = config('FIREBASE_CREDENTIALS_JSON', default='').strip()
 
-# Play Store review: one customer email may use a fixed OTP (no inbox needed).
-# Leave blank to disable. Never reuse these values for real users.
+# Play Console review accounts: password login, no OTP, never Django admin.
+# Create/reset with: python manage.py ensure_play_store_demo_accounts --password '...'
 PLAY_STORE_DEMO_CUSTOMER_EMAIL = config(
-    'PLAY_STORE_DEMO_CUSTOMER_EMAIL', default=''
+    'PLAY_STORE_DEMO_CUSTOMER_EMAIL', default='demo.customer@luminex-a.com'
 ).strip().lower()
+PLAY_STORE_DEMO_PROVIDER_EMAIL = config(
+    'PLAY_STORE_DEMO_PROVIDER_EMAIL', default='demo.serviceprovider@luminex-a.com'
+).strip().lower()
+# Legacy; unused when the emails above use password login.
 PLAY_STORE_DEMO_CUSTOMER_OTP = config(
     'PLAY_STORE_DEMO_CUSTOMER_OTP', default=''
 ).strip()

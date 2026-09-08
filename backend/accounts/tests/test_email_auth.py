@@ -286,33 +286,77 @@ class EmailVerificationTests(TestCase):
 
     @override_settings(
         PLAY_STORE_DEMO_CUSTOMER_EMAIL='demo.customer@luminex-a.com',
-        PLAY_STORE_DEMO_CUSTOMER_OTP='246810',
+        PLAY_STORE_DEMO_PROVIDER_EMAIL='demo.serviceprovider@luminex-a.com',
+        PLAY_STORE_DEMO_CUSTOMER_OTP='',
     )
-    def test_play_store_demo_customer_fixed_otp(self):
-        User.objects.create_user(
-            email='demo.customer@luminex-a.com',
-            full_name='Demo Customer',
-            password=None,
-            email_verified=True,
-        )
-        start = self.client.post(
-            '/accounts/api/login/start/',
-            {'email': 'demo.customer@luminex-a.com'},
-            format='json',
-            HTTP_HOST='localhost',
-        )
-        self.assertEqual(start.status_code, 200, start.data)
-        self.assertEqual(start.data['auth_method'], 'otp')
+    def test_play_store_demo_accounts_use_password_not_otp(self):
+        from django.core.management import call_command
 
-        verify = self.client.post(
-            '/accounts/api/login/otp/verify/',
-            {'email': 'demo.customer@luminex-a.com', 'code': '246810'},
-            format='json',
-            HTTP_HOST='localhost',
+        call_command('ensure_play_store_demo_accounts', password='PlayDemo99')
+        customer = User.objects.get(email='demo.customer@luminex-a.com')
+        provider = User.objects.get(email='demo.serviceprovider@luminex-a.com')
+        self.assertFalse(customer.is_staff)
+        self.assertFalse(customer.is_superuser)
+        self.assertFalse(provider.is_staff)
+        self.assertFalse(provider.is_superuser)
+        self.assertTrue(customer.email_verified)
+        self.assertTrue(provider.email_verified)
+
+        for email in (customer.email, provider.email):
+            start = self.client.post(
+                '/accounts/api/login/start/',
+                {'email': email},
+                format='json',
+                HTTP_HOST='localhost',
+            )
+            self.assertEqual(start.status_code, 200, start.data)
+            self.assertEqual(start.data['auth_method'], 'password')
+            self.assertEqual(len(mail.outbox), 0)
+
+            otp = self.client.post(
+                '/accounts/api/login/otp/verify/',
+                {'email': email, 'code': '246810'},
+                format='json',
+                HTTP_HOST='localhost',
+            )
+            self.assertEqual(otp.status_code, 400, otp.data)
+
+            login_ok = self.client.post(
+                '/accounts/api/login/',
+                {'email': email, 'password': 'PlayDemo99'},
+                format='json',
+                HTTP_HOST='localhost',
+            )
+            self.assertEqual(login_ok.status_code, 200, login_ok.data)
+            from django.conf import settings as dj_settings
+            self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, login_ok.cookies)
+            self.assertFalse(login_ok.data['user']['can_access_django_admin'])
+            self.client.cookies.clear()
+
+        self.assertFalse(
+            OrganizationMembership.objects.filter(
+                user=customer,
+                role__in=(
+                    OrganizationMembership.Role.OWNER,
+                    OrganizationMembership.Role.STAFF,
+                ),
+            ).exists()
         )
-        self.assertEqual(verify.status_code, 200, verify.data)
-        from django.conf import settings as dj_settings
-        self.assertIn(dj_settings.AUTH_TOKEN_COOKIE_NAME, verify.cookies)
+        self.assertTrue(
+            OrganizationMembership.objects.filter(
+                user=provider,
+                organization__slug='play-store-demo',
+                role=OrganizationMembership.Role.OWNER,
+            ).exists()
+        )
+
+        customer.is_staff = True
+        customer.is_superuser = True
+        customer.save(update_fields=['is_staff', 'is_superuser'])
+        call_command('ensure_play_store_demo_accounts', password='PlayDemo99')
+        customer.refresh_from_db()
+        self.assertFalse(customer.is_staff)
+        self.assertFalse(customer.is_superuser)
 
 
 class SessionAPITests(TestCase):

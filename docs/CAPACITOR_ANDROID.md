@@ -45,7 +45,9 @@ credentials were found but **rejected** — check the logs for
 
 ## Build the Play bundle (.aab)
 
-This machine needs **JDK 17** and **Android Studio** (SDK).
+This machine needs **JDK 21** and **Android Studio** (SDK).
+
+### Preferred (on this Linux host)
 
 ```bash
 cd /home/ajil/luminexa/frontend
@@ -53,11 +55,25 @@ npx cap sync android
 npx cap open android
 ```
 
+### Hand off a zip to another PC (Windows Android Studio)
+
+**Never zip only `android/`.** Plugins resolve from `frontend/node_modules` via
+`capacitor.settings.gradle`. An android-only zip fails with
+`No matching variant of project :capacitor-*`.
+
+```bash
+# from repo root — creates a cache-busted download name
+./frontend/scripts/pack-android-studio.sh v7
+```
+
+Then open **`frontend/android`** inside the unzipped pack. See also
+`.cursor/rules/android-studio-pack.mdc`.
+
 In Android Studio:
 
 1. **Build → Generate Signed App Bundle / APK**
-2. Sign with the **same upload keystore** you used for the TWA
-3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **6** / 1.1.3)
+2. Sign with the **same upload keystore** you used for the TWA (alias `luminexa`)
+3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **7** / 1.1.4)
 
 Do not upload an APK if Play asks for an AAB.
 

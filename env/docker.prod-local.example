@@ -73,9 +73,10 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # EMAIL_USE_TLS=True
 # DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
-# Play Store review — customer signs in with email + this fixed OTP (no inbox).
-# PLAY_STORE_DEMO_CUSTOMER_EMAIL=demo.customer@luminex-a.com
-# PLAY_STORE_DEMO_CUSTOMER_OTP=246810
+# Play Console review accounts (password login, no OTP, no Django admin).
+# Create/reset: docker compose exec web python manage.py ensure_play_store_demo_accounts --password '...'
+PLAY_STORE_DEMO_CUSTOMER_EMAIL=demo.customer@luminex-a.com
+PLAY_STORE_DEMO_PROVIDER_EMAIL=demo.serviceprovider@luminex-a.com
 
 # Capacitor / FCM outside-app push (optional until google-services.json is set up)
 # With neither set, the API still stores device tokens but drops every push
