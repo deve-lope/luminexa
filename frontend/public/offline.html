@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f766e" />
+    <title>Luminexa — No internet</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg0: #f1f5f9;
+        --bg1: #f0fdfa;
+        --ink: #0f172a;
+        --muted: #475569;
+        --teal: #115e59;
+        --teal-deep: #134e4a;
+        --card: #ffffff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family:
+          'Segoe UI',
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background:
+          radial-gradient(1200px 600px at 50% -10%, var(--bg1), transparent 60%),
+          linear-gradient(180deg, var(--bg0), #e2e8f0);
+        color: var(--ink);
+      }
+      body {
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(24px, env(safe-area-inset-top))
+          max(24px, env(safe-area-inset-right))
+          max(24px, env(safe-area-inset-bottom))
+          max(24px, env(safe-area-inset-left));
+      }
+      main {
+        width: min(100%, 26rem);
+        background: var(--card);
+        border-radius: 1.5rem;
+        padding: 2rem 1.5rem 1.5rem;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        text-align: center;
+      }
+      .brand {
+        margin: 0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--teal);
+      }
+      .icon {
+        width: 3.5rem;
+        height: 3.5rem;
+        margin: 1.25rem auto 0;
+        border-radius: 1rem;
+        display: grid;
+        place-items: center;
+        background: #f0fdfa;
+        color: var(--teal);
+      }
+      h1 {
+        margin: 1rem 0 0;
+        font-size: 1.65rem;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0.75rem 0 0;
+        font-size: 1rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      button {
+        margin-top: 1.75rem;
+        width: 100%;
+        min-height: 48px;
+        border: 0;
+        border-radius: 1rem;
+        background: var(--teal);
+        color: #fff;
+        font-size: 0.95rem;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button:active {
+        background: var(--teal-deep);
+      }
+      .hint {
+        margin-top: 0.85rem;
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">Luminexa</p>
+      <div class="icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M2 8.5c2.5-3 5.5-4.5 10-4.5s7.5 1.5 10 4.5" stroke-linecap="round" />
+          <path d="M5 12c1.8-2 4-3 7-3s5.2 1 7 3" stroke-linecap="round" />
+          <path d="M8.5 15.5c1-.9 2.1-1.4 3.5-1.4s2.5.5 3.5 1.4" stroke-linecap="round" />
+          <circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none" />
+          <path d="M4 4l16 16" stroke-linecap="round" />
+        </svg>
+      </div>
+      <h1>No internet connection</h1>
+      <p>
+        Luminexa needs a network connection to load. Check Wi‑Fi or cellular data, then try again.
+      </p>
+      <button type="button" id="retry">Try again</button>
+      <p class="hint" id="status">Waiting for a connection…</p>
+    </main>
+    <script>
+      (function () {
+        var APP_URL = 'https://app.luminex-a.com/';
+        var retryBtn = document.getElementById('retry');
+        var statusEl = document.getElementById('status');
+        var busy = false;
+
+        function setStatus(text) {
+          if (statusEl) statusEl.textContent = text;
+        }
+
+        function goOnline() {
+          if (busy) return;
+          busy = true;
+          setStatus('Connecting…');
+          retryBtn.disabled = true;
+          retryBtn.textContent = 'Connecting…';
+          // Navigate back to the live app (reload alone can stay on this local page).
+          window.location.replace(APP_URL);
+        }
+
+        retryBtn.addEventListener('click', goOnline);
+
+        window.addEventListener('online', function () {
+          setStatus('Connection restored — opening Luminexa…');
+          goOnline();
+        });
+
+        if (navigator.onLine === false) {
+          setStatus('You appear to be offline.');
+        } else {
+          setStatus('Tap Try again when you are back online.');
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { useApiHealth } from '../contexts/ApiHealthContext';
 
+function isDeviceOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export default function MaintenancePage() {
   const { retry } = useApiHealth();
   const [busy, setBusy] = useState(false);
+  const offline = isDeviceOffline();
 
   const onRetry = async () => {
     setBusy(true);
@@ -19,14 +24,15 @@ export default function MaintenancePage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gradient-to-b from-slate-100 via-teal-50/40 to-slate-100 px-6 text-center">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md rounded-3xl bg-white/95 p-6 shadow-sm ring-1 ring-slate-200/70 sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-800">Luminexa</p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">
-          Can&apos;t connect right now
+          {offline ? 'No internet connection' : "Can't connect right now"}
         </h1>
         <p className="mt-3 text-base leading-relaxed text-slate-600">
-          The app needs a connection to Luminexa. This is usually a slow start or a brief network
-          drop — not a planned outage. Check your signal and try again.
+          {offline
+            ? 'Check Wi‑Fi or cellular data, then try again. Luminexa needs a network connection to load bookings and messages.'
+            : 'The app needs a connection to Luminexa. This is usually a slow start or a brief network drop — not a planned outage. Check your signal and try again.'}
         </p>
         <button
           type="button"
