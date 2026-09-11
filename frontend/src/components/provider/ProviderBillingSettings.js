@@ -228,7 +228,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
     subDetail = `Renews ${endDate}${daysLeft != null ? ` · ${daysLeft} days left` : ''}.`;
   } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
     subDetail = storeShell
-      ? 'Payment issue on this plan. Subscription payments are not available in the store app.'
+      ? 'Payment issue on this plan. Visit app.luminex-a.com in Safari or Chrome to update billing.'
       : 'Payment failed. Update your card to keep Pro.';
   } else if (sub.trial_days > 0 && !storeShell) {
     subDetail = `${sub.trial_days}-day free trial — no card needed to start. Then $9.99 CAD / month.`;
@@ -382,7 +382,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
 
       {storeShell ? (
         <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
-          Plan status is shown here. Subscription payments are not available in the store app.
+          Plan status is shown here. To manage your Pro subscription, visit app.luminex-a.com in
+          Safari or Chrome (store apps cannot take subscription payments).
         </p>
       ) : (
         <>

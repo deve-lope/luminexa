@@ -45,8 +45,9 @@ export default function ProviderSubscribePage() {
         </p>
         {storeShell ? (
           <p className="mt-2 text-sm text-slate-600">
-            Store apps cannot take Pro subscription payments. Plan status and customer payouts stay
-            available here.
+            Store apps cannot take Pro subscription payments. To start, renew, or manage your
+            subscription, visit app.luminex-a.com in Safari or Chrome, then return here. Plan status
+            and customer payouts stay available in the app.
           </p>
         ) : (
           <p className="mt-2 text-sm text-slate-600">

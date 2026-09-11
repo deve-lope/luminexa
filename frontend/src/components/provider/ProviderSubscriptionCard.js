@@ -83,7 +83,7 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
       </h2>
       <p className="mt-1 text-sm text-slate-600">
         {storeShell
-          ? 'See Pro status and set up customer card payouts. Subscription payments are not available in the store app.'
+          ? 'See Pro status and set up customer card payouts. To manage your subscription, visit app.luminex-a.com in Safari or Chrome.'
           : 'Luminexa Pro for this business. Billing, promo codes, and payouts are on the next screen.'}
       </p>
 
