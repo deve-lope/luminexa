@@ -11,6 +11,9 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://app.luminex-a.com',
     androidScheme: 'https',
+    // Bundled local page when the remote SPA cannot load (no network / DNS failure).
+    // Copied from public/offline.html into webDir on build. Needs a native rebuild.
+    errorPath: 'offline.html',
     allowNavigation: ['app.luminex-a.com', '*.luminex-a.com', '*.stripe.com'],
   },
   android: {

@@ -104,7 +104,33 @@ export function ApiHealthProvider({ children }) {
     });
   }, [beginConnecting, clearMaintenance]);
 
+  // Browser / WebView offline signal — jump straight to the can't-connect screen.
+  useEffect(() => {
+    const onOffline = () => {
+      clearGraceTimer();
+      setStatus('down');
+    };
+    const onOnline = () => {
+      if (statusRef.current === 'ok') return;
+      // Let the retry/poll path verify the API is reachable again.
+    };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      onOffline();
+    }
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [clearGraceTimer, setStatus]);
+
   const retry = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      clearGraceTimer();
+      setStatus('down');
+      return false;
+    }
     try {
       const res = await api.get('/accounts/api/session/', {
         timeout: 8000,
@@ -124,7 +150,7 @@ export function ApiHealthProvider({ children }) {
       clearMaintenance();
       return true;
     }
-  }, [beginConnecting, clearMaintenance]);
+  }, [beginConnecting, clearGraceTimer, clearMaintenance, setStatus]);
 
   useEffect(() => {
     if (connectionStatus === 'ok') return undefined;
