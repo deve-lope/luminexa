@@ -36,7 +36,7 @@ export default function ProviderSubscribePage() {
     <div className="mx-auto max-w-lg space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">
-          {storeShell ? 'Luminexa Pro required' : 'Start your Luminexa Pro trial'}
+          {storeShell ? 'Luminexa Pro required' : 'Luminexa Pro'}
         </h1>
         <p className="mt-2 text-sm text-slate-600">
           {activeOrg?.organization_name || 'Your business'} needs an active Pro plan to use the
@@ -45,19 +45,20 @@ export default function ProviderSubscribePage() {
         </p>
         {storeShell ? (
           <p className="mt-2 text-sm text-slate-600">
-            Plan status is below. For full billing details and to start or renew Pro, open Luminexa
-            in a web browser (app.luminex-a.com).
+            Store apps cannot take Pro subscription payments. To start, renew, or manage your
+            subscription, visit app.luminex-a.com in Safari or Chrome, then return here. Plan status
+            and customer payouts stay available in the app.
           </p>
         ) : (
           <p className="mt-2 text-sm text-slate-600">
-            Start with a free trial — no card required. Add a payment method later before the trial
-            ends if you want to keep Pro.
+            New accounts get a free trial with no card required. If you already used a trial on this
+            email, subscribe to continue with Pro.
           </p>
         )}
       </div>
       {!isOwner && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Only the business owner can start the trial. Ask them to subscribe, then refresh.
+          Only the business owner can manage the plan. Ask them to subscribe, then refresh.
         </p>
       )}
       <ProviderBillingSettings

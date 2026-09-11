@@ -79,11 +79,11 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold uppercase text-slate-500">
-        {storeShell ? 'Subscription' : 'Manage subscription'}
+        {storeShell ? 'Billing & payouts' : 'Manage subscription'}
       </h2>
       <p className="mt-1 text-sm text-slate-600">
         {storeShell
-          ? 'Luminexa Pro status for this business. Full billing details are on the website.'
+          ? 'See Pro status and set up customer card payouts. To manage your subscription, visit app.luminex-a.com in Safari or Chrome.'
           : 'Luminexa Pro for this business. Billing, promo codes, and payouts are on the next screen.'}
       </p>
 
@@ -105,7 +105,7 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
         to={providerBilling(orgSlug)}
         className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
       >
-        <span>{storeShell ? 'View billing status' : 'Manage billing'}</span>
+        <span>{storeShell ? 'Billing & customer payouts' : 'Manage billing'}</span>
         <span className="text-slate-400" aria-hidden>
           →
         </span>

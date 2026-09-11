@@ -6,7 +6,6 @@ import { isNativeApp } from '../../native/capacitorNative';
 import { subscriptionDaysRemaining } from '../../utils/providerSubscription';
 
 /** Play/App Store: Pro SaaS must not open Stripe Checkout/Portal from the store shell. */
-const BILLING_WEB_HOST = 'app.luminex-a.com';
 
 function statusCopy(status) {
   if (status === 'trialing') return 'Free trial';
@@ -132,6 +131,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
       const res = await fn();
       const url = res.data?.url || res.data?.checkout_url || res.data?.portal_url;
       if (!url) throw new Error('No Stripe URL returned');
+      // After await, iOS blocks window.open (gesture lost). Main-frame navigation
+      // still works — Connect stays in the WebView (*.stripe.com allowNavigation).
       window.location.href = url;
     } catch (e) {
       setError(parseApiError(e) || 'Stripe request failed.');
@@ -227,10 +228,12 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
     subDetail = `Renews ${endDate}${daysLeft != null ? ` · ${daysLeft} days left` : ''}.`;
   } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
     subDetail = storeShell
-      ? 'Payment issue on this plan. Check billing details in a web browser.'
+      ? 'Payment issue on this plan. Visit app.luminex-a.com in Safari or Chrome to update billing.'
       : 'Payment failed. Update your card to keep Pro.';
   } else if (sub.trial_days > 0 && !storeShell) {
     subDetail = `${sub.trial_days}-day free trial — no card needed to start. Then $9.99 CAD / month.`;
+  } else if (sub.trial_used && !storeShell) {
+    subDetail = 'Free trial already used on this account. Subscribe to continue with Pro.';
   }
 
   const runInstantPayout = async () => {
@@ -274,6 +277,218 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
     }
   };
 
+  const connectSection = (
+    <section className="lx-card space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            Get paid
+          </p>
+          <h2 className="mt-1 text-lg font-bold text-slate-900">Customer card payments</h2>
+          <p className="mt-0.5 text-sm text-slate-600">
+            Customers pay your invoices. You receive the money. Luminexa takes {feeLabel}%;
+            Stripe’s card fee is separate.
+          </p>
+        </div>
+        <StatusPill tone={connectTone(connect)}>{connectLabel(connect)}</StatusPill>
+      </div>
+
+      <p className="text-sm text-slate-600">
+        {connect.can_accept_cards
+          ? 'Customers can pay invoices with a card, Apple Pay, or Google Pay.'
+          : connect.details_submitted
+            ? 'Stripe is reviewing your payout account, or more details are needed.'
+            : 'Set up Stripe Express once so invoice payments go to your bank.'}
+      </p>
+
+      {isOwner && configured && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              redirectTo(() =>
+                jobsAPI.startConnectOnboarding(orgSlug, {
+                  return_path: stripeReturnPath,
+                })
+              )
+            }
+            className={
+              connect.can_accept_cards
+                ? 'lx-btn-secondary min-h-[48px]'
+                : 'lx-btn-primary min-h-[48px]'
+            }
+          >
+            {busy
+              ? 'Opening Stripe…'
+              : connect.account_id
+                ? 'Continue payout setup'
+                : 'Set up payouts'}
+          </button>
+          {connect.details_submitted && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => redirectTo(() => jobsAPI.openConnectDashboard(orgSlug))}
+              className="lx-btn-secondary min-h-[48px]"
+            >
+              Stripe dashboard
+            </button>
+          )}
+          {connect.payouts_enabled && (
+            <button
+              type="button"
+              disabled={busy || !payouts.instant_supported}
+              onClick={runInstantPayout}
+              className="lx-btn-secondary min-h-[48px]"
+              title={payouts.detail || ''}
+            >
+              {payouts.instant_supported
+                ? `Cash out now ($${instantDollars} ${currency})`
+                : 'Instant payout unavailable'}
+            </button>
+          )}
+        </div>
+      )}
+      {connect.payouts_enabled && payouts.detail && (
+        <p className="text-xs text-slate-500">{payouts.detail}</p>
+      )}
+    </section>
+  );
+
+  const proSection = (
+    <section className="lx-card space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            Your plan
+          </p>
+          <h2 className="mt-1 text-lg font-bold text-slate-900">Luminexa Pro</h2>
+          <p className="mt-0.5 text-sm text-slate-600">{planLabel} · $9.99 CAD / month</p>
+        </div>
+        <StatusPill tone={subTone(sub.status, sub.active)}>
+          {statusCopy(sub.status)}
+        </StatusPill>
+      </div>
+
+      <p className="text-sm text-slate-600">{subDetail}</p>
+
+      <ul className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+        <li className="rounded-xl bg-slate-50 px-3 py-2">Provider dashboard & bookings</li>
+        <li className="rounded-xl bg-slate-50 px-3 py-2">Invoices & customer card pay</li>
+        <li className="rounded-xl bg-slate-50 px-3 py-2">Analytics & job costing</li>
+        <li className="rounded-xl bg-slate-50 px-3 py-2">Customers use Luminexa free</li>
+      </ul>
+
+      {storeShell ? (
+        <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
+          Plan status is shown here. To manage your Pro subscription, visit app.luminex-a.com in
+          Safari or Chrome (store apps cannot take subscription payments).
+        </p>
+      ) : (
+        <>
+          {isOwner && configured && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {canStartMonthly && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    redirectTo(() =>
+                      jobsAPI.startSubscription(orgSlug, {
+                        plan: 'pro_monthly',
+                        success_path: subscribeSuccessPath,
+                        cancel_path: subscribeSuccessPath,
+                      })
+                    )
+                  }
+                  className="lx-btn-primary min-h-[48px] flex-1 sm:flex-none sm:px-6"
+                >
+                  {busy
+                    ? 'Opening Stripe…'
+                    : sub.source === 'promo'
+                      ? 'Upgrade to paid monthly'
+                      : sub.trial_days > 0
+                        ? 'Start free trial'
+                        : 'Subscribe monthly'}
+                </button>
+              )}
+              {canStartYearly && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    redirectTo(() =>
+                      jobsAPI.startSubscription(orgSlug, {
+                        plan: 'pro_yearly',
+                        success_path: subscribeSuccessPath,
+                        cancel_path: subscribeSuccessPath,
+                      })
+                    )
+                  }
+                  className="lx-btn-secondary min-h-[48px]"
+                >
+                  {sub.source === 'promo' ? 'Upgrade to paid yearly' : 'Subscribe yearly'}
+                </button>
+              )}
+              {sub.has_customer && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    redirectTo(() =>
+                      jobsAPI.openBillingPortal(orgSlug, {
+                        return_path: stripeReturnPath,
+                      })
+                    )
+                  }
+                  className="lx-btn-secondary min-h-[48px]"
+                >
+                  Manage card & invoices
+                </button>
+              )}
+            </div>
+          )}
+
+          {!isOwner && (
+            <p className="text-sm text-amber-800">Only the business owner can change the plan.</p>
+          )}
+
+          {isOwner &&
+            configured &&
+            !sub.prices_configured?.pro_monthly &&
+            !sub.prices_configured?.pro_yearly && (
+              <p className="text-sm text-amber-800">Subscription price is not configured yet.</p>
+            )}
+
+          {isOwner && (
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold text-slate-700">Have a promo code?</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  placeholder="e.g. LAUNCH4W"
+                  autoCapitalize="characters"
+                  className="min-h-[44px] min-w-[10rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={promoBusy || busy}
+                  onClick={applyPromo}
+                  className="lx-btn-secondary min-h-[44px]"
+                >
+                  {promoBusy ? 'Applying…' : 'Apply code'}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+
   return (
     <div className="space-y-4">
       {!configured && (
@@ -293,217 +508,11 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
         </p>
       )}
 
-      {/* 1. Luminexa Pro */}
-      <section className="lx-card space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-              Your plan
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-slate-900">Luminexa Pro</h2>
-            <p className="mt-0.5 text-sm text-slate-600">{planLabel} · $9.99 CAD / month</p>
-          </div>
-          <StatusPill tone={subTone(sub.status, sub.active)}>
-            {statusCopy(sub.status)}
-          </StatusPill>
-        </div>
+      {/* On store apps, show customer payouts first so they are easy to find. */}
+      {storeShell ? connectSection : null}
+      {proSection}
+      {!storeShell ? connectSection : null}
 
-        <p className="text-sm text-slate-600">{subDetail}</p>
-
-        <ul className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-          <li className="rounded-xl bg-slate-50 px-3 py-2">Provider dashboard & bookings</li>
-          <li className="rounded-xl bg-slate-50 px-3 py-2">Invoices & customer card pay</li>
-          <li className="rounded-xl bg-slate-50 px-3 py-2">Analytics & job costing</li>
-          <li className="rounded-xl bg-slate-50 px-3 py-2">Customers use Luminexa free</li>
-        </ul>
-
-        {storeShell ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
-            Plan status is shown here. For full billing details, renewals, and card management,
-            open Luminexa in a web browser ({BILLING_WEB_HOST}).
-          </p>
-        ) : (
-          <>
-            {isOwner && configured && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {canStartMonthly && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      redirectTo(() =>
-                        jobsAPI.startSubscription(orgSlug, {
-                          plan: 'pro_monthly',
-                          success_path: subscribeSuccessPath,
-                          cancel_path: subscribeSuccessPath,
-                        })
-                      )
-                    }
-                    className="lx-btn-primary min-h-[48px] flex-1 sm:flex-none sm:px-6"
-                  >
-                    {busy
-                      ? 'Opening Stripe…'
-                      : sub.source === 'promo'
-                        ? 'Upgrade to paid monthly'
-                        : sub.trial_days > 0
-                          ? 'Start free trial'
-                          : 'Subscribe monthly'}
-                  </button>
-                )}
-                {canStartYearly && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      redirectTo(() =>
-                        jobsAPI.startSubscription(orgSlug, {
-                          plan: 'pro_yearly',
-                          success_path: subscribeSuccessPath,
-                          cancel_path: subscribeSuccessPath,
-                        })
-                      )
-                    }
-                    className="lx-btn-secondary min-h-[48px]"
-                  >
-                    {sub.source === 'promo' ? 'Upgrade to paid yearly' : 'Subscribe yearly'}
-                  </button>
-                )}
-                {sub.has_customer && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      redirectTo(() =>
-                        jobsAPI.openBillingPortal(orgSlug, {
-                          return_path: stripeReturnPath,
-                        })
-                      )
-                    }
-                    className="lx-btn-secondary min-h-[48px]"
-                  >
-                    Manage card & invoices
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!isOwner && (
-              <p className="text-sm text-amber-800">Only the business owner can change the plan.</p>
-            )}
-
-            {isOwner &&
-              configured &&
-              !sub.prices_configured?.pro_monthly &&
-              !sub.prices_configured?.pro_yearly && (
-                <p className="text-sm text-amber-800">Subscription price is not configured yet.</p>
-              )}
-
-            {isOwner && (
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-xs font-semibold text-slate-700">Have a promo code?</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="e.g. LAUNCH4W"
-                    autoCapitalize="characters"
-                    className="min-h-[44px] min-w-[10rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  />
-                  <button
-                    type="button"
-                    disabled={promoBusy || busy}
-                    onClick={applyPromo}
-                    className="lx-btn-secondary min-h-[44px]"
-                  >
-                    {promoBusy ? 'Applying…' : 'Apply code'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* 2. Customer card payouts */}
-      <section className="lx-card space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-              Get paid
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-slate-900">Customer card payments</h2>
-            <p className="mt-0.5 text-sm text-slate-600">
-              Customers pay your invoices. You receive the money. Luminexa takes {feeLabel}%;
-              Stripe’s card fee is separate.
-            </p>
-          </div>
-          <StatusPill tone={connectTone(connect)}>{connectLabel(connect)}</StatusPill>
-        </div>
-
-        <p className="text-sm text-slate-600">
-          {connect.can_accept_cards
-            ? 'Customers can pay invoices with a card, Apple Pay, or Google Pay.'
-            : connect.details_submitted
-              ? 'Stripe is reviewing your payout account, or more details are needed.'
-              : 'Set up Stripe Express once so invoice payments go to your bank.'}
-        </p>
-
-        {isOwner && configured && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                redirectTo(() =>
-                  jobsAPI.startConnectOnboarding(orgSlug, {
-                    return_path: stripeReturnPath,
-                  })
-                )
-              }
-              className={
-                connect.can_accept_cards
-                  ? 'lx-btn-secondary min-h-[48px]'
-                  : 'lx-btn-primary min-h-[48px]'
-              }
-            >
-              {busy
-                ? 'Opening Stripe…'
-                : connect.account_id
-                  ? 'Continue payout setup'
-                  : 'Set up payouts'}
-            </button>
-            {connect.details_submitted && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => redirectTo(() => jobsAPI.openConnectDashboard(orgSlug))}
-                className="lx-btn-secondary min-h-[48px]"
-              >
-                Stripe dashboard
-              </button>
-            )}
-            {connect.payouts_enabled && (
-              <button
-                type="button"
-                disabled={busy || !payouts.instant_supported}
-                onClick={runInstantPayout}
-                className="lx-btn-secondary min-h-[48px]"
-                title={payouts.detail || ''}
-              >
-                {payouts.instant_supported
-                  ? `Cash out now ($${instantDollars} ${currency})`
-                  : 'Instant payout unavailable'}
-              </button>
-            )}
-          </div>
-        )}
-        {connect.payouts_enabled && payouts.detail && (
-          <p className="text-xs text-slate-500">{payouts.detail}</p>
-        )}
-      </section>
-
-      {/* 3. QuickBooks */}
       <section className="lx-card space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
