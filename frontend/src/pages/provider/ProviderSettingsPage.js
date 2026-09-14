@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
+import ProviderReferralSettings from '../../components/provider/ProviderReferralSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import ProviderWebsiteSettings from '../../components/provider/ProviderWebsiteSettings';
 import SettingsSectionOverlay from '../../components/provider/SettingsSectionOverlay';
@@ -44,6 +45,11 @@ const SETTINGS_SECTIONS = [
     id: 'books',
     title: 'Business books',
     hint: 'Invoice reminders and labor rate',
+  },
+  {
+    id: 'referrals',
+    title: 'Referral rewards',
+    hint: 'Coupon credit when customers refer friends',
   },
   {
     id: 'locations',
@@ -393,6 +399,10 @@ export default function ProviderSettingsPage() {
 
         {openSection === 'books' && (
           <ProviderBooksSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
+        )}
+
+        {openSection === 'referrals' && (
+          <ProviderReferralSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
         )}
 
         {openSection === 'locations' && (

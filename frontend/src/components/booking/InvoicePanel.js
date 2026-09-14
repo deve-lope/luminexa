@@ -106,10 +106,12 @@ function InvoiceBreakdown({ invoice, providerName }) {
             <dt className="text-slate-500">Subtotal</dt>
             <dd className="font-medium">{formatMoney(subtotal, currency)}</dd>
           </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-slate-500">Discount</dt>
-            <dd className="font-medium">{formatMoney(discount, currency)}</dd>
-          </div>
+          {Number(discount) > 0 ? (
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">Referral credit</dt>
+              <dd className="font-medium">−{formatMoney(discount, currency)}</dd>
+            </div>
+          ) : null}
           {taxLines.length > 0
             ? taxLines.map((line, idx) => {
                 const code = (line.code || '').trim() || (line.name || 'Tax').split('(')[0].trim();

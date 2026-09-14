@@ -792,6 +792,8 @@ def complete_booking(booking, *, staff_user):
     if booking.availability_slot_id:
         # Completed jobs free a seat so remaining capacity can be booked again.
         release_slot(_lock_slot(booking.availability_slot))
+    from .referral_services import qualify_referral_on_completion
+    qualify_referral_on_completion(booking=booking)
     return booking
 
 

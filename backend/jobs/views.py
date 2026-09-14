@@ -140,7 +140,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         )
 
     def get_object(self):
-        if getattr(self, 'action', None) in ('connect', 'booking_context', 'service_inquiry'):
+        if getattr(self, 'action', None) in ('connect', 'booking_context', 'service_inquiry', 'referral'):
             org = resolve_organization(self.kwargs.get('slug'))
             if not org or not org.is_active:
                 raise ValidationError({'detail': 'Organization not found.'})
@@ -173,6 +173,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'default_labor_rate',
             'invoice_followup_enabled',
             'invoice_followup_days',
+            'referral_rewards_enabled',
+            'referral_reward_amount',
+            'referral_max_earnings_per_referrer',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:
@@ -188,6 +191,19 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can delete the organization.')
         instance.delete()
+
+    @action(detail=True, methods=['get'], url_path='referral')
+    def referral(self, request, slug=None):
+        """Referral program status + the caller's personal code/credit for this org."""
+        from .referral_services import referral_summary_for_user
+
+        org = self.get_object()
+        # Staff can read settings; customers/public need active program visibility.
+        if not is_org_staff(request.user, org):
+            # Allow any authenticated user to fetch their code when program is on.
+            pass
+        data = referral_summary_for_user(organization=org, user=request.user)
+        return Response(data)
 
     @action(detail=True, methods=['get', 'post'], url_path='locations')
     def locations(self, request, slug=None):
@@ -1299,6 +1315,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             service_address=ser.validated_data.get('service_address', '') or '',
             quote_answers=ser.validated_data.get('quote_answers'),
         )
+        referral_code = (request.data.get('referral_code') or '').strip()
+        if referral_code:
+            from .referral_services import attach_referral_attribution
+            attach_referral_attribution(booking=booking, code=referral_code)
         log_booking_event(
             booking,
             action=BookingStatusEvent.Action.CREATED,
@@ -1350,6 +1370,11 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'quote_answers': row.get('quote_answers'),
                 })
             bookings = customer_request_slots_batch(items=items, customer=request.user)
+
+        referral_code = (request.data.get('referral_code') or '').strip()
+        if referral_code and bookings:
+            from .referral_services import attach_referral_attribution
+            attach_referral_attribution(booking=bookings[0], code=referral_code)
 
         from .notifications import notify_customer_booking_created
 

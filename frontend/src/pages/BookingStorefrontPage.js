@@ -28,6 +28,8 @@ import { isShopService, serviceRequiresQuote } from '../utils/serviceDisplay';
 import { getStorefrontCache, setStorefrontCache } from '../utils/storefrontCache';
 import { scrollToHashTarget } from '../components/ScrollToTop';
 import VisitWebsiteButton from '../components/provider/VisitWebsiteButton';
+import CustomerReferralCard from '../components/customer/CustomerReferralCard';
+import { captureReferralFromSearch } from '../utils/referralStorage';
 
 /**
  * Public booking profile at /book/:slug
@@ -42,7 +44,7 @@ export default function BookingStorefrontPage() {
   const isCustomerProviderRoute = location.pathname.startsWith('/customer/provider/');
   const isOwnerView = variant === 'owner';
   const isGuest = variant === 'guest';
-  const { memberships, refreshSession } = useAuth();
+  const { memberships, refreshSession, user } = useAuth();
   const staffOfOrg = isOrgStaff(memberships, businessSlug);
   const [data, setData] = useState(() => getStorefrontCache(providerKey));
   const [loading, setLoading] = useState(() => !getStorefrontCache(providerKey));
@@ -58,6 +60,15 @@ export default function BookingStorefrontPage() {
   const connection = customerConnectionState(bookingPolicy, membership);
   const mustConnect = !isOwnerView && needsExplicitConnect(bookingPolicy) && connection === 'disconnected';
   const canPickService = !isOwnerView && !mustConnect;
+
+  useEffect(() => {
+    const org = data?.organization;
+    captureReferralFromSearch(location.search, [
+      businessSlug,
+      org?.slug,
+      org?.public_ref,
+    ]);
+  }, [location.search, businessSlug, data?.organization]);
 
   const load = useCallback((opts = {}) => {
     if (!businessSlug) return;
@@ -361,6 +372,16 @@ export default function BookingStorefrontPage() {
                 <p className="mt-2 text-xs text-slate-500">{policyLabel(bookingPolicy)}</p>
               )}
             </header>
+
+            {!isOwnerView && organization.referral_rewards_enabled ? (
+              <CustomerReferralCard
+                orgSlug={organization.slug || adminOrgSlug}
+                orgPublicRef={organization.public_ref || customerKey}
+                rewardAmount={organization.referral_reward_amount}
+                enabled
+                isLoggedIn={Boolean(user)}
+              />
+            ) : null}
 
             {isGuest && (
               <section className="rounded-xl bg-white p-5 shadow-sm">

@@ -1,6 +1,8 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -224,6 +226,25 @@ class Organization(models.Model):
         default=list,
         blank=True,
         help_text='Days after issue to send payment reminders, e.g. [3, 7, 14]. Empty uses defaults.',
+    )
+    # Customer referral rewards (credit as coupon after referred job is completed)
+    referral_rewards_enabled = models.BooleanField(
+        default=False,
+        help_text='When on, customers can share a code and earn coupon credit after a referred job is completed.',
+    )
+    referral_reward_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Coupon credit granted per successful referral (referred customer completes a job).',
+    )
+    referral_max_earnings_per_referrer = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Lifetime coupon credit one customer can earn from referrals at this business.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
