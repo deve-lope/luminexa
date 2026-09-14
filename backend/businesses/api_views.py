@@ -241,6 +241,19 @@ def _business_types_for_discover():
     return business_types_with_service_provider_counts(require_providers=True)
 
 
+def _filter_discover_business_types(types_list, q: str):
+    """Keyword-filter the annotated BusinessType list from catalog helpers."""
+    if not q:
+        return list(types_list)
+    ql = q.lower()
+    return [
+        t for t in types_list
+        if ql in (t.name or '').lower()
+        or ql in (t.description or '').lower()
+        or ql in (t.slug or '').lower()
+    ]
+
+
 def _serialize_bookable_service(service, *, ctx):
     org = service.organization
     types = [
@@ -810,14 +823,9 @@ def customer_discover_api(request):
             orgs_qs = Organization.objects.filter(
                 is_active=True, profile_public=True, id__in=dist_map.keys()
             ).order_by('name')[:15]
-            types_qs = _business_types_for_discover()
-            if q:
-                types_qs = types_qs.filter(
-                    Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=q.lower()),
-                )
-            types_qs = types_qs[:12]
+            types_list = _filter_discover_business_types(_business_types_for_discover(), q)[:12]
             return Response({
-                'business_types': BusinessTypeSerializer(types_qs, many=True).data,
+                'business_types': BusinessTypeSerializer(types_list, many=True).data,
                 'providers': PublicProviderCardSerializer(orgs_qs, many=True, context=ctx).data,
                 'services': services,
                 'location_search': {
@@ -839,12 +847,7 @@ def customer_discover_api(request):
     ql = q.lower()
     q_postal = normalize_postal_code(q) if q else ''
 
-    types_qs = _business_types_for_discover()
-    if q:
-        types_qs = types_qs.filter(
-            Q(name__icontains=q) | Q(description__icontains=q) | Q(slug__icontains=ql),
-        )
-    types_qs = types_qs[:12]
+    types_list = _filter_discover_business_types(_business_types_for_discover(), q)[:12]
 
     orgs = Organization.objects.filter(is_active=True, profile_public=True)
     if postal:
@@ -876,7 +879,7 @@ def customer_discover_api(request):
     services = [_serialize_bookable_service(s, ctx=ctx) for s in services_qs[:20]]
 
     return Response({
-        'business_types': BusinessTypeSerializer(types_qs, many=True).data,
+        'business_types': BusinessTypeSerializer(types_list, many=True).data,
         'providers': PublicProviderCardSerializer(orgs, many=True, context=ctx).data,
         'services': services,
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),

@@ -1,7 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import ChatBlock, ProviderDeletionFeedback, SafetyReport, User
+from .models import (
+    AdminLoginFailureDay,
+    ChatBlock,
+    ProviderDeletionFeedback,
+    SafetyReport,
+    User,
+)
+
+
+@admin.register(AdminLoginFailureDay)
+class AdminLoginFailureDayAdmin(admin.ModelAdmin):
+    list_display = ('key', 'day', 'fail_count', 'alert_sent_at', 'updated_at')
+    list_filter = ('day',)
+    search_fields = ('key',)
+    readonly_fields = ('key', 'day', 'fail_count', 'alert_sent_at', 'created_at', 'updated_at')
+    ordering = ('-day', '-updated_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SafetyReport)

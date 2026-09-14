@@ -3,12 +3,16 @@ import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { useAuth } from '../../contexts/AuthContext';
 import { isNativeApp } from '../../native/capacitorNative';
-import { subscriptionDaysRemaining } from '../../utils/providerSubscription';
+import {
+  formatSubscriptionPeriodEnd,
+  formatSubscriptionRemainingLabel,
+} from '../../utils/providerSubscription';
 
 /** Play/App Store: Pro SaaS must not open Stripe Checkout/Portal from the store shell. */
 const BILLING_WEB_HOST = 'app.luminex-a.com';
 
-function statusCopy(status) {
+function statusCopy(status, source) {
+  if (source === 'promo') return 'Promo';
   if (status === 'trialing') return 'Free trial';
   if (status === 'active') return 'Active';
   if (status === 'past_due') return 'Past due';
@@ -199,10 +203,8 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
   const canStartYearly =
     (!sub.status || sub.status === 'none' || sub.status === 'canceled' || sub.source === 'promo') &&
     sub.prices_configured?.pro_yearly;
-  const daysLeft = subscriptionDaysRemaining(sub.current_period_end);
-  const endDate = sub.current_period_end
-    ? new Date(sub.current_period_end).toLocaleDateString()
-    : null;
+  const endDate = formatSubscriptionPeriodEnd(sub.current_period_end);
+  const remaining = formatSubscriptionRemainingLabel(sub.current_period_end);
   const planLabel =
     sub.plan && sub.plan !== 'free' ? sub.plan.replace(/_/g, ' ') : 'Luminexa Pro';
 
@@ -213,18 +215,18 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
     : 'Subscribe to use the provider dashboard.';
   if (sub.source === 'promo' && endDate) {
     subDetail =
-      daysLeft === 0
+      remaining === 'Ends today'
         ? `Promo access ends today (${endDate}).`
-        : `Promo access until ${endDate}${daysLeft != null ? ` · ${daysLeft} days left` : ''}.`;
+        : `Promo access until ${endDate}${remaining ? ` · ${remaining.toLowerCase()}` : ''}.`;
   } else if (sub.status === 'trialing' && endDate) {
     subDetail =
-      daysLeft === 0
+      remaining === 'Ends today'
         ? storeShell
           ? `Trial ends today (${endDate}).`
           : `Trial ends today (${endDate}). Add a card to keep Pro.`
-        : `Trial until ${endDate} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left.`;
+        : `Trial until ${endDate}${remaining ? ` · ${remaining.toLowerCase()}` : ''}.`;
   } else if (sub.active && endDate) {
-    subDetail = `Renews ${endDate}${daysLeft != null ? ` · ${daysLeft} days left` : ''}.`;
+    subDetail = `Renews ${endDate}${remaining ? ` · ${remaining.toLowerCase()}` : ''}.`;
   } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
     subDetail = storeShell
       ? 'Payment issue on this plan. Check billing details in a web browser.'
@@ -304,7 +306,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
             <p className="mt-0.5 text-sm text-slate-600">{planLabel} · $9.99 CAD / month</p>
           </div>
           <StatusPill tone={subTone(sub.status, sub.active)}>
-            {statusCopy(sub.status)}
+            {statusCopy(sub.status, sub.source)}
           </StatusPill>
         </div>
 

@@ -195,21 +195,33 @@ def issue_or_update_invoice(
             # Legacy full pre-tax total; still persist any extras for display.
             pre_tax = _parse_amount(raw_subtotal)
 
-    tax = calculate_tax_for_organization(booking.organization, pre_tax)
-    snapshot = suggested_invoice_payload(booking)
-    desc = (description or snapshot['description'] or 'Service')[:255]
-    note_text = (notes or '').strip()
-
     try:
         invoice = Invoice.objects.select_for_update().get(booking_id=booking.pk)
     except Invoice.DoesNotExist:
         invoice = None
 
+    from .referral_services import consume_referral_credit, link_consumed_coupons_to_invoice
+
+    if invoice is None:
+        discount = consume_referral_credit(booking=booking, pre_tax=pre_tax)
+    else:
+        # Do not re-consume coupons on invoice edits; keep prior discount (clamped).
+        discount = min(Decimal(invoice.discount or 0), pre_tax).quantize(Decimal('0.01'))
+
+    taxable = (pre_tax - discount).quantize(Decimal('0.01'))
+    if taxable < 0:
+        taxable = Decimal('0.00')
+    tax = calculate_tax_for_organization(booking.organization, taxable)
+    snapshot = suggested_invoice_payload(booking)
+    desc = (description or snapshot['description'] or 'Service')[:255]
+    note_text = (notes or '').strip()
+
     fields = {
         'pricing_type': snapshot['pricing_type'],
         'estimated_amount': snapshot['estimated_amount'],
         'estimated_max': snapshot['estimated_max'],
-        'subtotal': tax['subtotal'],
+        'subtotal': pre_tax,
+        'discount': discount,
         'amount': tax['total'],
         'tax_total': tax['tax_total'],
         'tax_lines': tax['tax_lines'],
@@ -231,6 +243,7 @@ def issue_or_update_invoice(
             **fields,
         )
         invoice.save()
+        link_consumed_coupons_to_invoice(booking=booking, invoice=invoice)
     else:
         if invoice.status == Invoice.Status.VOID:
             raise ValidationError({'status': 'This invoice was voided.'})

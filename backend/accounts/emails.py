@@ -164,3 +164,37 @@ def send_safety_report_alert(report) -> bool:
     except Exception:
         logger.exception('Failed to send safety report alert for #%s', report.pk)
         return False
+
+
+def send_admin_login_lockout_alert(
+    *,
+    key: str,
+    attempted_email: str,
+    ip: str,
+    fail_count: int,
+    day,
+) -> bool:
+    """Notify support when Django admin login hits the daily failure cap."""
+    to = getattr(settings, 'SUPPORT_EMAIL', None) or 'support@luminex-a.com'
+    try:
+        send_mail(
+            subject='[Luminexa] Django admin login locked after failed attempts',
+            message=(
+                'Django admin login was locked after too many failed attempts.\n\n'
+                f'Day (UTC): {day}\n'
+                f'Lock key: {key}\n'
+                f'Attempted email: {attempted_email or "(none)"}\n'
+                f'IP: {ip or "(unknown)"}\n'
+                f'Failed attempts: {fail_count}\n\n'
+                'Further tries for this email/IP are blocked until tomorrow (UTC), '
+                'or until an operator clears the lockout:\n'
+                '  python manage.py reset_admin_access <email> --clear-lockout\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[to],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception('Failed to send admin login lockout alert for %s', key)
+        return False

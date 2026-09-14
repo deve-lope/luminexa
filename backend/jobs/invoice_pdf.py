@@ -212,7 +212,7 @@ def build_invoice_pdf(invoice) -> bytes:
     ref = f'BK-{booking.pk:05d}'
     status = invoice.get_status_display()
     subtotal = invoice.subtotal if invoice.subtotal is not None else invoice.amount
-    discount = Decimal('0.00')
+    discount = Decimal(invoice.discount or 0).quantize(Decimal('0.01'))
 
     biz_lines = []
     if org.service_address:
@@ -371,8 +371,9 @@ def build_invoice_pdf(invoice) -> bytes:
     label_max_chars = 22
     rows = [
         ('Subtotal', _fmt_money(subtotal, currency), False),
-        ('Discount', _fmt_money(discount, currency), False),
     ]
+    if discount > 0:
+        rows.append(('Discount', _fmt_money(discount, currency), False))
     for tax_line in (invoice.tax_lines or []):
         rows.append((
             _tax_row_label(tax_line),
