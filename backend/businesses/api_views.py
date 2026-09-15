@@ -402,18 +402,11 @@ def _availability_summary_for_services(services, window):
 
 
 def _service_keyword_filter(q: str) -> Q:
-    """Shared keyword match for browse/discover (postal path and lat/lng path)."""
-    q_postal = normalize_postal_code(q) if q else ''
+    """Match the service itself (name / description / category), not the whole org catalog."""
     return (
         Q(name__icontains=q)
         | Q(description__icontains=q)
-        | Q(organization__name__icontains=q)
-        | Q(organization__tagline__icontains=q)
-        | Q(organization__service_city__icontains=q)
-        | Q(organization__service_state__icontains=q)
-        | Q(organization__service_address__icontains=q)
-        | Q(organization__service_postal_code__icontains=q_postal or q)
-        | Q(organization__business_types__name__icontains=q)
+        | Q(category__name__icontains=q)
     )
 
 

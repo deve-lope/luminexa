@@ -60,6 +60,25 @@ class CustomerDiscoverKeywordTests(TestCase):
         names = [s['name'] for s in res.data.get('services') or []]
         self.assertIn('Deep cleaning', names)
 
+    def test_org_name_alone_does_not_dump_unrelated_services(self):
+        """“clean” matching “AJ Cleaning” must not return oil change from that org."""
+        Service.objects.create(
+            organization=self.org,
+            name='Oil change',
+            duration_minutes=30,
+            base_price='40.00',
+            is_active=True,
+        )
+        res = self.client.get(
+            '/api/v1/customer/discover/',
+            {'q': 'clean'},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        names = [s['name'] for s in res.data.get('services') or []]
+        self.assertIn('Deep cleaning', names)
+        self.assertNotIn('Oil change', names)
+
     def test_keyword_with_nearby_coords(self):
         res = self.client.get(
             '/api/v1/customer/discover/',

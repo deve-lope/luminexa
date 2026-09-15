@@ -86,10 +86,9 @@ export default function CustomerQuotesPage() {
         </div>
       ) : !hasItems ? (
         <div className="lx-empty">
-          <p className="text-slate-600">No open quotes or pending requests.</p>
+          <p className="text-slate-600">No open quotes.</p>
           <p className="mt-1 text-sm text-slate-500">
-            Quote requests and bookings waiting on a price or approval show up here until both
-            sides confirm.
+            Price requests waiting on you or the business show up here.
           </p>
           <Link
             to={customerFind()}
@@ -100,12 +99,8 @@ export default function CustomerQuotesPage() {
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-600">
-            Bookings waiting on a price, your approval, or the business to respond.
-          </p>
           {activeInquiries.length > 0 && (
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Quote requests</h2>
               <ul className="space-y-3">
                 {activeInquiries.map((inq) => (
                   <li key={inq.id} className="lx-card">
@@ -155,9 +150,6 @@ export default function CustomerQuotesPage() {
 
           {pendingBookings.length > 0 && (
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">
-                Bookings awaiting confirmation
-              </h2>
               <ul className="space-y-3">
                 {pendingBookings.map((booking) => (
                   <CustomerBookingCard
