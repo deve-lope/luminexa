@@ -349,10 +349,10 @@ function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
   return (
     <div className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
       <div
-        className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug shadow-sm ${
+        className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug ${
           mine
-            ? 'rounded-2xl rounded-br-md bg-teal-100 text-slate-900'
-            : 'rounded-2xl rounded-bl-md bg-white text-slate-900 ring-1 ring-black/5'
+            ? 'rounded-2xl rounded-br-md bg-teal-100 text-slate-900 shadow-sm'
+            : 'rounded-2xl rounded-bl-md bg-white text-slate-900 shadow-md ring-1 ring-slate-200/90'
         } ${hasImage && !showBody && !hasFile ? 'p-1' : 'px-3 py-2'}`}
       >
         {hasImage ? (
@@ -670,7 +670,7 @@ export default function ChatThread({
   // On lg+, start after the w-60 sidebar so the composer is never covered.
   const sheet = (
     <div
-      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-luminexa-canvas lg:left-60"
+      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-[#e2efec] lg:left-60"
       role="dialog"
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}
@@ -790,11 +790,7 @@ export default function ChatThread({
 
       <div
         ref={listRef}
-        className="relative z-0 min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 18% 12%, rgba(13,148,136,0.05) 0, transparent 42%), radial-gradient(circle at 88% 0%, rgba(255,255,255,0.7) 0, transparent 38%)',
-        }}
+        className="lx-chat-thread relative z-0 min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3"
       >
         {loading && !messages.length ? (
           <p className="py-10 text-center text-sm text-slate-500">Loading messages…</p>
@@ -827,7 +823,7 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className="lx-chat-composer shrink-0 border-t border-slate-200/70 bg-luminexa-canvas px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
+      <div className="lx-chat-composer shrink-0 border-t border-teal-900/10 bg-[#e2efec] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
