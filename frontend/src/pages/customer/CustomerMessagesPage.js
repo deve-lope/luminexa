@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ChatThread from '../../components/chat/ChatThread';
 import { jobsAPI } from '../../utils/api';
+import { customerProviderPage } from '../../utils/customerPaths';
 import { formatWhen } from '../../utils/datetime';
 import { emitNotificationsChanged } from '../../utils/customerNotifications';
 import { emitMessagesChanged } from '../../utils/messageBadge';
@@ -162,6 +163,11 @@ export default function CustomerMessagesPage() {
           open
           peerName={selected.organization_name || selected.subject}
           peerSubtitle="Provider"
+          peerHref={
+            selected.organization_slug
+              ? customerProviderPage(selected.organization_slug)
+              : undefined
+          }
           onClose={closeConversation}
           loadMessages={loadMessagesAndRefreshBadge}
           sendMessage={(body, file) => jobsAPI.sendConversationMessage(selected.id, body, file)}

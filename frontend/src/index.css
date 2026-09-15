@@ -411,9 +411,9 @@ html.lx-modal-open .lx-pwa-install-prompt {
 
 html.capacitor-native .lx-ime-sheet.fixed.inset-0 {
   top: var(--lx-sat);
-  /* Extend to the physical bottom so beige fills the home-indicator strip. */
+  /* Extend to the physical bottom so canvas fills the home-indicator strip. */
   bottom: var(--lx-keyboard-inset, 0px);
-  background-color: #eae6df;
+  background-color: #f6f7f5;
 }
 
 /* Composer (not the sheet) clears the home indicator. */
