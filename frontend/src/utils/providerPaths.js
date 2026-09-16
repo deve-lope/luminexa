@@ -48,6 +48,18 @@ export function providerJobs(orgSlug) {
   return `/provider/${orgSlug}/jobs`;
 }
 
+export function providerGigs(orgSlug) {
+  return `/provider/${orgSlug}/gigs`;
+}
+
+export function providerGigDetail(orgSlug, gigId) {
+  return `/provider/${orgSlug}/gigs/${gigId}`;
+}
+
+export function providerMyGigQuotes(orgSlug) {
+  return `/provider/${orgSlug}/gigs/my-quotes`;
+}
+
 export function providerRequestDetail(orgSlug, kind, id) {
   return `/provider/${orgSlug}/requests/${kind}/${id}`;
 }

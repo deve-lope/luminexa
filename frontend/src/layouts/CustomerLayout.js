@@ -7,6 +7,7 @@ import CustomerNotificationBell from '../components/customer/CustomerNotificatio
 import { useAuth } from '../contexts/AuthContext';
 import { buildCustomerTabs, buildCustomerMenuItems } from '../config/navigation';
 import { jobsAPI } from '../utils/api';
+import { isAndroidApp } from '../native/capacitorNative';
 import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
@@ -22,13 +23,16 @@ export default function CustomerLayout({ children }) {
   const [bookingsBadgeCount, setBookingsBadgeCount] = useState(0);
   const [messagesCount, setMessagesCount] = useState(0);
 
+  const androidApp = isAndroidApp();
+
   const menuItems = useMemo(
     () =>
       buildCustomerMenuItems({
         logout: () => logout().then(() => navigate('/')),
         messagesBadgeCount: messagesCount,
+        includeGigs: androidApp,
       }),
-    [logout, navigate, messagesCount]
+    [logout, navigate, messagesCount, androidApp]
   );
 
   const tabs = useMemo(
@@ -36,8 +40,9 @@ export default function CustomerLayout({ children }) {
       buildCustomerTabs({
         messagesBadgeCount: messagesCount,
         bookingsBadgeCount,
+        includeGigs: !androidApp,
       }),
-    [messagesCount, bookingsBadgeCount]
+    [messagesCount, bookingsBadgeCount, androidApp]
   );
 
   const isCustomerAppRoute =
@@ -137,6 +142,15 @@ export default function CustomerLayout({ children }) {
     }
     if (location.pathname.endsWith('/customer/quotes')) {
       return { eyebrow: 'Bookings', title: 'Quotes' };
+    }
+    if (location.pathname.endsWith('/customer/gigs/create')) {
+      return { eyebrow: 'Gig wall', title: 'Create gig' };
+    }
+    if (/^\/customer\/gigs\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Gig wall', title: 'Gig details' };
+    }
+    if (location.pathname.endsWith('/customer/gigs')) {
+      return { eyebrow: 'Explore', title: 'Gig wall' };
     }
     if (location.pathname.endsWith('/customer/completed')) {
       return { eyebrow: 'Bookings', title: 'Done' };

@@ -2,10 +2,10 @@ import { authPathWithNext } from '../utils/postLoginRoute';
 
 export function buildProviderTabs(
   orgSlug,
-  { requestsBadgeCount = 0, messagesBadgeCount = 0 } = {},
+  { requestsBadgeCount = 0, messagesBadgeCount = 0, includeGigs = true } = {},
 ) {
   const base = `/provider/${orgSlug}`;
-  return [
+  const tabs = [
     { id: 'today', label: 'Home', to: base, end: true },
     { id: 'schedule', label: 'Schedule', to: `${base}/schedule` },
     {
@@ -14,22 +14,32 @@ export function buildProviderTabs(
       to: `${base}/requests`,
       badgeCount: requestsBadgeCount > 0 ? requestsBadgeCount : undefined,
     },
-    {
-      id: 'messages',
-      label: 'Messages',
-      to: `${base}/messages`,
-      badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
-    },
   ];
+  if (includeGigs) {
+    tabs.push({ id: 'gigs', label: 'Gigs', to: `${base}/gigs` });
+  }
+  tabs.push({
+    id: 'messages',
+    label: 'Messages',
+    to: `${base}/messages`,
+    badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
+  });
+  return tabs;
 }
 
 export function buildCustomerTabs({
   messagesBadgeCount = 0,
   bookingsBadgeCount = 0,
+  includeGigs = true,
 } = {}) {
-  return [
+  const tabs = [
     { id: 'home', label: 'Home', to: '/customer', end: true },
     { id: 'book', label: 'Book', to: '/customer/find' },
+  ];
+  if (includeGigs) {
+    tabs.push({ id: 'gigs', label: 'Gigs', to: '/customer/gigs' });
+  }
+  tabs.push(
     {
       id: 'bookings',
       label: 'Bookings',
@@ -42,7 +52,8 @@ export function buildCustomerTabs({
       to: '/customer/messages',
       badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
     },
-  ];
+  );
+  return tabs;
 }
 
 /** @deprecated Prefer buildCustomerTabs — kept for any static imports */
@@ -101,6 +112,8 @@ export function buildProviderMenuItems({
   providerAnalyticsPath,
   providerClientsPath,
   providerJobsPath,
+  providerGigsPath,
+  includeGigs = false,
   providerNotificationsPath,
   notificationsBadgeCount = 0,
   isStaff,
@@ -117,6 +130,14 @@ export function buildProviderMenuItems({
       label: 'Jobs',
       to: providerJobsPath,
       iconId: 'jobs',
+    });
+  }
+  if (includeGigs && providerGigsPath) {
+    items.push({
+      id: 'gigs',
+      label: 'Gig wall',
+      to: providerGigsPath,
+      iconId: 'gigs',
     });
   }
   if (providerAnalyticsPath) {
@@ -178,10 +199,22 @@ export function buildProviderMenuItems({
   return items;
 }
 
-export function buildCustomerMenuItems({ logout, messagesBadgeCount = 0 } = {}) {
+export function buildCustomerMenuItems({
+  logout,
+  messagesBadgeCount = 0,
+  includeGigs = false,
+} = {}) {
   const items = [];
 
   items.push({ id: 'section-more', divider: true, label: 'More' });
+  if (includeGigs) {
+    items.push({
+      id: 'gigs',
+      label: 'Gig wall',
+      to: '/customer/gigs',
+      iconId: 'gigs',
+    });
+  }
   items.push({
     id: 'account',
     label: 'Account',
@@ -195,7 +228,7 @@ export function buildCustomerMenuItems({ logout, messagesBadgeCount = 0 } = {}) 
     iconId: 'messages',
     badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
   });
-  items.push({ id: 'completed', label: 'Past jobs', to: '/customer/completed' });
+  items.push({ id: 'completed', label: 'My jobs', to: '/customer/completed' });
   items.push({ id: 'referrals', label: 'Referrals', to: '/customer/referrals' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });

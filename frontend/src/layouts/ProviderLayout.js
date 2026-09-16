@@ -11,6 +11,7 @@ import { isProviderMember } from '../utils/postLoginRoute';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { jobsAPI } from '../utils/api';
+import { isAndroidApp } from '../native/capacitorNative';
 import {
   firstProviderHome,
   providerAccount,
@@ -18,6 +19,7 @@ import {
   providerAnalytics,
   providerClients,
   providerJobs,
+  providerGigs,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -148,14 +150,17 @@ function ProviderShell() {
     };
   }, [loadMessagesCount, location.pathname]);
 
+  const androidApp = isAndroidApp();
+
   const tabs = useMemo(
     () =>
       buildProviderTabs(orgSlug, {
         // Unseen pending work + unread booking-update alerts (Messages-style).
         requestsBadgeCount: Math.max(alertCount, bookingNotifCount),
         messagesBadgeCount: messagesCount,
+        includeGigs: !androidApp,
       }),
-    [orgSlug, alertCount, bookingNotifCount, messagesCount]
+    [orgSlug, alertCount, bookingNotifCount, messagesCount, androidApp]
   );
   const menuItems = useMemo(
     () =>
@@ -169,12 +174,14 @@ function ProviderShell() {
         providerAnalyticsPath: providerAnalytics(orgSlug),
         providerClientsPath: providerClients(orgSlug),
         providerJobsPath: providerJobs(orgSlug),
+        providerGigsPath: providerGigs(orgSlug),
+        includeGigs: androidApp,
         providerNotificationsPath: providerNotifications(orgSlug),
         notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount]
+    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount, androidApp]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -219,6 +226,15 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/jobs`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Jobs' };
+    }
+    if (location.pathname.startsWith(`${base}/gigs/my-quotes`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'My bids' };
+    }
+    if (/\/gigs\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/gigs')) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Gig details' };
+    }
+    if (location.pathname.startsWith(`${base}/gigs`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Gig wall' };
     }
     if (location.pathname.startsWith(`${base}/my-page`) || location.pathname.startsWith(`${base}/share`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My page' };

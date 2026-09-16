@@ -443,6 +443,36 @@ export const jobsAPI = {
   listTasks: (params) => api.get('/api/v1/tasks/', { params }),
   createTask: (data) => api.post('/api/v1/tasks/', data),
   patchTask: (id, data) => api.patch(`/api/v1/tasks/${id}/`, data),
+
+  // Gig Wall
+  listMyGigs: () => api.get('/api/v1/gigs/'),
+  createGig: (data) => api.post('/api/v1/gigs/', data),
+  getGig: (id) => api.get(`/api/v1/gigs/${id}/`),
+  updateGig: (id, data) => api.patch(`/api/v1/gigs/${id}/`, data),
+  closeGig: (id) => api.post(`/api/v1/gigs/${id}/close/`),
+  reopenGig: (id) => api.post(`/api/v1/gigs/${id}/reopen/`),
+  deleteGig: (id) => api.delete(`/api/v1/gigs/${id}/`),
+  listGigWall: (params) => api.get('/api/v1/gigs-wall/', { params }),
+  getGigWallDetail: (id) => api.get(`/api/v1/gigs-wall/${id}/`),
+  uploadGigImage: (gigId, file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    return api.post(`/api/v1/gigs/${gigId}/images/`, fd, { timeout: 60000 });
+  },
+  deleteGigImage: (gigId, imageId) =>
+    api.delete(`/api/v1/gigs/${gigId}/images/${imageId}/`),
+  listGigComments: (gigId) => api.get(`/api/v1/gigs/${gigId}/comments/`),
+  createGigComment: (gigId, body) =>
+    api.post(`/api/v1/gigs/${gigId}/comments/`, { body }),
+  listGigQuotes: (gigId) => api.get(`/api/v1/gigs/${gigId}/quotes/`),
+  createGigQuote: (gigId, data) => api.post(`/api/v1/gigs/${gigId}/quotes/`, data),
+  updateGigQuote: (gigId, quoteId, data) =>
+    api.patch(`/api/v1/gigs/${gigId}/quotes/${quoteId}/`, data),
+  withdrawGigQuote: (gigId, quoteId) =>
+    api.delete(`/api/v1/gigs/${gigId}/quotes/${quoteId}/`),
+  acceptGigQuote: (gigId, quoteId) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/accept/`),
+  listMyGigQuotes: (params) => api.get('/api/v1/gigs/my-quotes/', { params }),
 };
 
 export default api;

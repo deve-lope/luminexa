@@ -9,6 +9,15 @@ export function isNativeApp() {
   return Capacitor.isNativePlatform();
 }
 
+/** True only in the Play Store Android WebView (not iOS, not mobile Chrome). */
+export function isAndroidApp() {
+  try {
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  } catch {
+    return false;
+  }
+}
+
 /** Mark the document as soon as Cap is available (safe-area CSS hooks). */
 export function markNativeDocument() {
   try {

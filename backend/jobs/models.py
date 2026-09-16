@@ -206,6 +206,9 @@ class ProviderNotification(models.Model):
         CUSTOMER_REPORTED_NO_SHOW = 'customer_reported_no_show', 'Customer reported no-show'
         INCOMPLETE_JOB_TASKS = 'incomplete_job_tasks', 'Incomplete job tasks'
         SUBSCRIPTION_ENDING = 'subscription_ending', 'Subscription ending'
+        NEW_GIG_IN_AREA = 'new_gig_in_area', 'New gig in your area'
+        GIG_QUOTE_ACCEPTED = 'gig_quote_accepted', 'Gig quote accepted'
+        NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on gig'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -252,6 +255,9 @@ class CustomerNotification(models.Model):
         PAYMENT_CONFIRMED = 'payment_confirmed', 'Payment confirmed'
         NEW_MESSAGE = 'new_message', 'New message'
         QUOTE_DETAILS_REQUESTED = 'quote_details_requested', 'Quote details requested'
+        NEW_GIG_QUOTE = 'new_gig_quote', 'New quote on your gig'
+        NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on your gig'
+        GIG_EXPIRED = 'gig_expired', 'Gig post expired'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1210,6 +1216,198 @@ class ServiceRequestMessage(models.Model):
                 self.conversation = conv
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class GigPost(models.Model):
+    """Customer-posted job request that providers can quote on."""
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open for quotes'
+        QUOTED = 'quoted', 'Has quotes'
+        ACCEPTED = 'accepted', 'Quote accepted'
+        CLOSED = 'closed', 'Closed'
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='gig_posts',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(max_length=2000)
+    category = models.ForeignKey(
+        'businesses.BusinessType',
+        on_delete=models.PROTECT,
+        related_name='gig_posts',
+        null=True,
+        blank=True,
+    )
+    location_address = models.TextField(blank=True, default='')
+    location_city = models.CharField(max_length=120, blank=True, default='', db_index=True)
+    location_state = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    location_postal_code = models.CharField(max_length=12, blank=True, default='', db_index=True)
+    location_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded from postal code for radius search',
+    )
+    location_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded from postal code for radius search',
+    )
+    search_radius_miles = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=25,
+        help_text='How far from this location to search for providers',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    expires_at = models.DateTimeField(
+        help_text='Auto-close date (typically 30 days after creation)',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['category', 'status', '-created_at']),
+            models.Index(fields=['location_latitude', 'location_longitude']),
+        ]
+
+    def __str__(self):
+        return f'{self.customer_id}: {self.title[:50]}'
+
+
+class GigPostImage(models.Model):
+    """Photos attached to a gig post (max 2 per post)."""
+
+    MAX_PER_POST = 2
+    MAX_BYTES = 5 * 1024 * 1024  # 5MB
+
+    gig_post = models.ForeignKey(
+        GigPost,
+        on_delete=models.CASCADE,
+        related_name='images',
+    )
+    image = models.ImageField(upload_to='gigs/images/%Y/%m/')
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return f'GigPost {self.gig_post_id} image #{self.pk}'
+
+
+class GigComment(models.Model):
+    """Discussion thread on a gig post (customer + visible providers)."""
+
+    gig_post = models.ForeignKey(
+        GigPost,
+        on_delete=models.CASCADE,
+        related_name='comments',
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='gig_comments',
+    )
+    organization = models.ForeignKey(
+        'businesses.Organization',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='gig_comments',
+        help_text='Set if author is provider staff/owner',
+    )
+    body = models.TextField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['gig_post', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'Comment on GigPost {self.gig_post_id} by {self.author_id}'
+
+
+class GigQuote(models.Model):
+    """Provider's price proposal for a gig post."""
+
+    class Status(models.TextChoices):
+        SUBMITTED = 'submitted', 'Submitted'
+        ACCEPTED = 'accepted', 'Accepted by customer'
+        WITHDRAWN = 'withdrawn', 'Withdrawn by provider'
+
+    gig_post = models.ForeignKey(
+        GigPost,
+        on_delete=models.CASCADE,
+        related_name='quotes',
+    )
+    organization = models.ForeignKey(
+        'businesses.Organization',
+        on_delete=models.CASCADE,
+        related_name='gig_quotes',
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='gig_quotes_submitted',
+    )
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    description = models.TextField(
+        max_length=1500,
+        help_text='What this quote covers',
+    )
+    estimated_duration_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='How many days this job will take',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.SUBMITTED,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['price', 'created_at']  # Lowest price first
+        constraints = [
+            models.UniqueConstraint(
+                fields=['gig_post', 'organization'],
+                name='one_quote_per_org_per_post',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['gig_post', 'price']),
+            models.Index(fields=['organization', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'Quote ${self.price} by {self.organization_id} on GigPost {self.gig_post_id}'
 
 
 class Task(models.Model):

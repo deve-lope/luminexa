@@ -60,6 +60,18 @@ export function customerCategories() {
   return '/customer/categories';
 }
 
+export function customerGigs() {
+  return '/customer/gigs';
+}
+
+export function customerGigCreate() {
+  return '/customer/gigs/create';
+}
+
+export function customerGigDetail(id) {
+  return `/customer/gigs/${id}`;
+}
+
 export function customerFindType(typeSlug) {
   return `/customer/find/${typeSlug}`;
 }
