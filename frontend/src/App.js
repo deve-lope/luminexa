@@ -24,6 +24,7 @@ import CustomerBookingDetailPage from './pages/customer/CustomerBookingDetailPag
 import CustomerInquiryDetailPage from './pages/customer/CustomerInquiryDetailPage';
 import CustomerHistoryPage from './pages/customer/CustomerHistoryPage';
 import CustomerCompletedPage from './pages/customer/CustomerCompletedPage';
+import CustomerReferralsPage from './pages/customer/CustomerReferralsPage';
 import CustomerQuotesPage from './pages/customer/CustomerQuotesPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
@@ -233,6 +234,7 @@ function AppRoutes() {
           <Route path="notifications" element={<CustomerNotificationsPage />} />
           <Route path="quotes" element={<CustomerQuotesPage />} />
           <Route path="completed" element={<CustomerCompletedPage />} />
+          <Route path="referrals" element={<CustomerReferralsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />
           <Route path="account" element={<CustomerAccountPage />} />
           <Route path="about" element={<AboutPage embedded />} />

@@ -36,6 +36,10 @@ export function customerCompleted() {
   return '/customer/completed';
 }
 
+export function customerReferrals() {
+  return '/customer/referrals';
+}
+
 export function customerHistory() {
   return '/customer/history';
 }

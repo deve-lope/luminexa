@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -261,3 +262,114 @@ class ReferralRewardsTests(TestCase):
             Referral.Status.REWARDED,
         )
         self.assertEqual(ReferralCoupon.objects.filter(owner=self.referrer).count(), 1)
+
+    def test_customer_referrals_overview(self):
+        booking = self._make_booking(self.referred, status=Booking.Status.IN_PROGRESS)
+        attach_referral_attribution(booking=booking, code=self.code.code)
+        complete_booking(booking, staff_user=self.owner)
+
+        self.client.force_authenticate(user=self.referrer)
+        res = self.client.get('/api/v1/me/referrals/')
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertIn('how_to_use', body)
+        self.assertEqual(len(body['completed']), 1)
+        row = body['completed'][0]
+        self.assertEqual(row['referred_name'], 'Referred')
+        self.assertEqual(row['organization_name'], 'Referral Org')
+        self.assertEqual(row['amount'], '10.00')
+        self.assertEqual(row['remaining'], '10.00')
+        self.assertEqual(len(body['credits']), 1)
+        self.assertEqual(body['credits'][0]['available_credit'], '10.00')
+        self.assertEqual(body['credits'][0]['organization_slug'], 'referral-org')
+        self.assertFalse(body['credits'][0]['at_cap'])
+        self.assertEqual(body['credits'][0]['max_earnings_per_referrer'], '25.00')
+
+    def test_overview_shows_at_cap_when_lifetime_max_hit(self):
+        # Cap $25 with $10 rewards → 3 referrals fill the cap (10+10+5).
+        for i in range(3):
+            user = User.objects.create_user(
+                email=f'cap{i}@luminexa.local',
+                password='password123',
+                full_name=f'Cap {i}',
+                phone=f'+1555444000{i}',
+            )
+            booking = self._make_booking(user, status=Booking.Status.IN_PROGRESS)
+            attach_referral_attribution(booking=booking, code=self.code.code)
+            complete_booking(booking, staff_user=self.owner)
+
+        self.assertEqual(
+            ReferralCoupon.objects.filter(owner=self.referrer).aggregate(s=Sum('amount'))['s'],
+            Decimal('25.00'),
+        )
+
+        # Fourth → capped, $0 new credit
+        user4 = User.objects.create_user(
+            email='cap4@luminexa.local', password='password123', full_name='Cap 4',
+            phone='+15554440004',
+        )
+        booking4 = self._make_booking(user4, status=Booking.Status.IN_PROGRESS)
+        attach_referral_attribution(booking=booking4, code=self.code.code)
+        complete_booking(booking4, staff_user=self.owner)
+        self.assertEqual(
+            Referral.objects.get(referred_user=user4).status,
+            Referral.Status.CAPPED,
+        )
+
+        self.client.force_authenticate(user=self.referrer)
+        overview = self.client.get('/api/v1/me/referrals/').json()
+        credit = overview['credits'][0]
+        self.assertTrue(credit['at_cap'])
+        self.assertEqual(credit['earned_total'], '25.00')
+        self.assertEqual(credit['max_earnings_per_referrer'], '25.00')
+        self.assertEqual(credit['remaining_cap'], '0.00')
+        capped_rows = [r for r in overview['completed'] if r['status'] == 'capped']
+        self.assertEqual(len(capped_rows), 1)
+        self.assertTrue(capped_rows[0]['at_cap'])
+        self.assertEqual(capped_rows[0]['earned_total'], '25.00')
+
+        summary = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/referral/',
+            HTTP_HOST='localhost',
+        ).json()
+        self.assertTrue(summary['at_cap'])
+        self.assertEqual(summary['remaining_cap'], '0.00')
+        self.assertEqual(summary['earned_total'], '25.00')
+
+    def test_clients_list_shows_referral_rewards_and_referred_by(self):
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=self.referrer,
+            role=OrganizationMembership.Role.CUSTOMER,
+            customer_status=OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org,
+            user=self.referred,
+            role=OrganizationMembership.Role.CUSTOMER,
+            customer_status=OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        booking = self._make_booking(self.referred, status=Booking.Status.IN_PROGRESS)
+        attach_referral_attribution(booking=booking, code=self.code.code)
+        complete_booking(booking, staff_user=self.owner)
+
+        self.client.force_authenticate(self.owner)
+        res = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/customers/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        by_id = {row['id']: row for row in res.data}
+        self.assertEqual(by_id[self.referrer.id]['referral_earned_total'], '10.00')
+        self.assertEqual(by_id[self.referrer.id]['referral_available_credit'], '10.00')
+        self.assertEqual(by_id[self.referrer.id]['referral_rewarded_count'], 1)
+        self.assertEqual(by_id[self.referred.id]['referred_by_name'], 'Referrer')
+        self.assertEqual(by_id[self.referred.id]['referral_status'], 'rewarded')
+
+        detail = self.client.get(
+            f'/api/v1/organizations/{self.org.slug}/customers/{self.referrer.id}/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(detail.status_code, 200, detail.data)
+        self.assertEqual(detail.data['referral_earned_total'], '10.00')
+        self.assertEqual(detail.data['referral_available_credit'], '10.00')

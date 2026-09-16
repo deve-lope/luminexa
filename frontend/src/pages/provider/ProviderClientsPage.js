@@ -289,6 +289,46 @@ export default function ProviderClientsPage() {
                     {' · '}
                     {c.no_show_count || 0} no-show{(c.no_show_count || 0) === 1 ? '' : 's'}
                   </p>
+                  {(() => {
+                    const earned = Number(c.referral_earned_total || 0);
+                    const avail = Number(c.referral_available_credit || 0);
+                    const count = Number(c.referral_rewarded_count || 0);
+                    if (!(earned > 0 || avail > 0 || count > 0 || c.referred_by_name)) {
+                      return null;
+                    }
+                    const money = (n) => {
+                      try {
+                        return new Intl.NumberFormat(undefined, {
+                          style: 'currency',
+                          currency: 'CAD',
+                          maximumFractionDigits: 2,
+                        }).format(n);
+                      } catch {
+                        return `$${n}`;
+                      }
+                    };
+                    return (
+                      <p className="mt-1 text-xs text-teal-800">
+                        {earned > 0 || avail > 0 || count > 0 ? (
+                          <>
+                            Referral: {money(avail)} available
+                            {earned > 0 ? ` · ${money(earned)} earned` : ''}
+                            {count > 0
+                              ? ` · ${count} successful referral${count === 1 ? '' : 's'}`
+                              : ''}
+                            {c.referral_at_cap ? ' · max reached' : ''}
+                          </>
+                        ) : null}
+                        {c.referred_by_name ? (
+                          <>
+                            {(earned > 0 || avail > 0 || count > 0) ? ' · ' : ''}
+                            Referred by {c.referred_by_name}
+                            {c.referral_status === 'pending' ? ' (pending job)' : ''}
+                          </>
+                        ) : null}
+                      </p>
+                    );
+                  })()}
                 </Link>
                 <div className="flex shrink-0 flex-col justify-center gap-1 sm:flex-row sm:items-center">
                   {blocked ? (

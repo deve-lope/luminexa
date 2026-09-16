@@ -1468,6 +1468,15 @@ class OrgCustomerSerializer(serializers.Serializer):
     provider_notes = serializers.CharField(required=False, allow_blank=True, default='')
     outstanding_balance = serializers.CharField(required=False, allow_null=True)
     completed_bookings = serializers.IntegerField(required=False, default=0)
+    referral_earned_total = serializers.CharField(required=False, default='0.00')
+    referral_available_credit = serializers.CharField(required=False, default='0.00')
+    referral_rewarded_count = serializers.IntegerField(required=False, default=0)
+    referral_remaining_cap = serializers.CharField(required=False, default='0.00')
+    referral_at_cap = serializers.BooleanField(required=False, default=False)
+    referral_max_earnings = serializers.CharField(required=False, default='0.00')
+    referred_by_id = serializers.IntegerField(required=False, allow_null=True)
+    referred_by_name = serializers.CharField(required=False, allow_blank=True, default='')
+    referral_status = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class TaskSerializer(serializers.ModelSerializer):

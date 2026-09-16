@@ -76,14 +76,34 @@ export default function CustomerReferralCard({
 
   if (!summary?.enabled || !summary?.code) return null;
 
+  const atCap = Boolean(summary.at_cap);
+  const maxLabel = formatMoney(summary.max_earnings_per_referrer || 0);
+  const earnedLabel = formatMoney(summary.earned_total || 0);
+  const avail = Number(summary.available_credit || 0);
+
+  if (atCap) {
+    return (
+      <section className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-sm text-slate-800">
+        <p className="font-medium text-slate-900">Max reward received</p>
+        <p className="mt-1 text-slate-700">
+          You&apos;ve earned the lifetime max for this business ({earnedLabel}
+          {summary.max_earnings_per_referrer ? ` of ${maxLabel}` : ''}). Further referrals here
+          won&apos;t add more credit
+          {avail > 0 ? ` · ${formatMoney(avail)} still available to use on your next invoice` : ''}.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-xl border border-teal-100 bg-teal-50/60 px-4 py-3 text-sm text-slate-800">
       <p className="font-medium text-slate-900">Share &amp; earn {rewardLabel}</p>
       <p className="mt-1 text-slate-600">
         When someone books with your link and finishes a job, you get coupon credit on your next
         invoice here
-        {summary.available_credit && Number(summary.available_credit) > 0
-          ? ` · Available credit: ${formatMoney(summary.available_credit)}`
+        {avail > 0 ? ` · Available credit: ${formatMoney(avail)}` : ''}
+        {summary.max_earnings_per_referrer
+          ? ` · Up to ${maxLabel} lifetime at this business`
           : ''}
         .
       </p>

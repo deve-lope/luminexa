@@ -51,6 +51,7 @@ urlpatterns = [
         'me/notifications/<int:notification_id>/dismiss/',
         views.CustomerNotificationDismissAPIView.as_view(),
     ),
+    path('me/referrals/', views.CustomerReferralsAPIView.as_view()),
     path('provider-dashboard/', dashboard_views.ProviderDashboardAPIView.as_view()),
     path('provider-analytics/', analytics_views.ProviderAnalyticsAPIView.as_view()),
     path('provider-books-export/', analytics_views.ProviderBooksExportAPIView.as_view()),

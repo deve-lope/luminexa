@@ -138,6 +138,55 @@ export default function ProviderClientDetailPage() {
             <p className="font-semibold text-slate-900">{data.completed_bookings ?? 0}</p>
           </div>
         </div>
+        {(Number(data.referral_earned_total) > 0 ||
+          Number(data.referral_available_credit) > 0 ||
+          Number(data.referral_rewarded_count) > 0 ||
+          data.referred_by_name) && (
+          <div className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-3 text-sm text-slate-800">
+            <p className="text-[10px] font-semibold uppercase text-teal-700">Referral rewards</p>
+            {(Number(data.referral_earned_total) > 0 ||
+              Number(data.referral_available_credit) > 0 ||
+              Number(data.referral_rewarded_count) > 0) && (
+              <p className="mt-1 font-medium text-slate-900">
+                {money(data.referral_available_credit)} available
+                {Number(data.referral_earned_total) > 0
+                  ? ` · ${money(data.referral_earned_total)} earned`
+                  : ''}
+                {Number(data.referral_rewarded_count) > 0
+                  ? ` · ${data.referral_rewarded_count} successful referral${
+                      Number(data.referral_rewarded_count) === 1 ? '' : 's'
+                    }`
+                  : ''}
+              </p>
+            )}
+            {data.referral_at_cap ? (
+              <p className="mt-0.5 text-xs text-amber-800">
+                Lifetime max reached
+                {Number(data.referral_max_earnings) > 0
+                  ? ` (${money(data.referral_max_earnings)})`
+                  : ''}
+              </p>
+            ) : Number(data.referral_max_earnings) > 0 &&
+              Number(data.referral_earned_total) > 0 ? (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {money(data.referral_remaining_cap)} left before their lifetime max of{' '}
+                {money(data.referral_max_earnings)}
+              </p>
+            ) : null}
+            {data.referred_by_name ? (
+              <p className="mt-1 text-xs text-slate-600">
+                Referred by <span className="font-medium">{data.referred_by_name}</span>
+                {data.referral_status === 'pending'
+                  ? ' — waiting for their first completed job'
+                  : data.referral_status === 'rewarded'
+                    ? ' — referrer credited'
+                    : data.referral_status === 'capped'
+                      ? ' — referrer already at max'
+                      : ''}
+              </p>
+            ) : null}
+          </div>
+        )}
         <p className="mt-3 text-xs text-slate-500">
           {data.cancel_count || 0} cancel{(data.cancel_count || 0) === 1 ? '' : 's'} ·{' '}
           {data.no_show_count || 0} no-show{(data.no_show_count || 0) === 1 ? '' : 's'}

@@ -233,12 +233,11 @@ def link_consumed_coupons_to_invoice(*, booking: Booking, invoice: Invoice) -> N
 def referral_summary_for_user(*, organization: Organization, user) -> dict:
     """Payload for customer/provider referral status endpoints."""
     enabled = program_is_active(organization)
+    max_earnings = _money(organization.referral_max_earnings_per_referrer)
     base = {
         'enabled': enabled,
         'reward_amount': str(_money(organization.referral_reward_amount)),
-        'max_earnings_per_referrer': str(
-            _money(organization.referral_max_earnings_per_referrer)
-        ),
+        'max_earnings_per_referrer': str(max_earnings),
     }
     if not user or not getattr(user, 'is_authenticated', False):
         return base
@@ -251,12 +250,203 @@ def referral_summary_for_user(*, organization: Organization, user) -> dict:
             'available_credit': '0.00',
             'earned_total': '0.00',
             'remaining_cap': '0.00',
+            'at_cap': False,
         }
     code = get_or_create_referral_code(organization=organization, referrer=user)
+    earned = earned_total(organization=organization, owner=user)
+    room = remaining_cap(organization=organization, owner=user)
     return {
         **base,
         'code': code.code,
         'available_credit': str(available_credit(organization=organization, owner=user)),
-        'earned_total': str(earned_total(organization=organization, owner=user)),
-        'remaining_cap': str(remaining_cap(organization=organization, owner=user)),
+        'earned_total': str(earned),
+        'remaining_cap': str(room),
+        'at_cap': room <= ZERO,
+    }
+
+
+def _org_book_key(org: Organization) -> str:
+    return (getattr(org, 'public_ref', None) or org.slug or '').strip()
+
+
+def referral_owner_stats_map(*, organization: Organization, owner_ids) -> dict[int, dict]:
+    """
+    Batch referral coupon stats for many customers at one org.
+    Keys are user ids; values include earned/available/at_cap/rewarded_count.
+    """
+    from django.db.models import Count
+
+    ids = [int(x) for x in owner_ids if x is not None]
+    cap = _money(organization.referral_max_earnings_per_referrer)
+    empty = {
+        'earned_total': ZERO,
+        'available_credit': ZERO,
+        'rewarded_count': 0,
+        'remaining_cap': cap,
+        'at_cap': False,
+        'max_earnings_per_referrer': cap,
+    }
+    out: dict[int, dict] = {uid: {**empty} for uid in ids}
+    if not ids:
+        return out
+
+    earned_rows = (
+        ReferralCoupon.objects.filter(organization=organization, owner_id__in=ids)
+        .values('owner_id')
+        .annotate(s=Sum('amount'), n=Count('id'))
+    )
+    for row in earned_rows:
+        uid = row['owner_id']
+        earned = _money(row['s'])
+        room = max(ZERO, (cap - earned)) if cap > ZERO else ZERO
+        out[uid]['earned_total'] = earned
+        out[uid]['rewarded_count'] = int(row['n'] or 0)
+        out[uid]['remaining_cap'] = room
+        out[uid]['at_cap'] = room <= ZERO and earned > ZERO
+        out[uid]['max_earnings_per_referrer'] = cap
+
+    avail_rows = (
+        ReferralCoupon.objects.filter(
+            organization=organization,
+            owner_id__in=ids,
+            status=ReferralCoupon.Status.AVAILABLE,
+            remaining__gt=0,
+        )
+        .values('owner_id')
+        .annotate(s=Sum('remaining'))
+    )
+    for row in avail_rows:
+        out[row['owner_id']]['available_credit'] = _money(row['s'])
+
+    return out
+
+
+def referred_by_map(*, organization: Organization, user_ids) -> dict[int, dict]:
+    """Map referred_user_id → {referrer_id, referrer_name, status} for this org."""
+    ids = [int(x) for x in user_ids if x is not None]
+    if not ids:
+        return {}
+    rows = (
+        Referral.objects.filter(organization=organization, referred_user_id__in=ids)
+        .exclude(status=Referral.Status.INVALID)
+        .select_related('referrer')
+    )
+    out = {}
+    for ref in rows:
+        name = (
+            (ref.referrer.get_full_name() or '').strip()
+            or (ref.referrer.email or '').split('@')[0]
+            or 'Customer'
+        )
+        out[ref.referred_user_id] = {
+            'referrer_id': ref.referrer_id,
+            'referrer_name': name,
+            'status': ref.status,
+        }
+    return out
+
+
+def serialize_owner_referral_stats(stats: dict | None) -> dict:
+    """Stringify decimal fields for API payloads."""
+    s = stats or {}
+    return {
+        'referral_earned_total': str(_money(s.get('earned_total'))),
+        'referral_available_credit': str(_money(s.get('available_credit'))),
+        'referral_rewarded_count': int(s.get('rewarded_count') or 0),
+        'referral_remaining_cap': str(_money(s.get('remaining_cap'))),
+        'referral_at_cap': bool(s.get('at_cap')),
+        'referral_max_earnings': str(_money(s.get('max_earnings_per_referrer'))),
+    }
+
+def customer_referrals_overview(*, user) -> dict:
+    """Completed referrals + usable credit by provider for the logged-in customer."""
+    referrals = (
+        Referral.objects.filter(referrer=user)
+        .exclude(status=Referral.Status.INVALID)
+        .select_related('organization', 'referred_user', 'coupon')
+        .order_by('-rewarded_at', '-created_at')
+    )
+
+    # Per-org earned / cap for labels on completed + credit rows.
+    org_ids_seen: set[int] = set()
+    for ref in referrals:
+        org_ids_seen.add(ref.organization_id)
+    for c in ReferralCoupon.objects.filter(owner=user).only('organization_id'):
+        org_ids_seen.add(c.organization_id)
+
+    org_stats: dict[int, dict] = {}
+    for org in Organization.objects.filter(id__in=org_ids_seen):
+        earned = earned_total(organization=org, owner=user)
+        room = remaining_cap(organization=org, owner=user)
+        cap = _money(org.referral_max_earnings_per_referrer)
+        org_stats[org.id] = {
+            'earned': earned,
+            'remaining_cap': room,
+            'max_earnings': cap,
+            'at_cap': room <= ZERO and earned > ZERO,
+            'available': available_credit(organization=org, owner=user),
+        }
+
+    completed = []
+    pending = []
+    for ref in referrals:
+        org = ref.organization
+        coupon = getattr(ref, 'coupon', None)
+        stats = org_stats.get(org.id) or {}
+        row = {
+            'id': ref.id,
+            'status': ref.status,
+            'organization_name': org.name,
+            'organization_slug': org.slug,
+            'organization_public_ref': _org_book_key(org),
+            'referred_name': (
+                (ref.referred_user.get_full_name() or '').strip()
+                or (ref.referred_user.email or '').split('@')[0]
+                or 'Friend'
+            ),
+            'amount': str(_money(coupon.amount)) if coupon else '0.00',
+            'remaining': str(_money(coupon.remaining)) if coupon else '0.00',
+            'earned_total': str(stats.get('earned', ZERO)),
+            'max_earnings_per_referrer': str(stats.get('max_earnings', ZERO)),
+            'at_cap': bool(stats.get('at_cap')),
+            'rewarded_at': ref.rewarded_at.isoformat() if ref.rewarded_at else None,
+            'created_at': ref.created_at.isoformat() if ref.created_at else None,
+        }
+        if ref.status == Referral.Status.REWARDED:
+            completed.append(row)
+        elif ref.status == Referral.Status.PENDING:
+            pending.append(row)
+        elif ref.status == Referral.Status.CAPPED:
+            # Cap hit — no new money; show max already received for this provider.
+            completed.append({**row, 'amount': '0.00', 'remaining': '0.00'})
+
+    credit_rows = []
+    for org in Organization.objects.filter(id__in=org_ids_seen).order_by('name'):
+        stats = org_stats[org.id]
+        avail = stats['available']
+        earned = stats['earned']
+        if avail <= ZERO and earned <= ZERO:
+            continue
+        credit_rows.append({
+            'organization_name': org.name,
+            'organization_slug': org.slug,
+            'organization_public_ref': _org_book_key(org),
+            'available_credit': str(avail),
+            'earned_total': str(earned),
+            'max_earnings_per_referrer': str(stats['max_earnings']),
+            'remaining_cap': str(stats['remaining_cap']),
+            'at_cap': bool(stats['at_cap']),
+        })
+
+    return {
+        'how_to_use': (
+            'Referral credit is per business. Book again with that company — '
+            'when they send your invoice, unused credit is applied automatically '
+            'before tax. Credit cannot move to a different business. '
+            'Each business sets a lifetime max; once you hit it, further referrals '
+            'there do not earn more credit.'
+        ),
+        'credits': credit_rows,
+        'completed': completed,
+        'pending': pending,
     }

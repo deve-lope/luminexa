@@ -150,6 +150,9 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/customer/account')) {
       return { eyebrow: 'Account', title: 'Profile & password' };
     }
+    if (location.pathname.endsWith('/customer/referrals')) {
+      return { eyebrow: 'More', title: 'Referrals' };
+    }
     if (location.pathname.endsWith('/customer/about')) {
       return { eyebrow: 'More', title: 'About Luminexa' };
     }

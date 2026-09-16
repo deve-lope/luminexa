@@ -439,6 +439,7 @@ export const jobsAPI = {
       params: serviceId ? { service: serviceId } : undefined,
     }),
   getReferral: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/referral/`),
+  listMyReferrals: () => api.get('/api/v1/me/referrals/'),
   listTasks: (params) => api.get('/api/v1/tasks/', { params }),
   createTask: (data) => api.post('/api/v1/tasks/', data),
   patchTask: (id, data) => api.patch(`/api/v1/tasks/${id}/`, data),
