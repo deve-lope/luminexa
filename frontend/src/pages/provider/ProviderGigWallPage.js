@@ -16,7 +16,7 @@ export default function ProviderGigWallPage() {
   const load = useCallback(() => {
     setLoading(true);
     jobsAPI
-      .listGigWall({ category: category || undefined, status: 'open' })
+      .listGigWall({ category: category || undefined, status: 'all' })
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : res.data?.results || [];
         setPosts(list);
@@ -36,7 +36,7 @@ export default function ProviderGigWallPage() {
         <div>
           <h1 className="text-xl font-semibold text-luminexa-ink">Gig wall</h1>
           <p className="mt-0.5 text-sm text-slate-600">
-            Open requests in your service area.
+            Open and quoted requests in your service area. Closed gigs stay off the wall.
           </p>
         </div>
         <Link

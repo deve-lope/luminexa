@@ -9,6 +9,22 @@ import { jobsAPI } from '../../utils/api';
 import { customerGigs, customerQuotes } from '../../utils/customerPaths';
 import { providerGigs, providerMyGigQuotes } from '../../utils/providerPaths';
 
+function statusLabel(status) {
+  if (status === 'open') return 'Open';
+  if (status === 'quoted') return 'Quoted';
+  if (status === 'accepted') return 'Accepted';
+  if (status === 'closed') return 'Closed';
+  return status || '';
+}
+
+function ownerStatusHint(status) {
+  if (status === 'open') return 'On the wall — providers can send quotes.';
+  if (status === 'quoted') return 'On the wall — you have quotes. Close it to stop new ones.';
+  if (status === 'closed') return 'Off the wall — no new quotes. Reopen to list it again.';
+  if (status === 'accepted') return 'A quote was accepted. This gig stays off the wall.';
+  return '';
+}
+
 export default function GigPostDetailPage({ mode = 'customer' }) {
   const { id, orgSlug } = useParams();
   const navigate = useNavigate();
@@ -21,6 +37,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
   const [error, setError] = useState(null);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
   const activeTab = searchParams.get('tab') === 'quotes' ? 'quotes' : 'comments';
 
   const isProviderMode = mode === 'provider';
@@ -112,7 +129,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
               </span>
             )}
             <span className="rounded-full bg-luminexa-mist px-2 py-0.5 font-medium text-teal-800">
-              {post.status}
+              {statusLabel(post.status)}
             </span>
             {post.category_name && (
               <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-800">
@@ -124,26 +141,87 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
           </div>
         </div>
         {isOwner && (
-          <button
-            type="button"
-            disabled={deleteBusy}
-            onClick={async () => {
-              if (!window.confirm('Delete this gig post? This cannot be undone.')) return;
-              setDeleteBusy(true);
-              try {
-                await jobsAPI.closeGig(post.id);
-                navigate(customerGigs());
-              } catch {
-                setError('Could not delete this gig post.');
-                setDeleteBusy(false);
-              }
-            }}
-            className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50"
-          >
-            {deleteBusy ? 'Deleting…' : 'Delete post'}
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {['open', 'quoted'].includes(post.status) && (
+              <button
+                type="button"
+                disabled={statusBusy}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      'Close this gig? It leaves the public wall and providers cannot send new quotes. You can reopen it later.',
+                    )
+                  ) {
+                    return;
+                  }
+                  setStatusBusy(true);
+                  try {
+                    const res = await jobsAPI.closeGig(post.id);
+                    setPost(res.data);
+                    setError(null);
+                  } catch {
+                    setError('Could not close this gig.');
+                  } finally {
+                    setStatusBusy(false);
+                  }
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50"
+              >
+                {statusBusy ? 'Closing…' : 'Close gig'}
+              </button>
+            )}
+            {post.status === 'closed' && (
+              <button
+                type="button"
+                disabled={statusBusy}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      'Reopen this gig so it shows on the wall again and providers can quote?',
+                    )
+                  ) {
+                    return;
+                  }
+                  setStatusBusy(true);
+                  try {
+                    const res = await jobsAPI.reopenGig(post.id);
+                    setPost(res.data);
+                    setError(null);
+                  } catch {
+                    setError('Could not reopen this gig.');
+                  } finally {
+                    setStatusBusy(false);
+                  }
+                }}
+                className="rounded-xl bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {statusBusy ? 'Reopening…' : 'Reopen gig'}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={async () => {
+                if (!window.confirm('Delete this gig post? This cannot be undone.')) return;
+                setDeleteBusy(true);
+                try {
+                  await jobsAPI.deleteGig(post.id);
+                  navigate(customerGigs());
+                } catch {
+                  setError('Could not delete this gig post.');
+                  setDeleteBusy(false);
+                }
+              }}
+              className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50"
+            >
+              {deleteBusy ? 'Deleting…' : 'Delete post'}
+            </button>
+          </div>
         )}
       </div>
+      {isOwner && ownerStatusHint(post.status) && (
+        <p className="text-sm text-slate-600">{ownerStatusHint(post.status)}</p>
+      )}
 
       <div className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{post.description}</p>
@@ -196,7 +274,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
       {activeTab === 'comments' && (
         <div className="space-y-3">
           <GigCommentThread comments={comments} />
-          {(isOwner || isProviderMode) && post.status !== 'closed' && (
+          {(isOwner || isProviderMode) && ['open', 'quoted'].includes(post.status) && (
             <GigCommentForm
               onSubmit={async (body) => {
                 await jobsAPI.createGigComment(post.id, body);

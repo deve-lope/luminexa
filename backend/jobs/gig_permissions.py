@@ -24,6 +24,10 @@ def can_comment_on_gig(user, gig_post, organization=None):
     # If user owns the post
     if gig_post.customer_id == user.id:
         return True
+
+    # Closed / accepted gigs are off the wall — no new provider comments
+    if gig_post.status not in (GigPost.Status.OPEN, GigPost.Status.QUOTED):
+        return False
     
     # If provider, check visibility
     if organization:

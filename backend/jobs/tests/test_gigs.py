@@ -270,6 +270,94 @@ class GigAPITests(TestCase):
         self.assertIn(res.status_code, (403, 404))
         self.assertTrue(GigPost.objects.filter(id=post.id).exists())
 
+    def test_owner_can_close_and_reopen_gig(self):
+        post = self._create_post()
+        self.client.force_authenticate(self.customer)
+        closed = self.client.post(f'/api/v1/gigs/{post.id}/close/', HTTP_HOST='localhost')
+        self.assertEqual(closed.status_code, 200, closed.data)
+        self.assertEqual(closed.data['status'], GigPost.Status.CLOSED)
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.CLOSED)
+        self.assertTrue(GigPost.objects.filter(id=post.id).exists())
+
+        reopened = self.client.post(f'/api/v1/gigs/{post.id}/reopen/', HTTP_HOST='localhost')
+        self.assertEqual(reopened.status_code, 200, reopened.data)
+        self.assertEqual(reopened.data['status'], GigPost.Status.OPEN)
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.OPEN)
+
+    def test_reopen_restores_quoted_when_quotes_exist(self):
+        post = self._create_post(status=GigPost.Status.CLOSED)
+        GigQuote.objects.create(
+            gig_post=post, organization=self.org,
+            price=Decimal('80.00'), description='We can do it',
+        )
+        self.client.force_authenticate(self.customer)
+        res = self.client.post(f'/api/v1/gigs/{post.id}/reopen/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['status'], GigPost.Status.QUOTED)
+
+    def test_closed_gig_leaves_public_and_provider_wall(self):
+        post = self._create_post()
+        self.client.force_authenticate(self.customer)
+        self.client.post(f'/api/v1/gigs/{post.id}/close/', HTTP_HOST='localhost')
+
+        self.client.force_authenticate(self.other)
+        listed = self.client.get('/api/v1/gigs/', HTTP_HOST='localhost')
+        self.assertEqual(listed.status_code, 200)
+        results = listed.data['results'] if isinstance(listed.data, dict) else listed.data
+        self.assertNotIn(post.id, [r['id'] for r in results])
+        retrieve = self.client.get(f'/api/v1/gigs/{post.id}/', HTTP_HOST='localhost')
+        self.assertIn(retrieve.status_code, (403, 404))
+
+        self.client.force_authenticate(self.provider)
+        wall = self.client.get('/api/v1/gigs-wall/?status=all', HTTP_HOST='localhost')
+        self.assertEqual(wall.status_code, 200)
+        wall_results = wall.data['results'] if isinstance(wall.data, dict) else wall.data
+        self.assertNotIn(post.id, [r['id'] for r in wall_results])
+        detail = self.client.get(f'/api/v1/gigs-wall/{post.id}/', HTTP_HOST='localhost')
+        self.assertEqual(detail.status_code, 403)
+        quote = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/',
+            {'price': '50.00', 'description': 'Too late'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quote.status_code, 403)
+
+        self.client.force_authenticate(self.customer)
+        mine = self.client.get('/api/v1/gigs/', HTTP_HOST='localhost')
+        mine_results = mine.data['results'] if isinstance(mine.data, dict) else mine.data
+        self.assertIn(post.id, [r['id'] for r in mine_results])
+
+    def test_cannot_close_accepted_gig(self):
+        post = self._create_post(status=GigPost.Status.ACCEPTED)
+        self.client.force_authenticate(self.customer)
+        res = self.client.post(f'/api/v1/gigs/{post.id}/close/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 400)
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.ACCEPTED)
+
+    def test_other_customer_cannot_close_gig(self):
+        post = self._create_post(user=self.other)
+        self.client.force_authenticate(self.customer)
+        res = self.client.post(f'/api/v1/gigs/{post.id}/close/', HTTP_HOST='localhost')
+        self.assertIn(res.status_code, (403, 404))
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.OPEN)
+
+    def test_reopen_extends_expired_window(self):
+        post = self._create_post(
+            status=GigPost.Status.CLOSED,
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+        self.client.force_authenticate(self.customer)
+        res = self.client.post(f'/api/v1/gigs/{post.id}/reopen/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 200, res.data)
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.OPEN)
+        self.assertGreater(post.expires_at, timezone.now())
+
     def test_customer_wall_shows_all_posts_own_first(self):
         mine = self._create_post(user=self.customer, title='My request')
         other = self._create_post(user=self.other, title='Other job')

@@ -1,7 +1,11 @@
 """API views for the Gig Wall feature."""
 
+from datetime import timedelta
+
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -64,6 +68,7 @@ class CustomerGigPostViewSet(viewsets.ModelViewSet):
     - LIST: all open/quoted posts (Reddit-style), with the current user's posts first
     - RETRIEVE: any open/quoted post, or own post in any status
     - CREATE / UPDATE / DELETE: own posts only
+    - CLOSE / REOPEN: own posts (status change; not the same as DELETE)
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -76,7 +81,7 @@ class CustomerGigPostViewSet(viewsets.ModelViewSet):
             .annotate(**_gig_annotations())
         )
 
-        if self.action in ('update', 'partial_update', 'destroy'):
+        if self.action in ('update', 'partial_update', 'destroy', 'close', 'reopen'):
             return base.filter(customer=user).order_by('-created_at')
 
         if self.action == 'list':
@@ -142,6 +147,48 @@ class CustomerGigPostViewSet(viewsets.ModelViewSet):
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    def _serialized_post(self, post):
+        obj = (
+            GigPost.objects.select_related('customer', 'category')
+            .prefetch_related('images')
+            .annotate(**_gig_annotations())
+            .get(pk=post.pk)
+        )
+        return GigPostSerializer(obj, context={'request': self.request})
+
+    @action(detail=True, methods=['post'], url_path='close')
+    def close(self, request, pk=None):
+        """Take the gig off the public wall. Owner can still see it and reopen later."""
+        post = self.get_object()
+        if post.customer_id != request.user.id:
+            raise PermissionDenied('You can only close your own gig posts.')
+        if post.status == GigPost.Status.ACCEPTED:
+            raise ValidationError({'detail': 'An accepted gig cannot be closed.'})
+        if post.status == GigPost.Status.CLOSED:
+            raise ValidationError({'detail': 'This gig is already closed.'})
+        if post.status not in (GigPost.Status.OPEN, GigPost.Status.QUOTED):
+            raise ValidationError({'detail': 'Only open gigs can be closed.'})
+        post.status = GigPost.Status.CLOSED
+        post.save(update_fields=['status', 'updated_at'])
+        return Response(self._serialized_post(post).data)
+
+    @action(detail=True, methods=['post'], url_path='reopen')
+    def reopen(self, request, pk=None):
+        """Put a closed gig back on the wall. Restores quoted if quotes still exist."""
+        post = self.get_object()
+        if post.customer_id != request.user.id:
+            raise PermissionDenied('You can only reopen your own gig posts.')
+        if post.status != GigPost.Status.CLOSED:
+            raise ValidationError({'detail': 'Only closed gigs can be reopened.'})
+        has_quotes = post.quotes.exclude(status=GigQuote.Status.WITHDRAWN).exists()
+        post.status = GigPost.Status.QUOTED if has_quotes else GigPost.Status.OPEN
+        update_fields = ['status', 'updated_at']
+        if post.expires_at and post.expires_at <= timezone.now():
+            post.expires_at = timezone.now() + timedelta(days=30)
+            update_fields.append('expires_at')
+        post.save(update_fields=update_fields)
+        return Response(self._serialized_post(post).data)
+
 
 class ProviderGigWallViewSet(viewsets.ReadOnlyModelViewSet):
     """Providers browse gig posts visible in their service area."""
@@ -193,10 +240,13 @@ class ProviderGigWallViewSet(viewsets.ReadOnlyModelViewSet):
         if not post:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Owner can always retrieve; providers only if visible
+        # Owner can always retrieve; providers only if the gig is still on the wall
         if post.customer_id == request.user.id:
             serializer = GigPostSerializer(post, context={'request': request})
             return Response(serializer.data)
+
+        if post.status not in (GigPost.Status.OPEN, GigPost.Status.QUOTED):
+            raise PermissionDenied('This gig is no longer on the wall.')
 
         if not membership:
             raise PermissionDenied('Provider access required.')
