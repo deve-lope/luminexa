@@ -51,9 +51,7 @@ export default function CustomerGigWallPage() {
         </Link>
       </div>
 
-      <div className="rounded-2xl border border-luminexa-line bg-white p-3 shadow-lx-soft">
-        <GigCategoryFilter value={category} onChange={setCategory} />
-      </div>
+      <GigCategoryFilter value={category} onChange={setCategory} />
 
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

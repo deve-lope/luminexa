@@ -146,21 +146,25 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
       </div>
 
       <div className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
-        <p className="whitespace-pre-wrap text-sm text-slate-800">{post.description}</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{post.description}</p>
         {location && <p className="mt-3 text-sm text-slate-600">{location}</p>}
-        {post.images?.length > 0 && (
-          <div className="mt-3 flex gap-2">
+      </div>
+
+      {post.images?.length > 0 && (
+        <section className="rounded-2xl border border-luminexa-line bg-white p-4 shadow-lx-soft">
+          <h2 className="text-sm font-semibold text-slate-900">Images</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3">
             {post.images.map((img) => (
               <img
                 key={img.id}
                 src={img.image || img.url}
                 alt=""
-                className="h-28 w-28 rounded-lg object-cover"
+                className="aspect-square w-full rounded-xl object-cover"
               />
             ))}
           </div>
-        )}
-      </div>
+        </section>
+      )}
 
       <div className="flex gap-2 border-b border-luminexa-line">
         <button
