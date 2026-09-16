@@ -228,7 +228,7 @@ export function buildCustomerMenuItems({
     iconId: 'messages',
     badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
   });
-  items.push({ id: 'completed', label: 'Past jobs', to: '/customer/completed' });
+  items.push({ id: 'completed', label: 'My jobs', to: '/customer/completed' });
   items.push({ id: 'referrals', label: 'Referrals', to: '/customer/referrals' });
   items.push({ id: 'luminexa-home', label: 'About Luminexa', to: '/customer/about' });
   items.push({ id: 'logout', label: 'Log out', onClick: logout, danger: true });
