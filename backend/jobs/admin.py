@@ -5,6 +5,10 @@ from .models import (
     CustomerServiceInquiry,
     AvailabilitySlot,
     Booking,
+    GigComment,
+    GigPost,
+    GigPostImage,
+    GigQuote,
     Invoice,
     Service,
     ServiceCategory,
@@ -78,3 +82,37 @@ class CustomerNotificationAdmin(admin.ModelAdmin):
 class CustomerServiceInquiryAdmin(admin.ModelAdmin):
     list_display = ('organization', 'customer', 'service_label', 'status', 'created_at', 'dismissed_at')
     list_filter = ('organization', 'status', 'dismissed_at')
+
+
+class GigPostImageInline(admin.TabularInline):
+    model = GigPostImage
+    extra = 0
+    readonly_fields = ('image', 'created_at')
+
+
+@admin.register(GigPost)
+class GigPostAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'title', 'customer', 'category', 'status',
+        'location_city', 'created_at', 'expires_at',
+    )
+    list_filter = ('status', 'category', 'created_at')
+    search_fields = ('title', 'description', 'customer__email', 'location_city')
+    readonly_fields = ('created_at', 'updated_at', 'location_latitude', 'location_longitude')
+    inlines = [GigPostImageInline]
+
+
+@admin.register(GigComment)
+class GigCommentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'gig_post', 'author', 'organization', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('body', 'author__email', 'gig_post__title')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(GigQuote)
+class GigQuoteAdmin(admin.ModelAdmin):
+    list_display = ('id', 'gig_post', 'organization', 'price', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('gig_post__title', 'organization__name', 'description')
+    readonly_fields = ('created_at', 'updated_at')

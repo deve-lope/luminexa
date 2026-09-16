@@ -27,6 +27,11 @@ import CustomerCompletedPage from './pages/customer/CustomerCompletedPage';
 import CustomerReferralsPage from './pages/customer/CustomerReferralsPage';
 import CustomerQuotesPage from './pages/customer/CustomerQuotesPage';
 import CustomerAccountPage from './pages/customer/CustomerAccountPage';
+import CustomerGigWallPage from './pages/customer/CustomerGigWallPage';
+import CreateGigPostPage from './pages/customer/CreateGigPostPage';
+import GigPostDetailPage from './pages/gigs/GigPostDetailPage';
+import ProviderGigWallPage from './pages/provider/ProviderGigWallPage';
+import ProviderMyQuotesPage from './pages/provider/ProviderMyQuotesPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
 import CustomerBookServicePage from './pages/customer/CustomerBookServicePage';
 import AcceptStaffInvitePage from './pages/AcceptStaffInvitePage';
@@ -203,6 +208,9 @@ function AppRoutes() {
           <Route path="requests" element={<ProviderRequestsPage />} />
           <Route path="requests/:kind/:id" element={<ProviderRequestDetailPage />} />
           <Route path="jobs" element={<ProviderJobsPage />} />
+          <Route path="gigs" element={<ProviderGigWallPage />} />
+          <Route path="gigs/my-quotes" element={<ProviderMyQuotesPage />} />
+          <Route path="gigs/:id" element={<GigPostDetailPage mode="provider" />} />
           <Route path="messages" element={<ProviderMessagesPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
           <Route path="notifications/all" element={<ProviderNotificationsAllPage />} />
@@ -233,6 +241,9 @@ function AppRoutes() {
           <Route path="messages" element={<CustomerMessagesPage />} />
           <Route path="notifications" element={<CustomerNotificationsPage />} />
           <Route path="quotes" element={<CustomerQuotesPage />} />
+          <Route path="gigs" element={<CustomerGigWallPage />} />
+          <Route path="gigs/create" element={<CreateGigPostPage />} />
+          <Route path="gigs/:id" element={<GigPostDetailPage mode="customer" />} />
           <Route path="completed" element={<CustomerCompletedPage />} />
           <Route path="referrals" element={<CustomerReferralsPage />} />
           <Route path="history" element={<CustomerHistoryPage />} />

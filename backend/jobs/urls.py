@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import analytics_views, dashboard_views, public_views, service_request_views, stripe_views, views
-from . import quickbooks_views
+from . import gig_views, quickbooks_views
 
 router = DefaultRouter()
 router.register(r'organizations', views.OrganizationViewSet, basename='organization')
@@ -12,8 +12,39 @@ router.register(r'availability-slots', views.AvailabilitySlotViewSet, basename='
 router.register(r'unavailable-blocks', views.UnavailableBlockViewSet, basename='unavailable-block')
 router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'tasks', views.TaskViewSet, basename='task')
+router.register(r'gigs', gig_views.CustomerGigPostViewSet, basename='customer-gigs')
+router.register(r'gigs-wall', gig_views.ProviderGigWallViewSet, basename='provider-gigs-wall')
 
 urlpatterns = [
+    path('gigs/my-quotes/', gig_views.ProviderMyQuotesAPIView.as_view()),
+    path(
+        'gigs/<int:gig_post_id>/images/',
+        gig_views.GigPostImageViewSet.as_view({'get': 'list', 'post': 'create'}),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/images/<int:pk>/',
+        gig_views.GigPostImageViewSet.as_view({'delete': 'destroy'}),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/comments/',
+        gig_views.GigCommentViewSet.as_view({'get': 'list', 'post': 'create'}),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/',
+        gig_views.GigQuoteViewSet.as_view({'get': 'list', 'post': 'create'}),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:pk>/',
+        gig_views.GigQuoteViewSet.as_view({
+            'patch': 'partial_update',
+            'delete': 'destroy',
+        }),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/accept/',
+        gig_views.GigQuoteAcceptAPIView.as_view(),
+    ),
+
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
     path('me/service-inquiries/<int:inquiry_id>/', views.CustomerMyInquiryDetailAPIView.as_view()),
     path(
