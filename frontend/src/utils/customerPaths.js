@@ -72,6 +72,10 @@ export function customerGigDetail(id) {
   return `/customer/gigs/${id}`;
 }
 
+export function customerGigBid(gigId, quoteId) {
+  return `/customer/gigs/${gigId}/bids/${quoteId}`;
+}
+
 export function customerFindType(typeSlug) {
   return `/customer/find/${typeSlug}`;
 }

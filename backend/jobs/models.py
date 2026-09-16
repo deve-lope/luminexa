@@ -209,6 +209,8 @@ class ProviderNotification(models.Model):
         NEW_GIG_IN_AREA = 'new_gig_in_area', 'New gig in your area'
         GIG_QUOTE_ACCEPTED = 'gig_quote_accepted', 'Gig quote accepted'
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on gig'
+        GIG_QUOTE_COUNTERED = 'gig_quote_countered', 'Customer countered your gig bid'
+        GIG_QUOTE_REJECTED = 'gig_quote_rejected', 'Customer rejected your gig bid'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -258,6 +260,7 @@ class CustomerNotification(models.Model):
         NEW_GIG_QUOTE = 'new_gig_quote', 'New quote on your gig'
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on your gig'
         GIG_EXPIRED = 'gig_expired', 'Gig post expired'
+        GIG_COUNTER_DECLINED = 'gig_counter_declined', 'Provider declined your counter-offer'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1350,7 +1353,9 @@ class GigQuote(models.Model):
 
     class Status(models.TextChoices):
         SUBMITTED = 'submitted', 'Submitted'
+        COUNTERED = 'countered', 'Customer counter-offer'
         ACCEPTED = 'accepted', 'Accepted by customer'
+        REJECTED = 'rejected', 'Rejected by customer'
         WITHDRAWN = 'withdrawn', 'Withdrawn by provider'
 
     gig_post = models.ForeignKey(
@@ -1390,6 +1395,21 @@ class GigQuote(models.Model):
         default=Status.SUBMITTED,
         db_index=True,
     )
+    counter_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text='Customer-proposed price awaiting provider response.',
+    )
+    counter_message = models.TextField(
+        blank=True,
+        default='',
+        max_length=1000,
+        help_text='Optional note with the customer counter-offer.',
+    )
+    countered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1409,6 +1429,10 @@ class GigQuote(models.Model):
     def __str__(self):
         return f'Quote ${self.price} by {self.organization_id} on GigPost {self.gig_post_id}'
 
+    @classmethod
+    def active_statuses(cls):
+        """Bids that still count on the wall / keep the gig in 'quoted'."""
+        return (cls.Status.SUBMITTED, cls.Status.COUNTERED)
 
 class Task(models.Model):
     class Priority(models.IntegerChoices):

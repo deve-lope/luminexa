@@ -30,6 +30,7 @@ import CustomerAccountPage from './pages/customer/CustomerAccountPage';
 import CustomerGigWallPage from './pages/customer/CustomerGigWallPage';
 import CreateGigPostPage from './pages/customer/CreateGigPostPage';
 import GigPostDetailPage from './pages/gigs/GigPostDetailPage';
+import GigBidDetailPage from './pages/gigs/GigBidDetailPage';
 import ProviderGigWallPage from './pages/provider/ProviderGigWallPage';
 import ProviderMyQuotesPage from './pages/provider/ProviderMyQuotesPage';
 import CustomerProviderRoutes from './layouts/CustomerProviderRoutes';
@@ -210,6 +211,10 @@ function AppRoutes() {
           <Route path="jobs" element={<ProviderJobsPage />} />
           <Route path="gigs" element={<ProviderGigWallPage />} />
           <Route path="gigs/my-quotes" element={<ProviderMyQuotesPage />} />
+          <Route
+            path="gigs/:id/bids/:quoteId"
+            element={<GigBidDetailPage mode="provider" />}
+          />
           <Route path="gigs/:id" element={<GigPostDetailPage mode="provider" />} />
           <Route path="messages" element={<ProviderMessagesPage />} />
           <Route path="notifications" element={<ProviderNotificationsPage />} />
@@ -243,6 +248,10 @@ function AppRoutes() {
           <Route path="quotes" element={<CustomerQuotesPage />} />
           <Route path="gigs" element={<CustomerGigWallPage />} />
           <Route path="gigs/create" element={<CreateGigPostPage />} />
+          <Route
+            path="gigs/:id/bids/:quoteId"
+            element={<GigBidDetailPage mode="customer" />}
+          />
           <Route path="gigs/:id" element={<GigPostDetailPage mode="customer" />} />
           <Route path="completed" element={<CustomerCompletedPage />} />
           <Route path="referrals" element={<CustomerReferralsPage />} />

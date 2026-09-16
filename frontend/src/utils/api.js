@@ -465,6 +465,7 @@ export const jobsAPI = {
   createGigComment: (gigId, body) =>
     api.post(`/api/v1/gigs/${gigId}/comments/`, { body }),
   listGigQuotes: (gigId) => api.get(`/api/v1/gigs/${gigId}/quotes/`),
+  getGigQuote: (gigId, quoteId) => api.get(`/api/v1/gigs/${gigId}/quotes/${quoteId}/`),
   createGigQuote: (gigId, data) => api.post(`/api/v1/gigs/${gigId}/quotes/`, data),
   updateGigQuote: (gigId, quoteId, data) =>
     api.patch(`/api/v1/gigs/${gigId}/quotes/${quoteId}/`, data),
@@ -472,6 +473,16 @@ export const jobsAPI = {
     api.delete(`/api/v1/gigs/${gigId}/quotes/${quoteId}/`),
   acceptGigQuote: (gigId, quoteId) =>
     api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/accept/`),
+  rejectGigQuote: (gigId, quoteId) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/reject/`),
+  counterGigQuote: (gigId, quoteId, data) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/counter/`, data),
+  acceptGigQuoteCounter: (gigId, quoteId) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/accept-counter/`),
+  declineGigQuoteCounter: (gigId, quoteId) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/decline-counter/`),
+  openGigQuoteConversation: (gigId, quoteId) =>
+    api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/conversation/`),
   listMyGigQuotes: (params) => api.get('/api/v1/gigs/my-quotes/', { params }),
 };
 

@@ -230,6 +230,9 @@ function ProviderShell() {
     if (location.pathname.startsWith(`${base}/gigs/my-quotes`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My bids' };
     }
+    if (/\/gigs\/[^/]+\/bids\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Bid details' };
+    }
     if (/\/gigs\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/gigs')) {
       return { eyebrow: activeOrg?.organization_name, title: 'Gig details' };
     }

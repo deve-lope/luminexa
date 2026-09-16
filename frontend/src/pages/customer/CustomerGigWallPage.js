@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import GigCategoryFilter from '../../components/gigs/GigCategoryFilter';
 import GigPostCard from '../../components/gigs/GigPostCard';
@@ -32,21 +32,27 @@ export default function CustomerGigWallPage() {
     load();
   }, [load]);
 
-  const mineCount = posts.filter((p) => p.is_mine).length;
+  const { mine, others } = useMemo(() => {
+    const mineList = [];
+    const otherList = [];
+    posts.forEach((p) => {
+      if (p.is_mine) mineList.push(p);
+      else otherList.push(p);
+    });
+    return { mine: mineList, others: otherList };
+  }, [posts]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-luminexa-ink">Gig wall</h1>
+          <p className="lx-eyebrow">Community board</p>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight text-luminexa-ink">Gig wall</h1>
           <p className="mt-0.5 text-sm text-slate-600">
-            Everyone&apos;s help requests. Yours stay on top.
+            Help requests pinned for providers nearby. Yours stay on top.
           </p>
         </div>
-        <Link
-          to={customerGigCreate()}
-          className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
-        >
+        <Link to={customerGigCreate()} className="lx-btn-primary shrink-0 px-4 py-2 text-sm">
           Post a request
         </Link>
       </div>
@@ -58,46 +64,57 @@ export default function CustomerGigWallPage() {
           {error}
         </p>
       )}
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
-      {!loading && posts.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-teal-200 bg-luminexa-mist/60 px-4 py-10 text-center">
-          <p className="text-sm text-teal-900">
-            No requests on the wall yet. Be the first to post.
-          </p>
-          <Link
-            to={customerGigCreate()}
-            className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline"
-          >
-            Post a request
-          </Link>
-        </div>
-      )}
 
-      {!loading && posts.length > 0 && mineCount > 0 && (
-        <p className="text-xs font-medium uppercase tracking-wide text-teal-800">
-          Your posts ({mineCount})
-        </p>
-      )}
+      <div className="gig-wall-surface">
+        {loading && <p className="px-2 py-6 text-center text-sm text-slate-600">Loading the wall…</p>}
 
-      <div className="space-y-3">
-        {posts.map((post, idx) => {
-          const prev = posts[idx - 1];
-          const showOthersHeading =
-            idx > 0 && prev?.is_mine && !post.is_mine;
-          return (
-            <React.Fragment key={post.id}>
-              {showOthersHeading && (
-                <p className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Community requests
-                </p>
-              )}
-              <GigPostCard
-                post={post}
-                onClick={() => navigate(customerGigDetail(post.id))}
-              />
-            </React.Fragment>
-          );
-        })}
+        {!loading && posts.length === 0 && (
+          <div className="gig-empty-board">
+            <p className="text-sm font-medium text-teal-950">
+              Nothing pinned yet. Be the first to post a request.
+            </p>
+            <Link
+              to={customerGigCreate()}
+              className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline"
+            >
+              Post a request
+            </Link>
+          </div>
+        )}
+
+        {!loading && mine.length > 0 && (
+          <>
+            <p className="gig-board-label">Your posts ({mine.length})</p>
+            <div className="gig-pin-board">
+              {mine.map((post, idx) => (
+                <GigPostCard
+                  key={post.id}
+                  post={post}
+                  index={idx}
+                  onClick={() => navigate(customerGigDetail(post.id))}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {!loading && others.length > 0 && (
+          <>
+            <p className={`gig-board-label${mine.length > 0 ? ' pt-4' : ''}`}>
+              Community requests
+            </p>
+            <div className="gig-pin-board">
+              {others.map((post, idx) => (
+                <GigPostCard
+                  key={post.id}
+                  post={post}
+                  index={mine.length + idx}
+                  onClick={() => navigate(customerGigDetail(post.id))}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

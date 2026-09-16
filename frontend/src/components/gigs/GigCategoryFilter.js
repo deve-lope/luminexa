@@ -18,23 +18,41 @@ export default function GigCategoryFilter({ value, onChange }) {
 
   return (
     <div>
-      <label htmlFor="gig-category" className="mb-1 block text-sm font-medium text-slate-700">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         Category
-      </label>
-      <select
-        id="gig-category"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        disabled={loading}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+      </p>
+      <div
+        className="gig-chip-rail"
+        role="listbox"
+        aria-label="Filter by category"
+        aria-busy={loading || undefined}
       >
-        <option value="">All categories</option>
-        {categories.map((cat) => (
-          <option key={cat.slug || cat.id} value={cat.slug}>
-            {cat.name}
-          </option>
-        ))}
-      </select>
+        <button
+          type="button"
+          role="option"
+          aria-selected={!value}
+          onClick={() => onChange(null)}
+          className={`gig-chip${!value ? ' gig-chip--active' : ''}`}
+        >
+          All
+        </button>
+        {categories.map((cat) => {
+          const slug = cat.slug || String(cat.id);
+          const active = value === slug;
+          return (
+            <button
+              key={slug}
+              type="button"
+              role="option"
+              aria-selected={active}
+              onClick={() => onChange(slug)}
+              className={`gig-chip${active ? ' gig-chip--active' : ''}`}
+            >
+              {cat.name}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
