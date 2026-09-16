@@ -240,6 +240,36 @@ class GigAPITests(TestCase):
         self.assertEqual(post.category_id, self.category.id)
         self.assertEqual(res.data.get('category_slug'), self.category.slug)
 
+    def test_create_requires_city_and_postal(self):
+        self.client.force_authenticate(self.customer)
+        res = self.client.post(
+            '/api/v1/gigs/',
+            {
+                'title': 'Need help today',
+                'description': 'Please install a shelf',
+                'search_radius_miles': 25,
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertIn('location_city', res.data)
+        self.assertIn('location_postal_code', res.data)
+
+    def test_customer_can_delete_own_gig(self):
+        post = self._create_post()
+        self.client.force_authenticate(self.customer)
+        res = self.client.delete(f'/api/v1/gigs/{post.id}/', HTTP_HOST='localhost')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(GigPost.objects.filter(id=post.id).exists())
+
+    def test_other_customer_cannot_delete_gig(self):
+        post = self._create_post(user=self.other)
+        self.client.force_authenticate(self.customer)
+        res = self.client.delete(f'/api/v1/gigs/{post.id}/', HTTP_HOST='localhost')
+        self.assertIn(res.status_code, (403, 404))
+        self.assertTrue(GigPost.objects.filter(id=post.id).exists())
+
     def test_customer_wall_shows_all_posts_own_first(self):
         mine = self._create_post(user=self.customer, title='My request')
         other = self._create_post(user=self.other, title='Other job')
@@ -399,6 +429,11 @@ class GigAPITests(TestCase):
                 HTTP_HOST='localhost',
             )
             self.assertEqual(res.status_code, 201, res.data)
+            image_url = res.data.get('image') or ''
+            self.assertTrue(
+                str(image_url).startswith('/media/'),
+                f'Expected same-origin /media/ URL, got {image_url!r}',
+            )
         upload = SimpleUploadedFile('photo3.png', _png_bytes(), content_type='image/png')
         res = self.client.post(
             f'/api/v1/gigs/{post.id}/images/',

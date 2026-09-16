@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import GigCommentForm from '../../components/gigs/GigCommentForm';
 import GigCommentThread from '../../components/gigs/GigCommentThread';
 import GigQuoteForm from '../../components/gigs/GigQuoteForm';
@@ -11,6 +11,7 @@ import { providerGigs, providerMyGigQuotes } from '../../utils/providerPaths';
 
 export default function GigPostDetailPage({ mode = 'customer' }) {
   const { id, orgSlug } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [post, setPost] = useState(null);
@@ -19,6 +20,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [quoteBusy, setQuoteBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const activeTab = searchParams.get('tab') === 'quotes' ? 'quotes' : 'comments';
 
   const isProviderMode = mode === 'provider';
@@ -121,16 +123,24 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
             <span>Within {post.search_radius_miles} mi</span>
           </div>
         </div>
-        {isOwner && ['open', 'quoted'].includes(post.status) && (
+        {isOwner && (
           <button
             type="button"
+            disabled={deleteBusy}
             onClick={async () => {
-              await jobsAPI.closeGig(post.id);
-              load();
+              if (!window.confirm('Delete this gig post? This cannot be undone.')) return;
+              setDeleteBusy(true);
+              try {
+                await jobsAPI.closeGig(post.id);
+                navigate(customerGigs());
+              } catch {
+                setError('Could not delete this gig post.');
+                setDeleteBusy(false);
+              }
             }}
-            className="rounded-xl border border-teal-200 bg-white px-3 py-1.5 text-sm font-medium text-teal-900"
+            className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50"
           >
-            Close post
+            {deleteBusy ? 'Deleting…' : 'Delete post'}
           </button>
         )}
       </div>
@@ -143,9 +153,9 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
             {post.images.map((img) => (
               <img
                 key={img.id}
-                src={img.image}
+                src={img.image || img.url}
                 alt=""
-                className="h-24 w-24 rounded-lg object-cover"
+                className="h-28 w-28 rounded-lg object-cover"
               />
             ))}
           </div>

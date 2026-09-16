@@ -19,8 +19,10 @@ import {
   providerHome,
   providerSettings,
   providerShare,
+  providerGigs,
 } from '../utils/providerPaths';
 import { resolveOwnerBookBack, resolvePublicBack } from '../utils/navigationBack';
+import { isAndroidApp } from '../native/capacitorNative';
 
 function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const { user, logout } = useAuth();
@@ -29,7 +31,11 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const { orgSlug: ctxSlug } = useProviderOrg();
   const orgSlug = orgSlugProp || ctxSlug;
 
-  const tabs = useMemo(() => buildProviderTabs(orgSlug), [orgSlug]);
+  const androidApp = isAndroidApp();
+  const tabs = useMemo(
+    () => buildProviderTabs(orgSlug, { includeGigs: !androidApp }),
+    [orgSlug, androidApp],
+  );
   const menuItems = useMemo(
     () =>
       buildProviderMenuItems({
@@ -38,10 +44,12 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
+        providerGigsPath: providerGigs(orgSlug),
+        includeGigs: androidApp,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin]
+    [logout, navigate, orgSlug, user?.can_access_django_admin, androidApp]
   );
 
   const onServiceDetail = /\/services\/[^/]+\/?$/.test(location.pathname);

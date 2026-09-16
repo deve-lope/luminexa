@@ -138,9 +138,8 @@ class CustomerGigPostViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         post = self.get_object()
         if post.customer_id != request.user.id:
-            raise PermissionDenied('You can only close your own gig posts.')
-        post.status = GigPost.Status.CLOSED
-        post.save(update_fields=['status', 'updated_at'])
+            raise PermissionDenied('You can only delete your own gig posts.')
+        post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

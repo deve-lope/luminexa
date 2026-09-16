@@ -19,6 +19,7 @@ export default function GigPostCard({ post, onClick, showDistance = false, dista
       ? `${post.quote_count} quote${post.quote_count === 1 ? '' : 's'}`
       : 'No quotes yet';
   const isMine = !!post.is_mine;
+  const thumb = post.images?.[0]?.image || post.images?.[0]?.url;
 
   return (
     <button
@@ -31,6 +32,13 @@ export default function GigPostCard({ post, onClick, showDistance = false, dista
       }`}
     >
       <div className="flex items-start justify-between gap-3">
+        {thumb && (
+          <img
+            src={thumb}
+            alt=""
+            className="h-16 w-16 shrink-0 rounded-lg object-cover"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-semibold text-luminexa-ink">{post.title}</h3>

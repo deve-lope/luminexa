@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import GigImageUpload from '../../components/gigs/GigImageUpload';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { customerGigDetail, customerGigs } from '../../utils/customerPaths';
+import { validatePostalCode } from '../../utils/postalInput';
 
 export default function CreateGigPostPage() {
   const navigate = useNavigate();
@@ -40,10 +41,23 @@ export default function CreateGigPostPage() {
     e.preventDefault();
     setLoading(true);
     setErrors({});
+    const city = (formData.location_city || '').trim();
+    const postalCheck = validatePostalCode(formData.location_postal_code);
+    if (city.length < 2 || !postalCheck.valid) {
+      const next = {};
+      if (city.length < 2) next.location_city = 'City is required.';
+      if (!postalCheck.valid) next.location_postal_code = postalCheck.error || 'Postal / ZIP code is required.';
+      next.detail = next.location_city || next.location_postal_code;
+      setErrors(next);
+      setLoading(false);
+      return;
+    }
     try {
       const payload = {
         ...formData,
         category: formData.category || null,
+        location_city: city,
+        location_postal_code: postalCheck.normalized,
         search_radius_miles: Number(formData.search_radius_miles) || 25,
       };
       const res = await jobsAPI.createGig(payload);
@@ -146,13 +160,17 @@ export default function CreateGigPostPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-luminexa-ink">City</label>
+            <label className="mb-1 block text-sm font-medium text-luminexa-ink">City *</label>
             <input
               name="location_city"
               value={formData.location_city}
               onChange={handleChange}
+              required
+              minLength={2}
+              maxLength={120}
               className="w-full rounded-xl border border-luminexa-line px-3 py-2 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
             />
+            {errors.location_city && <p className="mt-1 text-sm text-red-600">{errors.location_city}</p>}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-luminexa-ink">State / province</label>
@@ -164,13 +182,18 @@ export default function CreateGigPostPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-luminexa-ink">Postal code</label>
+            <label className="mb-1 block text-sm font-medium text-luminexa-ink">Postal / ZIP code *</label>
             <input
               name="location_postal_code"
               value={formData.location_postal_code}
               onChange={handleChange}
+              required
+              autoComplete="postal-code"
               className="w-full rounded-xl border border-luminexa-line px-3 py-2 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
             />
+            {errors.location_postal_code && (
+              <p className="mt-1 text-sm text-red-600">{errors.location_postal_code}</p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-luminexa-ink">

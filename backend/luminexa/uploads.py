@@ -11,7 +11,10 @@ MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 ALLOWED_IMAGE_CONTENT_TYPES = {
     'image/jpeg',
+    'image/jpg',
+    'image/pjpeg',
     'image/png',
+    'image/x-png',
     'image/webp',
     'image/gif',
 }

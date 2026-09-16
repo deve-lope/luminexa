@@ -10,6 +10,7 @@ from rest_framework import serializers
 
 from businesses.location import haversine_miles
 from businesses.models import BusinessType
+from businesses.postal import validate_postal_code
 from luminexa.uploads import validate_uploaded_image_django
 
 from .gig_geocode import assign_gig_coordinates
@@ -52,6 +53,13 @@ class BusinessTypeIdentifierField(serializers.Field):
         return value.slug
 
 
+def _media_url(file_field):
+    """Same-origin /media/... path. Absolute URLs break behind nginx Host=localhost."""
+    if not file_field or not getattr(file_field, 'url', None):
+        return None
+    return file_field.url
+
+
 class GigPostImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = GigPostImage
@@ -65,6 +73,11 @@ class GigPostImageSerializer(serializers.ModelSerializer):
         if ext and ext not in {'.jpg', '.jpeg', '.png', '.webp', '.gif'}:
             raise serializers.ValidationError('Use a JPEG, PNG, WebP, or GIF image.')
         return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['image'] = _media_url(instance.image)
+        return data
 
 
 class GigPostSerializer(serializers.ModelSerializer):
@@ -156,6 +169,10 @@ class GigPostWriteSerializer(serializers.ModelSerializer):
             'search_radius_miles',
         ]
         read_only_fields = ['id']
+        extra_kwargs = {
+            'location_city': {'required': True, 'allow_blank': False},
+            'location_postal_code': {'required': True, 'allow_blank': False},
+        }
 
     def validate_title(self, value):
         title = (value or '').strip()
@@ -178,6 +195,23 @@ class GigPostWriteSerializer(serializers.ModelSerializer):
         if miles < 1 or miles > 100:
             raise serializers.ValidationError('Radius must be between 1 and 100 miles.')
         return Decimal(str(round(miles, 1)))
+
+    def validate_location_city(self, value):
+        city = (value or '').strip()
+        if len(city) < 2:
+            raise serializers.ValidationError('City is required.')
+        if len(city) > 120:
+            raise serializers.ValidationError('City must be 120 characters or fewer.')
+        return city
+
+    def validate_location_postal_code(self, value):
+        raw = (value or '').strip()
+        if not raw:
+            raise serializers.ValidationError('Postal / ZIP code is required.')
+        normalized = validate_postal_code(raw)
+        if len(normalized) < 5:
+            raise serializers.ValidationError('Enter a complete postal or ZIP code.')
+        return normalized
 
     def create(self, validated_data):
         request = self.context['request']
@@ -249,13 +283,7 @@ class GigQuoteOrganizationSerializer(serializers.Serializer):
     public_ref = serializers.CharField()
 
     def get_logo(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            url = obj.logo.url
-            if request:
-                return request.build_absolute_uri(url)
-            return url
-        return None
+        return _media_url(obj.logo)
 
 
 class GigQuoteSerializer(serializers.ModelSerializer):
