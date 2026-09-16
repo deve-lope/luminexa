@@ -71,15 +71,31 @@ def accept_gig_quote(quote, *, customer, price=None):
         status=GigQuote.Status.WITHDRAWN
     )
 
+    from .booking_services import ensure_customer_membership
+
+    # Approved membership so Quotes can show the provider schedule and book a slot.
+    ensure_customer_membership(quote.organization, customer, approve=True)
+
+    address = (post.location_address or '').strip()
+    if not address:
+        parts = [
+            (post.location_city or '').strip(),
+            (post.location_state or '').strip(),
+            (post.location_postal_code or '').strip(),
+        ]
+        address = ', '.join(p for p in parts if p)
+
     CustomerServiceInquiry.objects.create(
         organization=quote.organization,
         customer=customer,
         service_label=post.title[:200],
         message=f'Accepted bid from gig post: {post.title}\n\n{quote.description}',
-        service_address=post.location_address or '',
+        service_address=address,
         status=CustomerServiceInquiry.Status.QUOTE_ACCEPTED,
         quote_amount=final_price,
         quote_message=quote.description,
+        quoted_at=timezone.now(),
+        gig_quote=quote,
     )
 
     notify_quote_accepted(quote)

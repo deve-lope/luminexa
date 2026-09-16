@@ -208,6 +208,11 @@ urlpatterns = [
         name='public-service-calendar',
     ),
     path(
+        'public/providers/<slug>/calendar/',
+        public_views.PublicOrganizationCalendarAPIView.as_view(),
+        name='public-organization-calendar',
+    ),
+    path(
         'public/providers/<slug>/combined-calendar/',
         public_views.PublicCombinedCalendarAPIView.as_view(),
         name='public-combined-calendar',

@@ -197,6 +197,8 @@ export const businessesAPI = {
     api.get(`/api/v1/public/providers/${orgSlug}/services/${serviceId}/calendar/`, {
       params,
     }),
+  getOrgCalendar: (orgSlug, params) =>
+    api.get(`/api/v1/public/providers/${orgSlug}/calendar/`, { params }),
   getCombinedCalendar: (orgSlug, serviceIds, params) =>
     api.get(`/api/v1/public/providers/${orgSlug}/combined-calendar/`, {
       params: {

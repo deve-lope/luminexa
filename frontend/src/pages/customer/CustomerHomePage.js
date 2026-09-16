@@ -24,6 +24,7 @@ import { lxPillTone } from '../../utils/pillGradients';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 import useUnpaidInvoice, { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
+import { IconMapPin, IconSchedule } from '../../components/icons/NavIcons';
 
 const MAX_HOME_PROVIDERS = 3;
 const MAX_HOME_CATEGORIES = 8;
@@ -477,14 +478,28 @@ export default function CustomerHomePage() {
                         <div>
                           <p className={`font-semibold tracking-tight ${tone.title}`}>{b.service_name}</p>
                           <p className={`mt-0.5 text-sm ${tone.body}`}>{b.organization_name}</p>
-                          <p className={`mt-3 text-sm font-medium ${tone.title}`}>
-                            <span className={`font-normal ${tone.body}`}>When · </span>
-                            {formatWhen(b.start_at)}
+                          {b.quote_amount != null && (
+                            <p className={`mt-1 text-sm font-medium tabular-nums ${tone.title}`}>
+                              Agreed · ${Number(b.quote_amount).toFixed(2)}
+                            </p>
+                          )}
+                          <p className={`mt-3 flex items-start gap-2 text-sm font-medium ${tone.title}`}>
+                            <IconSchedule
+                              className={`mt-0.5 h-4 w-4 shrink-0 ${tone.body}`}
+                              aria-hidden
+                            />
+                            <span>
+                              <span className="sr-only">When: </span>
+                              {formatWhen(b.start_at)}
+                            </span>
                           </p>
                           {(b.job_location || b.service_address) && (
-                            <p className={`mt-1 line-clamp-2 text-sm ${tone.body}`}>
-                              <span className="font-medium">Place · </span>
-                              {b.job_location || b.service_address}
+                            <p className={`mt-1.5 flex items-start gap-2 text-sm ${tone.body}`}>
+                              <IconMapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                              <span className="line-clamp-2">
+                                <span className="sr-only">Place: </span>
+                                {b.job_location || b.service_address}
+                              </span>
                             </p>
                           )}
                           <span

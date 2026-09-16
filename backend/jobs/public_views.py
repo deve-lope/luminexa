@@ -206,6 +206,92 @@ class PublicServiceCalendarAPIView(APIView):
         })
 
 
+class PublicOrganizationCalendarAPIView(APIView):
+    """
+    Month calendar of all provider open slots (any service + general).
+    Used for gig-wall / custom quote bookings with no catalog service.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+        org = _public_organization(slug)
+        if not org:
+            return Response({'detail': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not customer_can_view_calendar(org, request.user):
+            return Response(
+                {'detail': 'Connect to this business to view availability.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        now = timezone.now()
+        is_staff = OrganizationMembership.objects.filter(
+            organization=org,
+            user=request.user,
+            role__in=(
+                OrganizationMembership.Role.OWNER,
+                OrganizationMembership.Role.STAFF,
+            ),
+        ).exists()
+        bookable_after = now if is_staff else earliest_customer_bookable_at(now=now)
+        _ensure_recurring_slots(org, bookable_after)
+
+        year, month, err = _parse_calendar_month(request)
+        if err:
+            return err
+
+        _, last_day = calendar.monthrange(year, month)
+        range_start = timezone.make_aware(datetime.combine(date(year, month, 1), time.min))
+        range_end = timezone.make_aware(
+            datetime.combine(date(year, month, last_day), time.max)
+        )
+
+        slots_qs = (
+            AvailabilitySlot.objects.filter(
+                organization=org,
+                start_at__gte=range_start,
+                start_at__lte=range_end,
+            )
+            .select_related('organization', 'service')
+            .prefetch_related('bookings')
+            .order_by('start_at')
+        )
+
+        days_meta = {}
+        slots_by_day = defaultdict(list)
+        for slot in slots_qs:
+            day_key = timezone.localtime(slot.start_at).strftime('%Y-%m-%d')
+            remaining = slot.remaining_capacity()
+            is_open = remaining > 0 and slot.start_at >= bookable_after
+            entry = {
+                'id': slot.id,
+                'start_at': slot.start_at.isoformat(),
+                'end_at': slot.end_at.isoformat(),
+                'status': slot.status,
+                'available': is_open,
+                'capacity': slot.capacity,
+                'occupied_count': slot.capacity - remaining,
+                'remaining_capacity': remaining,
+                'service_id': slot.service_id,
+            }
+            slots_by_day[day_key].append(entry)
+            if day_key not in days_meta:
+                days_meta[day_key] = {'total': 0, 'open': 0}
+            days_meta[day_key]['total'] += 1
+            if is_open:
+                days_meta[day_key]['open'] += 1
+
+        return Response({
+            'year': year,
+            'month': month,
+            'service': None,
+            'booking': booking_policy_meta(org, request.user, service=None),
+            'days': _days_payload(year, month, days_meta),
+            'slots_by_day': dict(slots_by_day),
+        })
+
+
 class PublicCombinedCalendarAPIView(APIView):
     """
     Month calendar for a combined multi-service visit.

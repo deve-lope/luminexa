@@ -621,6 +621,86 @@ class GigAPITests(TestCase):
             ).exists()
         )
 
+    def test_accept_bid_then_book_open_slot_from_quotes(self):
+        """After accepting a gig bid, Quotes inquiry can pick any open provider slot."""
+        from jobs.inquiry_services import CUSTOM_JOB_SERVICE_NAME
+        from jobs.models import AvailabilitySlot, Booking, Service
+
+        post = self._create_post(location_address='12 Queen St W, Toronto')
+        other_service = Service.objects.create(
+            organization=self.org,
+            name='Oil change',
+            duration_minutes=60,
+            base_price=Decimal('49.00'),
+            is_active=True,
+        )
+        self.client.force_authenticate(self.provider)
+        quote_res = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/',
+            {'price': '175.00', 'description': 'Full install'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quote_res.status_code, 201, quote_res.data)
+        quote_id = quote_res.data['id']
+
+        start = timezone.now() + timedelta(days=3)
+        # Slot tagged to a different catalog service — must not become the booking's job.
+        slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=other_service,
+            start_at=start,
+            end_at=start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+
+        self.client.force_authenticate(self.customer)
+        accept = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote_id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200, accept.data)
+
+        inquiry = CustomerServiceInquiry.objects.get(
+            customer=self.customer,
+            organization=self.org,
+            status=CustomerServiceInquiry.Status.QUOTE_ACCEPTED,
+        )
+        self.assertIsNone(inquiry.service_id)
+        self.assertEqual(inquiry.gig_quote_id, quote_id)
+        self.assertEqual(inquiry.service_label, post.title)
+
+        cal = self.client.get(
+            f'/api/v1/public/providers/{self.org.slug}/calendar/',
+            {'year': start.year, 'month': start.month},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(cal.status_code, 200, cal.data)
+        day_key = start.astimezone().strftime('%Y-%m-%d')
+        day_slots = cal.data['slots_by_day'].get(day_key) or []
+        self.assertTrue(any(s['id'] == slot.id and s['available'] for s in day_slots))
+
+        booked = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry.id}/book-slot/',
+            {'slot_id': slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(booked.status_code, 200, booked.data)
+        self.assertEqual(booked.data['inquiry']['status'], CustomerServiceInquiry.Status.COMPLETED)
+        self.assertEqual(booked.data['booking']['status'], Booking.Status.CONFIRMED)
+        self.assertEqual(str(booked.data['booking']['quote_amount']), '175.00')
+        self.assertEqual(booked.data['booking']['job_title'], post.title)
+        self.assertEqual(booked.data['booking']['service_name'], post.title)
+        self.assertNotEqual(booked.data['booking']['service'], other_service.id)
+
+        inquiry.refresh_from_db()
+        self.assertIsNotNone(inquiry.booking_id)
+        self.assertEqual(inquiry.booking.start_at, slot.start_at)
+        self.assertEqual(inquiry.booking.job_title, post.title)
+        self.assertEqual(inquiry.booking.service.name, CUSTOM_JOB_SERVICE_NAME)
+        self.assertNotEqual(inquiry.booking.service_id, other_service.id)
+
     def test_customer_cannot_accept_others_quote(self):
         post = self._create_post(user=self.other)
         quote = GigQuote.objects.create(

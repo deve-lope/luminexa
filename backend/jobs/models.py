@@ -375,6 +375,14 @@ class CustomerServiceInquiry(models.Model):
         blank=True,
         related_name='source_inquiry',
     )
+    gig_quote = models.ForeignKey(
+        'GigQuote',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='service_inquiries',
+        help_text='Accepted gig-wall bid that created this quote inquiry, if any.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -556,6 +564,12 @@ class Booking(models.Model):
         Organization, on_delete=models.CASCADE, related_name='bookings'
     )
     service = models.ForeignKey(Service, on_delete=models.PROTECT, related_name='bookings')
+    job_title = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text='Display title for gig/custom jobs (overrides catalog service name when set).',
+    )
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
