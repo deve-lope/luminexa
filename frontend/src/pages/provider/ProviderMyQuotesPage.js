@@ -19,7 +19,7 @@ export default function ProviderMyQuotesPage() {
         setQuotes(Array.isArray(res.data) ? res.data : []);
         setError(null);
       })
-      .catch(() => setError('Could not load your quotes.'))
+      .catch(() => setError('Could not load your bids.'))
       .finally(() => setLoading(false));
   }, [filter]);
 
@@ -30,7 +30,7 @@ export default function ProviderMyQuotesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">My gig quotes</h1>
+        <h1 className="text-xl font-semibold text-slate-900">My bids</h1>
         <Link to={providerGigs(orgSlug)} className="text-sm text-slate-600 hover:underline">
           Gig wall
         </Link>
@@ -55,7 +55,7 @@ export default function ProviderMyQuotesPage() {
       {loading && <p className="text-sm text-slate-500">Loading…</p>}
       {!loading && quotes.length === 0 && (
         <p className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-          You haven&apos;t submitted any quotes yet.
+          You haven&apos;t placed any bids yet.
         </p>
       )}
       <div className="space-y-3">

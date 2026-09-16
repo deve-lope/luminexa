@@ -36,14 +36,14 @@ export default function ProviderGigWallPage() {
         <div>
           <h1 className="text-xl font-semibold text-luminexa-ink">Gig wall</h1>
           <p className="mt-0.5 text-sm text-slate-600">
-            Open and quoted requests in your service area. Closed gigs stay off the wall.
+            Open requests in your service area. Place a bid to take the job. Closed gigs stay off the wall.
           </p>
         </div>
         <Link
           to={providerMyGigQuotes(orgSlug)}
           className="text-sm font-semibold text-teal-700 hover:underline"
         >
-          My quotes
+          My bids
         </Link>
       </div>
       <GigCategoryFilter value={category} onChange={setCategory} />
@@ -55,7 +55,7 @@ export default function ProviderGigWallPage() {
       {loading && <p className="text-sm text-slate-500">Loading…</p>}
       {!loading && posts.length === 0 && (
         <p className="rounded-2xl border border-dashed border-teal-200 bg-luminexa-mist/60 px-4 py-8 text-center text-sm text-teal-900">
-          No open gigs in your service area right now.
+          No open gigs to bid on in your service area right now.
         </p>
       )}
       <div className="space-y-3">
@@ -63,6 +63,7 @@ export default function ProviderGigWallPage() {
           <GigPostCard
             key={post.id}
             post={post}
+            offerNoun="bid"
             onClick={() => navigate(providerGigDetail(orgSlug, post.id))}
           />
         ))}

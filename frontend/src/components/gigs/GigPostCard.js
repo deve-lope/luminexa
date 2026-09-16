@@ -11,19 +11,26 @@ function timeAgo(iso) {
   return `${days}d ago`;
 }
 
-function statusLabel(status) {
+function statusLabel(status, offerNoun) {
   if (status === 'open') return 'Open';
-  if (status === 'quoted') return 'Quoted';
+  if (status === 'quoted') return offerNoun === 'bid' ? 'Has bids' : 'Quoted';
   if (status === 'accepted') return 'Accepted';
   if (status === 'closed') return 'Closed';
   return status || '';
 }
 
-export default function GigPostCard({ post, onClick, showDistance = false, distance }) {
+export default function GigPostCard({
+  post,
+  onClick,
+  showDistance = false,
+  distance,
+  offerNoun = 'quote',
+}) {
   const location = [post.location_city, post.location_state].filter(Boolean).join(', ');
   const excerpt = (post.description || '').trim();
   const quoteCount = Number(post.quote_count) || 0;
-  const quoteLabel = quoteCount === 1 ? '1 quote' : `${quoteCount} quotes`;
+  const quoteLabel =
+    quoteCount === 1 ? `1 ${offerNoun}` : `${quoteCount} ${offerNoun}s`;
   const isMine = !!post.is_mine;
   const meta = [
     post.category_name,
@@ -47,7 +54,7 @@ export default function GigPostCard({ post, onClick, showDistance = false, dista
           {post.title}
         </h3>
         <span className="shrink-0 rounded-full bg-luminexa-mist px-2 py-0.5 text-[11px] font-semibold text-teal-800">
-          {statusLabel(post.status)}
+          {statusLabel(post.status, offerNoun)}
         </span>
       </div>
       {isMine && (

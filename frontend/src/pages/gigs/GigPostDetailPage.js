@@ -9,9 +9,9 @@ import { jobsAPI } from '../../utils/api';
 import { customerGigs, customerQuotes } from '../../utils/customerPaths';
 import { providerGigs, providerMyGigQuotes } from '../../utils/providerPaths';
 
-function statusLabel(status) {
+function statusLabel(status, isProvider) {
   if (status === 'open') return 'Open';
-  if (status === 'quoted') return 'Quoted';
+  if (status === 'quoted') return isProvider ? 'Has bids' : 'Quoted';
   if (status === 'accepted') return 'Accepted';
   if (status === 'closed') return 'Closed';
   return status || '';
@@ -129,7 +129,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
               </span>
             )}
             <span className="rounded-full bg-luminexa-mist px-2 py-0.5 font-medium text-teal-800">
-              {statusLabel(post.status)}
+              {statusLabel(post.status, isProviderMode && !isOwner)}
             </span>
             {post.category_name && (
               <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-800">
@@ -266,7 +266,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
                 : 'text-slate-500'
             }`}
           >
-            Quotes ({isOwner ? quotes.length : quotes.length || '—'})
+            {isProviderMode && !isOwner ? `Bids (${quotes.length || '—'})` : `Quotes (${quotes.length})`}
           </button>
         )}
       </div>
@@ -301,7 +301,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
         <div className="space-y-3">
           {ownQuote ? (
             <div className="space-y-3">
-              <GigQuoteList quotes={[ownQuote]} canAccept={false} />
+              <GigQuoteList quotes={[ownQuote]} canAccept={false} noun="bid" />
               {ownQuote.status === 'submitted' && (
                 <>
                   <GigQuoteForm
@@ -325,7 +325,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
                     }}
                     className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700"
                   >
-                    Withdraw quote
+                    Withdraw bid
                   </button>
                 </>
               )}
@@ -334,7 +334,7 @@ export default function GigPostDetailPage({ mode = 'customer' }) {
                   to={providerMyGigQuotes(orgSlug)}
                   className="inline-block text-sm font-medium text-emerald-700 hover:underline"
                 >
-                  Quote accepted — view my quotes
+                  Bid accepted — view my bids
                 </Link>
               )}
             </div>

@@ -29,7 +29,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
     const price = Number(formData.price);
     if (!price || price < 0.01) nextErrors.price = 'Enter a valid price.';
     const description = (formData.description || '').trim();
-    if (!description) nextErrors.description = 'Describe what this quote covers.';
+    if (!description) nextErrors.description = 'Describe what this bid covers.';
     if (description.length > 1500) nextErrors.description = 'Max 1500 characters.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -50,7 +50,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-900">
-        {initialData ? 'Update your quote' : 'Submit a quote'}
+        {initialData ? 'Update your bid' : 'Place a bid'}
       </h3>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Price *</label>
@@ -71,7 +71,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          What this quote covers *
+          What this bid covers *
         </label>
         <textarea
           name="description"
@@ -106,7 +106,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
         disabled={loading}
         className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        {loading ? 'Saving…' : initialData ? 'Update quote' : 'Submit quote'}
+        {loading ? 'Saving…' : initialData ? 'Update bid' : 'Place bid'}
       </button>
     </form>
   );

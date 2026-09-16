@@ -20,14 +20,14 @@ def notify_new_gig_quote(gig_quote):
 
 
 def notify_quote_accepted(gig_quote):
-    """Notify provider when their quote is accepted."""
+    """Notify provider when their bid is accepted."""
     post = gig_quote.gig_post
     org = gig_quote.organization
     ProviderNotification.objects.create(
         organization=org,
         kind=ProviderNotification.Kind.GIG_QUOTE_ACCEPTED,
         message=(
-            f'Your quote of ${gig_quote.price} was accepted for "{post.title}"'
+            f'Your bid of ${gig_quote.price} was accepted for "{post.title}"'
         ),
         link_path=f'/provider/{org.slug}/gigs/{post.id}',
     )

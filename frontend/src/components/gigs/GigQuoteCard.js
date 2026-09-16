@@ -66,7 +66,7 @@ export default function GigQuoteCard({ quote, showAcceptButton = false, onAccept
       {confirming && (
         <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
           <p className="text-emerald-900">
-            Accept this quote for ${quote.price}? This closes the gig post.
+            Accept this quote for ${quote.price}? The gig leaves the wall and this job moves to Quotes.
           </p>
           <div className="mt-2 flex gap-2">
             <button
