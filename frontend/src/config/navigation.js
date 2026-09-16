@@ -14,6 +14,7 @@ export function buildProviderTabs(
       to: `${base}/requests`,
       badgeCount: requestsBadgeCount > 0 ? requestsBadgeCount : undefined,
     },
+    { id: 'gigs', label: 'Gigs', to: `${base}/gigs` },
     {
       id: 'messages',
       label: 'Messages',
@@ -30,6 +31,7 @@ export function buildCustomerTabs({
   return [
     { id: 'home', label: 'Home', to: '/customer', end: true },
     { id: 'book', label: 'Book', to: '/customer/find' },
+    { id: 'gigs', label: 'Gigs', to: '/customer/gigs' },
     {
       id: 'bookings',
       label: 'Bookings',
@@ -101,7 +103,6 @@ export function buildProviderMenuItems({
   providerAnalyticsPath,
   providerClientsPath,
   providerJobsPath,
-  providerGigsPath,
   providerNotificationsPath,
   notificationsBadgeCount = 0,
   isStaff,
@@ -118,14 +119,6 @@ export function buildProviderMenuItems({
       label: 'Jobs',
       to: providerJobsPath,
       iconId: 'jobs',
-    });
-  }
-  if (providerGigsPath) {
-    items.push({
-      id: 'gigs',
-      label: 'Gig wall',
-      to: providerGigsPath,
-      iconId: 'requests',
     });
   }
   if (providerAnalyticsPath) {
@@ -191,12 +184,6 @@ export function buildCustomerMenuItems({ logout, messagesBadgeCount = 0 } = {}) 
   const items = [];
 
   items.push({ id: 'section-more', divider: true, label: 'More' });
-  items.push({
-    id: 'gigs',
-    label: 'Gig wall',
-    to: '/customer/gigs',
-    iconId: 'jobs',
-  });
   items.push({
     id: 'account',
     label: 'Account',

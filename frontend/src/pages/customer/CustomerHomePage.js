@@ -12,7 +12,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { bookingStatusLabel } from '../../utils/customerBookings';
 import { formatWhen } from '../../utils/datetime';
-import { customerBookingDetail, customerBookings, customerCategories, customerFind, customerNotifications } from '../../utils/customerPaths';
+import { customerBookingDetail, customerBookings, customerCategories, customerFind, customerGigs, customerNotifications } from '../../utils/customerPaths';
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   dismissAllNotifications,
@@ -420,6 +420,20 @@ export default function CustomerHomePage() {
               </Link>
             </div>
           </header>
+
+          <Link
+            to={customerGigs()}
+            className="lx-card-interactive flex items-center justify-between gap-3 p-4"
+          >
+            <div className="min-w-0">
+              <p className="lx-eyebrow">Gig wall</p>
+              <p className="mt-1 font-semibold text-slate-900">Post a job for local providers</p>
+              <p className="lx-muted mt-0.5 text-sm">
+                Describe what you need. Nearby businesses can quote.
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-semibold text-teal-700">Open →</span>
+          </Link>
 
           <section className="lx-section-band">
             <div className="mb-4 flex items-end justify-between gap-2">

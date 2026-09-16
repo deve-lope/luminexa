@@ -13,6 +13,7 @@ import {
   providerSettings,
   providerShare,
   providerTasks,
+  providerGigs,
 } from '../../utils/providerPaths';
 import {
   PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
@@ -518,6 +519,7 @@ export default function ProviderTodayPage() {
             { label: 'Analytics', to: providerAnalytics(orgSlug) },
             { label: 'Services', to: providerServices(orgSlug) },
             { label: 'Schedule', to: providerSchedule(orgSlug) },
+            { label: 'Gig wall', to: providerGigs(orgSlug) },
             { label: 'My page', to: providerShare(orgSlug) },
             { label: 'Settings', to: providerSettings(orgSlug) },
           ].map((item) => (

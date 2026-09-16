@@ -18,7 +18,6 @@ import {
   providerAnalytics,
   providerClients,
   providerJobs,
-  providerGigs,
   providerNotifications,
   providerServices,
   providerSettings,
@@ -170,7 +169,6 @@ function ProviderShell() {
         providerAnalyticsPath: providerAnalytics(orgSlug),
         providerClientsPath: providerClients(orgSlug),
         providerJobsPath: providerJobs(orgSlug),
-        providerGigsPath: providerGigs(orgSlug),
         providerNotificationsPath: providerNotifications(orgSlug),
         notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
@@ -221,6 +219,15 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/jobs`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Jobs' };
+    }
+    if (location.pathname.startsWith(`${base}/gigs/my-quotes`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'My gig quotes' };
+    }
+    if (/\/gigs\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/gigs')) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Gig details' };
+    }
+    if (location.pathname.startsWith(`${base}/gigs`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Gig wall' };
     }
     if (location.pathname.startsWith(`${base}/my-page`) || location.pathname.startsWith(`${base}/share`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My page' };
