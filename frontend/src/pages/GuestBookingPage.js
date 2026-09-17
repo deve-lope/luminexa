@@ -1,9 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { jobsAPI } from '../utils/api';
 import { formatWhen } from '../utils/datetime';
 import { bookingStatusLabel } from '../utils/customerBookings';
-import { getStoreInstallOptions } from '../utils/storeLinks';
+import {
+  getOpenInAppUrl,
+  getStoreInstallOptions,
+  isAndroidUserAgent,
+  probePlayAppInstalled,
+} from '../utils/storeLinks';
 import { isNativeApp } from '../native/capacitorNative';
 import { customerBookingDetail } from '../utils/customerPaths';
 
@@ -12,8 +17,15 @@ export default function GuestBookingPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  /** true = Play app installed; false = not; null = unknown / unsupported. */
+  const [appInstalled, setAppInstalled] = useState(null);
   const native = isNativeApp();
-  const stores = getStoreInstallOptions();
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const stores = useMemo(() => getStoreInstallOptions(ua), [ua]);
+  const openInAppUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return getOpenInAppUrl(window.location.href, ua);
+  }, [ua]);
 
   useEffect(() => {
     if (!token) return;
@@ -28,6 +40,25 @@ export default function GuestBookingPage() {
       })
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (native) return undefined;
+    let cancelled = false;
+    probePlayAppInstalled().then((installed) => {
+      if (!cancelled) setAppInstalled(installed);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [native]);
+
+  const showOpenInApp =
+    Boolean(openInAppUrl) &&
+    (appInstalled === true || (appInstalled === null && isAndroidUserAgent(ua)));
+  // Hide store CTAs when we already know the app is installed, or when Android
+  // "Open in app" Intent already falls back to Play if missing.
+  const showInstall =
+    appInstalled === false || (appInstalled === null && !showOpenInApp);
 
   return (
     <div className="min-h-[100dvh] bg-luminexa-canvas text-slate-900">
@@ -49,27 +80,43 @@ export default function GuestBookingPage() {
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm font-semibold text-slate-900">You’re viewing this in your browser</p>
             <p className="mt-1 text-sm text-slate-600">
-              You can see the appointment here on the web, or install the latest Luminexa app.
+              {showOpenInApp
+                ? 'Open this appointment in the Luminexa app, or keep viewing it here on the web.'
+                : 'You can see the appointment here on the web, or install the latest Luminexa app.'}
             </p>
+            {showOpenInApp && (
+              <a
+                href={openInAppUrl}
+                className="lx-btn-primary mt-4 flex min-h-[44px] items-center justify-center"
+              >
+                Open in app
+              </a>
+            )}
             <a
               href="#booking"
-              className="lx-btn-primary mt-4 flex min-h-[44px] items-center justify-center"
+              className={`${
+                showOpenInApp
+                  ? 'mt-3 flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 text-sm font-medium text-slate-800'
+                  : 'lx-btn-primary mt-4 flex min-h-[44px] items-center justify-center'
+              }`}
             >
               View booking on the web
             </a>
-            <div className="mt-3 grid gap-2">
-              {stores.map((store) => (
-                <a
-                  key={store.id}
-                  href={store.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 text-sm font-medium text-slate-800"
-                >
-                  {store.label}
-                </a>
-              ))}
-            </div>
+            {showInstall && (
+              <div className="mt-3 grid gap-2">
+                {stores.map((store) => (
+                  <a
+                    key={store.id}
+                    href={store.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 text-sm font-medium text-slate-800"
+                  >
+                    {store.label}
+                  </a>
+                ))}
+              </div>
+            )}
           </section>
         )}
 

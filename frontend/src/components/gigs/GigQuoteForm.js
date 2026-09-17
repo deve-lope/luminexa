@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ConfirmDialog from '../ConfirmDialog';
 
 export default function GigQuoteForm({
   onSubmit,
@@ -13,6 +14,7 @@ export default function GigQuoteForm({
     estimated_duration_days: initialData?.estimated_duration_days || '',
   });
   const [errors, setErrors] = useState({});
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -119,16 +121,28 @@ export default function GigQuoteForm({
           <button
             type="button"
             disabled={loading || withdrawBusy}
-            onClick={() => {
-              if (!window.confirm('Withdraw this bid? You can place a new one later.')) return;
-              onWithdraw();
-            }}
+            onClick={() => setConfirmWithdraw(true)}
             className="rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
           >
             {withdrawBusy ? 'Withdrawing…' : 'Withdraw bid'}
           </button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmWithdraw}
+        title="Withdraw this bid?"
+        message="You can place a new bid on this gig later."
+        confirmLabel="Withdraw bid"
+        cancelLabel="Keep bid"
+        tone="danger"
+        busy={withdrawBusy}
+        onClose={() => !withdrawBusy && setConfirmWithdraw(false)}
+        onConfirm={() => {
+          setConfirmWithdraw(false);
+          onWithdraw?.();
+        }}
+      />
     </form>
   );
 }

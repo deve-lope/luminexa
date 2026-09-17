@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { jobsAPI } from '../../utils/api';
 import {
   customerGigDetail,
@@ -34,6 +35,8 @@ export default function GigBidDetailPage({ mode = 'customer' }) {
   const [showCounter, setShowCounter] = useState(false);
   const [counterPrice, setCounterPrice] = useState('');
   const [counterMessage, setCounterMessage] = useState('');
+  /** 'reject' | 'withdraw' — in-app dialog (window.confirm is blank in the native WebView). */
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const backPath = isProvider
     ? providerGigDetail(orgSlug, gigId)
@@ -249,15 +252,7 @@ export default function GigBidDetailPage({ mode = 'customer' }) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
-                if (!window.confirm('Reject this bid? You can still talk to other providers.')) {
-                  return;
-                }
-                run(async () => {
-                  await jobsAPI.rejectGigQuote(gigId, quoteId);
-                  navigate(customerGigDetail(gigId));
-                });
-              }}
+              onClick={() => setConfirmAction('reject')}
               className="rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 disabled:opacity-50"
             >
               Reject
@@ -384,15 +379,7 @@ export default function GigBidDetailPage({ mode = 'customer' }) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => {
-              if (!window.confirm('Withdraw this bid? You can place a new one later.')) {
-                return;
-              }
-              run(async () => {
-                await jobsAPI.withdrawGigQuote(gigId, quoteId);
-                navigate(providerGigDetail(orgSlug, gigId));
-              });
-            }}
+            onClick={() => setConfirmAction('withdraw')}
             className="flex-1 rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
           >
             Withdraw bid
@@ -418,6 +405,41 @@ export default function GigBidDetailPage({ mode = 'customer' }) {
           to continue.
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmAction === 'reject'}
+        title="Reject this bid?"
+        message="You can still talk to other providers and accept another bid."
+        confirmLabel="Reject bid"
+        cancelLabel="Keep bid"
+        tone="danger"
+        busy={busy}
+        onClose={() => !busy && setConfirmAction(null)}
+        onConfirm={() =>
+          run(async () => {
+            await jobsAPI.rejectGigQuote(gigId, quoteId);
+            setConfirmAction(null);
+            navigate(customerGigDetail(gigId));
+          })
+        }
+      />
+      <ConfirmDialog
+        open={confirmAction === 'withdraw'}
+        title="Withdraw this bid?"
+        message="You can place a new bid on this gig later."
+        confirmLabel="Withdraw bid"
+        cancelLabel="Keep bid"
+        tone="danger"
+        busy={busy}
+        onClose={() => !busy && setConfirmAction(null)}
+        onConfirm={() =>
+          run(async () => {
+            await jobsAPI.withdrawGigQuote(gigId, quoteId);
+            setConfirmAction(null);
+            navigate(providerGigDetail(orgSlug, gigId));
+          })
+        }
+      />
     </div>
   );
 }
