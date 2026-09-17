@@ -28,6 +28,11 @@ import { formatServiceAddressDisplay } from './ServiceLocationInput';
 import StarRating from '../services/StarRating';
 import { IconMapPin, IconSchedule } from '../icons/NavIcons';
 
+/** Gig-wall / custom quote bookings — not a catalog service page. */
+function isCustomOrGigBooking(booking) {
+  return Boolean((booking?.job_title || '').trim()) || booking?.service_name === 'Custom job';
+}
+
 function ReviewSnippet({ review }) {
   if (!review) return null;
   return (
@@ -102,6 +107,7 @@ export default function CustomerBookingCard({
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
   const providerKey = providerCustomerKey(booking);
+  const isGigOrCustomJob = isCustomOrGigBooking(booking);
   const canRate = Boolean(booking.can_rate);
   const myReview = booking.my_review;
   const isQuoted = booking.status === 'quoted';
@@ -245,8 +251,7 @@ export default function CustomerBookingCard({
       booking.status === 'completed' &&
       providerKey &&
       booking.service &&
-      !(booking.job_title || '').trim() &&
-      booking.service_name !== 'Custom job'
+      !isGigOrCustomJob
         ? customerProviderService(providerKey, booking.service)
         : null;
 
@@ -633,7 +638,10 @@ export default function CustomerBookingCard({
         </div>
       )}
 
-      {booking.status === 'completed' && providerKey && booking.service ? (
+      {booking.status === 'completed' &&
+      providerKey &&
+      booking.service &&
+      !isGigOrCustomJob ? (
         <div className="mt-3">
           <Link
             to={customerProviderService(providerKey, booking.service)}
@@ -695,7 +703,7 @@ export default function CustomerBookingCard({
                 View provider
               </Link>
             )}
-            {providerKey && booking.service && (
+            {providerKey && booking.service && !isGigOrCustomJob && (
               <Link
                 to={customerProviderServiceDetail(providerKey, booking.service)}
                 className="lx-btn-ghost w-full px-3 text-center"
