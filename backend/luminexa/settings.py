@@ -21,6 +21,8 @@ AUTH_TOKEN_COOKIE_SECURE = config(
     'AUTH_TOKEN_COOKIE_SECURE',
     default='false' if DEBUG else 'true',
 ).lower() == 'true'
+# Web + phone (or any two devices). A third login signs out the oldest session.
+AUTH_MAX_CONCURRENT_SESSIONS = config('AUTH_MAX_CONCURRENT_SESSIONS', default=2, cast=int)
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -145,7 +147,6 @@ REST_FRAMEWORK = {
     # Prefer HttpOnly cookie for the SPA; Authorization: Token still works for tests/API clients.
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'accounts.authentication.CookieTokenAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

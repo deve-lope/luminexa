@@ -297,6 +297,137 @@ class GigAPITests(TestCase):
         self.assertEqual(res.status_code, 200, res.data)
         self.assertEqual(res.data['status'], GigPost.Status.QUOTED)
 
+    def test_wall_quote_count_not_inflated_by_comments(self):
+        """Annotating quotes + comments must use distinct counts (JOIN multiplication)."""
+        post = self._create_post()
+        GigQuote.objects.create(
+            gig_post=post,
+            organization=self.org,
+            price=Decimal('90.00'),
+            description='One bid',
+        )
+        GigComment.objects.create(
+            gig_post=post, author=self.provider, organization=self.org, body='Q1?',
+        )
+        GigComment.objects.create(
+            gig_post=post, author=self.customer, body='A1',
+        )
+        post.status = GigPost.Status.QUOTED
+        post.save(update_fields=['status'])
+
+        self.client.force_authenticate(self.customer)
+        listed = self.client.get('/api/v1/gigs/', HTTP_HOST='localhost')
+        self.assertEqual(listed.status_code, 200)
+        results = listed.data['results'] if isinstance(listed.data, dict) else listed.data
+        row = next(r for r in results if r['id'] == post.id)
+        self.assertEqual(row['quote_count'], 1)
+        self.assertEqual(row['comment_count'], 2)
+
+        bids = self.client.get(f'/api/v1/gigs/{post.id}/quotes/', HTTP_HOST='localhost')
+        self.assertEqual(bids.status_code, 200)
+        self.assertEqual(len(bids.data), 1)
+
+        self.client.force_authenticate(self.provider)
+        wall = self.client.get('/api/v1/gigs-wall/?status=all', HTTP_HOST='localhost')
+        self.assertEqual(wall.status_code, 200)
+        wall_results = wall.data['results'] if isinstance(wall.data, dict) else wall.data
+        wall_row = next(r for r in wall_results if r['id'] == post.id)
+        self.assertEqual(wall_row['quote_count'], 1)
+
+    def test_customer_reject_counter_and_message_bid(self):
+        post = self._create_post()
+        quote = GigQuote.objects.create(
+            gig_post=post,
+            organization=self.org,
+            price=Decimal('120.00'),
+            description='Full job',
+        )
+        post.status = GigPost.Status.QUOTED
+        post.save(update_fields=['status'])
+
+        self.client.force_authenticate(self.customer)
+        detail = self.client.get(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data['price'], '120.00')
+
+        counter = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/counter/',
+            {'price': '95.00', 'message': 'Can you do 95?'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(counter.status_code, 200, counter.data)
+        self.assertEqual(counter.data['status'], GigQuote.Status.COUNTERED)
+        self.assertEqual(counter.data['counter_price'], '95.00')
+
+        self.client.force_authenticate(self.provider)
+        accept_c = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/accept-counter/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept_c.status_code, 200, accept_c.data)
+        self.assertEqual(accept_c.data['status'], GigQuote.Status.ACCEPTED)
+        self.assertEqual(accept_c.data['price'], '95.00')
+        self.assertTrue(
+            CustomerServiceInquiry.objects.filter(
+                organization=self.org,
+                customer=self.customer,
+                quote_amount=Decimal('95.00'),
+            ).exists()
+        )
+
+    def test_decline_counter_keeps_original_bid(self):
+        post = self._create_post()
+        quote = GigQuote.objects.create(
+            gig_post=post,
+            organization=self.org,
+            price=Decimal('150.00'),
+            description='Job',
+            status=GigQuote.Status.COUNTERED,
+            counter_price=Decimal('100.00'),
+        )
+        self.client.force_authenticate(self.provider)
+        res = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/decline-counter/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['status'], GigQuote.Status.SUBMITTED)
+        self.assertIsNone(res.data['counter_price'])
+        self.assertEqual(res.data['price'], '150.00')
+
+    def test_reject_bid_and_open_conversation(self):
+        post = self._create_post()
+        quote = GigQuote.objects.create(
+            gig_post=post,
+            organization=self.org,
+            price=Decimal('80.00'),
+            description='Job',
+        )
+        post.status = GigPost.Status.QUOTED
+        post.save(update_fields=['status'])
+
+        self.client.force_authenticate(self.customer)
+        rejected = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/reject/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(rejected.status_code, 200, rejected.data)
+        self.assertEqual(rejected.data['status'], GigQuote.Status.REJECTED)
+        post.refresh_from_db()
+        self.assertEqual(post.status, GigPost.Status.OPEN)
+
+        # Re-open chat is still allowed after reject (history)
+        chat = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote.id}/conversation/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(chat.status_code, 200, chat.data)
+        self.assertIn('conversation_id', chat.data)
+
     def test_closed_gig_leaves_public_and_provider_wall(self):
         post = self._create_post()
         self.client.force_authenticate(self.customer)
@@ -489,6 +620,86 @@ class GigAPITests(TestCase):
                 kind=ProviderNotification.Kind.GIG_QUOTE_ACCEPTED,
             ).exists()
         )
+
+    def test_accept_bid_then_book_open_slot_from_quotes(self):
+        """After accepting a gig bid, Quotes inquiry can pick any open provider slot."""
+        from jobs.inquiry_services import CUSTOM_JOB_SERVICE_NAME
+        from jobs.models import AvailabilitySlot, Booking, Service
+
+        post = self._create_post(location_address='12 Queen St W, Toronto')
+        other_service = Service.objects.create(
+            organization=self.org,
+            name='Oil change',
+            duration_minutes=60,
+            base_price=Decimal('49.00'),
+            is_active=True,
+        )
+        self.client.force_authenticate(self.provider)
+        quote_res = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/',
+            {'price': '175.00', 'description': 'Full install'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(quote_res.status_code, 201, quote_res.data)
+        quote_id = quote_res.data['id']
+
+        start = timezone.now() + timedelta(days=3)
+        # Slot tagged to a different catalog service — must not become the booking's job.
+        slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=other_service,
+            start_at=start,
+            end_at=start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+
+        self.client.force_authenticate(self.customer)
+        accept = self.client.post(
+            f'/api/v1/gigs/{post.id}/quotes/{quote_id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200, accept.data)
+
+        inquiry = CustomerServiceInquiry.objects.get(
+            customer=self.customer,
+            organization=self.org,
+            status=CustomerServiceInquiry.Status.QUOTE_ACCEPTED,
+        )
+        self.assertIsNone(inquiry.service_id)
+        self.assertEqual(inquiry.gig_quote_id, quote_id)
+        self.assertEqual(inquiry.service_label, post.title)
+
+        cal = self.client.get(
+            f'/api/v1/public/providers/{self.org.slug}/calendar/',
+            {'year': start.year, 'month': start.month},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(cal.status_code, 200, cal.data)
+        day_key = start.astimezone().strftime('%Y-%m-%d')
+        day_slots = cal.data['slots_by_day'].get(day_key) or []
+        self.assertTrue(any(s['id'] == slot.id and s['available'] for s in day_slots))
+
+        booked = self.client.post(
+            f'/api/v1/me/service-inquiries/{inquiry.id}/book-slot/',
+            {'slot_id': slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(booked.status_code, 200, booked.data)
+        self.assertEqual(booked.data['inquiry']['status'], CustomerServiceInquiry.Status.COMPLETED)
+        self.assertEqual(booked.data['booking']['status'], Booking.Status.CONFIRMED)
+        self.assertEqual(str(booked.data['booking']['quote_amount']), '175.00')
+        self.assertEqual(booked.data['booking']['job_title'], post.title)
+        self.assertEqual(booked.data['booking']['service_name'], post.title)
+        self.assertNotEqual(booked.data['booking']['service'], other_service.id)
+
+        inquiry.refresh_from_db()
+        self.assertIsNotNone(inquiry.booking_id)
+        self.assertEqual(inquiry.booking.start_at, slot.start_at)
+        self.assertEqual(inquiry.booking.job_title, post.title)
+        self.assertEqual(inquiry.booking.service.name, CUSTOM_JOB_SERVICE_NAME)
+        self.assertNotEqual(inquiry.booking.service_id, other_service.id)
 
     def test_customer_cannot_accept_others_quote(self):
         post = self._create_post(user=self.other)

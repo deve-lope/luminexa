@@ -1,3 +1,6 @@
+import binascii
+import os
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -297,6 +300,36 @@ class ChatBlock(models.Model):
 
     def __str__(self):
         return f'ChatBlock org={self.organization_id} customer={self.customer_id}'
+
+
+class AuthToken(models.Model):
+    """Login credential for one device. Up to AUTH_MAX_CONCURRENT_SESSIONS per user."""
+
+    key = models.CharField(max_length=40, unique=True)
+    user = models.ForeignKey(
+        'accounts.User',
+        related_name='auth_tokens',
+        on_delete=models.CASCADE,
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created']
+        indexes = [
+            models.Index(fields=['user', 'created']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = self.generate_key()
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_key(cls):
+        return binascii.hexlify(os.urandom(20)).decode()
+
+    def __str__(self):
+        return self.key
 
 
 class DevicePushToken(models.Model):

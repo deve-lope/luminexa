@@ -116,6 +116,7 @@ function restoreScrollSnapshot(snapshot) {
 
 /**
  * Read-only (or selectable) open-slot preview for quote-first services.
+ * When serviceId is omitted, loads the provider’s full open schedule.
  */
 export default function ServiceAvailabilityPreview({
   orgSlug,
@@ -164,11 +165,13 @@ export default function ServiceAvailabilityPreview({
   }, [fetching, calendar, restoreCapturedScroll]);
 
   const load = useCallback(() => {
-    if (!orgSlug || !serviceId) return;
+    if (!orgSlug) return;
     setFetching(true);
     setError(null);
-    businessesAPI
-      .getServiceCalendar(orgSlug, serviceId, { year, month })
+    const request = serviceId
+      ? businessesAPI.getServiceCalendar(orgSlug, serviceId, { year, month })
+      : businessesAPI.getOrgCalendar(orgSlug, { year, month });
+    request
       .then((res) => {
         setCalendar(res.data);
         const normalized = normalizeBookingCalendar(res.data);
@@ -231,7 +234,7 @@ export default function ServiceAvailabilityPreview({
     setMonth(d.getMonth() + 1);
   };
 
-  if (!orgSlug || !serviceId) return null;
+  if (!orgSlug) return null;
 
   return (
     <section

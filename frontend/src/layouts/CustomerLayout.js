@@ -146,6 +146,9 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/customer/gigs/create')) {
       return { eyebrow: 'Gig wall', title: 'Create gig' };
     }
+    if (/^\/customer\/gigs\/[^/]+\/bids\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Gig wall', title: 'Bid details' };
+    }
     if (/^\/customer\/gigs\/[^/]+$/.test(location.pathname)) {
       return { eyebrow: 'Gig wall', title: 'Gig details' };
     }

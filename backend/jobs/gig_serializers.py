@@ -130,7 +130,7 @@ class GigPostSerializer(serializers.ModelSerializer):
     def get_quote_count(self, obj):
         if hasattr(obj, '_quote_count'):
             return obj._quote_count
-        return obj.quotes.exclude(status=GigQuote.Status.WITHDRAWN).count()
+        return obj.quotes.filter(status__in=GigQuote.active_statuses()).count()
 
     def get_comment_count(self, obj):
         if hasattr(obj, '_comment_count'):
@@ -302,6 +302,9 @@ class GigQuoteSerializer(serializers.ModelSerializer):
             'description',
             'estimated_duration_days',
             'status',
+            'counter_price',
+            'counter_message',
+            'countered_at',
             'created_at',
             'updated_at',
         ]
@@ -360,7 +363,7 @@ class GigQuoteWriteSerializer(serializers.ModelSerializer):
     def validate_description(self, value):
         desc = (value or '').strip()
         if not desc:
-            raise serializers.ValidationError('Describe what this quote covers.')
+            raise serializers.ValidationError('Describe what this bid covers.')
         if len(desc) > 1500:
             raise serializers.ValidationError('Description must be 1500 characters or fewer.')
         return desc

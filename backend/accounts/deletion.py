@@ -12,9 +12,9 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 
+from .auth_sessions import delete_all_auth_tokens
 from .models import LoginCode, ProviderDeletionFeedback, User
 
 logger = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def anonymize_user(user: User) -> bool:
     user.save()
 
     # Invalidate credentials and any pending sign-in codes for the old address.
-    Token.objects.filter(user=user).delete()
+    delete_all_auth_tokens(user)
     if original_email:
         LoginCode.objects.filter(email__iexact=original_email).delete()
 

@@ -36,6 +36,7 @@ urlpatterns = [
     path(
         'gigs/<int:gig_post_id>/quotes/<int:pk>/',
         gig_views.GigQuoteViewSet.as_view({
+            'get': 'retrieve',
             'patch': 'partial_update',
             'delete': 'destroy',
         }),
@@ -43,6 +44,26 @@ urlpatterns = [
     path(
         'gigs/<int:gig_post_id>/quotes/<int:quote_id>/accept/',
         gig_views.GigQuoteAcceptAPIView.as_view(),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/reject/',
+        gig_views.GigQuoteRejectAPIView.as_view(),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/counter/',
+        gig_views.GigQuoteCounterAPIView.as_view(),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/accept-counter/',
+        gig_views.GigQuoteAcceptCounterAPIView.as_view(),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/decline-counter/',
+        gig_views.GigQuoteDeclineCounterAPIView.as_view(),
+    ),
+    path(
+        'gigs/<int:gig_post_id>/quotes/<int:quote_id>/conversation/',
+        gig_views.GigQuoteConversationAPIView.as_view(),
     ),
 
     path('me/service-inquiries/', views.CustomerMyInquiriesAPIView.as_view()),
@@ -185,6 +206,11 @@ urlpatterns = [
         'public/providers/<slug>/services/<int:service_id>/calendar/',
         public_views.PublicServiceCalendarAPIView.as_view(),
         name='public-service-calendar',
+    ),
+    path(
+        'public/providers/<slug>/calendar/',
+        public_views.PublicOrganizationCalendarAPIView.as_view(),
+        name='public-organization-calendar',
     ),
     path(
         'public/providers/<slug>/combined-calendar/',

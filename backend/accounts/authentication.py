@@ -2,12 +2,16 @@ from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
+from .models import AuthToken
+
 
 class CookieTokenAuthentication(TokenAuthentication):
     """
     Authenticate via HttpOnly auth cookie (preferred for the SPA), falling back
     to the standard Authorization: Token header for API clients and tests.
     """
+
+    model = AuthToken
 
     def authenticate(self, request):
         header_auth = super().authenticate(request)

@@ -4,18 +4,18 @@ from .models import CustomerNotification, ProviderNotification
 
 
 def notify_new_gig_quote(gig_quote):
-    """Notify customer when a provider submits a quote."""
+    """Notify customer when a provider submits a bid."""
     post = gig_quote.gig_post
     CustomerNotification.objects.create(
         customer=post.customer,
         organization=gig_quote.organization,
         kind=CustomerNotification.Kind.NEW_GIG_QUOTE,
-        title='New Quote Received',
+        title='New Bid Received',
         message=(
-            f'{gig_quote.organization.name} quoted ${gig_quote.price} '
+            f'{gig_quote.organization.name} bid ${gig_quote.price} '
             f'for "{post.title}"'
         ),
-        link_path=f'/customer/gigs/{post.id}?tab=quotes',
+        link_path=f'/customer/gigs/{post.id}/bids/{gig_quote.id}',
     )
 
 
@@ -29,7 +29,47 @@ def notify_quote_accepted(gig_quote):
         message=(
             f'Your bid of ${gig_quote.price} was accepted for "{post.title}"'
         ),
+        link_path=f'/provider/{org.slug}/gigs/{post.id}/bids/{gig_quote.id}',
+    )
+
+
+def notify_quote_rejected(gig_quote):
+    post = gig_quote.gig_post
+    org = gig_quote.organization
+    ProviderNotification.objects.create(
+        organization=org,
+        kind=ProviderNotification.Kind.GIG_QUOTE_REJECTED,
+        message=f'Your bid on "{post.title}" was declined.',
         link_path=f'/provider/{org.slug}/gigs/{post.id}',
+    )
+
+
+def notify_quote_countered(gig_quote):
+    post = gig_quote.gig_post
+    org = gig_quote.organization
+    ProviderNotification.objects.create(
+        organization=org,
+        kind=ProviderNotification.Kind.GIG_QUOTE_COUNTERED,
+        message=(
+            f'Customer offered ${gig_quote.counter_price} on "{post.title}" '
+            f'(your bid was ${gig_quote.price}).'
+        ),
+        link_path=f'/provider/{org.slug}/gigs/{post.id}/bids/{gig_quote.id}',
+    )
+
+
+def notify_counter_declined(gig_quote):
+    post = gig_quote.gig_post
+    CustomerNotification.objects.create(
+        customer=post.customer,
+        organization=gig_quote.organization,
+        kind=CustomerNotification.Kind.GIG_COUNTER_DECLINED,
+        title='Counter-offer declined',
+        message=(
+            f'{gig_quote.organization.name} kept their bid of ${gig_quote.price} '
+            f'on "{post.title}".'
+        ),
+        link_path=f'/customer/gigs/{post.id}/bids/{gig_quote.id}',
     )
 
 
@@ -79,7 +119,7 @@ def notify_gig_expired(gig_post, quote_count: int = 0):
         kind=CustomerNotification.Kind.GIG_EXPIRED,
         title='Gig Post Expired',
         message=(
-            f'Your gig post "{gig_post.title}" expired with {quote_count} quote(s).'
+            f'Your gig post "{gig_post.title}" expired with {quote_count} bid(s).'
         ),
         link_path=f'/customer/gigs/{gig_post.id}',
     )

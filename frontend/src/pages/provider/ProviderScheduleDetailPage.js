@@ -277,7 +277,13 @@ export default function ProviderScheduleDetailPage() {
           <dl className="mt-4 space-y-4">
             <DetailRow label="Service">{data.service_name}</DetailRow>
             <DetailRow label="Duration">{formatDurationLabel(data.service_duration_minutes) || '—'}</DetailRow>
-            <DetailRow label="Price">{currency.format(Number(data.service_base_price))}</DetailRow>
+            <DetailRow label="Price">
+              {currency.format(
+                Number(
+                  data.quote_amount != null ? data.quote_amount : data.service_base_price,
+                ),
+              )}
+            </DetailRow>
             <DetailRow label="Time">
               {formatTime(data.start_at)} – {formatTime(data.end_at)}
             </DetailRow>

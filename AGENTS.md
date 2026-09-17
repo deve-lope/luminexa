@@ -79,6 +79,7 @@ cd frontend && npm start   # SPA :3000
 - `businesses.0016_organization_concurrent_capacity`
 - `businesses.0017_organizationlocation`
 - `jobs.0025_booking_slot_capacity_fk` (Booking.slot OneToOne → FK)
+- `accounts.0021_authtoken_multi_device` (max 2 simultaneous logins)
 
 ## Definition of done
 

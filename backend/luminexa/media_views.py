@@ -5,7 +5,6 @@ from pathlib import Path
 from django.conf import settings
 from django.http import Http404, HttpResponseForbidden
 from django.views.static import serve as django_serve
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
 from accounts.authentication import CookieTokenAuthentication
@@ -28,7 +27,7 @@ def _is_public_media_path(path: str) -> bool:
 
 
 def _user_is_authenticated(request) -> bool:
-    authenticators = (CookieTokenAuthentication(), TokenAuthentication())
+    authenticators = (CookieTokenAuthentication(),)
     for authenticator in authenticators:
         try:
             result = authenticator.authenticate(request)

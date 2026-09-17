@@ -3,7 +3,6 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status
-from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -11,7 +10,12 @@ from rest_framework.views import APIView
 
 from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
 
-from .auth_cookies import clear_auth_cookie, set_auth_cookie
+from .auth_cookies import clear_auth_cookie
+from .auth_sessions import (
+    delete_all_auth_tokens,
+    delete_request_auth_token,
+    issue_auth_token_response,
+)
 from .deletion import anonymize_user, record_provider_deletion_feedback
 from .emails import (
     send_account_deletion_email,
@@ -60,18 +64,6 @@ def _registration_pending_response(user, *, organization=None):
     if organization is not None:
         payload['organization'] = {'slug': organization.slug, 'name': organization.name}
     return Response(payload, status=status.HTTP_201_CREATED)
-
-
-def _issue_auth_token(user):
-    """Issue a rotated DRF token and set it in an HttpOnly cookie (not in JSON)."""
-    Token.objects.filter(user=user).delete()
-    token = Token.objects.create(user=user)
-    response = Response({
-        'user': UserSerializer(user).data,
-        'auth': 'cookie',
-    })
-    set_auth_cookie(response, token.key)
-    return response
 
 
 def _send_customer_otp(email: str, *, full_name: str = '') -> None:
@@ -208,7 +200,7 @@ class LoginOtpVerifyAPIView(APIView):
         if not user.email_verified:
             user.email_verified = True
             user.save(update_fields=['email_verified'])
-        return _issue_auth_token(user)
+        return issue_auth_token_response(user, request)
 
 
 class LoginAPIView(APIView):
@@ -228,14 +220,14 @@ class LoginAPIView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        return _issue_auth_token(user)
+        return issue_auth_token_response(user, request)
 
 
 class LogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        Token.objects.filter(user=request.user).delete()
+        delete_request_auth_token(request)
         response = Response({'detail': 'Logged out.'})
         clear_auth_cookie(response)
         return response
@@ -470,7 +462,7 @@ class DeleteAccountAPIView(APIView):
             channel='in_app',
         )
         anonymize_user(user)
-        Token.objects.filter(user=user).delete()
+        delete_all_auth_tokens(user)
         response = Response({'detail': 'Your account has been deleted.'})
         clear_auth_cookie(response)
         return response

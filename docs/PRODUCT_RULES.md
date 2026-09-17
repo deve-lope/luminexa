@@ -213,3 +213,22 @@ Providers can **Import CSV** on Clients (`full_name`, `email`, `phone`, optional
 - Do not blast welcome emails on import.
 - Do not invent membership-only stubs without a User (Clients and bookings need `user_id`).
 - Existing platform users with the same email are **linked** to the org, not duplicated.
+
+---
+
+## Sessions — max two devices per account
+
+### What it means
+
+An account may be signed in on **at most two devices at once** (typical: web browser + phone app). Logging in on a second device must **not** sign the first one out.
+
+A **third** login creates a new session and signs out the **oldest** of the two existing sessions. Logging out on one device leaves the other signed in.
+
+Code: `accounts.AuthToken` (FK, not DRF’s one-token-per-user `Token`) · `accounts.auth_sessions.issue_auth_token_response` · cap `AUTH_MAX_CONCURRENT_SESSIONS` (default **2**).
+
+### What NOT to simplify away
+
+- Do not rotate/delete all tokens on every login (that is what signed web off when the phone signed in).
+- Do not use DRF `authtoken.Token` (OneToOne) as the SPA session — it cannot hold two devices.
+- Logout deletes **this device’s** token only, not every session for the account.
+

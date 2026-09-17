@@ -4,7 +4,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework.test import APIClient
 
-from accounts.models import LoginCode, User
+from accounts.models import AuthToken, LoginCode, User
 from accounts.otp import issue_login_code
 from businesses.models import BusinessType, OrganizationMembership
 
@@ -381,3 +381,130 @@ class SessionAPITests(TestCase):
         self.assertEqual(res.status_code, 200, res.data)
         self.assertTrue(res.data['authenticated'])
         self.assertEqual(res.data['user']['email'], 'session@example.com')
+
+
+class ConcurrentSessionTests(TestCase):
+    """Web + phone can stay signed in; a third login signs out the oldest device."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='two.devices@example.com',
+            full_name='Two Devices',
+            password='password123',
+            email_verified=True,
+        )
+        BusinessType.objects.create(slug='cleaning', name='Cleaning', is_active=True)
+        from businesses.models import Organization
+        from businesses.utils import unique_organization_slug
+
+        org = Organization.objects.create(
+            name='Two Device Biz',
+            slug=unique_organization_slug('Two Device Biz'),
+            profile_public=True,
+            is_active=True,
+        )
+        OrganizationMembership.objects.create(
+            organization=org,
+            user=self.user,
+            role=OrganizationMembership.Role.OWNER,
+        )
+
+    def _login(self, client):
+        return client.post(
+            '/accounts/api/login/',
+            {'email': self.user.email, 'password': 'password123'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+
+    def _cookie_name(self):
+        from django.conf import settings as dj_settings
+
+        return dj_settings.AUTH_TOKEN_COOKIE_NAME
+
+    def test_web_and_phone_stay_signed_in(self):
+        web = APIClient()
+        phone = APIClient()
+        web_login = self._login(web)
+        phone_login = self._login(phone)
+        self.assertEqual(web_login.status_code, 200, web_login.data)
+        self.assertEqual(phone_login.status_code, 200, phone_login.data)
+        cookie = self._cookie_name()
+        self.assertNotEqual(web.cookies[cookie].value, phone.cookies[cookie].value)
+
+        web_session = web.get('/accounts/api/session/', HTTP_HOST='localhost')
+        phone_session = phone.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertTrue(web_session.data['authenticated'])
+        self.assertTrue(phone_session.data['authenticated'])
+        self.assertEqual(AuthToken.objects.filter(user=self.user).count(), 2)
+
+    def test_third_login_signs_out_oldest_device(self):
+        first = APIClient()
+        second = APIClient()
+        third = APIClient()
+        self._login(first)
+        self._login(second)
+        self._login(third)
+
+        first_session = first.get('/accounts/api/session/', HTTP_HOST='localhost')
+        second_session = second.get('/accounts/api/session/', HTTP_HOST='localhost')
+        third_session = third.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertFalse(first_session.data['authenticated'])
+        self.assertTrue(second_session.data['authenticated'])
+        self.assertTrue(third_session.data['authenticated'])
+        self.assertEqual(AuthToken.objects.filter(user=self.user).count(), 2)
+
+    def test_logout_on_one_device_keeps_the_other(self):
+        web = APIClient()
+        phone = APIClient()
+        self._login(web)
+        self._login(phone)
+        out = web.post('/accounts/api/logout/', HTTP_HOST='localhost')
+        self.assertEqual(out.status_code, 200, out.data)
+
+        web_session = web.get('/accounts/api/session/', HTTP_HOST='localhost')
+        phone_session = phone.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertFalse(web_session.data['authenticated'])
+        self.assertTrue(phone_session.data['authenticated'])
+        self.assertEqual(AuthToken.objects.filter(user=self.user).count(), 1)
+
+    def test_relogin_same_client_reuses_token(self):
+        client = APIClient()
+        self._login(client)
+        cookie = self._cookie_name()
+        key = client.cookies[cookie].value
+        self._login(client)
+        self.assertEqual(client.cookies[cookie].value, key)
+        self.assertEqual(AuthToken.objects.filter(user=self.user).count(), 1)
+
+    def test_customer_otp_web_and_phone_stay_signed_in(self):
+        customer = User.objects.create_user(
+            email='cust.two.devices@example.com',
+            full_name='Cust Two Devices',
+            password=None,
+            email_verified=True,
+        )
+        web = APIClient()
+        phone = APIClient()
+        code1 = issue_login_code(customer.email)
+        web_login = web.post(
+            '/accounts/api/login/otp/verify/',
+            {'email': customer.email, 'code': code1},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(web_login.status_code, 200, web_login.data)
+        code2 = issue_login_code(customer.email)
+        phone_login = phone.post(
+            '/accounts/api/login/otp/verify/',
+            {'email': customer.email, 'code': code2},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(phone_login.status_code, 200, phone_login.data)
+        web_session = web.get('/accounts/api/session/', HTTP_HOST='localhost')
+        phone_session = phone.get('/accounts/api/session/', HTTP_HOST='localhost')
+        self.assertTrue(web_session.data['authenticated'])
+        self.assertTrue(phone_session.data['authenticated'])
+        self.assertEqual(AuthToken.objects.filter(user=customer).count(), 2)
+

@@ -25,7 +25,10 @@ export default function GigCommentForm({ onSubmit, disabled = false }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-2 rounded-xl border border-black/5 bg-[#fffcf7] p-3 shadow-sm"
+    >
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -33,14 +36,14 @@ export default function GigCommentForm({ onSubmit, disabled = false }) {
         maxLength={1000}
         rows={3}
         disabled={disabled}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        className="lx-input min-h-[5.5rem] resize-y text-sm"
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-slate-500">{body.length}/1000</span>
         <button
           type="submit"
           disabled={disabled || !body.trim()}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="lx-btn-primary px-4 py-2 text-sm disabled:opacity-50"
         >
           Post comment
         </button>
