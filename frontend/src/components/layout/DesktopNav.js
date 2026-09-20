@@ -31,6 +31,7 @@ export default function DesktopNav({
                 key={tab.id}
                 to={tab.to}
                 end={tab.end}
+                data-tour={`tab-${tab.id}`}
                 aria-label={
                   tab.badgeCount > 0
                     ? `${tab.label}, ${tab.badgeCount} new`
@@ -58,7 +59,11 @@ export default function DesktopNav({
         </nav>
 
         {menuItems.length > 0 && (
-          <nav className="border-t border-luminexa-line p-2.5 pb-3" aria-label="More">
+          <nav
+            className="border-t border-luminexa-line p-2.5 pb-3"
+            aria-label="More"
+            data-tour="menu"
+          >
             <ul className="space-y-0.5">
               {menuItems.map((item) =>
                 item.divider ? (
