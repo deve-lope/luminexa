@@ -203,6 +203,13 @@ export async function bootstrapNativeApp() {
   markNativeDocument();
 
   try {
+    const { ensureFirstOpenedAt } = await import('../utils/storeRatePrompt');
+    ensureFirstOpenedAt();
+  } catch {
+    /* ignore */
+  }
+
+  try {
     const { App } = await import('@capacitor/app');
     const launch = await App.getLaunchUrl();
     if (launch?.url) navigateToAppUrl(launch.url);

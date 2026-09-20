@@ -81,6 +81,7 @@ import {
 } from './components/booking/BookRedirect';
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import StoreRatePrompt from './components/StoreRatePrompt';
 import { bootstrapNativeApp, isNativeApp } from './native/capacitorNative';
 import ScrollToTop from './components/ScrollToTop';
 import InAppNavTracker from './components/InAppNavTracker';
@@ -125,6 +126,7 @@ function AppRoutes() {
   return (
     <div className={isAuthShell ? 'min-h-[100dvh] bg-luminexa-canvas' : 'min-h-[100dvh] bg-slate-50'}>
       {!isNativeApp() && !location.pathname.startsWith('/b/') && <PwaInstallPrompt />}
+      {isNativeApp() && !isAuthShell && <StoreRatePrompt />}
       <Routes>
         <Route path="/" element={<LandingRoute />} />
         <Route path="/ottawa" element={<CityHubPage />} />

@@ -148,6 +148,20 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 
 ---
 
+## App store rating (native only)
+
+After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enjoying Luminexa?” prompt that opens the **store listing** (Play, or App Store when `APP_STORE_URL` is set). This is separate from **provider/job reviews** (`CustomerRatePrompt`).
+
+### Binding details
+
+- **Skip** browser and webview users entirely (`isNativeApp()` only).
+- Record `firstOpenedAt` on first native open; do not prompt before 7 days.
+- Dismiss or “Rate” permanently stops the prompt for that install.
+- iOS: no prompt until `APP_STORE_URL` is live (do not send users to App Store search).
+- Destination is always `getStoreReviewUrl` / `storeLinks.js` — never a fake in-web star UI.
+
+---
+
 ## Quick “shipped truths” checklist for agents
 
 1. Capacity default 1; UI label “Jobs at the same time”; FK not OneToOne; OPEN while remaining > 0.
@@ -155,6 +169,7 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 3. Multi-location any-branch match; primary sync; 2nd-location choice UX.
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
+5b. App rating = native only after ≥1 week; Play / App Store listing only (not webview).
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
 8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.

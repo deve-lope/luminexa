@@ -28,6 +28,22 @@ export function getPreferredStoreUrl(ua = '') {
 }
 
 /**
+ * Store listing for an in-app “rate Luminexa” CTA (native shell only).
+ * @param {'android'|'ios'|string} platform Capacitor platform id
+ * @returns {string|null} null when that store should not be prompted
+ */
+export function getStoreReviewUrl(platform) {
+  if (platform === 'android') return PLAY_STORE_URL;
+  if (platform === 'ios') {
+    if (!APP_STORE_URL) return null;
+    const sep = APP_STORE_URL.includes('?') ? '&' : '?';
+    if (/[?&]action=write-review\b/.test(APP_STORE_URL)) return APP_STORE_URL;
+    return `${APP_STORE_URL}${sep}action=write-review`;
+  }
+  return null;
+}
+
+/**
  * Store install buttons for guest booking links when the native app is not installed.
  * Mobile UAs get only their store; desktop gets both.
  */

@@ -1,11 +1,13 @@
 import {
   ANDROID_PACKAGE_ID,
+  APP_STORE_URL,
   PLAY_STORE_URL,
   getAndroidOpenInAppUrl,
   getAppStoreUrl,
   getOpenInAppUrl,
   getPreferredStoreUrl,
   getStoreInstallOptions,
+  getStoreReviewUrl,
   probePlayAppInstalled,
 } from './storeLinks';
 
@@ -29,6 +31,24 @@ describe('getPreferredStoreUrl', () => {
     expect(PLAY_STORE_URL).toBe(
       'https://play.google.com/store/apps/details?id=com.luminexa.app'
     );
+  });
+});
+
+describe('getStoreReviewUrl', () => {
+  test('Android opens the Play listing', () => {
+    expect(getStoreReviewUrl('android')).toBe(PLAY_STORE_URL);
+  });
+
+  test('iOS is skipped until APP_STORE_URL is set', () => {
+    if (APP_STORE_URL) {
+      expect(getStoreReviewUrl('ios')).toContain('action=write-review');
+    } else {
+      expect(getStoreReviewUrl('ios')).toBeNull();
+    }
+  });
+
+  test('web / unknown platform is skipped', () => {
+    expect(getStoreReviewUrl('web')).toBeNull();
   });
 });
 
