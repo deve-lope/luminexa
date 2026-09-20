@@ -785,6 +785,13 @@ class Invoice(models.Model):
     qbo_invoice_id = models.CharField(max_length=64, blank=True, default='')
     qbo_payment_id = models.CharField(max_length=64, blank=True, default='')
     qbo_synced_at = models.DateTimeField(null=True, blank=True)
+    discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Referral coupon credit applied to this invoice (pre-tax).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -793,6 +800,139 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f'{self.number} ({self.status})'
+
+
+class ReferralCode(models.Model):
+    """Per-customer share code for a provider's referral rewards program."""
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='referral_codes',
+    )
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_codes',
+    )
+    code = models.CharField(max_length=16, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'referrer'],
+                name='uniq_referral_code_per_org_referrer',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.code} ({self.organization.slug})'
+
+
+class Referral(models.Model):
+    """Tracks that a referred customer booked via someone's code for an org."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending completion'
+        REWARDED = 'rewarded', 'Rewarded'
+        CAPPED = 'capped', 'Cap reached'
+        INVALID = 'invalid', 'Invalid'
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='referrals',
+    )
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referrals_made',
+    )
+    referred_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referrals_received',
+    )
+    referral_code = models.ForeignKey(
+        ReferralCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referrals',
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    qualifying_booking = models.ForeignKey(
+        'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='qualified_referrals',
+        help_text='First completed booking by the referred customer that unlocked the reward.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    rewarded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'referred_user'],
+                name='uniq_referral_per_org_referred_user',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.organization.slug}: {self.referrer_id}→{self.referred_user_id} ({self.status})'
+
+
+class ReferralCoupon(models.Model):
+    """Coupon credit for a referrer, usable only on invoices with that provider."""
+
+    class Status(models.TextChoices):
+        AVAILABLE = 'available', 'Available'
+        APPLIED = 'applied', 'Fully applied'
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='referral_coupons',
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_coupons',
+    )
+    referral = models.OneToOneField(
+        Referral,
+        on_delete=models.CASCADE,
+        related_name='coupon',
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text='Original grant amount.',
+    )
+    remaining = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Unused credit still available.',
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.AVAILABLE, db_index=True,
+    )
+    last_applied_invoice = models.ForeignKey(
+        'Invoice',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referral_coupons_applied',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'Coupon {self.amount} for user {self.owner_id} @ {self.organization.slug}'
 
 
 class JobCostLine(models.Model):

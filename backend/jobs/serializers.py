@@ -90,8 +90,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return f'BK-{obj.booking_id:05d}' if obj.booking_id else ''
 
     def get_discount(self, obj):
-        # Reserved for future discount support; always expose for invoice UI.
-        return '0.00'
+        return str(Decimal(obj.discount or 0).quantize(Decimal('0.01')))
 
     def get_can_pay_online(self, obj):
         from django.conf import settings as dj_settings
@@ -128,6 +127,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'default_labor_rate',
             'invoice_followup_enabled',
             'invoice_followup_days',
+            'referral_rewards_enabled',
+            'referral_reward_amount',
+            'referral_max_earnings_per_referrer',
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
@@ -147,6 +149,55 @@ class OrganizationSerializer(serializers.ModelSerializer):
         if value < 1 or value > 50:
             raise serializers.ValidationError('Use 1–50 people working at the same time.')
         return value
+
+    def validate_referral_reward_amount(self, value):
+        if value is None:
+            return Decimal('0.00')
+        amount = Decimal(str(value))
+        if amount < 0:
+            raise serializers.ValidationError('Reward amount cannot be negative.')
+        if amount > Decimal('10000.00'):
+            raise serializers.ValidationError('Keep per-referral reward at $10,000 or less.')
+        return amount.quantize(Decimal('0.01'))
+
+    def validate_referral_max_earnings_per_referrer(self, value):
+        if value is None:
+            return Decimal('0.00')
+        amount = Decimal(str(value))
+        if amount < 0:
+            raise serializers.ValidationError('Earnings cap cannot be negative.')
+        if amount > Decimal('100000.00'):
+            raise serializers.ValidationError('Keep the earnings cap at $100,000 or less.')
+        return amount.quantize(Decimal('0.01'))
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        enabled = attrs.get(
+            'referral_rewards_enabled',
+            getattr(self.instance, 'referral_rewards_enabled', False) if self.instance else False,
+        )
+        reward = attrs.get(
+            'referral_reward_amount',
+            getattr(self.instance, 'referral_reward_amount', None) if self.instance else None,
+        )
+        cap = attrs.get(
+            'referral_max_earnings_per_referrer',
+            getattr(self.instance, 'referral_max_earnings_per_referrer', None) if self.instance else None,
+        )
+        if enabled:
+            if reward is not None and Decimal(str(reward)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_reward_amount': 'Set how much credit each successful referral earns.',
+                })
+            if cap is not None and Decimal(str(cap)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_max_earnings_per_referrer': 'Set a lifetime earnings cap per person.',
+                })
+            if reward is not None and cap is not None and Decimal(str(reward)) > Decimal(str(cap)):
+                raise serializers.ValidationError({
+                    'referral_reward_amount': 'Per-referral reward cannot exceed the lifetime cap.',
+                })
+        return attrs
 
     def validate_logo(self, value):
         if not value:
@@ -1417,6 +1468,15 @@ class OrgCustomerSerializer(serializers.Serializer):
     provider_notes = serializers.CharField(required=False, allow_blank=True, default='')
     outstanding_balance = serializers.CharField(required=False, allow_null=True)
     completed_bookings = serializers.IntegerField(required=False, default=0)
+    referral_earned_total = serializers.CharField(required=False, default='0.00')
+    referral_available_credit = serializers.CharField(required=False, default='0.00')
+    referral_rewarded_count = serializers.IntegerField(required=False, default=0)
+    referral_remaining_cap = serializers.CharField(required=False, default='0.00')
+    referral_at_cap = serializers.BooleanField(required=False, default=False)
+    referral_max_earnings = serializers.CharField(required=False, default='0.00')
+    referred_by_id = serializers.IntegerField(required=False, allow_null=True)
+    referred_by_name = serializers.CharField(required=False, allow_blank=True, default='')
+    referral_status = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -1523,6 +1583,7 @@ class PublicOrganizationReadSerializer(serializers.ModelSerializer):
             'service_address', 'service_city', 'service_state', 'service_postal_code',
             'service_latitude', 'service_longitude', 'service_radius_miles',
             'locations', 'currency',
+            'referral_rewards_enabled', 'referral_reward_amount',
         )
 
     def get_currency(self, obj):

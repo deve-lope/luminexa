@@ -75,6 +75,7 @@ export function resolveCustomerBack(pathname, search = '') {
   if (path === '/customer/messages') return { to: '/customer' };
   if (path === '/customer/notifications') return { to: '/customer' };
   if (path === '/customer/history') return { to: '/customer/bookings' };
+  if (path === '/customer/referrals') return { to: '/customer' };
   if (path === '/customer/about') return { to: '/customer' };
   if (/^\/customer\/provider\/[^/]+\/checkout$/.test(path)) {
     const key = path.split('/')[3];

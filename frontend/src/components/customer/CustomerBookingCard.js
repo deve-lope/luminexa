@@ -17,6 +17,7 @@ import {
 import ProviderAttendancePrompt from './ProviderAttendancePrompt';
 import {
   customerProviderPage,
+  customerProviderService,
   customerProviderServiceDetail,
 } from '../../utils/customerPaths';
 import { providerCustomerKey } from '../../utils/providerRouteKey';
@@ -42,6 +43,32 @@ function ReviewSnippet({ review }) {
       )}
     </div>
   );
+}
+
+function formatInvoiceAmount(invoice) {
+  if (!invoice || invoice.amount == null) return null;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: invoice.currency || 'CAD',
+    }).format(Number(invoice.amount) || 0);
+  } catch {
+    return `$${Number(invoice.amount || 0).toFixed(2)}`;
+  }
+}
+
+function invoiceStatusMeta(invoice) {
+  if (!invoice) return null;
+  if (invoice.status === 'paid') {
+    return { text: 'Paid', className: 'bg-emerald-50 text-emerald-800 ring-emerald-200/80' };
+  }
+  if (invoice.status === 'issued') {
+    return { text: 'Due', className: 'bg-amber-50 text-amber-900 ring-amber-200/80' };
+  }
+  if (invoice.status === 'void') {
+    return { text: 'Void', className: 'bg-slate-50 text-slate-600 ring-slate-200/80' };
+  }
+  return null;
 }
 
 export default function CustomerBookingCard({
@@ -142,6 +169,11 @@ export default function CustomerBookingCard({
             ? 'Ready to rate — open for details'
             : null
       : null;
+    const invoice = booking.invoice;
+    const invoiceAmount = formatInvoiceAmount(invoice);
+    const invoiceStatus = invoiceStatusMeta(invoice);
+    const showBillRow = Boolean(invoice && (invoiceAmount || invoiceStatus));
+
     const body = (
       <>
         <div className="flex items-start justify-between gap-3">
@@ -167,31 +199,89 @@ export default function CustomerBookingCard({
       </>
     );
 
-    const footer = (detailTo || onCompactDelete) && (
-      <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+    const billRow = showBillRow && (
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {invoiceAmount && (
+            <span className="text-base font-semibold tabular-nums tracking-tight text-slate-900">
+              {invoiceAmount}
+            </span>
+          )}
+          {invoiceStatus && (
+            <span
+              className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ${invoiceStatus.className}`}
+            >
+              {invoiceStatus.text}
+            </span>
+          )}
+        </div>
         {detailTo ? (
           <Link
             to={detailTo}
-            className="text-sm font-medium text-teal-700 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+            className="shrink-0 text-sm font-semibold text-teal-700 outline-none hover:text-teal-800 focus-visible:ring-2 focus-visible:ring-teal-500/40"
+            onClick={(e) => e.stopPropagation()}
           >
-            Full details →
+            View bill
           </Link>
-        ) : (
-          <span />
-        )}
-        {onCompactDelete ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onCompactDelete();
-            }}
-            className="shrink-0 text-sm font-semibold text-red-600 hover:underline"
-          >
-            {compactDeleteLabel}
-          </button>
         ) : null}
+      </div>
+    );
+
+    const rebookTo =
+      booking.status === 'completed' && providerKey && booking.service
+        ? customerProviderService(providerKey, booking.service)
+        : null;
+
+    const footer = !showBillRow && (detailTo || onCompactDelete || rebookTo) && (
+      <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+        {(detailTo || onCompactDelete) && (
+          <div className="flex items-end justify-between gap-3">
+            {detailTo ? (
+              <Link
+                to={detailTo}
+                className="text-sm font-medium text-teal-700 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+              >
+                Full details →
+              </Link>
+            ) : (
+              <span />
+            )}
+            {onCompactDelete ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onCompactDelete();
+                }}
+                className="shrink-0 text-sm font-semibold text-red-600 hover:underline"
+              >
+                {compactDeleteLabel}
+              </button>
+            ) : null}
+          </div>
+        )}
+        {rebookTo ? (
+          <Link
+            to={rebookTo}
+            className="lx-btn-primary inline-flex min-h-[44px] w-full items-center justify-center text-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Book again
+          </Link>
+        ) : null}
+      </div>
+    );
+
+    const billFooter = showBillRow && rebookTo && (
+      <div className="mt-2">
+        <Link
+          to={rebookTo}
+          className="lx-btn-primary inline-flex min-h-[44px] w-full items-center justify-center text-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Book again
+        </Link>
       </div>
     );
 
@@ -203,11 +293,16 @@ export default function CustomerBookingCard({
             className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
           >
             {body}
+            {billRow}
           </Link>
         ) : (
-          body
+          <>
+            {body}
+            {billRow}
+          </>
         )}
         {footer}
+        {billFooter}
         <ProviderAttendancePrompt
           compact
           booking={booking}
@@ -511,9 +606,27 @@ export default function CustomerBookingCard({
         </div>
       )}
 
+      {booking.status === 'completed' && providerKey && booking.service ? (
+        <div className="mt-3">
+          <Link
+            to={customerProviderService(providerKey, booking.service)}
+            className="lx-btn-primary inline-flex min-h-[48px] w-full items-center justify-center"
+          >
+            Book again
+          </Link>
+          <p className="mt-2 text-center text-xs text-slate-500">
+            {booking.booking_policy === 'quote' ||
+            serviceRequiresQuote(booking.service_pricing_type)
+              ? 'Starts a new quote request. Your previous price doesn’t carry over.'
+              : 'You’ll see today’s price and open times on the next screen.'}
+          </p>
+        </div>
+      ) : null}
+
       <RequestMessageThread
         compact
         peerName={booking.organization_name}
+        peerHref={providerKey ? customerProviderPage(providerKey) : undefined}
         emptyHint="Opens your chat with this business — booking details appear in the thread."
         idleOpenLabel="Message business"
         loadMessages={() => jobsAPI.listBookingMessages(booking.id)}

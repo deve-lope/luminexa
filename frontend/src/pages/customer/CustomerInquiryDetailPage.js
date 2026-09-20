@@ -330,6 +330,7 @@ export default function CustomerInquiryDetailPage() {
         <RequestMessageThread
           compact
           peerName={inquiry.organization_name}
+          peerHref={customerProviderPage(orgKey)}
           emptyHint="Message the business about this quote request."
           idleOpenLabel="Message business"
           loadMessages={() => jobsAPI.listInquiryMessages(orgKey, inquiry.id)}

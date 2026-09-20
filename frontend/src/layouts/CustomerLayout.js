@@ -127,7 +127,7 @@ export default function CustomerLayout({ children }) {
       return { eyebrow: 'Bookings', title: 'Appointment' };
     }
     if (location.pathname.endsWith('/customer/bookings')) {
-      return { eyebrow: 'Bookings', title: 'Upcoming' };
+      return { eyebrow: 'Bookings', title: 'Coming up' };
     }
     if (location.pathname.endsWith('/customer/messages')) {
       return { eyebrow: 'Messages', title: 'Conversations' };
@@ -139,7 +139,7 @@ export default function CustomerLayout({ children }) {
       return { eyebrow: 'Bookings', title: 'Quotes' };
     }
     if (location.pathname.endsWith('/customer/completed')) {
-      return { eyebrow: 'Bookings', title: 'Completed' };
+      return { eyebrow: 'Bookings', title: 'Done' };
     }
     if (location.pathname.endsWith('/customer/history')) {
       return { eyebrow: 'Bookings', title: 'History' };
@@ -149,6 +149,9 @@ export default function CustomerLayout({ children }) {
     }
     if (location.pathname.endsWith('/customer/account')) {
       return { eyebrow: 'Account', title: 'Profile & password' };
+    }
+    if (location.pathname.endsWith('/customer/referrals')) {
+      return { eyebrow: 'More', title: 'Referrals' };
     }
     if (location.pathname.endsWith('/customer/about')) {
       return { eyebrow: 'More', title: 'About Luminexa' };

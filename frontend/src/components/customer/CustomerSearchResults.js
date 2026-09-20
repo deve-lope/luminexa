@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import BookableServiceCard from './BookableServiceCard';
 import BusinessTypeTileGrid from './BusinessTypeTileGrid';
 import ServiceRatingSummary from '../services/ServiceRatingSummary';
-import { bookService, businessPage } from '../../utils/customerPaths';
-import { formatServiceCatalogLabel } from '../../utils/serviceDisplay';
+import { businessPage } from '../../utils/customerPaths';
 
 export default function CustomerSearchResults({ results, query, areaLabel, loading }) {
   const searchTerm = query?.trim() || '';
@@ -12,7 +12,15 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
   if (!searchTerm && !hasArea && !loading && !results) return null;
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Searching…</p>;
+    return (
+      <div className="lx-card flex items-center gap-3 py-6 text-sm text-slate-500">
+        <span
+          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-teal-600"
+          aria-hidden
+        />
+        Searching…
+      </div>
+    );
   }
 
   const types = results?.business_types || [];
@@ -22,9 +30,9 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
 
   if (empty) {
     return (
-      <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+      <p className="lx-card text-sm text-slate-600">
         {searchTerm
-          ? `No results for "${searchTerm}"${hasArea ? ` near ${areaLabel}` : ''}. Try another keyword or ZIP code.`
+          ? `No results for “${searchTerm}”${hasArea ? ` near ${areaLabel}` : ''}. Try another keyword or ZIP code.`
           : hasArea
             ? `No services found near ${areaLabel}. Try a wider radius or another ZIP / postal code.`
             : 'No nearby services found. Try a different area or widen the radius.'}
@@ -33,47 +41,68 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
   }
 
   return (
-    <div className="space-y-5">
-      {hasArea && (
-        <p className="text-sm text-slate-600">
-          Showing results near <span className="font-medium text-slate-800">{areaLabel}</span>
-        </p>
-      )}
-      {types.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Categories
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 lg:text-xl">
+            {searchTerm ? `Results for “${searchTerm}”` : 'Nearby services'}
           </h2>
+          {hasArea && (
+            <p className="mt-1 text-sm text-slate-600">
+              Near <span className="font-medium text-slate-800">{areaLabel}</span>
+            </p>
+          )}
+        </div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          {[
+            services.length ? `${services.length} service${services.length === 1 ? '' : 's'}` : null,
+            providers.length ? `${providers.length} provider${providers.length === 1 ? '' : 's'}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      </div>
+
+      {types.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Categories
+          </h3>
           <BusinessTypeTileGrid types={types} />
         </section>
       )}
+
       {providers.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Providers
-          </h2>
-          <ul className="space-y-2">
+          </h3>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {providers.map((p) => (
-              <li key={p.slug}>
+              <li key={p.slug || p.organization_slug}>
                 <Link
-                  to={businessPage(p.slug)}
-                  className="flex min-h-[56px] items-center gap-3 rounded-xl bg-white p-3 shadow-sm transition hover:shadow-md"
+                  to={businessPage(p.public_ref || p.slug || p.organization_slug)}
+                  className="lx-card-interactive flex h-full items-center gap-3 !p-3"
                 >
                   {p.logo_url ? (
                     <img
                       src={p.logo_url}
                       alt=""
-                      className="h-11 w-11 shrink-0 rounded-lg object-cover"
+                      className="h-14 w-14 shrink-0 rounded-xl object-cover ring-1 ring-slate-200/80"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg text-slate-400">
-                      {p.name?.charAt(0)}
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-slate-100 text-lg font-semibold text-teal-800 ring-1 ring-slate-200/80">
+                      {(p.name || p.organization_name || '?').charAt(0)}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900">{p.name}</p>
-                    {p.tagline && (
-                      <p className="truncate text-sm text-slate-600">{p.tagline}</p>
+                    <p className="font-semibold tracking-tight text-slate-900">
+                      {p.name || p.organization_name}
+                    </p>
+                    {(p.tagline || p.location_short) && (
+                      <p className="mt-0.5 truncate text-sm text-slate-600">
+                        {p.tagline || p.location_short}
+                      </p>
                     )}
                     {p.rating_summary?.count > 0 && (
                       <div className="mt-1">
@@ -87,36 +116,16 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
           </ul>
         </section>
       )}
+
       {services.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Services
-          </h2>
-          <ul className="space-y-2">
+          </h3>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {services.map((s) => (
               <li key={`${s.organization_slug}-${s.id}`}>
-                <Link
-                  to={bookService(s.organization_slug, s.id)}
-                  className="block rounded-xl bg-white p-3 shadow-sm transition hover:shadow-md"
-                >
-                  <p className="font-medium text-slate-900">{s.name}</p>
-                  <p className="text-sm text-slate-600">
-                    {s.organization_name}
-                    {s.distance_miles != null && (
-                      <span className="text-slate-500"> · ~{s.distance_miles} mi away</span>
-                    )}
-                  </p>
-                  {formatServiceCatalogLabel(s) && (
-                    <p className="mt-1 text-sm font-medium text-slate-800">
-                      {formatServiceCatalogLabel(s)}
-                    </p>
-                  )}
-                  {s.rating_summary?.count > 0 && (
-                    <div className="mt-1">
-                      <ServiceRatingSummary summary={s.rating_summary} compact />
-                    </div>
-                  )}
-                </Link>
+                <BookableServiceCard service={s} />
               </li>
             ))}
           </ul>

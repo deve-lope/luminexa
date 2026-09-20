@@ -4,19 +4,23 @@ import { jobsAPI } from '../../utils/api';
 import parseApiError from '../../utils/parseApiError';
 import { isNativeApp } from '../../native/capacitorNative';
 import { providerBilling } from '../../utils/providerPaths';
-import { subscriptionDaysRemaining } from '../../utils/providerSubscription';
+import {
+  formatSubscriptionPeriodEnd,
+  formatSubscriptionRemainingLabel,
+} from '../../utils/providerSubscription';
 
-function statusLabel(status) {
-  if (status === 'trialing') return 'Trial';
-  if (status === 'active') return 'Active';
-  if (status === 'past_due') return 'Past due';
-  if (status === 'canceled') return 'Canceled';
-  if (status === 'unpaid') return 'Unpaid';
+function statusLabel(sub) {
+  if (sub?.source === 'promo') return 'Promo';
+  if (sub?.status === 'trialing') return 'Trial';
+  if (sub?.status === 'active') return 'Active';
+  if (sub?.status === 'past_due') return 'Past due';
+  if (sub?.status === 'canceled') return 'Canceled';
+  if (sub?.status === 'unpaid') return 'Unpaid';
   return 'Not subscribed';
 }
 
 /**
- * Compact subscription summary for My Account — days left + link to billing details.
+ * Compact subscription summary for My Account — end date + human remaining time.
  */
 export default function ProviderSubscriptionCard({ orgSlug }) {
   const [sub, setSub] = useState(null);
@@ -41,37 +45,27 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
     load();
   }, [load]);
 
-  const daysLeft = subscriptionDaysRemaining(sub?.current_period_end);
   const isActive = Boolean(sub?.active);
   const planLabel =
     sub?.plan && sub.plan !== 'free' ? sub.plan.replace(/_/g, ' ') : null;
-  const endDate = sub?.current_period_end
-    ? new Date(sub.current_period_end).toLocaleDateString()
-    : null;
+  const endDate = formatSubscriptionPeriodEnd(sub?.current_period_end);
+  const remaining = formatSubscriptionRemainingLabel(sub?.current_period_end);
 
-  let detail = 'No active Pro subscription.';
-  if (isActive && daysLeft != null) {
-    const dayWord = daysLeft === 1 ? 'day' : 'days';
+  let headline = 'No active Pro subscription.';
+  let subline = null;
+  if (isActive && endDate) {
     if (sub.source === 'promo') {
-      detail =
-        daysLeft === 0
-          ? `Promo Pro ends today (${endDate}).`
-          : `${daysLeft} ${dayWord} left on promo Pro · until ${endDate}`;
+      headline = `Access until ${endDate}`;
     } else if (sub.status === 'trialing') {
-      detail =
-        daysLeft === 0
-          ? `Trial ends today (${endDate}).`
-          : `${daysLeft} ${dayWord} left in trial · until ${endDate}`;
+      headline = `Trial until ${endDate}`;
     } else {
-      detail =
-        daysLeft === 0
-          ? `Renews today (${endDate}).`
-          : `${daysLeft} ${dayWord} left · renews ${endDate}`;
+      headline = `Renews ${endDate}`;
     }
+    subline = remaining;
   } else if (isActive) {
-    detail = `${statusLabel(sub?.status)}${planLabel ? ` · ${planLabel}` : ''}`;
+    headline = `${statusLabel(sub)}${planLabel ? ` · ${planLabel}` : ''}`;
   } else if (sub?.status && sub.status !== 'none') {
-    detail = statusLabel(sub.status);
+    headline = statusLabel(sub);
   }
 
   const storeShell = isNativeApp();
@@ -94,10 +88,13 @@ export default function ProviderSubscriptionCard({ orgSlug }) {
       ) : (
         <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {isActive ? statusLabel(sub?.status) : 'Status'}
+            {isActive ? statusLabel(sub) : 'Status'}
             {planLabel ? ` · ${planLabel}` : ''}
           </p>
-          <p className="mt-1 text-base font-semibold text-slate-900">{detail}</p>
+          <p className="mt-1 text-base font-semibold text-slate-900">{headline}</p>
+          {subline ? (
+            <p className="mt-0.5 text-sm text-slate-600">{subline}</p>
+          ) : null}
         </div>
       )}
 

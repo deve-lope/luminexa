@@ -7,26 +7,6 @@ import { jobsAPI } from '../../utils/api';
 import { isCompletedBooking } from '../../utils/customerBookings';
 import { customerBookingDetail, customerFind } from '../../utils/customerPaths';
 
-function invoicePaymentLabel(invoice) {
-  if (!invoice) return null;
-  if (invoice.status === 'paid') return { text: 'Paid', className: 'bg-emerald-100 text-emerald-800' };
-  if (invoice.status === 'issued') return { text: 'Payment due', className: 'bg-amber-100 text-amber-900' };
-  if (invoice.status === 'void') return { text: 'Invoice voided', className: 'bg-slate-100 text-slate-600' };
-  return null;
-}
-
-function formatInvoiceAmount(invoice) {
-  if (!invoice || invoice.amount == null) return null;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: invoice.currency || 'CAD',
-    }).format(Number(invoice.amount) || 0);
-  } catch {
-    return `$${Number(invoice.amount || 0).toFixed(2)}`;
-  }
-}
-
 export default function CustomerCompletedPage() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,9 +40,6 @@ export default function CustomerCompletedPage() {
   return (
     <div className="space-y-4">
       <BookingsSubNav />
-      <p className="text-sm text-slate-600">
-        Jobs that were finished — view bills, pay online, and leave a review.
-      </p>
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {loading ? (
@@ -72,10 +49,9 @@ export default function CustomerCompletedPage() {
         </div>
       ) : completed.length === 0 ? (
         <div className="lx-empty">
-          <p className="text-slate-600">No completed jobs yet.</p>
+          <p className="text-slate-600">No finished jobs yet.</p>
           <p className="mt-1 text-sm text-slate-500">
-            When a provider marks your appointment as done, it appears here with the invoice and
-            rating options.
+            When a job is marked done, bills and reviews show up here.
           </p>
           <Link
             to={customerFind()}
@@ -85,46 +61,16 @@ export default function CustomerCompletedPage() {
           </Link>
         </div>
       ) : (
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Jobs done
-          </h2>
-          <ul className="space-y-3">
-            {completed.map((booking) => {
-              const payment = invoicePaymentLabel(booking.invoice);
-              const amount = formatInvoiceAmount(booking.invoice);
-              return (
-                <li key={booking.id} className="space-y-2">
-                  <CustomerBookingCard
-                    booking={booking}
-                    compact
-                    detailTo={customerBookingDetail(booking.id)}
-                  />
-                  {payment && (
-                    <div className="flex flex-wrap items-center gap-2 px-1">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${payment.className}`}
-                      >
-                        {payment.text}
-                      </span>
-                      {amount && (
-                        <span className="text-xs font-medium tabular-nums text-slate-600">
-                          {amount}
-                        </span>
-                      )}
-                      <Link
-                        to={customerBookingDetail(booking.id)}
-                        className="text-xs font-medium text-teal-700"
-                      >
-                        View bill →
-                      </Link>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <ul className="space-y-3">
+          {completed.map((booking) => (
+            <CustomerBookingCard
+              key={booking.id}
+              booking={booking}
+              compact
+              detailTo={customerBookingDetail(booking.id)}
+            />
+          ))}
+        </ul>
       )}
     </div>
   );

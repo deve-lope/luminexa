@@ -157,6 +157,30 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
+8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.
+
+---
+
+## Referral rewards (provider opt-in)
+
+### What it means
+
+Owners enable **Referral rewards** in Settings (toggle) with:
+
+- **Credit per referral** (`referral_reward_amount`)
+- **Max a person can earn** (`referral_max_earnings_per_referrer`) lifetime coupon credit at that business
+
+Customers share `?ref=CODE` on the booking URL. Attribution is stored when the referred person books. **Coupon credit is issued only when that referred person's booking is marked completed.** Credit applies automatically as invoice discount on the referrer's next invoice with that provider (pre-tax).
+
+Turning the toggle **off** stops new attributions / share UI. Existing available coupon credit still applies on invoices. Pending referrals (already booked with a code) still qualify on completion.
+
+### What NOT to simplify away
+
+- Do not grant credit on book / pay alone — completion is required.
+- Do not allow self-referral.
+- Do not ignore the lifetime cap (partial last grant is OK).
+- Coupons are provider-scoped.
+- Do not wipe existing coupons when the program is turned off.
 
 ---
 

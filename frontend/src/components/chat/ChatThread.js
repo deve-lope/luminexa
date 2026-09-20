@@ -218,6 +218,67 @@ function BookingCardBubble({ card, detailHref, forceCompact = false }) {
   return <div className="flex justify-center py-1">{inner}</div>;
 }
 
+function OngoingChip({ href, kind, title, subtitle, status }) {
+  const isRequest = kind === 'request';
+  const inner = (
+    <div
+      className={`flex min-h-[40px] max-w-[min(78vw,16.5rem)] items-center gap-2.5 rounded-xl px-3 py-2 text-left ring-1 transition ${
+        isRequest
+          ? 'bg-amber-50 ring-amber-200/60 hover:bg-amber-50/90'
+          : 'bg-teal-50/90 ring-teal-100 hover:bg-teal-50'
+      } ${href ? 'active:scale-[0.98]' : ''}`}
+    >
+      <span
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+          isRequest ? 'bg-amber-100 text-amber-800' : 'bg-teal-100 text-teal-800'
+        }`}
+        aria-hidden
+      >
+        {isRequest ? (
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        ) : (
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">
+          {title}
+        </span>
+        {subtitle ? (
+          <span className="mt-0.5 block truncate text-[11px] leading-tight text-slate-500">
+            {subtitle}
+          </span>
+        ) : null}
+      </span>
+      {status ? (
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            isRequest ? 'bg-amber-100 text-amber-900' : 'bg-white text-teal-800 ring-1 ring-teal-100'
+          }`}
+        >
+          {status}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link
+        to={href}
+        className="shrink-0 snap-start outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className="shrink-0 snap-start">{inner}</div>;
+}
+
 function PinnedContextStrip({
   bookings,
   inquiries,
@@ -227,12 +288,18 @@ function PinnedContextStrip({
 }) {
   if (!bookings.length && !inquiries.length) return null;
 
+  const count = bookings.length + inquiries.length;
+
   return (
-    <div className="shrink-0 border-b border-black/5 bg-teal-900/95 px-3 py-2">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-100/70">
-        Ongoing
+    <div className="border-t border-slate-100 px-3 pb-2.5 pt-2">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+        Ongoing{count > 1 ? ` · ${count}` : ''}
       </p>
-      <div className="flex gap-2 overflow-x-auto pb-0.5">
+      <div
+        className={`flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+          count > 1 ? 'snap-x snap-mandatory' : ''
+        }`}
+      >
         {bookings.map((card) => {
           const base =
             bookingDetailHref && card.booking_id
@@ -240,25 +307,15 @@ function PinnedContextStrip({
               : null;
           const href = withReturnTo(base, returnTo);
           const when = card.start_at ? formatWhen(card.start_at) : null;
-          const tile = (
-            <div className="w-[200px] shrink-0 rounded-xl bg-white/95 px-3 py-2 text-left shadow-sm">
-              <p className="truncate text-[13px] font-semibold text-slate-900">
-                {card.service_name || 'Booking'}
-              </p>
-              {when ? <p className="mt-0.5 truncate text-[11px] text-slate-600">{when}</p> : null}
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-teal-800">
-                {statusLabel(card.status)}
-              </p>
-            </div>
-          );
-          return href ? (
-            <Link key={`b-${card.booking_id}`} to={href} className="shrink-0">
-              {tile}
-            </Link>
-          ) : (
-            <div key={`b-${card.booking_id}`} className="shrink-0">
-              {tile}
-            </div>
+          return (
+            <OngoingChip
+              key={`b-${card.booking_id}`}
+              href={href}
+              kind="booking"
+              title={card.service_name || 'Booking'}
+              subtitle={when}
+              status={statusLabel(card.status)}
+            />
           );
         })}
         {inquiries.map((card) => {
@@ -267,25 +324,15 @@ function PinnedContextStrip({
               ? inquiryDetailHref(card.inquiry_id)
               : null;
           const href = withReturnTo(base, returnTo);
-          const tile = (
-            <div className="w-[200px] shrink-0 rounded-xl bg-amber-50 px-3 py-2 text-left shadow-sm ring-1 ring-amber-100">
-              <p className="truncate text-[13px] font-semibold text-slate-900">
-                {card.service_name || 'Request'}
-              </p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-600">Custom request</p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                {statusLabel(card.status)}
-              </p>
-            </div>
-          );
-          return href ? (
-            <Link key={`i-${card.inquiry_id}`} to={href} className="shrink-0">
-              {tile}
-            </Link>
-          ) : (
-            <div key={`i-${card.inquiry_id}`} className="shrink-0">
-              {tile}
-            </div>
+          return (
+            <OngoingChip
+              key={`i-${card.inquiry_id}`}
+              href={href}
+              kind="request"
+              title={card.service_name || 'Request'}
+              subtitle="Custom request"
+              status={statusLabel(card.status)}
+            />
           );
         })}
       </div>
@@ -302,17 +349,12 @@ function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
   return (
     <div className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
       <div
-        className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug shadow-sm ${
+        className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug ${
           mine
-            ? 'rounded-2xl rounded-br-md bg-[#d1f4e0] text-slate-900'
-            : 'rounded-2xl rounded-bl-md bg-white text-slate-900 ring-1 ring-black/5'
+            ? 'rounded-2xl rounded-br-md bg-teal-100 text-slate-900 shadow-sm'
+            : 'rounded-2xl rounded-bl-md bg-white text-slate-900 shadow-md ring-1 ring-slate-200/90'
         } ${hasImage && !showBody && !hasFile ? 'p-1' : 'px-3 py-2'}`}
       >
-        {!mine && msg.sender_role !== 'system' && msg.sender_name ? (
-          <p className={`mb-0.5 text-[11px] font-semibold text-teal-800 ${hasImage ? 'px-2 pt-1' : ''}`}>
-            {msg.sender_name}
-          </p>
-        ) : null}
         {hasImage ? (
           <button
             type="button"
@@ -421,6 +463,8 @@ export default function ChatThread({
   onClose,
   peerName,
   peerSubtitle,
+  /** When set, tapping the peer name/avatar opens this path (e.g. provider storefront). */
+  peerHref,
   loadMessages,
   sendMessage,
   bookingDetailHref,
@@ -626,58 +670,89 @@ export default function ChatThread({
   // On lg+, start after the w-60 sidebar so the composer is never covered.
   const sheet = (
     <div
-      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-[#eae6df] lg:left-60"
+      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-[#e2efec] lg:left-60"
       role="dialog"
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}
     >
-      <header className="flex shrink-0 items-center gap-3 border-b border-slate-200/60 bg-white/80 px-3 py-2.5 text-slate-900 shadow-sm backdrop-blur-xl backdrop-saturate-150">
+      {/* Sheet-level dismiss — header backdrop-filter traps fixed overlays. */}
+      {menuOpen ? (
         <button
           type="button"
-          onClick={onClose}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100/80"
-          aria-label="Back to conversations"
-        >
-          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800"
-          aria-hidden
-        >
-          {initials(peerName)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-tight text-slate-900">{peerName || 'Chat'}</p>
-          {peerSubtitle ? (
-            <p className="truncate text-xs text-slate-500">{peerSubtitle}</p>
-          ) : null}
-        </div>
-        {safetyEnabled ? (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100/80"
-              aria-label="Conversation options"
-              aria-expanded={menuOpen}
+          className="absolute inset-0 z-20 cursor-default"
+          aria-label="Close menu"
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
+
+      <div className="relative z-30 shrink-0 border-b border-slate-200/70 bg-white text-slate-900 shadow-sm">
+        <header className="flex items-center gap-3 px-3 py-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+            aria-label="Back to conversations"
+          >
+            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          {peerHref ? (
+            <Link
+              to={peerHref}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-0.5 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-500/40"
+              aria-label={`View ${peerName || 'provider'}`}
             >
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <circle cx="12" cy="5" r="1.75" />
-                <circle cx="12" cy="12" r="1.75" />
-                <circle cx="12" cy="19" r="1.75" />
-              </svg>
-            </button>
-            {menuOpen ? (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-[1] cursor-default"
-                  aria-label="Close menu"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-full z-[2] mt-1 min-w-[11rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200">
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800"
+                aria-hidden
+              >
+                {initials(peerName)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold leading-tight text-slate-900">
+                  {peerName || 'Chat'}
+                </p>
+                {peerSubtitle ? (
+                  <p className="truncate text-xs text-slate-500">{peerSubtitle}</p>
+                ) : null}
+              </div>
+            </Link>
+          ) : (
+            <>
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800"
+                aria-hidden
+              >
+                {initials(peerName)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold leading-tight text-slate-900">
+                  {peerName || 'Chat'}
+                </p>
+                {peerSubtitle ? (
+                  <p className="truncate text-xs text-slate-500">{peerSubtitle}</p>
+                ) : null}
+              </div>
+            </>
+          )}
+          {safetyEnabled ? (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+                aria-label="Conversation options"
+                aria-expanded={menuOpen}
+              >
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <circle cx="12" cy="5" r="1.75" />
+                  <circle cx="12" cy="12" r="1.75" />
+                  <circle cx="12" cy="19" r="1.75" />
+                </svg>
+              </button>
+              {menuOpen ? (
+                <div className="absolute right-0 top-full z-10 mt-1 min-w-[11rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200">
                   <button
                     type="button"
                     className="block w-full px-4 py-2.5 text-left text-sm text-slate-800 hover:bg-slate-50"
@@ -699,27 +774,23 @@ export default function ChatThread({
                     {canUnblock ? 'Unblock' : 'Block'}
                   </button>
                 </div>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+              ) : null}
+            </div>
+          ) : null}
+        </header>
 
-      <PinnedContextStrip
-        bookings={activeBookings}
-        inquiries={activeInquiries}
-        bookingDetailHref={bookingDetailHref}
-        inquiryDetailHref={inquiryDetailHref}
-        returnTo={returnTo}
-      />
+        <PinnedContextStrip
+          bookings={activeBookings}
+          inquiries={activeInquiries}
+          bookingDetailHref={bookingDetailHref}
+          inquiryDetailHref={inquiryDetailHref}
+          returnTo={returnTo}
+        />
+      </div>
 
       <div
         ref={listRef}
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.35) 0, transparent 45%), radial-gradient(circle at 80% 0%, rgba(15,118,110,0.06) 0, transparent 40%)',
-        }}
+        className="lx-chat-thread relative z-0 min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3"
       >
         {loading && !messages.length ? (
           <p className="py-10 text-center text-sm text-slate-500">Loading messages…</p>
@@ -752,7 +823,7 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className="lx-chat-composer shrink-0 border-t border-black/5 bg-[#eae6df] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
+      <div className="lx-chat-composer shrink-0 border-t border-teal-900/10 bg-[#e2efec] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
@@ -902,6 +973,7 @@ export function ChatEntryCard({
   loadMessages,
   sendMessage,
   peerName,
+  peerHref,
   emptyHint,
   idleOpenLabel = 'Message',
   compact = false,
@@ -951,6 +1023,7 @@ export function ChatEntryCard({
         open={open}
         onClose={() => setOpen(false)}
         peerName={peerName}
+        peerHref={peerHref}
         loadMessages={loadMessages}
         sendMessage={sendMessage}
         bookingDetailHref={bookingDetailHref}

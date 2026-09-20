@@ -4,6 +4,7 @@ from django.http import HttpResponseRedirect
 from django.urls import include, path, re_path
 from two_factor.urls import urlpatterns as tf_urls
 
+from accounts.admin_login import AdminLoginView
 from luminexa.media_views import serve_media
 
 
@@ -12,9 +13,17 @@ def api_root_redirect(request):
     return HttpResponseRedirect(settings.PUBLIC_APP_URL.rstrip('/') + '/login')
 
 
+# Replace stock two_factor login with lockout-aware admin login (same namespace).
+_tf_patterns, _tf_app = tf_urls
+_tf_patterns = [
+    path('account/login/', AdminLoginView.as_view(), name='login'),
+    *[p for p in _tf_patterns if getattr(p, 'name', None) != 'login'],
+]
+
+
 urlpatterns = [
     path('', api_root_redirect),
-    path('', include(tf_urls)),
+    path('', include((_tf_patterns, _tf_app))),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('api/v1/', include('businesses.urls')),

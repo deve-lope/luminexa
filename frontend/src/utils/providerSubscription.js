@@ -17,6 +17,36 @@ export function subscriptionDaysRemaining(periodEnd) {
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }
 
+/** Readable period-end date, e.g. "Mar 14, 2026". */
+export function formatSubscriptionPeriodEnd(periodEnd) {
+  if (!periodEnd) return null;
+  const end = new Date(periodEnd);
+  if (Number.isNaN(end.getTime())) return null;
+  return end.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Human remaining time (avoids "91 days left" for long promos).
+ * e.g. "Ends today", "12 days left", "About 3 months left".
+ */
+export function formatSubscriptionRemainingLabel(periodEnd) {
+  const days = subscriptionDaysRemaining(periodEnd);
+  if (days == null) return null;
+  if (days === 0) return 'Ends today';
+  if (days === 1) return '1 day left';
+  if (days < 14) return `${days} days left`;
+  if (days < 45) {
+    const weeks = Math.max(1, Math.round(days / 7));
+    return weeks === 1 ? 'About 1 week left' : `About ${weeks} weeks left`;
+  }
+  const months = Math.max(1, Math.round(days / 30.44));
+  return months === 1 ? 'About 1 month left' : `About ${months} months left`;
+}
+
 /** Paths providers may use before / without an active Pro subscription. */
 export function isProviderSubscriptionExemptPath(pathname, orgSlug) {
   if (!orgSlug) return false;

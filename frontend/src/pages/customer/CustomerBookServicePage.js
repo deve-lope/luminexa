@@ -26,6 +26,12 @@ import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay'
 import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
+import {
+  clearStoredReferralCode,
+  captureReferralFromSearch,
+  getStoredReferralCode,
+} from '../../utils/referralStorage';
+import CustomerReferralCard from '../../components/customer/CustomerReferralCard';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -312,6 +318,10 @@ export default function CustomerBookServicePage() {
     [validateBookingDetails, scrollToConfirmPanel]
   );
 
+  useEffect(() => {
+    captureReferralFromSearch(window.location.search, [businessSlug, storefront?.organization?.slug, storefront?.organization?.public_ref]);
+  }, [businessSlug, storefront?.organization?.slug, storefront?.organization?.public_ref]);
+
   const requestSlot = useCallback(
     async (slot) => {
       if (!slot) return;
@@ -320,6 +330,11 @@ export default function CustomerBookServicePage() {
       setError(null);
       try {
         const detail = notes.trim();
+        const referralCode = getStoredReferralCode(
+          businessSlug,
+          storefront?.organization?.slug,
+          storefront?.organization?.public_ref,
+        );
         await jobsAPI.requestBooking({
           slot_id: slot.id,
           service: Number(serviceId),
@@ -332,7 +347,15 @@ export default function CustomerBookServicePage() {
                 answer: (quoteAnswers[`q${i + 1}`] || '').trim(),
               }))
             : undefined,
+          ...(referralCode ? { referral_code: referralCode } : {}),
         });
+        if (referralCode) {
+          clearStoredReferralCode(
+            businessSlug,
+            storefront?.organization?.slug,
+            storefront?.organization?.public_ref,
+          );
+        }
         const instant = bookingCtx?.instant_confirm && !requiresQuote;
         const quote = requiresQuote;
         const successDetail = `${selectedDayLabel} · ${formatTimeRange(slot.start_at, slot.end_at)}`;
@@ -366,6 +389,9 @@ export default function CustomerBookServicePage() {
       showToast,
       serviceIsShop,
       navigate,
+      businessSlug,
+      storefront?.organization?.slug,
+      storefront?.organization?.public_ref,
     ]
   );
 
@@ -431,6 +457,16 @@ export default function CustomerBookServicePage() {
           </div>
         </section>
       )}
+
+      {storefront?.organization?.referral_rewards_enabled ? (
+        <CustomerReferralCard
+          orgSlug={storefront.organization.slug || businessSlug}
+          orgPublicRef={storefront.organization.public_ref || businessSlug}
+          rewardAmount={storefront.organization.referral_reward_amount}
+          enabled
+          isLoggedIn={Boolean(user)}
+        />
+      ) : null}
 
       {bookingPolicy && customerPolicyLabel(bookingPolicy) && (
         <p className="text-xs text-slate-500">{customerPolicyLabel(bookingPolicy)}</p>

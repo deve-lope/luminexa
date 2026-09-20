@@ -140,7 +140,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         )
 
     def get_object(self):
-        if getattr(self, 'action', None) in ('connect', 'booking_context', 'service_inquiry'):
+        if getattr(self, 'action', None) in ('connect', 'booking_context', 'service_inquiry', 'referral'):
             org = resolve_organization(self.kwargs.get('slug'))
             if not org or not org.is_active:
                 raise ValidationError({'detail': 'Organization not found.'})
@@ -173,6 +173,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'default_labor_rate',
             'invoice_followup_enabled',
             'invoice_followup_days',
+            'referral_rewards_enabled',
+            'referral_reward_amount',
+            'referral_max_earnings_per_referrer',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:
@@ -188,6 +191,19 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not m or m.role != OrganizationMembership.Role.OWNER:
             raise PermissionDenied('Only the owner can delete the organization.')
         instance.delete()
+
+    @action(detail=True, methods=['get'], url_path='referral')
+    def referral(self, request, slug=None):
+        """Referral program status + the caller's personal code/credit for this org."""
+        from .referral_services import referral_summary_for_user
+
+        org = self.get_object()
+        # Staff can read settings; customers/public need active program visibility.
+        if not is_org_staff(request.user, org):
+            # Allow any authenticated user to fetch their code when program is on.
+            pass
+        data = referral_summary_for_user(organization=org, user=request.user)
+        return Response(data)
 
     @action(detail=True, methods=['get', 'post'], url_path='locations')
     def locations(self, request, slug=None):
@@ -628,8 +644,17 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 action=BookingStatusEvent.Action.NO_SHOW,
             ).values('booking__customer_id').annotate(c=Count('id'))
         }
-        data = [
-            {
+        from .referral_services import (
+            referral_owner_stats_map,
+            referred_by_map,
+            serialize_owner_referral_stats,
+        )
+
+        owner_stats = referral_owner_stats_map(organization=org, owner_ids=user_ids)
+        by_map = referred_by_map(organization=org, user_ids=user_ids)
+        data = []
+        for m in memberships:
+            row = {
                 'id': m.user_id,
                 'email': m.user.email,
                 'full_name': m.user.full_name,
@@ -639,9 +664,18 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 'cancel_count': cancel_counts.get(m.user_id, 0),
                 'no_show_count': no_show_counts.get(m.user_id, 0),
                 'provider_notes': m.provider_notes or '',
+                **serialize_owner_referral_stats(owner_stats.get(m.user_id)),
             }
-            for m in memberships
-        ]
+            referred = by_map.get(m.user_id)
+            if referred:
+                row['referred_by_id'] = referred['referrer_id']
+                row['referred_by_name'] = referred['referrer_name']
+                row['referral_status'] = referred['status']
+            else:
+                row['referred_by_id'] = None
+                row['referred_by_name'] = ''
+                row['referral_status'] = ''
+            data.append(row)
         return Response(OrgCustomerSerializer(data, many=True).data)
 
     @action(detail=True, methods=['get'], url_path='customers/import-template')
@@ -749,7 +783,19 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             .select_related('service', 'invoice')
             .order_by('-start_at')[:20]
         )
-        return Response({
+        from .referral_services import (
+            referral_owner_stats_map,
+            referred_by_map,
+            serialize_owner_referral_stats,
+        )
+
+        stats = referral_owner_stats_map(
+            organization=org, owner_ids=[membership.user_id],
+        ).get(membership.user_id)
+        referred = referred_by_map(
+            organization=org, user_ids=[membership.user_id],
+        ).get(membership.user_id)
+        payload = {
             'id': membership.user_id,
             'email': membership.user.email,
             'full_name': membership.user.full_name,
@@ -761,6 +807,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'completed_bookings': completed,
             'cancel_count': cancel_count,
             'no_show_count': no_show_count,
+            **serialize_owner_referral_stats(stats),
+            'referred_by_id': referred['referrer_id'] if referred else None,
+            'referred_by_name': referred['referrer_name'] if referred else '',
+            'referral_status': referred['status'] if referred else '',
             'recent_bookings': [
                 {
                     'id': b.id,
@@ -774,7 +824,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 }
                 for b in recent
             ],
-        })
+        }
+        return Response(payload)
 
     @action(detail=True, methods=['post'], url_path='approve-customer')
     def approve_customer(self, request, slug=None):
@@ -1299,6 +1350,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             service_address=ser.validated_data.get('service_address', '') or '',
             quote_answers=ser.validated_data.get('quote_answers'),
         )
+        referral_code = (request.data.get('referral_code') or '').strip()
+        if referral_code:
+            from .referral_services import attach_referral_attribution
+            attach_referral_attribution(booking=booking, code=referral_code)
         log_booking_event(
             booking,
             action=BookingStatusEvent.Action.CREATED,
@@ -1350,6 +1405,11 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'quote_answers': row.get('quote_answers'),
                 })
             bookings = customer_request_slots_batch(items=items, customer=request.user)
+
+        referral_code = (request.data.get('referral_code') or '').strip()
+        if referral_code and bookings:
+            from .referral_services import attach_referral_attribution
+            attach_referral_attribution(booking=bookings[0], code=referral_code)
 
         from .notifications import notify_customer_booking_created
 
@@ -2369,6 +2429,17 @@ class CustomerNotificationsAPIView(APIView):
             'count': unread_count,
             'results': CustomerNotificationSerializer(results, many=True).data,
         })
+
+
+class CustomerReferralsAPIView(APIView):
+    """Customer referral history: completed rewards, pending, and usable credit."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .referral_services import customer_referrals_overview
+
+        return Response(customer_referrals_overview(user=request.user))
 
 
 class CustomerNotificationDismissAPIView(APIView):

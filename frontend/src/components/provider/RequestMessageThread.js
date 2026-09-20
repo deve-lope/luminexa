@@ -9,6 +9,7 @@ export default function RequestMessageThread({
   loadMessages,
   sendMessage,
   peerName,
+  peerHref,
   customerName,
   emptyHint,
   idleOpenLabel = 'Message',
@@ -28,6 +29,7 @@ export default function RequestMessageThread({
         open
         onClose={onClose || (() => {})}
         peerName={displayName}
+        peerHref={peerHref}
         loadMessages={loadMessages}
         sendMessage={sendMessage}
         bookingDetailHref={bookingDetailHref}
@@ -42,6 +44,7 @@ export default function RequestMessageThread({
       loadMessages={loadMessages}
       sendMessage={sendMessage}
       peerName={displayName}
+      peerHref={peerHref}
       emptyHint={emptyHint}
       idleOpenLabel={idleOpenLabel}
       compact={compact}

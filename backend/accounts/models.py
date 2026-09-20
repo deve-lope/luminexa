@@ -166,6 +166,33 @@ class ProviderDeletionFeedback(models.Model):
         return f'{self.get_reason_display()} · {self.organization_slug or self.user_id_snapshot}'
 
 
+class ProviderTrialClaim(models.Model):
+    """One Stripe Pro free trial per email — survives account anonymization."""
+
+    email = models.EmailField(
+        unique=True,
+        db_index=True,
+        help_text='Normalized owner email that already used the Pro trial.',
+    )
+    used_at = models.DateTimeField(auto_now_add=True)
+    user_id_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='User pk when the trial was claimed (row may later be anonymized).',
+    )
+    organization_id_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Organization pk when the trial was claimed.',
+    )
+
+    class Meta:
+        ordering = ['-used_at']
+
+    def __str__(self):
+        return f'ProviderTrialClaim<{self.email}>'
+
+
 class SafetyReport(models.Model):
     """User-submitted report about a provider org or customer (admin review queue)."""
 
@@ -302,3 +329,26 @@ class DevicePushToken(models.Model):
 
     def __str__(self):
         return f'{self.platform}:{self.token[:16]}…'
+
+
+class AdminLoginFailureDay(models.Model):
+    """Daily failed Django admin (/account/login/) attempts — email:… or ip:… keys."""
+
+    key = models.CharField(max_length=320, db_index=True)
+    day = models.DateField(db_index=True)
+    fail_count = models.PositiveSmallIntegerField(default=0)
+    alert_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['key', 'day'],
+                name='uniq_admin_login_failure_key_day',
+            ),
+        ]
+        ordering = ['-day', '-updated_at']
+
+    def __str__(self):
+        return f'{self.key} @ {self.day}: {self.fail_count}'

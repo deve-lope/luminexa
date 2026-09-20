@@ -23,6 +23,11 @@ import {
 } from '../../utils/slotCalendar';
 import { customerBookings } from '../../utils/customerPaths';
 import { useToast } from '../../contexts/ToastContext';
+import {
+  clearStoredReferralCode,
+  captureReferralFromSearch,
+  getStoredReferralCode,
+} from '../../utils/referralStorage';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -141,6 +146,14 @@ export default function CustomerBookMultipleServicesPage() {
     const saved = (user?.default_service_address || '').trim();
     if (saved && !serviceAddress) setServiceAddress(saved);
   }, [user?.default_service_address, serviceAddress]);
+
+  useEffect(() => {
+    captureReferralFromSearch(window.location.search, [
+      businessSlug,
+      storefront?.organization?.slug,
+      storefront?.organization?.public_ref,
+    ]);
+  }, [businessSlug, storefront?.organization?.slug, storefront?.organization?.public_ref]);
 
   useEffect(() => {
     if (!businessSlug) return undefined;
@@ -279,13 +292,26 @@ export default function CustomerBookMultipleServicesPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const referralCode = getStoredReferralCode(
+        businessSlug,
+        storefront?.organization?.slug,
+        storefront?.organization?.public_ref,
+      );
       await jobsAPI.requestBookingsBatch({
         combined: true,
         start_at: selectedSlot.start_at,
         services: selectedServices.map((svc) => svc.id),
         service_address: needsCustomerAddress ? serviceAddress.trim() : '',
         customer_notes: notes.trim(),
+        ...(referralCode ? { referral_code: referralCode } : {}),
       });
+      if (referralCode) {
+        clearStoredReferralCode(
+          businessSlug,
+          storefront?.organization?.slug,
+          storefront?.organization?.public_ref,
+        );
+      }
       showToast(
         `${selectedServices.length} service${selectedServices.length === 1 ? '' : 's'} booked together.`,
         'success'
