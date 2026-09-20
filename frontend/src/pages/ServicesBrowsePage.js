@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BookableServiceCard from '../components/customer/BookableServiceCard';
 import BusinessTypeTileGrid from '../components/customer/BusinessTypeTileGrid';
@@ -24,6 +24,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [types, setTypes] = useState([]);
   const [services, setServices] = useState([]);
+  const [matchMode, setMatchMode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -54,6 +55,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
         const data = res.data || {};
         setTypes(Array.isArray(data.business_types) ? data.business_types : []);
         setServices(Array.isArray(data.services) ? data.services : []);
+        setMatchMode(data.match_mode || null);
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
@@ -63,17 +65,6 @@ export default function ServicesBrowsePage({ embedded = false }) {
     const timer = setTimeout(loadBrowse, 250);
     return () => clearTimeout(timer);
   }, [loadBrowse]);
-
-  const filteredTypes = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return types;
-    return types.filter(
-      (t) =>
-        t.name?.toLowerCase().includes(q) ||
-        t.description?.toLowerCase().includes(q) ||
-        t.slug?.toLowerCase().includes(q)
-    );
-  }, [types, query]);
 
   const typeLink = (typeSlug) => {
     if (isAuthenticated) return `/customer/find/${typeSlug}`;
@@ -197,10 +188,10 @@ export default function ServicesBrowsePage({ embedded = false }) {
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Service categories
                 </h2>
-                {filteredTypes.length === 0 ? (
+                {types.length === 0 ? (
                   <p className="text-sm text-slate-500">No categories match your search.</p>
                 ) : (
-                  <BusinessTypeTileGrid types={filteredTypes} getLinkTo={typeLink} />
+                  <BusinessTypeTileGrid types={types} getLinkTo={typeLink} />
                 )}
               </section>
 
@@ -213,6 +204,11 @@ export default function ServicesBrowsePage({ embedded = false }) {
                     </span>
                   )}
                 </h2>
+                {matchMode === 'related' && services.length > 0 && (
+                  <p className="mb-3 text-sm text-slate-500">
+                    Showing related services for “{query.trim()}”.
+                  </p>
+                )}
                 {services.length === 0 ? (
                   <div className="rounded-xl bg-white p-5 text-center shadow-sm">
                     <p className="text-sm text-slate-600">

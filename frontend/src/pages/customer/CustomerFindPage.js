@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookableServiceCard from '../../components/customer/BookableServiceCard';
 import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid';
@@ -30,6 +30,7 @@ export default function CustomerFindPage() {
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
   const [types, setTypes] = useState([]);
   const [services, setServices] = useState([]);
+  const [matchMode, setMatchMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [locationExpanded, setLocationExpanded] = useState(false);
@@ -98,6 +99,7 @@ export default function CustomerFindPage() {
         const data = res.data || {};
         setTypes(Array.isArray(data.business_types) ? data.business_types : []);
         setServices(Array.isArray(data.services) ? data.services : []);
+        setMatchMode(data.match_mode || null);
       })
       .catch(() => setError('Could not load services.'))
       .finally(() => setLoading(false));
@@ -119,17 +121,6 @@ export default function CustomerFindPage() {
     const timer = setTimeout(loadCatalog, 250);
     return () => clearTimeout(timer);
   }, [loadCatalog]);
-
-  const filteredTypes = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return types;
-    return types.filter(
-      (t) =>
-        t.name?.toLowerCase().includes(q) ||
-        t.description?.toLowerCase().includes(q) ||
-        t.slug?.toLowerCase().includes(q)
-    );
-  }, [types, query]);
 
   const handleLocationChange = useCallback(
     ({ postal: nextPostal, lat, lng, label, country, radiusMiles: r }) => {
@@ -477,10 +468,10 @@ export default function CustomerFindPage() {
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                       Categories
                     </h2>
-                    {filteredTypes.length === 0 ? (
+                    {types.length === 0 ? (
                       <p className="text-sm text-slate-500">No categories match your search.</p>
                     ) : (
-                      <BusinessTypeTileGrid types={filteredTypes} />
+                      <BusinessTypeTileGrid types={types} />
                     )}
                   </section>
 
@@ -493,6 +484,11 @@ export default function CustomerFindPage() {
                         </span>
                       )}
                     </h2>
+                    {matchMode === 'related' && services.length > 0 && (
+                      <p className="mb-3 text-sm text-slate-500">
+                        Showing related services for “{query.trim()}”.
+                      </p>
+                    )}
                     {services.length === 0 ? (
                       <div className="lx-empty">
                         <p className="text-slate-600">

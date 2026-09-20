@@ -36,6 +36,12 @@ from .serializers import (
     OrganizationMembershipReadSerializer,
     PublicProviderCardSerializer,
 )
+from .service_search import (
+    business_type_matches_query,
+    keyword_match_mode,
+    service_keyword_filter,
+    sort_services_by_keyword,
+)
 from .utils import organization_location_full, organization_location_short
 
 
@@ -245,13 +251,7 @@ def _filter_discover_business_types(types_list, q: str):
     """Keyword-filter the annotated BusinessType list from catalog helpers."""
     if not q:
         return list(types_list)
-    ql = q.lower()
-    return [
-        t for t in types_list
-        if ql in (t.name or '').lower()
-        or ql in (t.description or '').lower()
-        or ql in (t.slug or '').lower()
-    ]
+    return [t for t in types_list if business_type_matches_query(t, q)]
 
 
 def _serialize_bookable_service(service, *, ctx):
@@ -303,7 +303,7 @@ def _bookable_services_queryset():
             organization__is_active=True,
             organization__profile_public=True,
         )
-        .select_related('organization')
+        .select_related('organization', 'category')
         .prefetch_related('organization__business_types', 'reviews', 'gallery_images')
         .order_by('organization__service_city', 'organization__name', 'sort_order', 'name')
     )
@@ -402,12 +402,15 @@ def _availability_summary_for_services(services, window):
 
 
 def _service_keyword_filter(q: str) -> Q:
-    """Match the service itself (name / description / category), not the whole org catalog."""
-    return (
-        Q(name__icontains=q)
-        | Q(description__icontains=q)
-        | Q(category__name__icontains=q)
-    )
+    """Match services via phrase, tokens/synonyms, category expansion, or org tagline."""
+    return service_keyword_filter(q)
+
+
+def _finalize_service_list(qs, *, q='', dist_map=None, limit=200):
+    """Apply keyword ranking / distance sort and return a Python list capped at limit."""
+    service_list = list(qs[: max(limit * 3, limit)])
+    service_list = sort_services_by_keyword(service_list, q, dist_map=dist_map or None)
+    return service_list[:limit]
 
 
 def _apply_service_filters(
@@ -644,14 +647,7 @@ def public_services_browse_api(request):
 
     types_list = business_types_with_service_provider_counts(require_providers=False)
     if q:
-        ql = q.lower()
-        types_list = [
-            t
-            for t in types_list
-            if ql in (t.name or '').lower()
-            or ql in (t.description or '').lower()
-            or ql in (t.slug or '').lower()
-        ]
+        types_list = [t for t in types_list if business_type_matches_query(t, q)]
     types_qs = types_list
 
     # Prefer explicit lat/lng from address selection over postal re-geocode
@@ -676,7 +672,7 @@ def public_services_browse_api(request):
             if q:
                 qs = qs.filter(_service_keyword_filter(q)).distinct()
             qs = _apply_availability_filter(qs, availability_window)
-            service_list = list(qs[:200])
+            service_list = _finalize_service_list(qs, q=q, dist_map=dist_map, limit=200)
             ctx = {
                 'request': request,
                 'distance_by_org_id': dist_map,
@@ -686,7 +682,7 @@ def public_services_browse_api(request):
             }
             services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
             types_payload = BusinessTypeSerializer(types_qs, many=True).data
-            return Response({
+            payload = {
                 'business_types': types_payload,
                 'services': services,
                 'count': len(services),
@@ -706,7 +702,11 @@ def public_services_browse_api(request):
                     if availability_window
                     else None
                 ),
-            })
+            }
+            match_mode = keyword_match_mode(service_list, q)
+            if match_mode:
+                payload['match_mode'] = match_mode
+            return Response(payload)
         except (ValueError, TypeError):
             pass
 
@@ -719,7 +719,7 @@ def public_services_browse_api(request):
         radius_miles=radius_miles,
     )
     qs = _apply_availability_filter(qs, availability_window)
-    service_list = list(qs[:200])
+    service_list = _finalize_service_list(qs, q=q, dist_map=dist_map, limit=200)
     ctx = {
         'request': request,
         'distance_by_org_id': dist_map,
@@ -730,7 +730,7 @@ def public_services_browse_api(request):
     services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
     picker = _location_picker_payload(state=state, city=city)
 
-    return Response({
+    payload = {
         'business_types': BusinessTypeSerializer(types_qs, many=True).data,
         'services': services,
         'cities': picker['cities'],
@@ -746,7 +746,11 @@ def public_services_browse_api(request):
             if availability_window
             else None
         ),
-    })
+    }
+    match_mode = keyword_match_mode(service_list, q)
+    if match_mode:
+        payload['match_mode'] = match_mode
+    return Response(payload)
 
 
 @api_view(['GET'])
@@ -768,18 +772,23 @@ def customer_services_catalog_api(request):
         postal=postal,
         radius_miles=radius_miles,
     )
+    service_list = _finalize_service_list(qs, q=q, dist_map=dist_map, limit=200)
     ctx = {'request': request, 'distance_by_org_id': dist_map}
-    services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:200]]
+    services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
     picker = _location_picker_payload(state=state, city=city)
 
-    return Response({
+    payload = {
         'services': services,
         'cities': picker['cities'],
         'states': picker['states'],
         'postal_codes': picker['postal_codes'],
         'count': len(services),
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),
-    })
+    }
+    match_mode = keyword_match_mode(service_list, q)
+    if match_mode:
+        payload['match_mode'] = match_mode
+    return Response(payload)
 
 
 @api_view(['GET'])
@@ -811,13 +820,14 @@ def customer_discover_api(request):
             qs = qs.filter(organization_id__in=dist_map.keys()) if dist_map else qs.none()
             if q:
                 qs = qs.filter(_service_keyword_filter(q)).distinct()
+            service_list = _finalize_service_list(qs, q=q, dist_map=dist_map, limit=40)
             ctx = {'request': request, 'distance_by_org_id': dist_map}
-            services = [_serialize_bookable_service(s, ctx=ctx) for s in qs[:40]]
+            services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
             orgs_qs = Organization.objects.filter(
                 is_active=True, profile_public=True, id__in=dist_map.keys()
             ).order_by('name')[:15]
             types_list = _filter_discover_business_types(_business_types_for_discover(), q)[:12]
-            return Response({
+            payload = {
                 'business_types': BusinessTypeSerializer(types_list, many=True).data,
                 'providers': PublicProviderCardSerializer(orgs_qs, many=True, context=ctx).data,
                 'services': services,
@@ -829,7 +839,11 @@ def customer_discover_api(request):
                     'lng': center_lng,
                     'result_count': len(dist_map),
                 },
-            })
+            }
+            match_mode = keyword_match_mode(service_list, q)
+            if match_mode:
+                payload['match_mode'] = match_mode
+            return Response(payload)
         except (ValueError, TypeError):
             pass
 
@@ -868,12 +882,17 @@ def customer_discover_api(request):
         radius_miles=radius_miles,
     )
     dist_map = svc_dist or dist_map
+    service_list = _finalize_service_list(services_qs, q=q, dist_map=dist_map, limit=20)
     ctx = {'request': request, 'distance_by_org_id': dist_map}
-    services = [_serialize_bookable_service(s, ctx=ctx) for s in services_qs[:20]]
+    services = [_serialize_bookable_service(s, ctx=ctx) for s in service_list]
 
-    return Response({
+    payload = {
         'business_types': BusinessTypeSerializer(types_list, many=True).data,
         'providers': PublicProviderCardSerializer(orgs, many=True, context=ctx).data,
         'services': services,
         'location_search': _location_search_meta(postal, city, state, radius_miles, dist_map),
-    })
+    }
+    match_mode = keyword_match_mode(service_list, q)
+    if match_mode:
+        payload['match_mode'] = match_mode
+    return Response(payload)

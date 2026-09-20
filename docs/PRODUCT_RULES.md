@@ -78,6 +78,19 @@ Core: `organization_distances_within_radius` in `backend/businesses/location.py`
 | 5 mi | 25 mi | ~20 mi | **Hidden** (outside customer search) |
 | 25 mi | 15 mi | ~8 mi | Visible if ≤ both |
 
+### Keyword search (related services)
+
+Free-text `q` on Find / Home / Browse does **not** require choosing a category first.
+
+Matching uses:
+
+1. Full-phrase and per-token `icontains` on service name, description, and category name
+2. Synonym expansion (e.g. detailing ↔ car wash / auto care)
+3. Platform `BusinessType` language (name / description / slug) → services in that category
+4. Organization **tagline** only (never org name alone — that would dump unrelated catalog items)
+
+When results come from expansion rather than an exact phrase hit, APIs may return `match_mode: "related"`. Dual-radius location rules are unchanged.
+
 ### Lat/lng preferred; postal fallback
 
 Customer Find / Home / Services browse should prefer **lat + lng + radius_miles**. Still send **postal** when available so ungeocoded providers whose postal prefix matches are included (treated as distance **0**, which always passes both radii).
@@ -94,6 +107,8 @@ Org matches if **any** active `OrganizationLocation` satisfies dual radius. Dist
 - Do not filter by customer miles alone.
 - Do not require geocoding for every org before search works (postal prefix fallback is intentional).
 - Do not match only the primary location when secondary branches would qualify.
+- Do not revert keyword search to full-phrase-only `icontains` (related/token expansion is intentional).
+- Do not expand the catalog from organization **name** alone.
 
 ---
 
