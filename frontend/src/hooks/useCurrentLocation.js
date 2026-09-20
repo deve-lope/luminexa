@@ -5,6 +5,7 @@ import {
   buildAddressFromGeocode,
   classifyLocationError,
   formatLocationAddress,
+  formatPlaceLabel,
   geolocationUnavailableReason,
   locationPermissionDeniedMessage,
   requestGeolocationCoordinates,
@@ -52,13 +53,18 @@ export default function useCurrentLocation() {
           const payload = {
             lat,
             lng,
-            address: buildAddressFromGeocode(data, { lat, lng }),
+            address: '',
+            neighbourhood: data.neighbourhood || '',
             city: data.city || '',
             state: data.state || data.province || '',
             postal_code: data.postal_code || '',
             country: data.country || '',
+            place_label: data.place_label || '',
           };
-          payload.address = formatLocationAddress(payload);
+          payload.address =
+            formatPlaceLabel(payload) ||
+            buildAddressFromGeocode(data, { lat, lng }) ||
+            formatLocationAddress(payload);
           if (!payload.address) {
             fail('Could not find an address for your location.', LOCATION_ERROR.OFF);
             return null;

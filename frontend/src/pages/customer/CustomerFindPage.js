@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookableServiceCard from '../../components/customer/BookableServiceCard';
 import BusinessTypeTileGrid from '../../components/customer/BusinessTypeTileGrid';
@@ -12,6 +12,8 @@ import { businessesAPI } from '../../utils/api';
 import { compareDateKeys, todayKey } from '../../utils/dateRange';
 import {
   canUseBrowserGeolocation,
+  formatPlaceLabel,
+  isCoordinateLabel,
   shareLocationButtonLabel,
 } from '../../utils/geolocationSupport';
 import LocationEnablePrompt from '../../components/customer/LocationEnablePrompt';
@@ -33,7 +35,9 @@ export default function CustomerFindPage() {
   const [matchMode, setMatchMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [locationExpanded, setLocationExpanded] = useState(false);
+  const gpsAvailable = canUseBrowserGeolocation();
+  // Open city/ZIP entry by default so typing is obvious on laptops and phones.
+  const [locationExpanded, setLocationExpanded] = useState(true);
 
   const {
     location: nearMe,
@@ -55,11 +59,59 @@ export default function CustomerFindPage() {
     if (nearMe.radiusMiles) setRadiusMiles(nearMe.radiusMiles);
   }, [nearMe]);
 
+  // Upgrade saved lat/lng-only labels to a readable place name.
+  const labelResolveFailedRef = useRef(new Set());
+  useEffect(() => {
+    if (locationLat == null || locationLng == null) return undefined;
+    if (locationLabel && !isCoordinateLabel(locationLabel)) return undefined;
+    const key = `${Number(locationLat).toFixed(5)},${Number(locationLng).toFixed(5)}`;
+    if (labelResolveFailedRef.current.has(key)) return undefined;
+    let cancelled = false;
+    businessesAPI
+      .reverseGeocode({ lat: locationLat, lng: locationLng })
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data || {};
+        const nextLabel = formatPlaceLabel({
+          place_label: data.place_label,
+          address: data.display_name,
+          neighbourhood: data.neighbourhood,
+          city: data.city,
+          state: data.state || data.province,
+          postal_code: data.postal_code,
+        });
+        if (!nextLabel) {
+          labelResolveFailedRef.current.add(key);
+          setLocationLabel((prev) => (prev && !isCoordinateLabel(prev) ? prev : 'Selected area'));
+          return;
+        }
+        setLocationLabel(nextLabel);
+        if (data.postal_code) setPostal(normalizePostalInput(data.postal_code));
+        applyLocation({
+          lat: locationLat,
+          lng: locationLng,
+          label: nextLabel,
+          neighbourhood: data.neighbourhood || '',
+          city: data.city || '',
+          postal: data.postal_code || postal,
+          country: data.country || '',
+          radiusMiles,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        labelResolveFailedRef.current.add(key);
+        setLocationLabel((prev) => (prev && !isCoordinateLabel(prev) ? prev : 'Selected area'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locationLat, locationLng, locationLabel, applyLocation, postal, radiusMiles]);
+
   const hasCoords = locationLat != null && locationLng != null;
   const hasLocation = hasCoords || isPostalSearchReady(postal);
   const qReady = query.trim().length >= 2;
   const shouldSearch = hasLocation || qReady;
-  const gpsAvailable = canUseBrowserGeolocation();
 
   const loadCatalog = useCallback(() => {
     if (!shouldSearch) {
@@ -123,26 +175,36 @@ export default function CustomerFindPage() {
   }, [loadCatalog]);
 
   const handleLocationChange = useCallback(
-    ({ postal: nextPostal, lat, lng, label, country, radiusMiles: r }) => {
+    ({ postal: nextPostal, lat, lng, label, country, radiusMiles: r, neighbourhood, city }) => {
       const nextLat = lat != null ? Number(lat) : null;
       const nextLng = lng != null ? Number(lng) : null;
       setPostal(normalizePostalInput(nextPostal || ''));
       setLocationLat(nextLat);
       setLocationLng(nextLng);
-      if (label) setLocationLabel(label);
+      const nextLabel = formatPlaceLabel({
+        place_label: label,
+        address: label,
+        neighbourhood,
+        city,
+        postal_code: nextPostal,
+      });
+      if (nextLabel) setLocationLabel(nextLabel);
+      else if (label && !isCoordinateLabel(label)) setLocationLabel(label);
       if (r != null) setRadiusMiles(r);
       if (nextLat != null && nextLng != null) {
         applyLocation({
           lat: nextLat,
           lng: nextLng,
-          label: label || locationLabel,
+          label: nextLabel || (label && !isCoordinateLabel(label) ? label : ''),
+          neighbourhood: neighbourhood || '',
+          city: city || '',
           postal: nextPostal || '',
           country: country || '',
           radiusMiles: r != null ? r : radiusMiles,
         });
       }
     },
-    [applyLocation, locationLabel, radiusMiles]
+    [applyLocation, radiusMiles]
   );
 
   const handleRadiusChange = useCallback(
@@ -184,7 +246,7 @@ export default function CustomerFindPage() {
   }, [requestNearMe]);
 
   const handleMapLocationSearch = useCallback(
-    ({ postal: nextPostal, lat, lng, radiusMiles: r, label }) => {
+    ({ postal: nextPostal, lat, lng, radiusMiles: r, label, neighbourhood, city }) => {
       if (nextPostal) setPostal(normalizePostalInput(nextPostal));
       else if (lat != null && lng != null) setPostal('');
       const nextLat = lat != null ? Number(lat) : null;
@@ -192,22 +254,31 @@ export default function CustomerFindPage() {
       setLocationLat(nextLat);
       setLocationLng(nextLng);
       if (r != null) setRadiusMiles(r);
+      const nextLabel = formatPlaceLabel({
+        place_label: label,
+        address: label,
+        neighbourhood,
+        city,
+        postal_code: nextPostal,
+      });
       if (nextLat != null && nextLng != null) {
         const display =
-          label ||
-          locationLabel ||
-          (nextPostal ? normalizePostalInput(nextPostal) : `${nextLat.toFixed(5)}, ${nextLng.toFixed(5)}`);
+          nextLabel ||
+          (label && !isCoordinateLabel(label) ? label : '') ||
+          (nextPostal ? normalizePostalInput(nextPostal) : '');
         setLocationLabel(display);
         applyLocation({
           lat: nextLat,
           lng: nextLng,
           label: display,
+          neighbourhood: neighbourhood || '',
+          city: city || '',
           postal: nextPostal || '',
           radiusMiles: r != null ? r : radiusMiles,
         });
       }
     },
-    [applyLocation, locationLabel, radiusMiles]
+    [applyLocation, radiusMiles]
   );
 
   const minDate = todayKey();
@@ -299,31 +370,52 @@ export default function CustomerFindPage() {
           />
 
           {/* Near-me chip row */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2">
             {hasCoords ? (
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm text-teal-900">
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm text-teal-900 self-start">
                 <svg className="h-3.5 w-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
                 </svg>
                 <span className="truncate font-medium">
-                  Near {nearLabelShort || 'your location'}
+                  Near {nearLabelShort || 'your area'}
                 </span>
                 <button
                   type="button"
                   onClick={() => setLocationExpanded((v) => !v)}
                   className="shrink-0 font-semibold text-teal-800 underline-offset-2 hover:underline"
                 >
-                  Change
+                  {locationExpanded ? 'Hide' : 'Change'}
                 </button>
               </div>
             ) : (
-              <>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                {!locationExpanded && (
+                  <button
+                    type="button"
+                    onClick={() => setLocationExpanded(true)}
+                    className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-900 hover:bg-teal-100 sm:flex-1"
+                  >
+                    <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
+                    </svg>
+                    Enter city or postal code
+                  </button>
+                )}
+                {locationExpanded && (
+                  <button
+                    type="button"
+                    onClick={() => setLocationExpanded(false)}
+                    className="inline-flex min-h-[40px] items-center self-start rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Hide location
+                  </button>
+                )}
                 {gpsAvailable && (
                   <button
                     type="button"
                     onClick={handleUseMyLocation}
                     disabled={locating}
-                    className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-60"
+                    className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="3" />
@@ -332,16 +424,15 @@ export default function CustomerFindPage() {
                     {shareLocationButtonLabel({ locating })}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setLocationExpanded((v) => !v)}
-                  className="inline-flex min-h-[40px] items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  {locationExpanded ? 'Hide address' : 'Enter address'}
-                </button>
-              </>
+              </div>
             )}
           </div>
+
+          {!gpsAvailable && !hasCoords && !locationExpanded && (
+            <p className="text-sm text-slate-600">
+              This device has no GPS — tap “Enter city or postal code” to search nearby.
+            </p>
+          )}
 
           {nearMeError && !locationExpanded && (
             <LocationEnablePrompt
@@ -360,7 +451,6 @@ export default function CustomerFindPage() {
               onLocationChange={handleLocationChange}
               onRadiusChange={handleRadiusChange}
               onClear={handleLocationClear}
-              onUseMyLocation={handleUseMyLocation}
               locating={locating}
               locationError={nearMeError}
               locationErrorKind={nearMeErrorKind}
@@ -442,7 +532,8 @@ export default function CustomerFindPage() {
               </svg>
               <p className="mt-3 text-base font-semibold text-slate-800">Search what you need</p>
               <p className="mt-1 text-sm text-slate-500">
-                Type a service keyword, or use your location to see what&apos;s nearby.
+                Type a service keyword, or set a city / postal code to see what&apos;s nearby
+                {gpsAvailable ? ' (or share your location)' : ''}.
               </p>
             </div>
           ) : (
@@ -499,7 +590,7 @@ export default function CustomerFindPage() {
                         <p className="mt-2 text-sm text-slate-500">
                           {hasLocation
                             ? 'Providers only appear if you are inside their service area and your search radius. Try another area, widen the radius, or change the keyword.'
-                            : 'Try another keyword, or share your location to see nearby providers.'}
+                            : 'Try another keyword, or enter a city / postal code to see nearby providers.'}
                         </p>
                         {hasFilter && (
                           <button

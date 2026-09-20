@@ -8,7 +8,7 @@ import {
   RADIUS_MILE_OPTIONS,
   formatRadiusMiles,
 } from '../../constants/locationSearch';
-import { canUseBrowserGeolocation, requestGeolocationCoordinates } from '../../utils/geolocationSupport';
+import { canUseBrowserGeolocation, formatPlaceLabel, requestGeolocationCoordinates } from '../../utils/geolocationSupport';
 import { bookService } from '../../utils/customerPaths';
 import {
   formatPostalLabel,
@@ -158,6 +158,8 @@ export default function CustomerSearchMapView({
       center: [startLat, startLng],
       zoom: 11,
       zoomControl: true,
+      // Let the page scroll on laptop trackpads; zoom via +/- controls only.
+      scrollWheelZoom: false,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
@@ -223,25 +225,38 @@ export default function CustomerSearchMapView({
 
       let lat = null;
       let lng = null;
+      let city = '';
+      let state = '';
       try {
         const res = await businessesAPI.lookupPostalCode(normalized);
         lat = res.data?.latitude ?? null;
         lng = res.data?.longitude ?? null;
+        city = res.data?.city || '';
+        state = res.data?.province || res.data?.state || '';
       } catch {
         lat = null;
         lng = null;
+        city = '';
+        state = '';
       }
       if (seq !== lookupSeq.current) return;
 
       setPostal(normalized);
       setLookupStatus('success');
       if (lat != null && lng != null) {
+        const label = formatPlaceLabel({
+          city,
+          state,
+          postal_code: normalized,
+        });
         applyCenter(lat, lng, radiusRef.current, { fit: true, emit: false });
         onLocationSearch?.({
           postal: normalized,
           lat,
           lng,
           radiusMiles: radiusRef.current,
+          label,
+          city,
         });
       } else {
         setError('Could not find that postal code. Pan the map or try another code.');
@@ -312,14 +327,26 @@ export default function CustomerSearchMapView({
         const lng = pos.coords.longitude;
         try {
           const res = await businessesAPI.reverseGeocode({ lat, lng });
-          const code = normalizePostalInput(res.data?.postal_code);
+          const data = res.data || {};
+          const code = normalizePostalInput(data.postal_code);
           if (code) setPostal(code);
+          const label = formatPlaceLabel({
+            place_label: data.place_label,
+            address: data.display_name,
+            neighbourhood: data.neighbourhood,
+            city: data.city,
+            state: data.state || data.province,
+            postal_code: data.postal_code,
+          });
           applyCenter(lat, lng, radiusRef.current, { fit: true, emit: false });
           onLocationSearch?.({
             postal: code || '',
             lat,
             lng,
             radiusMiles: radiusRef.current,
+            label,
+            neighbourhood: data.neighbourhood || '',
+            city: data.city || '',
           });
         } catch {
           applyCenter(lat, lng, radiusRef.current, { fit: true, emit: true });
@@ -395,7 +422,7 @@ export default function CustomerSearchMapView({
       {error && <p className="text-xs text-amber-700">{error}</p>}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-        <div ref={mapEl} className="h-[380px] w-full bg-slate-100 md:h-[460px]" />
+        <div ref={mapEl} className="h-[240px] w-full bg-slate-100 sm:h-[280px] md:h-[320px]" />
       </div>
       <p className="text-xs text-slate-500">
         Drag the map to explore — providers update for the area you&apos;re viewing.

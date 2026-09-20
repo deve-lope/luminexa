@@ -146,10 +146,14 @@ def reverse_geocode_api(request):
 
     location = reverse_geocode(lat, lng)
     if not location:
+        # Never surface raw coordinates as the display label — clients show a
+        # human fallback and can prompt for city / postal instead.
         return Response({
-            'display_name': f'{lat:.6f}, {lng:.6f}',
+            'display_name': '',
+            'place_label': '',
             'latitude': lat,
             'longitude': lng,
+            'neighbourhood': '',
             'city': '',
             'state': '',
             'province': '',
@@ -160,6 +164,7 @@ def reverse_geocode_api(request):
     return Response({
         **location,
         'province': location.get('state') or '',
+        'place_label': location.get('place_label') or location.get('display_name') or '',
     })
 
 

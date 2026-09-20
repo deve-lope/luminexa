@@ -3,7 +3,9 @@ import { DEFAULT_RADIUS_MILES } from '../constants/locationSearch';
 import {
   LOCATION_ERROR,
   canUseBrowserGeolocation,
+  formatPlaceLabel,
   geolocationUnavailableReason,
+  isCoordinateLabel,
   queryGeolocationPermission,
 } from '../utils/geolocationSupport';
 import useCurrentLocation from './useCurrentLocation';
@@ -16,10 +18,22 @@ function normalizeStored(raw) {
   const lng = Number(raw.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const radius = Number(raw.radiusMiles);
+  const rawLabel = (raw.label || '').trim();
+  const label = formatPlaceLabel({
+    place_label: rawLabel,
+    address: rawLabel,
+    neighbourhood: raw.neighbourhood,
+    city: raw.city,
+    state: raw.state || raw.province,
+    postal_code: raw.postal,
+  });
   return {
     lat,
     lng,
-    label: (raw.label || '').trim() || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    // Never persist / show bare lat,lng as the place name.
+    label: label && !isCoordinateLabel(label) ? label : '',
+    neighbourhood: (raw.neighbourhood || '').trim(),
+    city: (raw.city || '').trim(),
     postal: (raw.postal || '').trim(),
     country: (raw.country || '').trim(),
     radiusMiles: Number.isFinite(radius) && radius > 0 ? radius : DEFAULT_RADIUS_MILES,
@@ -125,6 +139,8 @@ export default function useNearMeLocation({ defaultRadiusMiles = DEFAULT_RADIUS_
         lat: payload.lat,
         lng: payload.lng,
         label: payload.address,
+        neighbourhood: payload.neighbourhood || '',
+        city: payload.city || '',
         postal: payload.postal_code || '',
         country: payload.country || '',
         radiusMiles: location?.radiusMiles ?? defaultRadiusMiles,

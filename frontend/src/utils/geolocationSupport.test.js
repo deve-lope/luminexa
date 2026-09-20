@@ -2,6 +2,8 @@ import {
   LOCATION_ERROR,
   canOpenLocationSettings,
   classifyLocationError,
+  formatPlaceLabel,
+  isCoordinateLabel,
   locationErrorTitle,
   locationPlatform,
   locationServicesOffMessage,
@@ -240,4 +242,26 @@ describe('native geolocation', () => {
 
 it('exposes a coordinate request entry point', () => {
   expect(typeof requestGeolocationCoordinates).toBe('function');
+});
+
+describe('formatPlaceLabel', () => {
+  it('prefers neighbourhood and city over coordinates', () => {
+    expect(
+      formatPlaceLabel({
+        neighbourhood: 'Vanier',
+        city: 'Ottawa',
+        address: '45.42150, -75.69720',
+      })
+    ).toBe('Vanier, Ottawa');
+  });
+
+  it('rejects bare coordinate strings', () => {
+    expect(isCoordinateLabel('45.42150, -75.69720')).toBe(true);
+    expect(isCoordinateLabel('Vanier, Ottawa')).toBe(false);
+    expect(formatPlaceLabel({ address: '45.42150, -75.69720' })).toBe('');
+  });
+
+  it('falls back to postal when no city is known', () => {
+    expect(formatPlaceLabel({ postal_code: 'K1L 6A3' })).toBe('K1L 6A3');
+  });
 });

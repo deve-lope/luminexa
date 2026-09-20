@@ -174,6 +174,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
             onRadiusChange={handleRadiusChange}
             onClear={handleLocationClear}
             services={services}
+            showMap
           />
 
           {error && (
