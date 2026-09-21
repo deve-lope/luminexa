@@ -31,33 +31,36 @@ export default function ProviderGigWallPage() {
   }, [load]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="lx-eyebrow">In your service area</p>
-          <h1 className="mt-0.5 text-xl font-bold tracking-tight text-luminexa-ink">Gig wall</h1>
-          <p className="mt-0.5 text-sm text-slate-600">
-            Open requests pinned nearby. Place a bid to take the job.
-          </p>
+    <div className="gig-wall-page">
+      <div className="gig-wall-page__inner space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="lx-eyebrow">In your service area</p>
+            <h1 className="gig-wall-page__title mt-0.5 text-xl font-bold tracking-tight">
+              Gig wall
+            </h1>
+            <p className="gig-wall-page__lede mt-0.5 text-sm">
+              Open requests pinned nearby. Place a bid to take the job.
+            </p>
+          </div>
+          <Link to={providerMyGigQuotes(orgSlug)} className="gig-wall-link shrink-0">
+            My bids
+          </Link>
         </div>
-        <Link
-          to={providerMyGigQuotes(orgSlug)}
-          className="text-sm font-semibold text-teal-700 hover:underline"
-        >
-          My bids
-        </Link>
-      </div>
 
-      <GigCategoryFilter value={category} onChange={setCategory} />
+        <GigCategoryFilter value={category} onChange={setCategory} />
 
-      {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p className="rounded-xl border border-red-200 bg-red-50/95 px-4 py-3 text-sm text-red-700 shadow-sm">
+            {error}
+          </p>
+        )}
 
-      <div className="gig-wall-surface">
-        {loading && <p className="px-2 py-6 text-center text-sm text-slate-600">Loading the wall…</p>}
+        {loading && (
+          <p className="gig-wall-page__lede px-2 py-6 text-center text-sm font-medium">
+            Loading the wall…
+          </p>
+        )}
 
         {!loading && posts.length === 0 && (
           <div className="gig-empty-board">

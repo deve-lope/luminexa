@@ -524,33 +524,210 @@ html.lx-keyboard-open .lx-auth-form-col {
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
-/* —— Gig Wall: pinned notice board —— */
+/* —— Gig Wall: cool ash wood (teal-friendly, vertical grain + knots) —— */
+.gig-wall-page,
 .gig-wall-surface {
   position: relative;
-  border-radius: 1.25rem;
-  padding: 1.1rem 1rem 1.5rem;
-  background:
-    radial-gradient(ellipse 100% 70% at 20% 10%, rgba(255, 248, 230, 0.45), transparent 50%),
-    radial-gradient(ellipse 90% 60% at 85% 90%, rgba(232, 240, 230, 0.5), transparent 45%),
-    linear-gradient(165deg, #e6e2d6 0%, #ddd8cc 45%, #d4d0c4 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  overflow: hidden;
+  background-color: #c8c9c0;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(248, 250, 248, 0.32) 0%,
+      transparent 18%,
+      rgba(55, 70, 62, 0.07) 100%
+    ),
+    /* Stronger plank seams */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(4.75rem - 2.5px),
+      rgba(55, 68, 60, 0.32) calc(4.75rem - 2.5px),
+      rgba(90, 105, 95, 0.14) calc(4.75rem - 1px),
+      transparent 4.75rem
+    ),
+    /* Plank face tones */
+    repeating-linear-gradient(
+      90deg,
+      #d2d4cb 0,
+      #c6c8bf 1.4rem,
+      #b8bcb2 2.9rem,
+      #cbcdc4 3.9rem,
+      #c0c4ba 4.75rem
+    );
 }
 
+/*
+  Vertical fiber lines (runs with the planks) — the main “wood pattern” cue.
+*/
+.gig-wall-page::before,
 .gig-wall-surface::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.28;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-  mix-blend-mode: soft-light;
+  opacity: 0.72;
+  background-image:
+    /* Fine vertical grain */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 2px,
+      rgba(55, 68, 60, 0.11) 2px,
+      rgba(55, 68, 60, 0.11) 3px,
+      transparent 3px,
+      transparent 6px,
+      rgba(40, 52, 46, 0.08) 6px,
+      rgba(40, 52, 46, 0.08) 7px,
+      transparent 7px,
+      transparent 11px,
+      rgba(90, 105, 95, 0.1) 11px,
+      rgba(90, 105, 95, 0.1) 12px,
+      transparent 12px,
+      transparent 18px
+    ),
+    /* Slightly thicker irregular vertical streaks */
+    repeating-linear-gradient(
+      89.4deg,
+      transparent 0,
+      transparent 13px,
+      rgba(55, 68, 60, 0.07) 13px,
+      rgba(55, 68, 60, 0.07) 15px,
+      transparent 15px,
+      transparent 29px,
+      rgba(70, 85, 76, 0.06) 29px,
+      rgba(70, 85, 76, 0.06) 30px,
+      transparent 30px,
+      transparent 47px
+    ),
+    repeating-linear-gradient(
+      90.6deg,
+      transparent 0,
+      transparent 21px,
+      rgba(45, 58, 52, 0.05) 21px,
+      rgba(45, 58, 52, 0.05) 22px,
+      transparent 22px,
+      transparent 55px
+    );
 }
 
+/*
+  Irregular growth-ring / knot ellipses + fiber pores (SVG, no blend-mode).
+*/
+.gig-wall-page::after,
+.gig-wall-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='520' viewBox='0 0 420 520'%3E%3Cdefs%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05 0.22' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.28 0 0 0 0 0.34 0 0 0 0 0.3 0 0 0 0.45 0'/%3E%3C/filter%3E%3C/defs%3E%3Cg fill='none' stroke='%233f5048' stroke-opacity='0.28'%3E%3Cellipse cx='68' cy='110' rx='14' ry='38' stroke-width='1.4'/%3E%3Cellipse cx='68' cy='110' rx='9' ry='26' stroke-width='1.1'/%3E%3Cellipse cx='68' cy='110' rx='4' ry='12' stroke-width='1'/%3E%3Cellipse cx='210' cy='240' rx='18' ry='48' stroke-width='1.3'/%3E%3Cellipse cx='210' cy='240' rx='12' ry='34' stroke-width='1'/%3E%3Cellipse cx='210' cy='240' rx='5' ry='16' stroke-width='0.9'/%3E%3Cellipse cx='340' cy='90' rx='11' ry='30' stroke-width='1.2'/%3E%3Cellipse cx='340' cy='90' rx='6' ry='18' stroke-width='0.9'/%3E%3Cellipse cx='120' cy='400' rx='16' ry='42' stroke-width='1.3'/%3E%3Cellipse cx='120' cy='400' rx='10' ry='28' stroke-width='1'/%3E%3Cellipse cx='300' cy='430' rx='13' ry='36' stroke-width='1.2'/%3E%3Cellipse cx='300' cy='430' rx='7' ry='20' stroke-width='0.9'/%3E%3Cellipse cx='380' cy='300' rx='10' ry='28' stroke-width='1.1'/%3E%3Cellipse cx='40' cy='300' rx='8' ry='22' stroke-width='1'/%3E%3C/g%3E%3Crect width='420' height='520' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 420px 520px;
+}
+
+.gig-wall-page > *,
 .gig-wall-surface > * {
   position: relative;
   z-index: 1;
+}
+
+/* Full-bleed wall list (edge-to-edge under AppShell header) */
+.gig-wall-page {
+  min-height: calc(100dvh - var(--lx-header-offset) - var(--lx-bottom-tabs-height));
+  overflow: hidden;
+}
+
+.gig-wall-page__inner {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 1.25rem max(1rem, var(--lx-sal)) 2rem max(1rem, var(--lx-sar));
+}
+
+@media (min-width: 640px) {
+  .gig-wall-page__inner {
+    padding: 1.5rem max(1.5rem, var(--lx-sal)) 2.25rem max(1.5rem, var(--lx-sar));
+  }
+}
+
+@media (min-width: 1024px) {
+  .gig-wall-page__inner {
+    padding-left: max(1.75rem, var(--lx-sal));
+    padding-right: max(1.75rem, var(--lx-sar));
+  }
+}
+
+/* Readable chrome on wood */
+.gig-wall-page .lx-eyebrow {
+  color: #0f766e;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.gig-wall-page__title {
+  color: #1c2733;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.gig-wall-page__lede {
+  color: #3f4650;
+}
+
+.gig-wall-page .gig-chip-label {
+  color: #4a5348;
+}
+
+.gig-wall-page .gig-chip {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(28, 39, 51, 0.14);
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(28, 39, 51, 0.08);
+}
+
+.gig-wall-page .gig-chip:hover {
+  background: #fff;
+  border-color: rgba(13, 148, 136, 0.4);
+  color: #0f766e;
+}
+
+.gig-wall-page .gig-chip--active {
+  background: #0f766e;
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.28);
+}
+
+.gig-wall-page .gig-wall-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  color: #0f766e;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 39, 51, 0.06);
+  text-decoration: none;
+}
+
+.gig-wall-page .gig-wall-link:hover {
+  background: #fff;
+  border-color: rgba(13, 148, 136, 0.45);
+  text-decoration: underline;
+}
+
+.gig-wall-page .gig-empty-board {
+  background: rgba(255, 252, 247, 0.72);
+  border-color: rgba(63, 90, 82, 0.4);
+}
+
+/* Inset board for detail / create (card on normal page) */
+.gig-wall-surface {
+  border-radius: 1.25rem;
+  padding: 1.1rem 1rem 1.5rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 0 0 1px rgba(70, 82, 74, 0.12);
+  overflow: hidden;
 }
 
 .gig-pin-board {
@@ -583,27 +760,34 @@ html.lx-keyboard-open .lx-auth-form-col {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #4a5640;
+  color: #3f564c;
   padding: 0.35rem 0.15rem 0.75rem;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .gig-pin-note-enter {
   animation: gig-pin-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: calc(var(--i, 0) * 45ms);
-  height: 100%;
+  height: auto;
 }
 
+/* Sticky-note shape — mildly squarish, still compact with truncated text */
 .gig-pin-note {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
-  min-height: 9.5rem;
+  aspect-ratio: 5 / 4;
+  min-height: 9rem;
+  max-height: 16.5rem;
+  height: auto;
   text-align: left;
   cursor: pointer;
-  border-radius: 0.2rem 0.2rem 0.45rem 0.45rem;
+  border-radius: 0.35rem;
   border: 1px solid rgba(28, 39, 51, 0.08);
   background: linear-gradient(165deg, #f8faf9 0%, #eef4f2 100%);
-  padding: 1.45rem 1rem 1rem;
+  padding: 1.25rem 0.85rem 0.75rem;
+  overflow: hidden;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 1px 1px rgba(28, 39, 51, 0.04),
@@ -613,6 +797,26 @@ html.lx-keyboard-open .lx-auth-form-col {
   transition:
     transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .gig-pin-note {
+    aspect-ratio: 1 / 1;
+    max-height: 15.5rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .gig-pin-note {
+    max-height: 14.5rem;
+  }
+}
+
+.gig-pin-see-more {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f766e;
 }
 
 /* Soft multi-color notes — light pastels aligned with teal UI */
@@ -694,15 +898,15 @@ html.lx-keyboard-open .lx-auth-form-col {
 }
 
 .gig-pin-note--tilt-a {
-  transform: rotate(-1.6deg);
+  transform: rotate(-1.1deg);
 }
 
 .gig-pin-note--tilt-b {
-  transform: rotate(1.35deg);
+  transform: rotate(0.95deg);
 }
 
 .gig-pin-note--tilt-c {
-  transform: rotate(-0.85deg);
+  transform: rotate(-0.55deg);
 }
 
 .gig-pin-note--tilt-a:hover,
@@ -736,7 +940,7 @@ html.lx-keyboard-open .lx-auth-form-col {
   left: 0;
   width: 3px;
   height: 100%;
-  border-radius: 0.2rem 0 0 0.45rem;
+  border-radius: 0.35rem 0 0 0.35rem;
   background: linear-gradient(180deg, #0d9488, #0f766e);
 }
 

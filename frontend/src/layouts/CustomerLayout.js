@@ -230,6 +230,7 @@ export default function CustomerLayout({ children }) {
   }
 
   const isAboutPage = location.pathname.endsWith('/customer/about');
+  const isGigWallList = /\/customer\/gigs\/?$/.test(location.pathname);
 
   return (
     <>
@@ -244,7 +245,7 @@ export default function CustomerLayout({ children }) {
         backTo={backNav?.to}
         homeTo={customerHomePath}
         headerActions={headerActions}
-        mainFullBleed={isAboutPage}
+        mainFullBleed={isAboutPage || isGigWallList}
         hideMobileChrome={isAboutPage}
       >
         {children ?? <Outlet />}

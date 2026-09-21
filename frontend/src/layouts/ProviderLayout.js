@@ -319,6 +319,7 @@ function ProviderShell() {
   }
 
   const isAboutPage = location.pathname.endsWith('/about');
+  const isGigWallList = /\/gigs\/?$/.test(location.pathname);
   const onSetupOrSubscribe =
     location.pathname.includes('/setup') || location.pathname.includes('/subscribe');
 
@@ -336,7 +337,7 @@ function ProviderShell() {
         showBack={!isProviderHome && Boolean(backNav?.to)}
         backTo={backNav?.to}
         homeTo={providerHomePath}
-        mainFullBleed={isAboutPage}
+        mainFullBleed={isAboutPage || isGigWallList}
         hideMobileChrome={isAboutPage}
       >
         <Outlet />

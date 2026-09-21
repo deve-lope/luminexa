@@ -18,7 +18,7 @@ export default function GigCategoryFilter({ value, onChange }) {
 
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+      <p className="gig-chip-label mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         Category
       </p>
       <div
