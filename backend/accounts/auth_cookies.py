@@ -19,5 +19,6 @@ def clear_auth_cookie(response):
         settings.AUTH_TOKEN_COOKIE_NAME,
         path='/',
         samesite=settings.AUTH_TOKEN_COOKIE_SAMESITE,
+        secure=bool(settings.AUTH_TOKEN_COOKIE_SECURE),
     )
     return response

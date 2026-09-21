@@ -2,6 +2,7 @@ import {
   closeTopOverlay,
   performAppBack,
   registerOverlayCloser,
+  registeredOverlayCloserCount,
 } from './appBackNavigation';
 
 describe('performAppBack', () => {
@@ -26,5 +27,15 @@ describe('performAppBack', () => {
 describe('closeTopOverlay', () => {
   test('returns false when nothing is open', () => {
     expect(closeTopOverlay()).toBe(false);
+  });
+});
+
+describe('registeredOverlayCloserCount', () => {
+  test('counts live overlays so menu cleanup can yield to Log out?', () => {
+    expect(registeredOverlayCloserCount()).toBe(0);
+    const unregister = registerOverlayCloser(() => {});
+    expect(registeredOverlayCloserCount()).toBe(1);
+    unregister();
+    expect(registeredOverlayCloserCount()).toBe(0);
   });
 });
