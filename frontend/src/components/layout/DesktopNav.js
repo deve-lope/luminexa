@@ -24,7 +24,11 @@ export default function DesktopNav({
 
       <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
         <nav className="space-y-0.5 p-2.5" aria-label="Primary">
-          {(tabs || []).map((tab) => {
+          {(tabs || [])
+            // Gig wall lives under Business (after Jobs) in the sidebar; keep it in
+            // `tabs` for the mobile bottom bar only.
+            .filter((tab) => tab.id !== 'gigs')
+            .map((tab) => {
             const Icon = TAB_ICONS[tab.id];
             return (
               <NavLink

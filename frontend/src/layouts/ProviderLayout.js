@@ -178,13 +178,15 @@ function ProviderShell() {
         providerClientsPath: providerClients(orgSlug),
         providerJobsPath: providerJobs(orgSlug),
         providerGigsPath: providerGigs(orgSlug),
-        includeGigs: androidApp,
+        // Always list Gig wall under Business (after Jobs). Primary tabs still
+        // include it for the mobile bottom bar; DesktopNav hides the duplicate.
+        includeGigs: true,
         providerNotificationsPath: providerNotifications(orgSlug),
         notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [requestLogout, orgSlug, user?.can_access_django_admin, notificationCount, androidApp]
+    [requestLogout, orgSlug, user?.can_access_django_admin, notificationCount]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;

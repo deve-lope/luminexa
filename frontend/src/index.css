@@ -413,16 +413,16 @@ html.capacitor-native .lx-ime-sheet.fixed.inset-0 {
   top: var(--lx-sat);
   /* Extend to the physical bottom so chat fill covers the home-indicator strip. */
   bottom: var(--lx-keyboard-inset, 0px);
-  background-color: #e2efec;
+  background-color: #f6f7f5;
 }
 
-/* Soft teal wash + faint dots so white incoming bubbles read clearly. */
+/* Soft canvas + faint brand wash so white incoming / accent outgoing bubbles both read. */
 .lx-chat-thread {
-  background-color: #e2efec;
+  background-color: #f6f7f5;
   background-image:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(13, 148, 136, 0.14), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(255, 255, 255, 0.45), transparent 50%),
-    radial-gradient(rgba(13, 148, 136, 0.07) 1.1px, transparent 1.1px);
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(13, 148, 136, 0.07), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(255, 255, 255, 0.55), transparent 50%),
+    radial-gradient(rgba(16, 35, 31, 0.045) 1.1px, transparent 1.1px);
   background-size: auto, auto, 18px 18px;
 }
 
