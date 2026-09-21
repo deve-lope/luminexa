@@ -15,6 +15,31 @@ from .booking_services import (
 )
 from .models import Booking, CustomerServiceInquiry, Service
 
+# Booking.service is required; gig / custom inquiries use this shared catalog row.
+CUSTOM_JOB_SERVICE_NAME = 'Custom job'
+
+
+def ensure_custom_job_service(organization):
+    """Active bookable service for gig-wall and other service-less quote bookings."""
+    svc, created = Service.objects.get_or_create(
+        organization=organization,
+        name=CUSTOM_JOB_SERVICE_NAME,
+        defaults={
+            'description': 'Used for custom and gig-wall bookings.',
+            'duration_minutes': 60,
+            'pricing_type': Service.PricingType.QUOTE,
+            'base_price': Decimal('0.00'),
+            'allow_request': False,
+            'fulfillment_kind': Service.FulfillmentKind.MOBILE,
+            'is_active': True,
+            'sort_order': 9999,
+        },
+    )
+    if not created and not svc.is_active:
+        svc.is_active = True
+        svc.save(update_fields=['is_active', 'updated_at'])
+    return svc
+
 
 def _parse_quote_amount(raw):
     try:
@@ -136,8 +161,6 @@ def book_inquiry_slot(inquiry, *, customer, slot):
         raise PermissionDenied('Only the customer can book this request.')
     if inquiry.booking_id:
         raise ValidationError({'detail': 'This request already has a booking.'})
-    if not inquiry.service_id:
-        raise ValidationError({'service': 'This request is not linked to a bookable service.'})
 
     require_booking_contact(customer)
     org = inquiry.organization
@@ -149,14 +172,22 @@ def book_inquiry_slot(inquiry, *, customer, slot):
         raise PermissionDenied('You cannot book with this business.')
 
     slot = _lock_slot(slot)
-    service = inquiry.service
     if slot.organization_id != org.id:
         raise ValidationError({'slot_id': 'This slot does not belong to the business.'})
-    if slot.service_id and slot.service_id != service.id:
-        raise ValidationError({'slot_id': 'This slot is for a different service.'})
     if not slot.is_bookable():
         raise ValidationError({'slot_id': 'This slot is no longer available.'})
     assert_slot_bookable_for_customer(slot)
+
+    # Catalog quote: slot must match that service (or be a general open slot).
+    # Gig / custom (no service): any open slot; never inherit the slot's catalog service.
+    if inquiry.service_id:
+        service = inquiry.service
+        if slot.service_id and slot.service_id != service.id:
+            raise ValidationError({'slot_id': 'This slot is for a different service.'})
+        job_title = ''
+    else:
+        service = ensure_custom_job_service(org)
+        job_title = (inquiry.service_label or '').strip()[:200]
 
     ensure_customer_membership(org, customer, approve=True)
     resolved_address = resolve_booking_service_address(
@@ -174,6 +205,7 @@ def book_inquiry_slot(inquiry, *, customer, slot):
     booking = Booking(
         organization=org,
         service=service,
+        job_title=job_title,
         customer=customer,
         availability_slot=slot,
         start_at=slot.start_at,
@@ -190,8 +222,9 @@ def book_inquiry_slot(inquiry, *, customer, slot):
     slot.refresh_status(save=True)
 
     inquiry.booking = booking
+    inquiry.service = service
     inquiry.status = CustomerServiceInquiry.Status.COMPLETED
-    inquiry.save(update_fields=['booking', 'status'])
+    inquiry.save(update_fields=['booking', 'service', 'status'])
 
     from .message_services import ensure_booking_card
 

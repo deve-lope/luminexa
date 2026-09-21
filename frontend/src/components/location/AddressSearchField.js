@@ -95,6 +95,9 @@ export default function AddressSearchField({
     }
     onSelect?.({
       address: displayName,
+      display_name: displayName,
+      place_label: item.place_label || '',
+      neighbourhood: item.neighbourhood || '',
       city: item.city || '',
       state: item.state || item.province || '',
       postal_code: item.postal_code || '',

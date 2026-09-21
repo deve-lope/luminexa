@@ -18,6 +18,7 @@ import { businessesAPI, jobsAPI, orgProfileAPI, userAPI } from '../../utils/api'
 import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
 import { isProviderMember } from '../../utils/postLoginRoute';
+import { markAppTourEligible } from '../../utils/appTour';
 import {
   hasFinishedProviderSetupWizard,
   isProviderWizardStepDone,
@@ -290,6 +291,7 @@ export default function ProviderSetupPage() {
       }
       const { data: completed } = await userAPI.completeOnboarding();
       setUserFromProfile(completed || profile);
+      markAppTourEligible();
 
       if (isOwner && !hasFinishedProviderSetupWizard(orgSlug)) {
         setStep('availability');

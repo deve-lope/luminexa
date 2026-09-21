@@ -48,6 +48,7 @@ export default function AppShell({
             {hasMenu && (
               <button
                 type="button"
+                data-tour="menu"
                 onClick={() => setMenuOpen(true)}
                 className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-sm transition hover:bg-white lg:hidden"
                 aria-label="Open menu"

@@ -378,33 +378,73 @@ function mapWebGeoError(err) {
 }
 
 export function buildAddressFromGeocode(data, { lat, lng } = {}) {
+  const place = formatPlaceLabel({
+    address: data?.place_label || data?.display_name,
+    neighbourhood: data?.neighbourhood,
+    city: data?.city,
+    state: data?.state || data?.province,
+    postal_code: data?.postal_code,
+    country: data?.country,
+  });
+  if (place) return place;
   const display = (data?.display_name || '').trim();
-  if (display) return display;
-  const parts = [
-    data?.city,
-    data?.state || data?.province,
-    data?.postal_code,
-  ].filter(Boolean);
-  if (parts.length) return parts.join(', ');
-  if (lat != null && lng != null) {
-    return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+  if (display && !isCoordinateLabel(display)) return display;
+  void lat;
+  void lng;
+  return '';
+}
+
+/**
+ * True when a string is just "45.42150, -75.69720" (or similar).
+ */
+export function isCoordinateLabel(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return /^-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+$/.test(text);
+}
+
+/**
+ * Readable place for chips / near-me (Westboro, Ottawa) — never lat/lng.
+ */
+export function formatPlaceLabel(payload = {}) {
+  const neighbourhood = (payload.neighbourhood || '').trim();
+  const city = (payload.city || '').trim();
+  const state = (payload.state || payload.province || '').trim();
+  const postal = (payload.postal_code || payload.postal || '').trim();
+  const direct = (payload.place_label || payload.address || '').trim();
+
+  if (neighbourhood && city && neighbourhood.toLowerCase() !== city.toLowerCase()) {
+    return `${neighbourhood}, ${city}`;
   }
+  if (neighbourhood) return neighbourhood;
+  if (city && state) return `${city}, ${state}`;
+  if (city) return city;
+  if (direct && !isCoordinateLabel(direct)) {
+    // Prefer the first two comma segments of a long address for chips.
+    const parts = direct.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2 && parts[0].length <= 40) {
+      return parts.slice(0, 2).join(', ');
+    }
+    return direct;
+  }
+  if (postal) return postal;
+  if (state) return state;
   return '';
 }
 
 export function formatLocationAddress(payload = {}) {
-  const direct = (payload.address || '').trim();
-  if (direct) return direct;
+  const place = formatPlaceLabel(payload);
+  if (place) return place;
   const parts = [
+    payload.neighbourhood,
     payload.city,
     payload.state || payload.province,
     payload.postal_code,
     payload.country,
   ].filter(Boolean);
   if (parts.length) return parts.join(', ');
-  if (payload.lat != null && payload.lng != null) {
-    return `${Number(payload.lat).toFixed(5)}, ${Number(payload.lng).toFixed(5)}`;
-  }
+  const direct = (payload.address || '').trim();
+  if (direct && !isCoordinateLabel(direct)) return direct;
   return '';
 }
 

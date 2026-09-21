@@ -47,6 +47,9 @@ export default function CustomerSearchResults({ results, query, areaLabel, loadi
           <h2 className="text-lg font-semibold tracking-tight text-slate-900 lg:text-xl">
             {searchTerm ? `Results for “${searchTerm}”` : 'Nearby services'}
           </h2>
+          {results?.match_mode === 'related' && services.length > 0 && (
+            <p className="mt-1 text-sm text-slate-500">Showing related services.</p>
+          )}
           {hasArea && (
             <p className="mt-1 text-sm text-slate-600">
               Near <span className="font-medium text-slate-800">{areaLabel}</span>

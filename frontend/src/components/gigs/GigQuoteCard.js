@@ -1,93 +1,91 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
 
-export default function GigQuoteCard({ quote, showAcceptButton = false, onAccept }) {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
+function statusBadge(status) {
+  if (status === 'accepted') {
+    return (
+      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
+        Accepted
+      </span>
+    );
+  }
+  if (status === 'rejected') {
+    return (
+      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+        Rejected
+      </span>
+    );
+  }
+  if (status === 'countered') {
+    return (
+      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-800">
+        Counter pending
+      </span>
+    );
+  }
+  if (status === 'withdrawn') {
+    return (
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+        Withdrawn
+      </span>
+    );
+  }
+  return null;
+}
+
+export default function GigQuoteCard({
+  quote,
+  isLowest = false,
+  onOpen,
+}) {
   const org = quote.organization || {};
 
-  const handleAccept = async () => {
-    setBusy(true);
-    try {
-      await onAccept?.(quote.id);
-      setConfirming(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <button
+      type="button"
+      onClick={() => onOpen?.(quote)}
+      className={`gig-bid-card w-full text-left transition hover:-translate-y-0.5 hover:shadow-md${
+        isLowest ? ' gig-bid-card--lowest' : ''
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {org.logo && (
               <img src={org.logo} alt="" className="h-8 w-8 rounded-full object-cover" />
             )}
-            {org.slug ? (
-              <Link to={`/book/${org.slug}`} className="font-semibold text-slate-900 hover:underline">
-                {org.name}
-              </Link>
-            ) : (
-              <span className="font-semibold text-slate-900">{org.name || 'Provider'}</span>
+            <span className="font-semibold text-slate-900">{org.name || 'Provider'}</span>
+            {isLowest && (
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-800">
+                Lowest
+              </span>
             )}
+            {statusBadge(quote.status)}
           </div>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{quote.description}</p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+          <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+            {quote.description}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {quote.estimated_duration_days != null && (
-              <span>Est. {quote.estimated_duration_days} day(s)</span>
+              <span className="gig-pin-chip">Est. {quote.estimated_duration_days} day(s)</span>
             )}
             {quote.organization_distance != null && (
-              <span>{quote.organization_distance} mi away</span>
+              <span className="gig-pin-chip">{quote.organization_distance} mi away</span>
             )}
             {quote.organization_rating != null && (
-              <span>★ {quote.organization_rating}</span>
+              <span className="gig-pin-chip">★ {quote.organization_rating}</span>
             )}
-            {quote.status === 'accepted' && (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800">
-                Accepted
-              </span>
+            {quote.counter_price != null && quote.status === 'countered' && (
+              <span className="gig-pin-chip">Counter ${quote.counter_price}</span>
             )}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-xl font-bold text-slate-900">${quote.price}</div>
-          {showAcceptButton && quote.status === 'submitted' && !confirming && (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="mt-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-            >
-              Accept
-            </button>
-          )}
+          <div className="text-2xl font-extrabold tracking-tight text-slate-900">
+            ${quote.price}
+          </div>
+          <p className="mt-1 text-xs font-semibold text-teal-700">View bid →</p>
         </div>
       </div>
-      {confirming && (
-        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
-          <p className="text-emerald-900">
-            Accept this quote for ${quote.price}? The gig leaves the wall and this job moves to Quotes.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleAccept}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
-            >
-              {busy ? 'Accepting…' : 'Confirm'}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setConfirming(false)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </button>
   );
 }

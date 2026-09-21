@@ -257,6 +257,7 @@ def format_postal_display(code: str) -> str:
 def build_display_name(
     *,
     street: str = '',
+    neighbourhood: str = '',
     city: str = '',
     state: str = '',
     postal_code: str = '',
@@ -266,7 +267,7 @@ def build_display_name(
     street_line = (street or '').strip()
     if street_line:
         parts.append(street_line)
-    for value in (city, state):
+    for value in (neighbourhood, city, state):
         text = (value or '').strip()
         if text and text not in parts:
             parts.append(text)
@@ -279,23 +280,72 @@ def build_display_name(
     return ', '.join(parts)
 
 
+def build_place_label(
+    *,
+    neighbourhood: str = '',
+    city: str = '',
+    state: str = '',
+    postal_code: str = '',
+) -> str:
+    """Short readable label for chips (e.g. Westboro, Ottawa) — never coordinates."""
+    parts: list[str] = []
+    for value in (neighbourhood, city, state):
+        text = (value or '').strip()
+        if text and text not in parts:
+            parts.append(text)
+    if parts:
+        # Chip-sized: neighbourhood + city, or city + province
+        if neighbourhood and city and neighbourhood.strip().lower() != city.strip().lower():
+            return f'{neighbourhood.strip()}, {city.strip()}'
+        return ', '.join(parts[:2])
+    postal_display = format_postal_display(postal_code)
+    return postal_display or ''
+
+
+def _distinct_place(neighbourhood: str, city: str) -> tuple[str, str]:
+    n = (neighbourhood or '').strip()
+    c = (city or '').strip()
+    if n and c and n.lower() == c.lower():
+        return '', c
+    if not c and n:
+        return '', n
+    return n, c
+
+
 def _finalize_location_payload(payload: dict) -> dict:
     """Rebuild display_name from structured fields so postal codes stay consistent."""
     street = payload.get('street') or ''
+    neighbourhood, city = _distinct_place(
+        payload.get('neighbourhood') or '',
+        payload.get('city') or '',
+    )
     if not street and payload.get('display_name'):
         # Keep photon/nominatim street in display_name only when we have no structured street.
         display = (payload.get('display_name') or '').strip()
     else:
         display = build_display_name(
             street=street,
-            city=payload.get('city') or '',
+            neighbourhood=neighbourhood,
+            city=city,
             state=payload.get('state') or '',
             postal_code=payload.get('postal_code') or '',
             country=payload.get('country') or '',
         )
         if not display:
             display = (payload.get('display_name') or '').strip()
-    out = {**payload, 'display_name': display}
+    place_label = build_place_label(
+        neighbourhood=neighbourhood,
+        city=city,
+        state=payload.get('state') or '',
+        postal_code=payload.get('postal_code') or '',
+    )
+    out = {
+        **payload,
+        'neighbourhood': neighbourhood,
+        'city': city,
+        'display_name': display,
+        'place_label': place_label or display,
+    }
     out.pop('street', None)
     out.pop('source', None)
     return out
@@ -455,6 +505,15 @@ def _address_payload(result: dict) -> dict:
     street_line = ' '.join(
         p for p in (address.get('house_number'), address.get('road') or address.get('street')) if p
     ).strip()
+    neighbourhood = (
+        address.get('suburb')
+        or address.get('neighbourhood')
+        or address.get('neighborhood')
+        or address.get('quarter')
+        or address.get('city_district')
+        or address.get('hamlet')
+        or ''
+    )
     city = (
         address.get('city')
         or address.get('town')
@@ -463,19 +522,29 @@ def _address_payload(result: dict) -> dict:
         or address.get('county')
         or ''
     )
+    neighbourhood, city = _distinct_place(neighbourhood, city)
     state = address.get('state') or address.get('province') or address.get('region') or ''
     postal_code = normalize_postal_code(address.get('postcode') or '')
     country = address.get('country') or ''
+    display = build_display_name(
+        street=street_line,
+        neighbourhood=neighbourhood,
+        city=city,
+        state=state,
+        postal_code=postal_code,
+        country=country,
+    ) or (result.get('display_name') or '')
     return {
-        'display_name': build_display_name(
-            street=street_line,
+        'display_name': display,
+        'place_label': build_place_label(
+            neighbourhood=neighbourhood,
             city=city,
             state=state,
             postal_code=postal_code,
-            country=country,
-        ) or (result.get('display_name') or ''),
+        ) or display,
         'latitude': float(result.get('lat')),
         'longitude': float(result.get('lon')),
+        'neighbourhood': neighbourhood,
         'city': city,
         'state': state,
         'postal_code': postal_code,
@@ -494,20 +563,32 @@ def _photon_payload(feature: dict) -> dict | None:
     street_line = ' '.join(
         p for p in (props.get('housenumber'), props.get('street')) if p
     ).strip()
-    city = props.get('city') or props.get('locality') or props.get('district') or ''
+    # Photon often puts the neighbourhood in district/locality while city is Ottawa, etc.
+    neighbourhood = props.get('district') or props.get('locality') or ''
+    city = props.get('city') or ''
+    neighbourhood, city = _distinct_place(neighbourhood, city)
     state = props.get('state') or ''
     postal_code = normalize_postal_code(props.get('postcode') or '')
     country = props.get('country') or ''
+    display = build_display_name(
+        street=street_line,
+        neighbourhood=neighbourhood,
+        city=city,
+        state=state,
+        postal_code=postal_code,
+        country=country,
+    )
     return {
-        'display_name': build_display_name(
-            street=street_line,
+        'display_name': display,
+        'place_label': build_place_label(
+            neighbourhood=neighbourhood,
             city=city,
             state=state,
             postal_code=postal_code,
-            country=country,
-        ),
+        ) or display,
         'latitude': float(lat),
         'longitude': float(lon),
+        'neighbourhood': neighbourhood,
         'city': city,
         'state': state,
         'postal_code': postal_code,

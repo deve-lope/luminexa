@@ -6,10 +6,9 @@ from pathlib import Path
 from django.conf import settings
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from accounts.models import User
+from accounts.models import AuthToken, User
 from businesses.models import Organization, OrganizationMembership
 from jobs.models import AvailabilitySlot, Booking, Service
 
@@ -215,7 +214,7 @@ class MediaAccessTests(TestCase):
         denied = self.client.get('/media/private/secret.txt', HTTP_HOST='localhost')
         self.assertEqual(denied.status_code, 403)
 
-        token = Token.objects.create(user=self.user)
+        token = AuthToken.objects.create(user=self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
         allowed = self.client.get('/media/private/secret.txt', HTTP_HOST='localhost')
         self.assertEqual(allowed.status_code, 200)

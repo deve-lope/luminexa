@@ -12,6 +12,7 @@ import PasswordInput from '../../components/ui/PasswordInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { userAPI } from '../../utils/api';
+import { requestAppTour } from '../../utils/appTour';
 import { PROVIDER_DELETION_REASONS } from '../../utils/providerDeletionReasons';
 
 const inputClass =
@@ -583,6 +584,50 @@ export default function CustomerAccountPage({ variant = 'customer', orgSlug = nu
             )}
           </dl>
         )}
+      </section>
+
+      <section
+        className={
+          isCustomerAccount
+            ? 'rounded-3xl border border-teal-100 bg-white p-5 shadow-sm sm:p-6'
+            : 'rounded-xl bg-white p-5 shadow-sm'
+        }
+      >
+        {isCustomerAccount ? (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Help</p>
+            <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">App tour</h2>
+          </>
+        ) : (
+          <h2 className="text-sm font-semibold uppercase text-slate-500">App tour</h2>
+        )}
+        <p className="mt-1 text-sm text-slate-600">
+          Walk through the main screens again — you can skip anytime.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            const role = isCustomerAccount ? 'customer' : 'provider';
+            requestAppTour(role, user?.id);
+            if (!isCustomerAccount && orgSlug) {
+              navigate(`/provider/${orgSlug}`);
+            } else {
+              navigate('/customer');
+            }
+          }}
+          className={
+            isCustomerAccount
+              ? 'mt-4 inline-flex min-h-[48px] w-full items-center justify-center rounded-full border border-teal-200 bg-teal-50 px-5 text-sm font-semibold text-teal-800 transition hover:border-teal-300 hover:bg-teal-100'
+              : 'mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50'
+          }
+        >
+          <span>Show app tour</span>
+          {!isCustomerAccount && (
+            <span className="text-slate-400" aria-hidden>
+              →
+            </span>
+          )}
+        </button>
       </section>
 
       <section

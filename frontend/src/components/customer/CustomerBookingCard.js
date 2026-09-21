@@ -23,9 +23,15 @@ import {
 import { providerCustomerKey } from '../../utils/providerRouteKey';
 import RequestMessageThread from '../provider/RequestMessageThread';
 import { jobsAPI } from '../../utils/api';
-import { formatJobLocationLabel, serviceRequiresQuote } from '../../utils/serviceDisplay';
+import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
 import StarRating from '../services/StarRating';
+import { IconMapPin, IconSchedule } from '../icons/NavIcons';
+
+/** Gig-wall / custom quote bookings — not a catalog service page. */
+function isCustomOrGigBooking(booking) {
+  return Boolean((booking?.job_title || '').trim()) || booking?.service_name === 'Custom job';
+}
 
 function ReviewSnippet({ review }) {
   if (!review) return null;
@@ -101,6 +107,7 @@ export default function CustomerBookingCard({
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
   const providerKey = providerCustomerKey(booking);
+  const isGigOrCustomJob = isCustomOrGigBooking(booking);
   const canRate = Boolean(booking.can_rate);
   const myReview = booking.my_review;
   const isQuoted = booking.status === 'quoted';
@@ -180,19 +187,32 @@ export default function CustomerBookingCard({
           <div className="min-w-0">
             <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
             <p className="mt-0.5 truncate text-sm text-slate-600">{booking.organization_name}</p>
+            {booking.quote_amount != null &&
+              booking.status !== 'quoted' &&
+              booking.status !== 'requested' && (
+                <p className="mt-1 text-sm font-medium tabular-nums text-slate-800">
+                  Agreed · ${Number(booking.quote_amount).toFixed(2)}
+                </p>
+              )}
           </div>
           <span className={`shrink-0 ${bookingStatusClass(booking.status)}`}>
             {statusLabel}
           </span>
         </div>
-        <p className="mt-2 text-sm text-slate-700">
-          <span className="font-medium text-slate-500">When · </span>
-          {formatWhen(booking.start_at)}
+        <p className="mt-2 flex items-start gap-2 text-sm text-slate-700">
+          <IconSchedule className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+          <span>
+            <span className="sr-only">When: </span>
+            {formatWhen(booking.start_at)}
+          </span>
         </p>
         {(booking.job_location || booking.service_address) && (
-          <p className="mt-1 line-clamp-1 text-sm text-slate-600">
-            <span className="font-medium text-slate-500">Place · </span>
-            {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
+          <p className="mt-1 flex items-start gap-2 text-sm text-slate-600">
+            <IconMapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+            <span className="line-clamp-1">
+              <span className="sr-only">Place: </span>
+              {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
+            </span>
           </p>
         )}
         {compactHint && <p className="mt-2 text-xs font-medium text-amber-800">{compactHint}</p>}
@@ -228,7 +248,10 @@ export default function CustomerBookingCard({
     );
 
     const rebookTo =
-      booking.status === 'completed' && providerKey && booking.service
+      booking.status === 'completed' &&
+      providerKey &&
+      booking.service &&
+      !isGigOrCustomJob
         ? customerProviderService(providerKey, booking.service)
         : null;
 
@@ -391,6 +414,13 @@ export default function CustomerBookingCard({
   return (
     <li className="lx-card">
       <p className="font-semibold tracking-tight text-slate-900">{booking.service_name}</p>
+      {booking.quote_amount != null &&
+        booking.status !== 'quoted' &&
+        booking.status !== 'requested' && (
+          <p className="mt-1 text-sm font-medium tabular-nums text-slate-800">
+            Agreed · ${Number(booking.quote_amount).toFixed(2)}
+          </p>
+        )}
       {providerKey ? (
         <Link
           to={customerProviderPage(providerKey)}
@@ -403,16 +433,18 @@ export default function CustomerBookingCard({
       )}
 
       <div className="mt-2 space-y-1.5 text-sm text-slate-700">
-        <p>
-          <span className="font-medium text-slate-500">When · </span>
-          {formatWhen(booking.start_at)}
+        <p className="flex items-start gap-2">
+          <IconSchedule className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+          <span>
+            <span className="sr-only">When: </span>
+            {formatWhen(booking.start_at)}
+          </span>
         </p>
         {(booking.job_location || booking.service_address) && (
-          <p>
-            <span className="font-medium text-slate-500">
-              {formatJobLocationLabel(booking).replace(/^Job location — /i, '')} ·{' '}
-            </span>
+          <p className="flex items-start gap-2">
+            <IconMapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
             <span className="whitespace-pre-wrap">
+              <span className="sr-only">Place: </span>
               {formatServiceAddressDisplay(booking.job_location || booking.service_address)}
             </span>
           </p>
@@ -606,7 +638,10 @@ export default function CustomerBookingCard({
         </div>
       )}
 
-      {booking.status === 'completed' && providerKey && booking.service ? (
+      {booking.status === 'completed' &&
+      providerKey &&
+      booking.service &&
+      !isGigOrCustomJob ? (
         <div className="mt-3">
           <Link
             to={customerProviderService(providerKey, booking.service)}
@@ -668,7 +703,7 @@ export default function CustomerBookingCard({
                 View provider
               </Link>
             )}
-            {providerKey && booking.service && (
+            {providerKey && booking.service && !isGigOrCustomJob && (
               <Link
                 to={customerProviderServiceDetail(providerKey, booking.service)}
                 className="lx-btn-ghost w-full px-3 text-center"

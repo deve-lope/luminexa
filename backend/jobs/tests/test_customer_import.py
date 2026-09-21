@@ -2,9 +2,9 @@ import io
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
+from accounts.models import AuthToken
 from businesses.models import Organization, OrganizationMembership
 
 User = get_user_model()
@@ -30,7 +30,7 @@ class CustomerImportTests(TestCase):
             role=OrganizationMembership.Role.OWNER,
         )
         self.client = APIClient()
-        token, _ = Token.objects.get_or_create(user=self.owner)
+        token, _ = AuthToken.objects.get_or_create(user=self.owner)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
 
     def _csv(self, body: str):

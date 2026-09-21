@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { jobsAPI } from '../../utils/api';
-import { providerGigDetail, providerGigs } from '../../utils/providerPaths';
+import { providerGigBid, providerGigs } from '../../utils/providerPaths';
 
 export default function ProviderMyQuotesPage() {
   const { orgSlug } = useParams();
@@ -36,7 +36,7 @@ export default function ProviderMyQuotesPage() {
         </Link>
       </div>
       <div className="flex flex-wrap gap-2">
-        {['all', 'submitted', 'accepted', 'withdrawn'].map((f) => (
+        {['all', 'submitted', 'countered', 'accepted', 'rejected', 'withdrawn'].map((f) => (
           <button
             key={f}
             type="button"
@@ -63,8 +63,8 @@ export default function ProviderMyQuotesPage() {
           <button
             key={q.id}
             type="button"
-            onClick={() => navigate(providerGigDetail(orgSlug, q.gig_post.id))}
-            className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm"
+            onClick={() => navigate(providerGigBid(orgSlug, q.gig_post.id, q.id))}
+            className="gig-bid-card w-full text-left"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -73,6 +73,11 @@ export default function ProviderMyQuotesPage() {
                   Customer: {q.gig_post?.customer_name || '—'}
                 </p>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-700">{q.description}</p>
+                {q.status === 'countered' && q.counter_price != null && (
+                  <p className="mt-1 text-sm font-medium text-teal-800">
+                    Counter offered: ${q.counter_price}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <div className="text-lg font-bold">${q.price}</div>

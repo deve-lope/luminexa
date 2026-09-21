@@ -24,13 +24,18 @@ export default function DesktopNav({
 
       <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
         <nav className="space-y-0.5 p-2.5" aria-label="Primary">
-          {(tabs || []).map((tab) => {
+          {(tabs || [])
+            // Gig wall lives under Business (after Jobs) in the sidebar; keep it in
+            // `tabs` for the mobile bottom bar only.
+            .filter((tab) => tab.id !== 'gigs')
+            .map((tab) => {
             const Icon = TAB_ICONS[tab.id];
             return (
               <NavLink
                 key={tab.id}
                 to={tab.to}
                 end={tab.end}
+                data-tour={`tab-${tab.id}`}
                 aria-label={
                   tab.badgeCount > 0
                     ? `${tab.label}, ${tab.badgeCount} new`
@@ -58,7 +63,11 @@ export default function DesktopNav({
         </nav>
 
         {menuItems.length > 0 && (
-          <nav className="border-t border-luminexa-line p-2.5 pb-3" aria-label="More">
+          <nav
+            className="border-t border-luminexa-line p-2.5 pb-3"
+            aria-label="More"
+            data-tour="menu"
+          >
             <ul className="space-y-0.5">
               {menuItems.map((item) =>
                 item.divider ? (

@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import CustomerInvoicePaymentPrompt from '../components/customer/CustomerInvoicePaymentPrompt';
 import CustomerRatePrompt from '../components/customer/CustomerRatePrompt';
 import CustomerNotificationBell from '../components/customer/CustomerNotificationBell';
+import AppTour from '../components/tour/AppTour';
 import { useAuth } from '../contexts/AuthContext';
 import { buildCustomerTabs, buildCustomerMenuItems } from '../config/navigation';
 import { jobsAPI } from '../utils/api';
@@ -14,6 +15,7 @@ import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
 import { NOTIFICATIONS_CHANGED_EVENT, countBookingUpdateNotifications } from '../utils/customerNotifications';
 import { MESSAGES_CHANGED_EVENT } from '../utils/messageBadge';
+import useLogoutConfirm from '../hooks/useLogoutConfirm';
 
 export default function CustomerLayout({ children }) {
   const { isAuthenticated, loading, user, memberships, logout } = useAuth();
@@ -22,17 +24,18 @@ export default function CustomerLayout({ children }) {
   const [notificationCount, setNotificationCount] = useState(0);
   const [bookingsBadgeCount, setBookingsBadgeCount] = useState(0);
   const [messagesCount, setMessagesCount] = useState(0);
+  const { requestLogout, logoutConfirmDialog } = useLogoutConfirm(logout, navigate);
 
   const androidApp = isAndroidApp();
 
   const menuItems = useMemo(
     () =>
       buildCustomerMenuItems({
-        logout: () => logout().then(() => navigate('/')),
+        logout: requestLogout,
         messagesBadgeCount: messagesCount,
         includeGigs: androidApp,
       }),
-    [logout, navigate, messagesCount, androidApp]
+    [requestLogout, messagesCount, androidApp]
   );
 
   const tabs = useMemo(
@@ -146,6 +149,9 @@ export default function CustomerLayout({ children }) {
     if (location.pathname.endsWith('/customer/gigs/create')) {
       return { eyebrow: 'Gig wall', title: 'Create gig' };
     }
+    if (/^\/customer\/gigs\/[^/]+\/bids\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: 'Gig wall', title: 'Bid details' };
+    }
     if (/^\/customer\/gigs\/[^/]+$/.test(location.pathname)) {
       return { eyebrow: 'Gig wall', title: 'Gig details' };
     }
@@ -224,6 +230,7 @@ export default function CustomerLayout({ children }) {
   }
 
   const isAboutPage = location.pathname.endsWith('/customer/about');
+  const isGigWallList = /\/customer\/gigs\/?$/.test(location.pathname);
 
   return (
     <>
@@ -238,13 +245,22 @@ export default function CustomerLayout({ children }) {
         backTo={backNav?.to}
         homeTo={customerHomePath}
         headerActions={headerActions}
-        mainFullBleed={isAboutPage}
+        mainFullBleed={isAboutPage || isGigWallList}
         hideMobileChrome={isAboutPage}
       >
         {children ?? <Outlet />}
       </AppShell>
       {isAuthenticated && isCustomerAppRoute && <CustomerInvoicePaymentPrompt />}
       {isAuthenticated && isCustomerAppRoute && <CustomerRatePrompt />}
+      {isAuthenticated && isCustomerAppRoute && !needsOnboarding(user) && (
+        <AppTour
+          role="customer"
+          user={user}
+          includeGigs={!androidApp}
+          enabled={isCustomerHome || location.pathname.startsWith('/customer/')}
+        />
+      )}
+      {logoutConfirmDialog}
     </>
   );
 }

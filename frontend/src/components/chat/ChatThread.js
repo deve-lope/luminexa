@@ -54,13 +54,20 @@ function timeLabel(iso) {
   }
 }
 
-function ReceiptTicks({ status }) {
+function ReceiptTicks({ status, onAccent }) {
   if (!status) return null;
   const read = status === 'read';
   const label = read ? 'Read' : 'Delivered';
+  const tone = onAccent
+    ? read
+      ? 'text-sky-200'
+      : 'text-white/55'
+    : read
+      ? 'text-sky-600'
+      : 'text-teal-900/45';
   return (
     <span
-      className={`ml-1 inline-flex items-center align-middle ${read ? 'text-sky-600' : 'text-teal-900/45'}`}
+      className={`ml-1 inline-flex items-center align-middle ${tone}`}
       title={label}
       aria-label={label}
     >
@@ -351,7 +358,7 @@ function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
       <div
         className={`relative max-w-[78%] overflow-hidden text-[15px] leading-snug ${
           mine
-            ? 'rounded-2xl rounded-br-md bg-teal-100 text-slate-900 shadow-sm'
+            ? 'rounded-2xl rounded-br-md bg-luminexa-accent text-white shadow-sm'
             : 'rounded-2xl rounded-bl-md bg-white text-slate-900 shadow-md ring-1 ring-slate-200/90'
         } ${hasImage && !showBody && !hasFile ? 'p-1' : 'px-3 py-2'}`}
       >
@@ -376,7 +383,7 @@ function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
             target="_blank"
             rel="noopener noreferrer"
             className={`mb-1 flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium ${
-              mine ? 'bg-teal-900/10 text-teal-950' : 'bg-slate-100 text-slate-800'
+              mine ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-800'
             }`}
           >
             <svg className="h-5 w-5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -388,11 +395,11 @@ function TextBubble({ msg, showReceiptLabel, onOpenImage }) {
         {showBody ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
         <p
           className={`mt-1 flex items-center justify-end gap-0.5 text-[10px] ${
-            mine ? 'text-teal-900/50' : 'text-slate-400'
+            mine ? 'text-white/70' : 'text-slate-400'
           } ${hasImage && !showBody ? 'px-2 pb-1' : ''}`}
         >
           <span>{timeLabel(msg.created_at)}</span>
-          {receipt ? <ReceiptTicks status={receipt} /> : null}
+          {receipt ? <ReceiptTicks status={receipt} onAccent={mine} /> : null}
         </p>
       </div>
       {showReceiptLabel && receipt ? (
@@ -670,7 +677,7 @@ export default function ChatThread({
   // On lg+, start after the w-60 sidebar so the composer is never covered.
   const sheet = (
     <div
-      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-[#e2efec] lg:left-60"
+      className="lx-ime-sheet fixed inset-0 z-[110] flex flex-col bg-luminexa-canvas lg:left-60"
       role="dialog"
       aria-modal="true"
       aria-label={`Chat with ${peerName || 'contact'}`}
@@ -823,7 +830,7 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className="lx-chat-composer shrink-0 border-t border-teal-900/10 bg-[#e2efec] px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
+      <div className="lx-chat-composer shrink-0 border-t border-luminexa-line bg-luminexa-canvas px-3 py-2 pb-[max(0.5rem,var(--lx-sab))]">
         {error ? (
           <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
@@ -907,7 +914,7 @@ export default function ChatThread({
             <button
               type="submit"
               disabled={sending || (!body.trim() && !file)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-700 text-white shadow-sm disabled:opacity-50"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-luminexa-accent text-white shadow-sm disabled:opacity-50"
               aria-label="Send"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">

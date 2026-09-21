@@ -78,6 +78,19 @@ Core: `organization_distances_within_radius` in `backend/businesses/location.py`
 | 5 mi | 25 mi | ~20 mi | **Hidden** (outside customer search) |
 | 25 mi | 15 mi | ~8 mi | Visible if ≤ both |
 
+### Keyword search (related services)
+
+Free-text `q` on Find / Home / Browse does **not** require choosing a category first.
+
+Matching uses:
+
+1. Full-phrase and per-token `icontains` on service name, description, and category name
+2. Synonym expansion (e.g. detailing ↔ car wash / auto care)
+3. Platform `BusinessType` language (name / description / slug) → services in that category
+4. Organization **tagline** only (never org name alone — that would dump unrelated catalog items)
+
+When results come from expansion rather than an exact phrase hit, APIs may return `match_mode: "related"`. Dual-radius location rules are unchanged.
+
 ### Lat/lng preferred; postal fallback
 
 Customer Find / Home / Services browse should prefer **lat + lng + radius_miles**. Still send **postal** when available so ungeocoded providers whose postal prefix matches are included (treated as distance **0**, which always passes both radii).
@@ -94,6 +107,8 @@ Org matches if **any** active `OrganizationLocation` satisfies dual radius. Dist
 - Do not filter by customer miles alone.
 - Do not require geocoding for every org before search works (postal prefix fallback is intentional).
 - Do not match only the primary location when secondary branches would qualify.
+- Do not revert keyword search to full-phrase-only `icontains` (related/token expansion is intentional).
+- Do not expand the catalog from organization **name** alone.
 
 ---
 
@@ -148,6 +163,20 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 
 ---
 
+## App store rating (native only)
+
+After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enjoying Luminexa?” prompt that opens the **store listing** (Play, or App Store when `APP_STORE_URL` is set). This is separate from **provider/job reviews** (`CustomerRatePrompt`).
+
+### Binding details
+
+- **Skip** browser and webview users entirely (`isNativeApp()` only).
+- Record `firstOpenedAt` on first native open; do not prompt before 7 days.
+- Dismiss or “Rate” permanently stops the prompt for that install.
+- iOS: no prompt until `APP_STORE_URL` is live (do not send users to App Store search).
+- Destination is always `getStoreReviewUrl` / `storeLinks.js` — never a fake in-web star UI.
+
+---
+
 ## Quick “shipped truths” checklist for agents
 
 1. Capacity default 1; UI label “Jobs at the same time”; FK not OneToOne; OPEN while remaining > 0.
@@ -155,6 +184,7 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 3. Multi-location any-branch match; primary sync; 2nd-location choice UX.
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
+5b. App rating = native only after ≥1 week; Play / App Store listing only (not webview).
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
 8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.
@@ -213,3 +243,22 @@ Providers can **Import CSV** on Clients (`full_name`, `email`, `phone`, optional
 - Do not blast welcome emails on import.
 - Do not invent membership-only stubs without a User (Clients and bookings need `user_id`).
 - Existing platform users with the same email are **linked** to the org, not duplicated.
+
+---
+
+## Sessions — max two devices per account
+
+### What it means
+
+An account may be signed in on **at most two devices at once** (typical: web browser + phone app). Logging in on a second device must **not** sign the first one out.
+
+A **third** login creates a new session and signs out the **oldest** of the two existing sessions. Logging out on one device leaves the other signed in.
+
+Code: `accounts.AuthToken` (FK, not DRF’s one-token-per-user `Token`) · `accounts.auth_sessions.issue_auth_token_response` · cap `AUTH_MAX_CONCURRENT_SESSIONS` (default **2**).
+
+### What NOT to simplify away
+
+- Do not rotate/delete all tokens on every login (that is what signed web off when the phone signed in).
+- Do not use DRF `authtoken.Token` (OneToOne) as the SPA session — it cannot hold two devices.
+- Logout deletes **this device’s** token only, not every session for the account.
+

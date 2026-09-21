@@ -23,6 +23,7 @@ import {
 } from '../utils/providerPaths';
 import { resolveOwnerBookBack, resolvePublicBack } from '../utils/navigationBack';
 import { isAndroidApp } from '../native/capacitorNative';
+import useLogoutConfirm from '../hooks/useLogoutConfirm';
 
 function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const { user, logout } = useAuth();
@@ -30,6 +31,7 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const location = useLocation();
   const { orgSlug: ctxSlug } = useProviderOrg();
   const orgSlug = orgSlugProp || ctxSlug;
+  const { requestLogout, logoutConfirmDialog } = useLogoutConfirm(logout, navigate);
 
   const androidApp = isAndroidApp();
   const tabs = useMemo(
@@ -39,7 +41,7 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   const menuItems = useMemo(
     () =>
       buildProviderMenuItems({
-        logout: () => logout().then(() => navigate('/')),
+        logout: requestLogout,
         providerServicesPath: `/provider/${orgSlug}/services`,
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
@@ -49,7 +51,7 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin, androidApp]
+    [requestLogout, orgSlug, user?.can_access_django_admin, androidApp]
   );
 
   const onServiceDetail = /\/services\/[^/]+\/?$/.test(location.pathname);
@@ -62,19 +64,22 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
   );
 
   return (
-    <AppShell
-      brand="Luminexa"
-      eyebrow={eyebrow}
-      title={title}
-      tabs={tabs}
-      menuItems={menuItems}
-      menuTitle="Provider menu"
-      showBack={Boolean(backNav?.to)}
-      backTo={backNav?.to}
-      homeTo={providerHome(orgSlug)}
-    >
-      {children}
-    </AppShell>
+    <>
+      <AppShell
+        brand="Luminexa"
+        eyebrow={eyebrow}
+        title={title}
+        tabs={tabs}
+        menuItems={menuItems}
+        menuTitle="Provider menu"
+        showBack={Boolean(backNav?.to)}
+        backTo={backNav?.to}
+        homeTo={providerHome(orgSlug)}
+      >
+        {children}
+      </AppShell>
+      {logoutConfirmDialog}
+    </>
   );
 }
 

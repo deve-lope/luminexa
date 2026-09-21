@@ -92,7 +92,7 @@ export default function LocationEnablePrompt({
             disabled={locating}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-teal-200 bg-white px-4 text-sm font-semibold text-teal-900 disabled:opacity-60"
           >
-            Enter address instead
+            Enter city or postal code instead
           </button>
         )}
       </div>

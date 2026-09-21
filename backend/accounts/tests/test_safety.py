@@ -1,10 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from accounts.models import ChatBlock, SafetyReport
+from accounts.models import AuthToken, ChatBlock, SafetyReport
 from businesses.models import Organization, OrganizationMembership
 from jobs.message_services import get_or_create_conversation, post_conversation_message
 from rest_framework.exceptions import PermissionDenied
@@ -48,7 +47,7 @@ class SafetyReportAndChatBlockTests(TestCase):
         self.client = APIClient()
 
     def _auth(self, user):
-        token, _ = Token.objects.get_or_create(user=user)
+        token, _ = AuthToken.objects.get_or_create(user=user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
 
     def test_customer_can_report_organization(self):

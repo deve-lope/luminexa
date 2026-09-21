@@ -38,6 +38,15 @@ def _organization_currency(organization) -> str:
     return currency_for_organization(organization)
 
 
+def booking_display_service_name(booking) -> str:
+    """Gig/custom jobs use job_title; catalog bookings use the service name."""
+    title = (getattr(booking, 'job_title', None) or '').strip()
+    if title:
+        return title
+    service = getattr(booking, 'service', None)
+    return getattr(service, 'name', None) or ''
+
+
 class InvoiceSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
@@ -384,12 +393,15 @@ class CustomerServiceInquirySerializer(serializers.ModelSerializer):
     organization_public_ref = serializers.CharField(source='organization.public_ref', read_only=True)
     reference = serializers.SerializerMethodField()
 
+    gig_quote = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True)
+
     class Meta:
         model = CustomerServiceInquiry
         fields = (
             'id', 'reference', 'service', 'service_name', 'service_label', 'message',
             'service_address', 'preferred_date', 'status', 'dismissed_at',
             'quote_amount', 'quote_message', 'quoted_at', 'quote_accepted_at', 'booking',
+            'gig_quote',
             'organization_name', 'organization_slug', 'organization_public_ref',
             'customer_name', 'customer_email', 'customer_phone', 'created_at',
         )
@@ -872,7 +884,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     """Full booking payload for provider schedule detail views."""
 
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
-    service_name = serializers.CharField(source='service.name', read_only=True)
+    service_name = serializers.SerializerMethodField()
+    job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(source='service.duration_minutes', read_only=True)
     service_base_price = serializers.DecimalField(
         source='service.base_price', max_digits=10, decimal_places=2, read_only=True,
@@ -916,7 +929,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         model = Booking
         fields = (
             'id', 'organization', 'organization_slug', 'organization_public_ref', 'organization_name',
-            'service', 'service_name', 'service_duration_minutes', 'service_base_price',
+            'service', 'service_name', 'job_title', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
             'customer', 'customer_name', 'customer_email', 'customer_phone',
@@ -934,6 +947,9 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         )
         read_only_fields = fields
+
+    def get_service_name(self, obj):
+        return booking_display_service_name(obj)
 
     def get_customer_view_url(self, obj):
         return obj.customer_view_url()
@@ -1015,7 +1031,8 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
-    service_name = serializers.CharField(source='service.name', read_only=True)
+    service_name = serializers.SerializerMethodField()
+    job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(
         source='service.duration_minutes', read_only=True,
     )
@@ -1066,7 +1083,7 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = (
             'id', 'reference', 'organization', 'organization_slug', 'organization_public_ref',
-            'service', 'service_name', 'service_duration_minutes', 'service_base_price',
+            'service', 'service_name', 'job_title', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
             'cancel_cutoff_hours', 'can_customer_cancel', 'can_customer_reschedule',
@@ -1086,7 +1103,7 @@ class BookingSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             'id', 'reference', 'customer_name', 'customer_email', 'customer_phone',
-            'service_name', 'service_duration_minutes', 'service_base_price',
+            'service_name', 'job_title', 'service_duration_minutes', 'service_base_price',
             'service_pricing_type', 'service_price_max', 'fulfillment_kind',
             'job_location', 'job_location_label',
             'cancel_cutoff_hours', 'can_customer_cancel', 'can_customer_reschedule',
@@ -1112,6 +1129,9 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return f'BK-{obj.pk:05d}'
+
+    def get_service_name(self, obj):
+        return booking_display_service_name(obj)
 
     def get_requires_quote(self, obj):
         from .booking_services import booking_requires_quote
@@ -1364,7 +1384,7 @@ class BatchBookingSerializer(serializers.Serializer):
 class PublicCustomerBookingSerializer(serializers.ModelSerializer):
     """Read-only booking card for the unauthenticated /b/<token> share link."""
 
-    service_name = serializers.CharField(source='service.name', read_only=True)
+    service_name = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_public_ref = serializers.CharField(
         source='organization.public_ref', read_only=True,
@@ -1383,6 +1403,9 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
             'customer_first_name',
         )
         read_only_fields = fields
+
+    def get_service_name(self, obj):
+        return booking_display_service_name(obj)
 
     def get_customer_first_name(self, obj):
         name = (getattr(obj.customer, 'full_name', None) or '').strip()
@@ -1443,7 +1466,7 @@ class ProviderBookSerializer(serializers.Serializer):
 
 
 class BookingDashboardSerializer(serializers.ModelSerializer):
-    service_name = serializers.CharField(source='service.name', read_only=True)
+    service_name = serializers.SerializerMethodField()
     customer_name = serializers.CharField(source='customer.full_name', read_only=True)
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
@@ -1454,6 +1477,9 @@ class BookingDashboardSerializer(serializers.ModelSerializer):
             'id', 'start_at', 'end_at', 'status', 'source', 'service_name',
             'customer_name', 'customer_email', 'customer_phone', 'customer_notes', 'service_address',
         )
+
+    def get_service_name(self, obj):
+        return booking_display_service_name(obj)
 
 
 class OrgCustomerSerializer(serializers.Serializer):

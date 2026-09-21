@@ -2,7 +2,12 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from businesses.geocode import search_locations
+from businesses.geocode import (
+    build_place_label,
+    _address_payload,
+    _photon_payload,
+    search_locations,
+)
 
 
 class SearchLocationsTests(SimpleTestCase):
@@ -41,3 +46,46 @@ class SearchLocationsTests(SimpleTestCase):
         results = search_locations('main st toronto', country='Canada')
         self.assertEqual(len(results), 1)
         nominatim_mock.assert_called()
+
+
+class PlaceLabelTests(SimpleTestCase):
+    def test_build_place_label_neighbourhood_city(self):
+        self.assertEqual(
+            build_place_label(neighbourhood='Vanier', city='Ottawa'),
+            'Vanier, Ottawa',
+        )
+
+    def test_nominatim_keeps_suburb_separate_from_city(self):
+        payload = _address_payload({
+            'lat': 45.43,
+            'lon': -75.66,
+            'display_name': 'fallback',
+            'address': {
+                'suburb': 'Vanier',
+                'city': 'Ottawa',
+                'state': 'Ontario',
+                'postcode': 'K1L1A1',
+                'country': 'Canada',
+                'road': 'Montreal Road',
+                'house_number': '100',
+            },
+        })
+        self.assertEqual(payload['neighbourhood'], 'Vanier')
+        self.assertEqual(payload['city'], 'Ottawa')
+        self.assertEqual(payload['place_label'], 'Vanier, Ottawa')
+        self.assertIn('Vanier', payload['display_name'])
+
+    def test_photon_uses_district_as_neighbourhood(self):
+        payload = _photon_payload({
+            'geometry': {'coordinates': [-75.75, 45.39]},
+            'properties': {
+                'district': 'Westboro',
+                'city': 'Ottawa',
+                'state': 'Ontario',
+                'country': 'Canada',
+                'street': 'Richmond Road',
+                'housenumber': '1',
+            },
+        })
+        self.assertEqual(payload['neighbourhood'], 'Westboro')
+        self.assertEqual(payload['place_label'], 'Westboro, Ottawa')

@@ -56,6 +56,10 @@ export function providerGigDetail(orgSlug, gigId) {
   return `/provider/${orgSlug}/gigs/${gigId}`;
 }
 
+export function providerGigBid(orgSlug, gigId, quoteId) {
+  return `/provider/${orgSlug}/gigs/${gigId}/bids/${quoteId}`;
+}
+
 export function providerMyGigQuotes(orgSlug) {
   return `/provider/${orgSlug}/gigs/my-quotes`;
 }

@@ -29,6 +29,7 @@ export default function BottomTabBar({ tabs }) {
               key={tab.id}
               to={tab.to}
               end={tab.end}
+              data-tour={`tab-${tab.id}`}
               aria-label={
                 tab.badgeCount > 0
                   ? `${tab.label}, ${tab.badgeCount} new`

@@ -31,42 +31,57 @@ export default function ProviderGigWallPage() {
   }, [load]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-luminexa-ink">Gig wall</h1>
-          <p className="mt-0.5 text-sm text-slate-600">
-            Open requests in your service area. Place a bid to take the job. Closed gigs stay off the wall.
-          </p>
+    <div className="gig-wall-page">
+      <div className="gig-wall-page__inner space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="lx-eyebrow">In your service area</p>
+            <h1 className="gig-wall-page__title mt-0.5 text-xl font-bold tracking-tight">
+              Gig wall
+            </h1>
+            <p className="gig-wall-page__lede mt-0.5 text-sm">
+              Open requests pinned nearby. Place a bid to take the job.
+            </p>
+          </div>
+          <Link to={providerMyGigQuotes(orgSlug)} className="gig-wall-link shrink-0">
+            My bids
+          </Link>
         </div>
-        <Link
-          to={providerMyGigQuotes(orgSlug)}
-          className="text-sm font-semibold text-teal-700 hover:underline"
-        >
-          My bids
-        </Link>
-      </div>
-      <GigCategoryFilter value={category} onChange={setCategory} />
-      {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
-      {!loading && posts.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-teal-200 bg-luminexa-mist/60 px-4 py-8 text-center text-sm text-teal-900">
-          No open gigs to bid on in your service area right now.
-        </p>
-      )}
-      <div className="space-y-3">
-        {posts.map((post) => (
-          <GigPostCard
-            key={post.id}
-            post={post}
-            offerNoun="bid"
-            onClick={() => navigate(providerGigDetail(orgSlug, post.id))}
-          />
-        ))}
+
+        <GigCategoryFilter value={category} onChange={setCategory} />
+
+        {error && (
+          <p className="rounded-xl border border-red-200 bg-red-50/95 px-4 py-3 text-sm text-red-700 shadow-sm">
+            {error}
+          </p>
+        )}
+
+        {loading && (
+          <p className="gig-wall-page__lede px-2 py-6 text-center text-sm font-medium">
+            Loading the wall…
+          </p>
+        )}
+
+        {!loading && posts.length === 0 && (
+          <div className="gig-empty-board">
+            <p className="text-sm font-medium text-teal-950">
+              No open gigs to bid on in your service area right now.
+            </p>
+          </div>
+        )}
+
+        {!loading && posts.length > 0 && (
+          <div className="gig-pin-board">
+            {posts.map((post, idx) => (
+              <GigPostCard
+                key={post.id}
+                post={post}
+                index={idx}
+                onClick={() => navigate(providerGigDetail(orgSlug, post.id))}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

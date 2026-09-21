@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react';
+import ConfirmDialog from '../ConfirmDialog';
 
-export default function GigQuoteForm({ onSubmit, initialData = null, loading = false }) {
+export default function GigQuoteForm({
+  onSubmit,
+  initialData = null,
+  loading = false,
+  onWithdraw = null,
+  withdrawBusy = false,
+}) {
   const [formData, setFormData] = useState({
     price: initialData?.price || '',
     description: initialData?.description || '',
     estimated_duration_days: initialData?.estimated_duration_days || '',
   });
   const [errors, setErrors] = useState({});
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -48,8 +56,8 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="font-semibold text-slate-900">
+    <form onSubmit={handleSubmit} className="gig-pin-sheet space-y-3 !pt-10">
+      <h3 className="font-bold tracking-tight text-slate-900">
         {initialData ? 'Update your bid' : 'Place a bid'}
       </h3>
       <div>
@@ -63,7 +71,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
             min="0.01"
             value={formData.price}
             onChange={handleChange}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="lx-input text-sm"
             required
           />
         </div>
@@ -79,7 +87,7 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
           onChange={handleChange}
           maxLength={1500}
           rows={4}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="lx-input resize-y text-sm"
           required
         />
         <div className="mt-1 text-xs text-slate-500">{formData.description.length}/1500</div>
@@ -96,18 +104,45 @@ export default function GigQuoteForm({ onSubmit, initialData = null, loading = f
             min="1"
             value={formData.estimated_duration_days}
             onChange={handleChange}
-            className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="lx-input w-32 text-sm"
           />
           <span className="text-sm text-slate-500">days</span>
         </div>
       </div>
-      <button
-        type="submit"
-        disabled={loading}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {loading ? 'Saving…' : initialData ? 'Update bid' : 'Place bid'}
-      </button>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="submit"
+          disabled={loading || withdrawBusy}
+          className="lx-btn-primary px-4 py-2 text-sm disabled:opacity-50"
+        >
+          {loading ? 'Saving…' : initialData ? 'Update bid' : 'Place bid'}
+        </button>
+        {onWithdraw && (
+          <button
+            type="button"
+            disabled={loading || withdrawBusy}
+            onClick={() => setConfirmWithdraw(true)}
+            className="rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+          >
+            {withdrawBusy ? 'Withdrawing…' : 'Withdraw bid'}
+          </button>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmWithdraw}
+        title="Withdraw this bid?"
+        message="You can place a new bid on this gig later."
+        confirmLabel="Withdraw bid"
+        cancelLabel="Keep bid"
+        tone="danger"
+        busy={withdrawBusy}
+        onClose={() => !withdrawBusy && setConfirmWithdraw(false)}
+        onConfirm={() => {
+          setConfirmWithdraw(false);
+          onWithdraw?.();
+        }}
+      />
     </form>
   );
 }

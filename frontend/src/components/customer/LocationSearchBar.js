@@ -11,7 +11,9 @@ import {
 import { bookService } from '../../utils/customerPaths';
 import {
   canUseBrowserGeolocation,
+  formatPlaceLabel,
   geolocationUnavailableReason,
+  isCoordinateLabel,
   shareLocationButtonLabel,
 } from '../../utils/geolocationSupport';
 import LocationEnablePrompt from './LocationEnablePrompt';
@@ -54,8 +56,8 @@ function groupByOrg(services) {
 }
 
 /**
- * Customer location search bar with embedded live map.
- * Uses address search or “Use my location” to set the search center.
+ * Customer location search: city/ZIP type-in + radius.
+ * Optional embedded map (off by default — Find list view uses the Map tab instead).
  */
 export default function LocationSearchBar({
   radiusMiles = DEFAULT_RADIUS_MILES,
@@ -71,6 +73,8 @@ export default function LocationSearchBar({
   externalLng = null,
   externalLabel = '',
   services = [],
+  /** When false (default), no map — address + radius only. */
+  showMap = false,
 }) {
   const [locationLabel, setLocationLabel] = useState('');
   const [hasLocation, setHasLocation] = useState(false);
@@ -103,14 +107,15 @@ export default function LocationSearchBar({
     if (externalLabel) setLocationLabel(externalLabel);
   }, [externalLat, externalLng, externalLabel]);
 
-  // Init Leaflet map when location is set
+  // Init Leaflet map only when showMap is on and location is set
   useEffect(() => {
-    if (!hasLocation || !mapEl.current || mapRef.current) return undefined;
+    if (!showMap || !hasLocation || !mapEl.current || mapRef.current) return undefined;
 
     const map = L.map(mapEl.current, {
       center: [lat, lng],
       zoom: 11,
       zoomControl: true,
+      scrollWheelZoom: false,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
@@ -128,10 +133,11 @@ export default function LocationSearchBar({
       providerMarkersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasLocation]);
+  }, [showMap, hasLocation]);
 
   // Draw/update center pin and radius circle when lat/lng/radius changes
   useEffect(() => {
+    if (!showMap) return;
     const map = mapRef.current;
     if (!map || lat == null || lng == null) return;
 
@@ -156,10 +162,11 @@ export default function LocationSearchBar({
     }
 
     map.fitBounds(circleRef.current.getBounds(), { padding: [28, 28], maxZoom: 13, animate: true });
-  }, [lat, lng, pendingRadius]);
+  }, [showMap, lat, lng, pendingRadius]);
 
   // Draw provider markers whenever services change
   useEffect(() => {
+    if (!showMap) return;
     const map = mapRef.current;
     if (!map) return;
     providerMarkersRef.current.forEach((m) => m.remove());
@@ -184,19 +191,23 @@ export default function LocationSearchBar({
       );
       providerMarkersRef.current.push(marker);
     });
-  }, [services]);
+  }, [showMap, services]);
 
   const applyLocation = (payload, label) => {
     const nextLat = payload.lat ?? payload.latitude;
     const nextLng = payload.lng ?? payload.longitude;
     if (nextLat == null || nextLng == null) return;
     const displayLabel =
-      label ||
-      [payload.city, payload.state || payload.province, payload.postal_code]
-        .filter(Boolean)
-        .join(', ') ||
-      payload.address ||
-      'Selected location';
+      formatPlaceLabel({
+        place_label: label || payload.place_label,
+        address: label || payload.address || payload.display_name,
+        neighbourhood: payload.neighbourhood,
+        city: payload.city,
+        state: payload.state || payload.province,
+        postal_code: payload.postal_code || payload.postal,
+      }) ||
+      (!isCoordinateLabel(label) ? label : '') ||
+      'Selected area';
     setLocationLabel(displayLabel);
     setLat(nextLat);
     setLng(nextLng);
@@ -205,6 +216,8 @@ export default function LocationSearchBar({
       lat: nextLat,
       lng: nextLng,
       label: displayLabel,
+      neighbourhood: payload.neighbourhood || '',
+      city: payload.city || '',
       postal: payload.postal_code || payload.postal || '',
       country: payload.country || '',
       radiusMiles: pendingRadius,
@@ -212,13 +225,20 @@ export default function LocationSearchBar({
   };
 
   const handleAddressSelect = (payload) => {
-    applyLocation(payload, payload.address || payload.display_name || '');
+    applyLocation(
+      payload,
+      payload.place_label ||
+        formatPlaceLabel(payload) ||
+        payload.address ||
+        payload.display_name ||
+        ''
+    );
   };
 
   const handleRadiusChange = (e) => {
     const next = Number(e.target.value);
     setPendingRadius(next);
-    if (circleRef.current) {
+    if (showMap && circleRef.current) {
       circleRef.current.setRadius(next * MILES_TO_METERS);
       if (mapRef.current) {
         mapRef.current.fitBounds(circleRef.current.getBounds(), { padding: [28, 28], maxZoom: 13 });
@@ -248,7 +268,7 @@ export default function LocationSearchBar({
     onUseMyLocation?.();
   };
 
-  const orgsOnMap = groupByOrg(services);
+  const orgsOnMap = showMap ? groupByOrg(services) : [];
   const gpsBlockedReason = !gpsAvailable ? geolocationUnavailableReason() : null;
 
   return (
@@ -262,25 +282,45 @@ export default function LocationSearchBar({
         )}
       </div>
 
-      {hasLocation ? (
+      <div className="space-y-2">
+        <AddressSearchField
+          id="customer-location-search"
+          label=""
+          placeholder="City, postal code, province, or address…"
+          onSelect={handleAddressSelect}
+        />
+        <p className="text-xs text-slate-500">
+          {hasLocation
+            ? 'Type a different city or postal code to move your search area.'
+            : onUseMyLocation && gpsAvailable
+              ? 'Search a city or postal code, or use your current location below.'
+              : gpsAvailable
+                ? 'Type a city, postal code, province, or address.'
+                : 'No GPS on this device — search a city or postal code to set your area.'}
+        </p>
+      </div>
+
+      {hasLocation && (
         <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2">
           <svg className="h-3.5 w-3.5 shrink-0 text-luminexa-accent" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
           </svg>
           <span className="flex-1 truncate text-sm font-medium text-violet-900">{locationLabel}</span>
-          <button type="button" onClick={handleClear} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={handleClear} className="text-slate-400 hover:text-slate-600" aria-label="Clear location">
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
         </div>
-      ) : (
+      )}
+
+      {!hasLocation && (
         <div className="space-y-2">
-          {onUseMyLocation && (
+          {onUseMyLocation && gpsAvailable && (
             <button
               type="button"
               onClick={handleUseMyLocation}
-              disabled={locating || !gpsAvailable}
+              disabled={locating}
               className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-60"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -298,15 +338,10 @@ export default function LocationSearchBar({
               error={locationError}
               errorKind={locationErrorKind}
               locating={locating}
-              onRetry={handleUseMyLocation}
+              onRetry={gpsAvailable ? handleUseMyLocation : undefined}
+              onEnterAddress={undefined}
             />
           )}
-          <AddressSearchField
-            id="customer-location-search"
-            label=""
-            placeholder="City, postal code, or address…"
-            onSelect={handleAddressSelect}
-          />
         </div>
       )}
 
@@ -315,9 +350,12 @@ export default function LocationSearchBar({
           {locationError && (
             <p className="text-xs text-amber-700">{locationError}</p>
           )}
-          <div className="overflow-hidden rounded-xl border border-slate-200">
-            <div ref={mapEl} className="h-[280px] w-full bg-slate-100" />
-          </div>
+
+          {showMap && (
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div ref={mapEl} className="h-[220px] w-full bg-slate-100 md:h-[260px]" />
+            </div>
+          )}
 
           <div>
             <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -338,15 +376,17 @@ export default function LocationSearchBar({
             </div>
           </div>
 
-          {orgsOnMap.length > 0 ? (
-            <p className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-700">{orgsOnMap.length}</span> provider{orgsOnMap.length !== 1 ? 's' : ''} in this area — tap a marker to see services.
-            </p>
-          ) : (
-            <p className="text-xs text-slate-500">
-              No providers serve this area. Some businesses only travel a shorter distance than your
-              search — try another ZIP or a wider radius.
-            </p>
+          {showMap && (
+            orgsOnMap.length > 0 ? (
+              <p className="text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">{orgsOnMap.length}</span> provider{orgsOnMap.length !== 1 ? 's' : ''} in this area — tap a marker to see services.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                No providers serve this area. Some businesses only travel a shorter distance than your
+                search — try another ZIP or a wider radius.
+              </p>
+            )
           )}
         </>
       )}

@@ -16,7 +16,7 @@ export function buildProviderTabs(
     },
   ];
   if (includeGigs) {
-    tabs.push({ id: 'gigs', label: 'Gigs', to: `${base}/gigs` });
+    tabs.push({ id: 'gigs', label: 'Gig wall', to: `${base}/gigs` });
   }
   tabs.push({
     id: 'messages',
@@ -37,7 +37,7 @@ export function buildCustomerTabs({
     { id: 'book', label: 'Book', to: '/customer/find' },
   ];
   if (includeGigs) {
-    tabs.push({ id: 'gigs', label: 'Gigs', to: '/customer/gigs' });
+    tabs.push({ id: 'gigs', label: 'Gig wall', to: '/customer/gigs' });
   }
   tabs.push(
     {

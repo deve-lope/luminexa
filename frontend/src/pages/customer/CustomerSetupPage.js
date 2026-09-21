@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { userAPI } from '../../utils/api';
 import { applyPostLoginNavigation } from '../../utils/postLoginRoute';
 import { needsOnboarding } from '../../utils/profileSetup';
+import { markAppTourEligible } from '../../utils/appTour';
 
 export default function CustomerSetupPage() {
   const { user, memberships, setUserFromProfile, loading } = useAuth();
@@ -59,6 +60,7 @@ export default function CustomerSetupPage() {
       });
       const { data: completed } = await userAPI.completeOnboarding();
       setUserFromProfile(completed);
+      markAppTourEligible();
       applyPostLoginNavigation(navigate, completed, memberships, nextPath);
     } catch (err) {
       const d = err.response?.data;

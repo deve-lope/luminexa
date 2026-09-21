@@ -16,7 +16,6 @@ from businesses.models import OrganizationMembership
 from .gig_notifications import (
     notify_new_comment,
     notify_new_gig_quote,
-    notify_quote_accepted,
 )
 from .gig_permissions import can_comment_on_gig, can_quote_on_gig
 from .gig_serializers import (
@@ -30,7 +29,6 @@ from .gig_serializers import (
     GigQuoteWriteSerializer,
 )
 from .models import (
-    CustomerServiceInquiry,
     GigComment,
     GigPost,
     GigPostImage,
@@ -53,12 +51,15 @@ def _provider_membership(user):
 
 
 def _gig_annotations():
+    # distinct=True: Count on multiple relations otherwise multiplies via JOINs
+    # (e.g. 1 bid + 2 comments → quote_count 2).
     return dict(
         _quote_count=Count(
             'quotes',
-            filter=~Q(quotes__status=GigQuote.Status.WITHDRAWN),
+            filter=Q(quotes__status__in=GigQuote.active_statuses()),
+            distinct=True,
         ),
-        _comment_count=Count('comments'),
+        _comment_count=Count('comments', distinct=True),
     )
 
 
@@ -180,7 +181,7 @@ class CustomerGigPostViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('You can only reopen your own gig posts.')
         if post.status != GigPost.Status.CLOSED:
             raise ValidationError({'detail': 'Only closed gigs can be reopened.'})
-        has_quotes = post.quotes.exclude(status=GigQuote.Status.WITHDRAWN).exists()
+        has_quotes = post.quotes.filter(status__in=GigQuote.active_statuses()).exists()
         post.status = GigPost.Status.QUOTED if has_quotes else GigPost.Status.OPEN
         update_fields = ['status', 'updated_at']
         if post.expires_at and post.expires_at <= timezone.now():
@@ -227,9 +228,10 @@ class ProviderGigWallViewSet(viewsets.ReadOnlyModelViewSet):
             .annotate(
                 _quote_count=Count(
                     'quotes',
-                    filter=~Q(quotes__status=GigQuote.Status.WITHDRAWN),
+                    filter=Q(quotes__status__in=GigQuote.active_statuses()),
+                    distinct=True,
                 ),
-                _comment_count=Count('comments'),
+                _comment_count=Count('comments', distinct=True),
             )
             .order_by('-created_at')
         )
@@ -398,17 +400,17 @@ class GigQuoteViewSet(viewsets.ViewSet):
 
         membership = _provider_membership(request.user)
         if not membership:
-            raise PermissionDenied('You must be a provider to submit quotes.')
+            raise PermissionDenied('You must be a provider to submit bids.')
 
         if not can_quote_on_gig(request.user, membership.organization, post):
-            raise PermissionDenied('You cannot quote on this gig post.')
+            raise PermissionDenied('You cannot bid on this gig post.')
 
         if GigQuote.objects.filter(
             gig_post=post, organization=membership.organization
-        ).exclude(status=GigQuote.Status.WITHDRAWN).exists():
-            raise ValidationError({'detail': 'You already submitted a quote for this gig.'})
+        ).filter(status__in=GigQuote.active_statuses()).exists():
+            raise ValidationError({'detail': 'You already submitted a bid for this gig.'})
 
-        # Allow re-quote after withdraw by updating existing withdrawn row
+        # Allow re-quote after withdraw/reject by updating the existing row
         existing = GigQuote.objects.filter(
             gig_post=post, organization=membership.organization
         ).first()
@@ -416,11 +418,17 @@ class GigQuoteViewSet(viewsets.ViewSet):
         serializer = GigQuoteWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        if existing and existing.status == GigQuote.Status.WITHDRAWN:
+        if existing and existing.status in (
+            GigQuote.Status.WITHDRAWN,
+            GigQuote.Status.REJECTED,
+        ):
             for attr, value in serializer.validated_data.items():
                 setattr(existing, attr, value)
             existing.status = GigQuote.Status.SUBMITTED
             existing.submitted_by = request.user
+            existing.counter_price = None
+            existing.counter_message = ''
+            existing.countered_at = None
             existing.save()
             quote = existing
         else:
@@ -441,21 +449,84 @@ class GigQuoteViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    def retrieve(self, request, gig_post_id=None, pk=None):
+        post = GigPost.objects.filter(pk=gig_post_id).first()
+        if not post:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        quote = (
+            GigQuote.objects.filter(pk=pk, gig_post_id=gig_post_id)
+            .select_related('organization', 'gig_post', 'gig_post__customer')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        membership = _provider_membership(request.user)
+        is_owner = post.customer_id == request.user.id
+        is_bidder = bool(
+            membership and membership.organization_id == quote.organization_id
+        )
+        if not is_owner and not is_bidder:
+            raise PermissionDenied('Not allowed.')
+
+        data = GigQuoteSerializer(quote, context={'request': request}).data
+        data['gig_post'] = {
+            'id': post.id,
+            'title': post.title,
+            'status': post.status,
+            'customer_name': (
+                post.customer.get_full_name()
+                or post.customer.email
+                or 'Customer'
+            ),
+        }
+        return Response(data)
+
     def partial_update(self, request, gig_post_id=None, pk=None):
         quote = self._own_quote(request, gig_post_id, pk)
-        if quote.status != GigQuote.Status.SUBMITTED:
-            raise ValidationError({'detail': 'Only submitted quotes can be edited.'})
+        if quote.status not in (GigQuote.Status.SUBMITTED, GigQuote.Status.COUNTERED):
+            raise ValidationError({'detail': 'Only open bids can be edited.'})
         serializer = GigQuoteWriteSerializer(quote, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        # Editing price while countered cancels the counter and resubmits.
+        if quote.status == GigQuote.Status.COUNTERED:
+            quote.status = GigQuote.Status.SUBMITTED
+            quote.counter_price = None
+            quote.counter_message = ''
+            quote.countered_at = None
+            quote.save(
+                update_fields=[
+                    'status',
+                    'counter_price',
+                    'counter_message',
+                    'countered_at',
+                    'updated_at',
+                ]
+            )
         return Response(GigQuoteSerializer(quote, context={'request': request}).data)
 
     def destroy(self, request, gig_post_id=None, pk=None):
+        from .gig_quote_services import refresh_gig_post_quote_status
+
         quote = self._own_quote(request, gig_post_id, pk)
-        if quote.status != GigQuote.Status.SUBMITTED:
-            raise ValidationError({'detail': 'Only submitted quotes can be withdrawn.'})
+        if quote.status not in (GigQuote.Status.SUBMITTED, GigQuote.Status.COUNTERED):
+            raise ValidationError({'detail': 'Only open bids can be withdrawn.'})
         quote.status = GigQuote.Status.WITHDRAWN
-        quote.save(update_fields=['status', 'updated_at'])
+        quote.counter_price = None
+        quote.counter_message = ''
+        quote.countered_at = None
+        quote.save(
+            update_fields=[
+                'status',
+                'counter_price',
+                'counter_message',
+                'countered_at',
+                'updated_at',
+            ]
+        )
+        refresh_gig_post_quote_status(quote.gig_post)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _own_quote(self, request, gig_post_id, pk):
@@ -468,53 +539,172 @@ class GigQuoteViewSet(viewsets.ViewSet):
             organization=membership.organization,
         ).select_related('organization', 'gig_post').first()
         if not quote:
-            raise ValidationError({'detail': 'Quote not found.'})
+            raise ValidationError({'detail': 'Bid not found.'})
         return quote
 
 
 class GigQuoteAcceptAPIView(APIView):
-    """Customer accepts a quote on their gig post."""
+    """Customer accepts a bid on their gig post."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, gig_post_id, quote_id):
-        post = GigPost.objects.filter(pk=gig_post_id).first()
-        if not post:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        if post.customer_id != request.user.id:
-            raise PermissionDenied('You can only accept quotes on your own posts.')
+        from .gig_quote_services import accept_gig_quote
 
-        quote = post.quotes.filter(pk=quote_id).select_related('organization').first()
+        quote = (
+            GigQuote.objects.filter(pk=quote_id, gig_post_id=gig_post_id)
+            .select_related('organization', 'gig_post')
+            .first()
+        )
         if not quote:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        if quote.status != GigQuote.Status.SUBMITTED:
-            raise ValidationError({'detail': 'This quote cannot be accepted.'})
-
-        quote.status = GigQuote.Status.ACCEPTED
-        quote.save(update_fields=['status', 'updated_at'])
-
-        post.status = GigPost.Status.ACCEPTED
-        post.save(update_fields=['status', 'updated_at'])
-
-        post.quotes.filter(status=GigQuote.Status.SUBMITTED).exclude(pk=quote.pk).update(
-            status=GigQuote.Status.WITHDRAWN
-        )
-
-        CustomerServiceInquiry.objects.create(
-            organization=quote.organization,
-            customer=request.user,
-            service_label=post.title[:200],
-            message=(
-                f'Accepted quote from gig post: {post.title}\n\n{quote.description}'
-            ),
-            service_address=post.location_address or '',
-            status=CustomerServiceInquiry.Status.QUOTE_ACCEPTED,
-            quote_amount=quote.price,
-            quote_message=quote.description,
-        )
-
-        notify_quote_accepted(quote)
+        quote = accept_gig_quote(quote, customer=request.user)
         return Response(GigQuoteSerializer(quote, context={'request': request}).data)
+
+
+class GigQuoteRejectAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, gig_post_id, quote_id):
+        from .gig_quote_services import reject_gig_quote
+
+        quote = (
+            GigQuote.objects.filter(pk=quote_id, gig_post_id=gig_post_id)
+            .select_related('organization', 'gig_post')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        quote = reject_gig_quote(quote, customer=request.user)
+        return Response(GigQuoteSerializer(quote, context={'request': request}).data)
+
+
+class GigQuoteCounterAPIView(APIView):
+    """Customer proposes a different price."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, gig_post_id, quote_id):
+        from .gig_quote_services import counter_gig_quote
+
+        quote = (
+            GigQuote.objects.filter(pk=quote_id, gig_post_id=gig_post_id)
+            .select_related('organization', 'gig_post')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        quote = counter_gig_quote(
+            quote,
+            customer=request.user,
+            price=request.data.get('price'),
+            message=request.data.get('message', ''),
+        )
+        return Response(GigQuoteSerializer(quote, context={'request': request}).data)
+
+
+class GigQuoteAcceptCounterAPIView(APIView):
+    """Provider accepts the customer's counter-price."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, gig_post_id, quote_id):
+        from .gig_quote_services import accept_gig_quote_counter
+
+        membership = _provider_membership(request.user)
+        if not membership:
+            raise PermissionDenied('Provider access required.')
+        quote = (
+            GigQuote.objects.filter(
+                pk=quote_id,
+                gig_post_id=gig_post_id,
+                organization=membership.organization,
+            )
+            .select_related('organization', 'gig_post', 'gig_post__customer')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        quote = accept_gig_quote_counter(quote, organization=membership.organization)
+        return Response(GigQuoteSerializer(quote, context={'request': request}).data)
+
+
+class GigQuoteDeclineCounterAPIView(APIView):
+    """Provider declines counter — original bid stays open."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, gig_post_id, quote_id):
+        from .gig_quote_services import decline_gig_quote_counter
+
+        membership = _provider_membership(request.user)
+        if not membership:
+            raise PermissionDenied('Provider access required.')
+        quote = (
+            GigQuote.objects.filter(
+                pk=quote_id,
+                gig_post_id=gig_post_id,
+                organization=membership.organization,
+            )
+            .select_related('organization', 'gig_post')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        quote = decline_gig_quote_counter(quote, organization=membership.organization)
+        return Response(GigQuoteSerializer(quote, context={'request': request}).data)
+
+
+class GigQuoteConversationAPIView(APIView):
+    """Open (or create) a chat thread for this gig bid — no prior customer link required."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, gig_post_id, quote_id):
+        from .message_services import get_or_create_conversation, post_conversation_message
+
+        quote = (
+            GigQuote.objects.filter(pk=quote_id, gig_post_id=gig_post_id)
+            .select_related('organization', 'gig_post', 'gig_post__customer')
+            .first()
+        )
+        if not quote:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        post = quote.gig_post
+        membership = _provider_membership(request.user)
+        is_owner = post.customer_id == request.user.id
+        is_bidder = bool(
+            membership and membership.organization_id == quote.organization_id
+        )
+        if not is_owner and not is_bidder:
+            raise PermissionDenied('Not allowed.')
+
+        conv = get_or_create_conversation(
+            organization=quote.organization,
+            customer=post.customer,
+        )
+
+        # Seed a context message once if the thread is empty.
+        if not conv.messages.exists():
+            post_conversation_message(
+                conversation=conv,
+                sender=request.user,
+                body=(
+                    f'Re: gig "{post.title}" — bid ${quote.price}'
+                    + (
+                        f' (counter ${quote.counter_price})'
+                        if quote.counter_price is not None
+                        else ''
+                    )
+                ),
+            )
+
+        return Response({
+            'conversation_id': conv.id,
+            'organization_slug': quote.organization.slug,
+            'organization_name': quote.organization.name,
+        })
 
 
 class ProviderMyQuotesAPIView(APIView):
@@ -531,7 +721,13 @@ class ProviderMyQuotesAPIView(APIView):
             .order_by('-created_at')
         )
         status_filter = request.query_params.get('status')
-        if status_filter in ('submitted', 'accepted', 'withdrawn'):
+        if status_filter in (
+            'submitted',
+            'countered',
+            'accepted',
+            'rejected',
+            'withdrawn',
+        ):
             qs = qs.filter(status=status_filter)
 
         return Response(

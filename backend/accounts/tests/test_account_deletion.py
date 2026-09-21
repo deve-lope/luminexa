@@ -1,10 +1,9 @@
 from django.core import mail
 from django.test import TestCase, override_settings
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from accounts.deletion import anonymize_user
-from accounts.models import LoginCode, User
+from accounts.models import AuthToken, LoginCode, User
 from businesses.models import Organization, OrganizationMembership
 
 
@@ -28,7 +27,7 @@ class AccountDeletionTests(TestCase):
 
     def test_anonymize_scrubs_pii_and_keeps_row(self):
         user = self._make_user()
-        Token.objects.create(user=user)
+        AuthToken.objects.create(user=user)
         LoginCode.objects.create(
             email=user.email, code_hash='x', expires_at='2999-01-01T00:00:00Z'
         )
@@ -43,7 +42,7 @@ class AccountDeletionTests(TestCase):
         self.assertEqual(user.phone, '')
         self.assertEqual(user.default_service_address, '')
         self.assertFalse(user.has_usable_password())
-        self.assertFalse(Token.objects.filter(user=user).exists())
+        self.assertFalse(AuthToken.objects.filter(user=user).exists())
         self.assertFalse(LoginCode.objects.filter(email='del.me@example.com').exists())
 
     def test_anonymize_is_idempotent(self):

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import OrgSwitcher from '../components/provider/OrgSwitcher';
+import AppTour from '../components/tour/AppTour';
 import { IconBell } from '../components/icons/NavIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -42,6 +43,7 @@ import {
   dismissProviderNotificationQuietly,
   PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
 } from '../utils/providerNotifications';
+import useLogoutConfirm from '../hooks/useLogoutConfirm';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
@@ -49,6 +51,7 @@ function ProviderShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const { orgSlug, activeOrg } = useProviderOrg();
+  const { requestLogout, logoutConfirmDialog } = useLogoutConfirm(logout, navigate);
   const [alertCount, setAlertCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
   const [bookingNotifCount, setBookingNotifCount] = useState(0);
@@ -165,7 +168,7 @@ function ProviderShell() {
   const menuItems = useMemo(
     () =>
       buildProviderMenuItems({
-        logout: () => logout().then(() => navigate('/')),
+        logout: requestLogout,
         aboutPath: providerAbout(orgSlug),
         providerServicesPath: providerServices(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
@@ -175,13 +178,15 @@ function ProviderShell() {
         providerClientsPath: providerClients(orgSlug),
         providerJobsPath: providerJobs(orgSlug),
         providerGigsPath: providerGigs(orgSlug),
-        includeGigs: androidApp,
+        // Always list Gig wall under Business (after Jobs). Primary tabs still
+        // include it for the mobile bottom bar; DesktopNav hides the duplicate.
+        includeGigs: true,
         providerNotificationsPath: providerNotifications(orgSlug),
         notificationsBadgeCount: notificationCount,
         isStaff: user?.can_access_django_admin,
         adminUrl: getDjangoAdminUrl(),
       }),
-    [logout, navigate, orgSlug, user?.can_access_django_admin, notificationCount, androidApp]
+    [requestLogout, orgSlug, user?.can_access_django_admin, notificationCount]
   );
 
   const providerHomePath = `/provider/${orgSlug}`;
@@ -229,6 +234,9 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/gigs/my-quotes`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'My bids' };
+    }
+    if (/\/gigs\/[^/]+\/bids\/[^/]+$/.test(location.pathname)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Bid details' };
     }
     if (/\/gigs\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/gigs')) {
       return { eyebrow: activeOrg?.organization_name, title: 'Gig details' };
@@ -313,25 +321,40 @@ function ProviderShell() {
   }
 
   const isAboutPage = location.pathname.endsWith('/about');
+  const isGigWallList = /\/gigs\/?$/.test(location.pathname);
+  const onSetupOrSubscribe =
+    location.pathname.includes('/setup') || location.pathname.includes('/subscribe');
 
   return (
-    <AppShell
-      brand="Luminexa"
-      eyebrow={eyebrow}
-      title={title}
-      headerExtra={<OrgSwitcher />}
-      headerActions={headerActions}
-      tabs={tabs}
-      menuItems={menuItems}
-      menuTitle="Provider menu"
-      showBack={!isProviderHome && Boolean(backNav?.to)}
-      backTo={backNav?.to}
-      homeTo={providerHomePath}
-      mainFullBleed={isAboutPage}
-      hideMobileChrome={isAboutPage}
-    >
-      <Outlet />
-    </AppShell>
+    <>
+      <AppShell
+        brand="Luminexa"
+        eyebrow={eyebrow}
+        title={title}
+        headerExtra={<OrgSwitcher />}
+        headerActions={headerActions}
+        tabs={tabs}
+        menuItems={menuItems}
+        menuTitle="Provider menu"
+        showBack={!isProviderHome && Boolean(backNav?.to)}
+        backTo={backNav?.to}
+        homeTo={providerHomePath}
+        mainFullBleed={isAboutPage || isGigWallList}
+        hideMobileChrome={isAboutPage}
+      >
+        <Outlet />
+      </AppShell>
+      {!needsOnboarding(user) && !onSetupOrSubscribe && (
+        <AppTour
+          role="provider"
+          user={user}
+          orgSlug={orgSlug}
+          includeGigs={!androidApp}
+          enabled={Boolean(orgSlug)}
+        />
+      )}
+      {logoutConfirmDialog}
+    </>
   );
 }
 

@@ -139,7 +139,14 @@ export default function CustomerInquiryDetailPage() {
 
   const isQuoted = inquiry.status === 'quoted';
   const quoteAccepted = inquiry.status === 'quote_accepted';
-  const canBook = quoteAccepted && inquiry.service && !inquiry.booking;
+  const canBook = quoteAccepted && !inquiry.booking;
+  const showSchedule =
+    Boolean(orgKey) &&
+    (Boolean(inquiry.service) || canBook) &&
+    (inquiry.status === 'pending' ||
+      inquiry.status === 'active' ||
+      isQuoted ||
+      canBook);
   const canDelete =
     !inquiry.booking &&
     (inquiry.status === 'pending' ||
@@ -222,18 +229,14 @@ export default function CustomerInquiryDetailPage() {
         </div>
       )}
 
-      {(inquiry.status === 'pending' ||
-        inquiry.status === 'active' ||
-        isQuoted ||
-        canBook) &&
-        inquiry.service && (
+      {showSchedule && (
           <ServiceAvailabilityPreview
             orgSlug={orgKey}
-            serviceId={inquiry.service}
+            serviceId={inquiry.service || undefined}
             title={canBook ? 'Choose your appointment' : 'When they’re available'}
             hint={
               canBook
-                ? 'Pick a time to confirm your booking.'
+                ? 'Pick an open time from their schedule to confirm your booking.'
                 : isQuoted
                   ? 'Accept the quote above, then pick one of these open times.'
                   : 'These are open slots while you wait for a quote — nothing is held yet.'
