@@ -15,10 +15,16 @@ def set_auth_cookie(response, token_key: str):
 
 
 def clear_auth_cookie(response):
-    response.delete_cookie(
+    # expire via set_cookie so Secure/SameSite match the live cookie. Django 5.2
+    # delete_cookie() cannot take secure= and will not clear a Secure lx_auth cookie.
+    response.set_cookie(
         settings.AUTH_TOKEN_COOKIE_NAME,
-        path='/',
-        samesite=settings.AUTH_TOKEN_COOKIE_SAMESITE,
+        '',
+        max_age=0,
+        httponly=True,
         secure=bool(settings.AUTH_TOKEN_COOKIE_SECURE),
+        samesite=settings.AUTH_TOKEN_COOKIE_SAMESITE,
+        path='/',
+        expires='Thu, 01 Jan 1970 00:00:00 GMT',
     )
     return response
