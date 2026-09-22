@@ -182,7 +182,7 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
+          src="/images/home-hero.jpg"
           alt=""
           className="h-full w-full object-cover"
         />

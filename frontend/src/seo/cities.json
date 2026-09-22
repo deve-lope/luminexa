@@ -7,7 +7,7 @@
   "home": {
     "title": "Luminexa | Book local services",
     "description": "Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots.",
-    "heroImage": "https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
+    "heroImage": "/images/home-hero.jpg"
   },
   "categories": [
     {
@@ -41,7 +41,7 @@
       "h1": "Gardening in {city}",
       "blurb": "Planting, weeding, hedges, and seasonal garden care from {city} crews who list real availability.",
       "extra": "Garden and lawn crews usually list under Yard & outdoors. Enter your {city} address, then browse that category to book a visit.",
-      "image": "https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=1600&q=80"
+      "image": "/images/home-hero.jpg"
     },
     {
       "slug": "home-cleaning",
@@ -59,7 +59,7 @@
       "description": "Book {city} lawn care, leaf cleanup, hedges, snow, and seasonal yard jobs on Luminexa. Compare local crews with open times.",
       "h1": "Lawn and yard work in {city}",
       "blurb": "Mowing, leaf cleanup, snow, and garden help from {city} crews who list real availability — not just a phone number.",
-      "image": "https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=1600&q=80"
+      "image": "/images/home-hero.jpg"
     },
     {
       "slug": "auto-vehicles",

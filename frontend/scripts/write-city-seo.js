@@ -67,6 +67,13 @@ function cityLinks() {
     .join(' · ');
 }
 
+function absoluteAsset(url) {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = String(data.siteUrl || '').replace(/\/$/, '');
+  return `${base}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 function pageHtml({
   title,
   description,
@@ -80,6 +87,8 @@ function pageHtml({
 }) {
   const ld = [orgSchema(), ...(extraLd || [])];
   const hero = image || data.home.heroImage;
+  const heroSrc = hero.startsWith('http') ? hero : hero; // same-origin path ok in <img>
+  const ogImage = absoluteAsset(hero);
   return `<!DOCTYPE html>
 <html lang="en-CA">
 <head>
@@ -95,7 +104,7 @@ function pageHtml({
   <meta property="og:title" content="${esc(title)}" />
   <meta property="og:description" content="${esc(description)}" />
   <meta property="og:url" content="${esc(canonical)}" />
-  <meta property="og:image" content="${esc(hero)}" />
+  <meta property="og:image" content="${esc(ogImage)}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${esc(title)}" />
   <meta name="twitter:description" content="${esc(description)}" />
@@ -134,7 +143,7 @@ function pageHtml({
 </head>
 <body>
   <section class="hero">
-    <img src="${esc(hero)}" alt="" onerror="this.style.display='none'" />
+    <img src="${esc(heroSrc)}" alt="" onerror="this.style.display='none'" />
     <div class="wash"></div>
     <div class="grad"></div>
     <div class="nav">
