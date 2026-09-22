@@ -23,6 +23,11 @@ if command -v npx >/dev/null 2>&1; then
   npx cap sync android
 fi
 
+# Studio handoff zips live under public/downloads for the website. Cap sync would
+# otherwise copy them into the AAB (~100MB+) and trigger Play "large APK" warnings.
+rm -rf android/app/src/main/assets/public/downloads
+# Keep web download folder for CDN handoff; do not re-sync into android after this.
+
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/frontend/node_modules/@capacitor" "$OUT_DIR/frontend/node_modules/@capawesome"
 
@@ -32,9 +37,10 @@ rsync -a \
   --exclude='local.properties' \
   --exclude='.idea' \
   --exclude='*.iml' \
+  --exclude='app/src/main/assets/public/downloads' \
   android/ "$OUT_DIR/frontend/android/"
 
-for pkg in android app filesystem geolocation push-notifications share splash-screen status-bar; do
+for pkg in android app filesystem geolocation push-notifications share splash-screen; do
   rsync -a "node_modules/@capacitor/$pkg/" "$OUT_DIR/frontend/node_modules/@capacitor/$pkg/"
 done
 rsync -a \

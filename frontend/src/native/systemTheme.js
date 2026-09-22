@@ -1,19 +1,14 @@
 /**
  * Luminexa stays light-mode only. Status bar icons must be dark on the frosted
- * header (Capacitor Style.Light = dark icons; Style.Dark = white icons).
+ * header (SystemBarsStyle.Light = dark icons; Dark = white icons).
+ * Uses Capacitor 8 SystemBars only — never @capacitor/status-bar (deprecated
+ * Window.setStatusBarColor APIs trigger Play Console edge-to-edge warnings).
  */
 
 export async function syncNativeStatusBar() {
   try {
     const { SystemBars, SystemBarsStyle } = await import('@capacitor/core');
     await SystemBars.setStyle({ style: SystemBarsStyle.Light });
-    return 'LIGHT';
-  } catch {
-    /* fall through */
-  }
-  try {
-    const { StatusBar, Style } = await import('@capacitor/status-bar');
-    await StatusBar.setStyle({ style: Style.Light });
     return 'LIGHT';
   } catch {
     return 'LIGHT';
