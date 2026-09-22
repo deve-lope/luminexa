@@ -31,10 +31,30 @@ class ContactInfoDetectionTests(TestCase):
         self.assertTrue(text_contains_contact_info('Text +1-416-555-9876'))
         self.assertTrue(text_contains_contact_info('My number is 6135551234'))
 
+    def test_detects_spaced_and_messy_phones(self):
+        self.assertTrue(text_contains_contact_info('Call me at 613 555 1234'))
+        self.assertTrue(text_contains_contact_info('Call me at 613  555  1234'))
+        self.assertTrue(text_contains_contact_info('My cell: 6 1 3 5 5 5 1 2 3 4'))
+        self.assertTrue(text_contains_contact_info('Reach me 613.555.1234 thanks'))
+        self.assertTrue(text_contains_contact_info('WhatsApp +1 416 555 0199'))
+        self.assertTrue(text_contains_contact_info('Text 613/555/1234'))
+        self.assertTrue(text_contains_contact_info('Call 613•555•1234'))
+        self.assertTrue(text_contains_contact_info('Phone: 613_555_1234'))
+
+    def test_detects_obfuscated_emails(self):
+        self.assertTrue(text_contains_contact_info('Email me@home.com'))
+        self.assertTrue(text_contains_contact_info('Email me @ home.com'))
+        self.assertTrue(text_contains_contact_info('Email me@home . com'))
+        self.assertTrue(text_contains_contact_info('Write me (at) home (dot) com'))
+        self.assertTrue(text_contains_contact_info('Reach alwin[at]gmail[dot]com'))
+        self.assertTrue(text_contains_contact_info('Contact alwin AT gmail DOT com'))
+
     def test_allows_normal_gig_copy(self):
         self.assertFalse(text_contains_contact_info('Fix leaky Moen kitchen sink in Westboro'))
         self.assertFalse(text_contains_contact_info('Need help for the 2024-2025 season'))
         self.assertFalse(text_contains_contact_info('Apartment 12 needs paint'))
+        self.assertFalse(text_contains_contact_info('Budget is around 400 to 500 dollars'))
+        self.assertFalse(text_contains_contact_info('Meet me at the park near home'))
 
     def test_scrub_replaces_contact(self):
         scrubbed = scrub_contact_info('Email me@test.com or call 613-555-1212')
