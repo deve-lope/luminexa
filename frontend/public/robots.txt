@@ -2,6 +2,8 @@ User-agent: *
 Allow: /
 Allow: /ottawa/
 Allow: /toronto/
+Allow: /ottawa/gigs/
+Allow: /toronto/gigs/
 Allow: /sitemap.xml
 Allow: /llms.txt
 

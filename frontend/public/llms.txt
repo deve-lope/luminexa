@@ -10,6 +10,10 @@ Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
 
 Featured jobs: snow removal, car detailing, gardening.
 
+Gig Wall: customers post public help requests. Indexable pages live at
+`/{city}/gigs/{category}/{slug}-{id}/` (sanitized — no street address, phone, or email).
+Providers ask for contact privately after a quote is accepted.
+
 ## How matching works
 
 A provider is shown only if the customer is inside both:
