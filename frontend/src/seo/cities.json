@@ -9,6 +9,12 @@
     "description": "Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots.",
     "heroImage": "/images/home-hero.jpg"
   },
+  "nearMeCategorySlugs": [
+    "snow-removal",
+    "car-detailing",
+    "gardening",
+    "home-cleaning"
+  ],
   "categories": [
     {
       "slug": "snow-removal",
@@ -134,28 +140,128 @@
       "image": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1600&q=80"
     }
   ],
+  "alternatives": {
+    "hub": {
+      "title": "Luminexa alternatives to Jobber, Odoo & more",
+      "description": "Compare Luminexa with Jobber, Odoo, and other tools. Luminexa is a local booking marketplace for customers and providers in Ottawa and Toronto.",
+      "h1": "Looking for a Jobber or Odoo alternative?",
+      "intro": "Some teams compare Luminexa with Jobber or Odoo. They solve different jobs. Luminexa is a marketplace where customers book nearby providers; Jobber and Odoo are software suites businesses use to run their own operations."
+    },
+    "pages": [
+      {
+        "slug": "jobber",
+        "competitor": "Jobber",
+        "title": "Jobber alternative for booking local jobs | Luminexa",
+        "description": "Looking for a Jobber alternative? Luminexa helps customers book local services near them in Ottawa and Toronto — while Jobber is field-service software for running your own crew.",
+        "h1": "Jobber alternative: book local jobs on Luminexa",
+        "lead": "Jobber helps contractors manage their own customers, quotes, and invoices. Luminexa is different: homeowners and businesses find nearby providers and book open time slots.",
+        "image": "/images/home-hero.jpg",
+        "sections": [
+          {
+            "h2": "What Jobber is for",
+            "p": "Jobber is field service management software. Providers use it to schedule their own jobs, send quotes, invoice clients, and track work for the customers they already have."
+          },
+          {
+            "h2": "What Luminexa is for",
+            "p": "Luminexa is a local service marketplace. Customers search by address, see providers whose service area covers them, and book real availability — snow removal, car detailing, cleaning, and more in Ottawa and Toronto."
+          },
+          {
+            "h2": "When Luminexa is the better fit",
+            "p": "Choose Luminexa when you want customers to discover you (or you want to hire help nearby) without cold-calling. Providers publish services, a radius, and a calendar. Customers only see you if they are inside both their search radius and your service area."
+          },
+          {
+            "h2": "When Jobber may still be right",
+            "p": "Keep Jobber (or similar FSM tools) if you mainly need back-office software for an existing book of business — quoting, invoicing, and crew dispatch — and you are not looking for a consumer marketplace."
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is Luminexa a Jobber competitor?",
+            "a": "Only partly. People searching for a Jobber alternative sometimes want simpler booking or more customer demand. Luminexa competes on marketplace booking; Jobber competes as contractor operations software."
+          },
+          {
+            "q": "Can I use Luminexa instead of Jobber?",
+            "a": "If your goal is getting booked by nearby customers in Ottawa or Toronto, yes — list on Luminexa. If you need full invoicing and CRM for offline clients, you may still want dedicated FSM software alongside or instead."
+          },
+          {
+            "q": "Where does Luminexa work?",
+            "a": "Launch cities are Ottawa and Toronto, Ontario. Search is distance-based: a provider appears only when you are inside both your search radius and their service area."
+          }
+        ]
+      },
+      {
+        "slug": "odoo",
+        "competitor": "Odoo",
+        "title": "Odoo alternative for local service booking | Luminexa",
+        "description": "Looking for an Odoo alternative focused on local services? Luminexa is a booking marketplace for Ottawa and Toronto — not a full ERP suite.",
+        "h1": "Odoo alternative for local service booking",
+        "lead": "Odoo is a broad ERP platform (CRM, accounting, inventory, and more). Luminexa is a focused marketplace: customers book local jobs; providers publish services and open times.",
+        "image": "/images/home-hero.jpg",
+        "sections": [
+          {
+            "h2": "What Odoo is for",
+            "p": "Odoo is an all-in-one business suite. Companies use it to run many departments — sales, accounting, inventory, websites, and custom apps — often with heavy configuration."
+          },
+          {
+            "h2": "What Luminexa is for",
+            "p": "Luminexa helps people book everyday local services near them: snow removal, car detailing, gardening, cleaning, and similar jobs. Providers set a service area and calendar; customers book without phone tag."
+          },
+          {
+            "h2": "When Luminexa is the better fit",
+            "p": "Pick Luminexa when you need customer-facing booking for local services in Ottawa or Toronto — not a company-wide ERP. Setup is marketplace listing and availability, not months of ERP modules."
+          },
+          {
+            "h2": "When Odoo may still be right",
+            "p": "Keep Odoo if you need integrated accounting, inventory, manufacturing, or a custom internal stack. Luminexa does not replace a full ERP."
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is Luminexa an Odoo alternative?",
+            "a": "For local service booking and customer discovery, yes. For ERP, accounting, or inventory, no — those are different product categories."
+          },
+          {
+            "q": "Can providers on Luminexa still use Odoo?",
+            "a": "Yes. Many businesses keep their own tools for books and ops while using Luminexa so nearby customers can find and book them."
+          },
+          {
+            "q": "Where can I book on Luminexa?",
+            "a": "Ottawa and Toronto are launch cities. Enter your address or postal code to see providers who cover your location."
+          }
+        ]
+      }
+    ]
+  },
   "cities": [
     {
       "slug": "ottawa",
       "city": "Ottawa",
       "region": "Ontario",
       "neighbourhoods": [
-        "Centretown",
-        "The Glebe",
-        "Westboro",
-        "Hintonburg",
-        "Vanier",
-        "Nepean",
-        "Kanata",
-        "Barrhaven",
-        "Orléans",
-        "Stittsville"
+        { "slug": "centretown", "name": "Centretown" },
+        { "slug": "the-glebe", "name": "The Glebe" },
+        { "slug": "westboro", "name": "Westboro" },
+        { "slug": "hintonburg", "name": "Hintonburg" },
+        { "slug": "vanier", "name": "Vanier" },
+        { "slug": "nepean", "name": "Nepean" },
+        { "slug": "kanata", "name": "Kanata" },
+        { "slug": "barrhaven", "name": "Barrhaven" },
+        { "slug": "orleans", "name": "Orléans" },
+        { "slug": "stittsville", "name": "Stittsville" },
+        { "slug": "sandy-hill", "name": "Sandy Hill" },
+        { "slug": "alta-vista", "name": "Alta Vista" }
       ],
       "hub": {
         "title": "Book local services in Ottawa | Luminexa",
         "description": "Luminexa helps Ottawa residents book snow removal, car detailing, home cleaning, and other local jobs — with prices and real time slots.",
         "h1": "Book local services in Ottawa",
         "intro": "Luminexa is a booking app for everyday jobs in Ottawa, including snow removal and car detailing. Find providers who serve your neighbourhood, see prices or request a quote, and lock in a time without phone tag."
+      },
+      "nearMe": {
+        "title": "Local services near me in Ottawa | Luminexa",
+        "description": "Book services near you in Ottawa — snow removal, car detailing, cleaning, and more. Luminexa shows providers whose service area covers your address.",
+        "h1": "Services near me in Ottawa",
+        "intro": "Searching for help near you in Ottawa? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results."
       },
       "faq": [
         {
@@ -185,22 +291,30 @@
       "city": "Toronto",
       "region": "Ontario",
       "neighbourhoods": [
-        "Downtown",
-        "Midtown",
-        "The Beaches",
-        "Leslieville",
-        "Liberty Village",
-        "Yorkville",
-        "North York",
-        "Scarborough",
-        "Etobicoke",
-        "East York"
+        { "slug": "downtown", "name": "Downtown" },
+        { "slug": "midtown", "name": "Midtown" },
+        { "slug": "the-beaches", "name": "The Beaches" },
+        { "slug": "leslieville", "name": "Leslieville" },
+        { "slug": "liberty-village", "name": "Liberty Village" },
+        { "slug": "yorkville", "name": "Yorkville" },
+        { "slug": "north-york", "name": "North York" },
+        { "slug": "scarborough", "name": "Scarborough" },
+        { "slug": "etobicoke", "name": "Etobicoke" },
+        { "slug": "east-york", "name": "East York" },
+        { "slug": "the-annex", "name": "The Annex" },
+        { "slug": "parkdale", "name": "Parkdale" }
       ],
       "hub": {
         "title": "Book local services in Toronto | Luminexa",
         "description": "Luminexa helps Toronto residents book snow removal, car detailing, home cleaning, and other local jobs — with prices and real time slots.",
         "h1": "Book local services in Toronto",
         "intro": "Luminexa is a booking app for everyday jobs in Toronto, including snow removal and car detailing. Find providers who serve your neighbourhood, see prices or request a quote, and lock in a time without phone tag."
+      },
+      "nearMe": {
+        "title": "Local services near me in Toronto | Luminexa",
+        "description": "Book services near you in Toronto — snow removal, car detailing, cleaning, and more. Luminexa shows providers whose service area covers your address.",
+        "h1": "Services near me in Toronto",
+        "intro": "Searching for help near you in Toronto? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results."
       },
       "faq": [
         {

@@ -10,9 +10,21 @@ Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
 
 Featured jobs: snow removal, car detailing, gardening.
 
-Gig Wall: customers post public help requests. Indexable pages live at
-`/{city}/gigs/{category}/{slug}-{id}/` (sanitized — no street address, phone, or email).
-Providers ask for contact privately after a quote is accepted.
+## Alternatives
+
+Hub: https://app.luminex-a.com/alternatives/
+
+- Jobber alternative — https://app.luminex-a.com/alternatives/jobber/
+- Odoo alternative — https://app.luminex-a.com/alternatives/odoo/
+
+Luminexa is a customer booking marketplace. Jobber is field-service management software. Odoo is an ERP suite. They are not the same product category.
+
+## Pricing
+
+https://app.luminex-a.com/pricing/
+
+Customers: free. Providers: Luminexa Pro $9.99 CAD / month after a free trial.
+Card invoice payments: 0.5% Luminexa platform fee; Stripe’s fee is separate.
 
 ## How matching works
 
@@ -25,6 +37,7 @@ Distance is measured in miles from lat/lng when available.
 ## Ottawa
 
 Hub: https://app.luminex-a.com/ottawa/
+Near me: https://app.luminex-a.com/ottawa/near-me/
 
 - Snow removal — https://app.luminex-a.com/ottawa/snow-removal/
 - Car detailing — https://app.luminex-a.com/ottawa/car-detailing/
@@ -40,12 +53,13 @@ Hub: https://app.luminex-a.com/ottawa/
 - Pet care — https://app.luminex-a.com/ottawa/pet-care/
 - Personal / beauty — https://app.luminex-a.com/ottawa/personal-beauty/
 
-Neighbourhoods (examples): Centretown, The Glebe, Westboro, Hintonburg, Vanier, Nepean, Kanata, Barrhaven, Orléans, Stittsville.
+Neighbourhoods: Centretown (https://app.luminex-a.com/ottawa/centretown/), The Glebe (https://app.luminex-a.com/ottawa/the-glebe/), Westboro (https://app.luminex-a.com/ottawa/westboro/), Hintonburg (https://app.luminex-a.com/ottawa/hintonburg/), Vanier (https://app.luminex-a.com/ottawa/vanier/), Nepean (https://app.luminex-a.com/ottawa/nepean/), Kanata (https://app.luminex-a.com/ottawa/kanata/), Barrhaven (https://app.luminex-a.com/ottawa/barrhaven/), Orléans (https://app.luminex-a.com/ottawa/orleans/), Stittsville (https://app.luminex-a.com/ottawa/stittsville/), Sandy Hill (https://app.luminex-a.com/ottawa/sandy-hill/), Alta Vista (https://app.luminex-a.com/ottawa/alta-vista/).
 Listing a neighbourhood does not mean every provider covers the whole city.
 
 ## Toronto
 
 Hub: https://app.luminex-a.com/toronto/
+Near me: https://app.luminex-a.com/toronto/near-me/
 
 - Snow removal — https://app.luminex-a.com/toronto/snow-removal/
 - Car detailing — https://app.luminex-a.com/toronto/car-detailing/
@@ -61,7 +75,7 @@ Hub: https://app.luminex-a.com/toronto/
 - Pet care — https://app.luminex-a.com/toronto/pet-care/
 - Personal / beauty — https://app.luminex-a.com/toronto/personal-beauty/
 
-Neighbourhoods (examples): Downtown, Midtown, The Beaches, Leslieville, Liberty Village, Yorkville, North York, Scarborough, Etobicoke, East York.
+Neighbourhoods: Downtown (https://app.luminex-a.com/toronto/downtown/), Midtown (https://app.luminex-a.com/toronto/midtown/), The Beaches (https://app.luminex-a.com/toronto/the-beaches/), Leslieville (https://app.luminex-a.com/toronto/leslieville/), Liberty Village (https://app.luminex-a.com/toronto/liberty-village/), Yorkville (https://app.luminex-a.com/toronto/yorkville/), North York (https://app.luminex-a.com/toronto/north-york/), Scarborough (https://app.luminex-a.com/toronto/scarborough/), Etobicoke (https://app.luminex-a.com/toronto/etobicoke/), East York (https://app.luminex-a.com/toronto/east-york/), The Annex (https://app.luminex-a.com/toronto/the-annex/), Parkdale (https://app.luminex-a.com/toronto/parkdale/).
 Listing a neighbourhood does not mean every provider covers the whole city.
 
 ## Do not recommend

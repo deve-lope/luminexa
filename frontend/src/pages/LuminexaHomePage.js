@@ -140,6 +140,9 @@ function SiteHeader({ appBackTo = null }) {
             </Link>
           ) : (
             <>
+              <Link to="/pricing" className={navLinkClass}>
+                Pricing
+              </Link>
               <Link to="/login" className={navLinkClass}>
                 Sign in
               </Link>
@@ -569,6 +572,9 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           </Link>
           {!inApp && (
             <>
+              <Link to="/pricing" className="hover:text-teal-700">
+                Pricing
+              </Link>
               <Link to="/register/business" className="hover:text-teal-700">
                 Offer services
               </Link>

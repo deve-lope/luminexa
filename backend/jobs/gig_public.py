@@ -271,14 +271,64 @@ def city_landing_urls() -> list[dict[str, str]]:
         'personal-beauty',
     ]
     featured = {'snow-removal', 'car-detailing', 'gardening'}
+    near_me_categories = {
+        'snow-removal',
+        'car-detailing',
+        'gardening',
+        'home-cleaning',
+    }
+    neighbourhoods = {
+        'ottawa': [
+            'centretown',
+            'the-glebe',
+            'westboro',
+            'hintonburg',
+            'vanier',
+            'nepean',
+            'kanata',
+            'barrhaven',
+            'orleans',
+            'stittsville',
+            'sandy-hill',
+            'alta-vista',
+        ],
+        'toronto': [
+            'downtown',
+            'midtown',
+            'the-beaches',
+            'leslieville',
+            'liberty-village',
+            'yorkville',
+            'north-york',
+            'scarborough',
+            'etobicoke',
+            'east-york',
+            'the-annex',
+            'parkdale',
+        ],
+    }
+    alternatives = ['jobber', 'odoo']
     urls: list[dict[str, str]] = [
         {'loc': f'{base}/', 'changefreq': 'weekly', 'priority': '1.0'},
+        {'loc': f'{base}/alternatives/', 'changefreq': 'monthly', 'priority': '0.75'},
+        {'loc': f'{base}/pricing/', 'changefreq': 'monthly', 'priority': '0.85'},
     ]
+    for alt in alternatives:
+        urls.append({
+            'loc': f'{base}/alternatives/{alt}/',
+            'changefreq': 'monthly',
+            'priority': '0.8',
+        })
     for city_slug in ('ottawa', 'toronto'):
         urls.append({
             'loc': f'{base}/{city_slug}/',
             'changefreq': 'weekly',
             'priority': '0.9',
+        })
+        urls.append({
+            'loc': f'{base}/{city_slug}/near-me/',
+            'changefreq': 'weekly',
+            'priority': '0.88',
         })
         for cat in categories:
             priority = '0.85' if cat in featured else '0.8'
@@ -287,6 +337,20 @@ def city_landing_urls() -> list[dict[str, str]]:
                 'changefreq': 'weekly',
                 'priority': priority,
             })
+        for nhood in neighbourhoods[city_slug]:
+            urls.append({
+                'loc': f'{base}/{city_slug}/{nhood}/',
+                'changefreq': 'weekly',
+                'priority': '0.7',
+            })
+            for cat in categories:
+                if cat not in near_me_categories:
+                    continue
+                urls.append({
+                    'loc': f'{base}/{city_slug}/{nhood}/{cat}/',
+                    'changefreq': 'weekly',
+                    'priority': '0.65',
+                })
     urls.append({
         'loc': f'{base}/privacy',
         'changefreq': 'yearly',
