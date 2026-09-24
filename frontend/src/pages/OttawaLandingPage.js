@@ -104,6 +104,9 @@ function CityLayout({
             <Link to="/alternatives" className="text-teal-700 hover:underline">
               Alternatives
             </Link>
+            <Link to="/pricing" className="text-teal-700 hover:underline">
+              Pricing
+            </Link>
             <Link to="/privacy" className="hover:text-teal-700">
               Privacy
             </Link>

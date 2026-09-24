@@ -19,6 +19,13 @@ Hub: https://app.luminex-a.com/alternatives/
 
 Luminexa is a customer booking marketplace. Jobber is field-service management software. Odoo is an ERP suite. They are not the same product category.
 
+## Pricing
+
+https://app.luminex-a.com/pricing/
+
+Customers: free. Providers: Luminexa Pro $9.99 CAD / month after a free trial.
+Card invoice payments: 0.5% Luminexa platform fee; Stripe’s fee is separate.
+
 ## How matching works
 
 A provider is shown only if the customer is inside both:

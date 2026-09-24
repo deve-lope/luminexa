@@ -8,6 +8,7 @@ import ConnectionLoadingPage from './pages/ConnectionLoadingPage';
 import MaintenancePage from './pages/MaintenancePage';
 import LandingRoute from './pages/LandingRoute';
 import AboutPage from './pages/AboutPage';
+import PricingPage from './pages/PricingPage';
 import {
   AlternativePage,
   AlternativesHubPage,
@@ -153,6 +154,8 @@ function AppRoutes() {
         <Route path="/toronto/:slug/:category/" element={<CityCategoryPage />} />
         <Route path="/toronto/:slug" element={<CityCategoryPage />} />
         <Route path="/toronto/:slug/" element={<CityCategoryPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/pricing/" element={<PricingPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/b/:token" element={<GuestBookingPage />} />
         <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />

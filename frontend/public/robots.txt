@@ -5,6 +5,7 @@ Allow: /toronto/
 Allow: /ottawa/gigs/
 Allow: /toronto/gigs/
 Allow: /alternatives/
+Allow: /pricing/
 Allow: /sitemap.xml
 Allow: /llms.txt
 

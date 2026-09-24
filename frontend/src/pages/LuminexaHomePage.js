@@ -140,6 +140,14 @@ function SiteHeader({ appBackTo = null }) {
             </Link>
           ) : (
             <>
+              <Link
+                to="/pricing"
+                className={`hidden min-h-[44px] items-center px-3 text-sm font-medium transition sm:inline-flex ${
+                  solid ? 'text-slate-600 hover:text-teal-700' : 'text-white/80 hover:text-white'
+                }`}
+              >
+                Pricing
+              </Link>
               <Link to="/login" className={navLinkClass}>
                 Sign in
               </Link>
@@ -569,6 +577,9 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           </Link>
           {!inApp && (
             <>
+              <Link to="/pricing" className="hover:text-teal-700">
+                Pricing
+              </Link>
               <Link to="/register/business" className="hover:text-teal-700">
                 Offer services
               </Link>

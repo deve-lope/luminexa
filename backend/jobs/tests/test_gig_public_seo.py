@@ -214,6 +214,7 @@ class PublicGigSEOTests(TestCase):
         self.assertIn('https://app.luminex-a.com/ottawa/', body)
         self.assertIn('https://app.luminex-a.com/ottawa/near-me/', body)
         self.assertIn('https://app.luminex-a.com/alternatives/jobber/', body)
+        self.assertIn('https://app.luminex-a.com/pricing/', body)
         self.assertIn('https://app.luminex-a.com/ottawa/kanata/snow-removal/', body)
         self.assertIn(public_gig_path(self.post).rstrip('/'), body)
         self.assertIn('<changefreq>daily</changefreq>', body)

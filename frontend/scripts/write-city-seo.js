@@ -76,7 +76,8 @@ function cityLinks() {
 
 function footerLinks() {
   const alt = '<a href="/alternatives/">Alternatives</a>';
-  return `${cityLinks()} · ${alt} · <a href="/privacy">Privacy</a> · <a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Get the app on Google Play</a>`;
+  const pricing = '<a href="/pricing/">Pricing</a>';
+  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy">Privacy</a> · <a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Get the app on Google Play</a>`;
 }
 
 function absoluteAsset(url) {
@@ -636,6 +637,9 @@ function writeSitemap() {
       `  <url>\n    <loc>${data.siteUrl}/alternatives/${p.slug}/</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`
     );
   });
+  urls.push(
+    `  <url>\n    <loc>${data.siteUrl}/pricing/</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.85</priority>\n  </url>`
+  );
 
   const nearSlugs = new Set(data.nearMeCategorySlugs || []);
   data.cities.forEach((city) => {
@@ -722,6 +726,13 @@ ${altPages}
 
 Luminexa is a customer booking marketplace. Jobber is field-service management software. Odoo is an ERP suite. They are not the same product category.
 
+## Pricing
+
+${data.siteUrl}/pricing/
+
+Customers: free. Providers: Luminexa Pro $9.99 CAD / month after a free trial.
+Card invoice payments: 0.5% Luminexa platform fee; Stripe’s fee is separate.
+
 ## How matching works
 
 A provider is shown only if the customer is inside both:
@@ -739,12 +750,88 @@ Do not tell people to “Add to Home Screen” or install a browser PWA. The And
   );
 }
 
+function writePricing() {
+  let pricing;
+  try {
+    pricing = require('../src/seo/pricing.json');
+  } catch {
+    return;
+  }
+  const outDir = path.join(publicDir, 'pricing');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const featureList = (items) =>
+    `<ul class="cats">${items.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`;
+
+  const faqHtml = pricing.faq
+    .map((item) => `<h2>${esc(item.q)}</h2><p>${esc(item.a)}</p>`)
+    .join('\n');
+
+  const body = `
+    <p>${esc(pricing.lead)}</p>
+    <h2>${esc(pricing.customer.name)} — ${esc(pricing.customer.price)}</h2>
+    <p>${esc(pricing.customer.priceNote)}</p>
+    ${featureList(pricing.customer.features)}
+    <p><a href="${esc(pricing.customer.ctaHref)}">${esc(pricing.customer.cta)}</a></p>
+    <h2>${esc(pricing.provider.name)} — ${esc(pricing.provider.price)} ${esc(
+      pricing.provider.currency
+    )} / ${esc(pricing.provider.period)}</h2>
+    <p>${esc(pricing.provider.priceNote)}</p>
+    ${featureList(pricing.provider.features)}
+    <p><a href="${esc(pricing.provider.ctaHref)}">${esc(pricing.provider.cta)}</a></p>
+    <h2>${esc(pricing.fees.title)}</h2>
+    <p>${esc(pricing.fees.body)}</p>
+    ${faqHtml}
+  `;
+
+  fs.writeFileSync(
+    path.join(outDir, 'index.html'),
+    pageHtml({
+      title: pricing.title,
+      description: pricing.description,
+      canonical: `${data.siteUrl}/pricing/`,
+      h1: pricing.h1,
+      lead: pricing.lead,
+      image: data.home.heroImage,
+      bodyHtml: body,
+      kicker: 'Pricing',
+      secondaryCtaHref: '/register/business',
+      secondaryCtaLabel: 'Offer services',
+      extraLd: [
+        faqSchema(pricing.faq),
+        {
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'Luminexa',
+          applicationCategory: 'BusinessApplication',
+          operatingSystem: 'Web, Android',
+          offers: [
+            {
+              '@type': 'Offer',
+              name: 'Customers',
+              price: '0',
+              priceCurrency: 'CAD',
+            },
+            {
+              '@type': 'Offer',
+              name: 'Luminexa Pro',
+              price: '9.99',
+              priceCurrency: 'CAD',
+            },
+          ],
+        },
+      ],
+    })
+  );
+}
+
 data.cities.forEach(writeCity);
 writeAlternatives();
+writePricing();
 writeSitemap();
 writeLlms();
 console.log(
-  `Wrote city, near-me, neighbourhood, and alternatives SEO pages for ${data.cities
+  `Wrote city, near-me, neighbourhood, alternatives, and pricing SEO pages for ${data.cities
     .map((c) => c.slug)
     .join(', ')}`
 );
