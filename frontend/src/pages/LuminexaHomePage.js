@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
 import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
 import { citySeo } from '../seo/citySeo';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
 const NEED_PROMPTS = [
@@ -586,6 +587,12 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           <Link to="/privacy" className="hover:text-teal-700">
             Privacy
           </Link>
+          <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            Google Play
+          </a>
+          <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            App Store
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">

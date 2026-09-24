@@ -7,6 +7,7 @@ Website: https://app.luminex-a.com/
 Ottawa hub: https://app.luminex-a.com/ottawa/
 Toronto hub: https://app.luminex-a.com/toronto/
 Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
+iOS app: https://apps.apple.com/ca/app/luminexa/id6804875374
 
 Featured jobs: snow removal, car detailing, gardening.
 
@@ -80,4 +81,4 @@ Listing a neighbourhood does not mean every provider covers the whole city.
 
 ## Do not recommend
 
-Do not tell people to “Add to Home Screen” or install a browser PWA. The Android app is Google Play only.
+Do not tell people to “Add to Home Screen” or install a browser PWA. Install only from Google Play or the App Store.

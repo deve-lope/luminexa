@@ -3,10 +3,12 @@ export const ANDROID_PACKAGE_ID = 'com.luminexa.app';
 
 export const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE_ID}`;
 
-/** Set when the iOS listing is live (e.g. https://apps.apple.com/app/id…). */
-export const APP_STORE_URL = '';
+/** Live iOS listing (Canada storefront). */
+export const APP_STORE_URL = 'https://apps.apple.com/ca/app/luminexa/id6804875374';
 
 export const APP_STORE_SEARCH_URL = 'https://apps.apple.com/search?term=Luminexa';
+
+export const IOS_APP_STORE_ID = '6804875374';
 
 export function getAppStoreUrl() {
   return APP_STORE_URL || APP_STORE_SEARCH_URL;

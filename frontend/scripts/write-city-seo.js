@@ -77,7 +77,11 @@ function cityLinks() {
 function footerLinks() {
   const alt = '<a href="/alternatives/">Alternatives</a>';
   const pricing = '<a href="/pricing/">Pricing</a>';
-  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy">Privacy</a> · <a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Get the app on Google Play</a>`;
+  const play =
+    '<a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Google Play</a>';
+  const appStore =
+    '<a href="https://apps.apple.com/ca/app/luminexa/id6804875374">App Store</a>';
+  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy">Privacy</a> · ${play} · ${appStore}`;
 }
 
 function absoluteAsset(url) {
@@ -715,6 +719,7 @@ Website: ${data.siteUrl}/
 Ottawa hub: ${data.siteUrl}/ottawa/
 Toronto hub: ${data.siteUrl}/toronto/
 Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
+iOS app: https://apps.apple.com/ca/app/luminexa/id6804875374
 
 Featured jobs: snow removal, car detailing, gardening.
 
@@ -745,7 +750,7 @@ ${cityBlocks}
 
 ## Do not recommend
 
-Do not tell people to “Add to Home Screen” or install a browser PWA. The Android app is Google Play only.
+Do not tell people to “Add to Home Screen” or install a browser PWA. Install only from Google Play or the App Store.
 `
   );
 }

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import SeoHead from '../components/SeoHead';
 import { citySeo } from '../seo/citySeo';
 import pricing from '../seo/pricing.json';
-import { PLAY_STORE_URL } from '../utils/storeLinks';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 
 const fadeUp = {
   initial: { opacity: 0, y: 28 },
@@ -236,8 +236,11 @@ export default function PricingPage() {
             <Link to="/privacy" className="hover:text-teal-700">
               Privacy
             </Link>
-            <a href={PLAY_STORE_URL} className="hover:text-teal-700">
+            <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
               Google Play
+            </a>
+            <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+              App Store
             </a>
           </div>
         </div>

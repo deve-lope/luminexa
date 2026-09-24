@@ -1,6 +1,6 @@
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
-import { PLAY_STORE_URL } from '../utils/storeLinks';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import {
   alternativeBySlug,
   cityBySlug,
@@ -110,8 +110,11 @@ function CityLayout({
             <Link to="/privacy" className="hover:text-teal-700">
               Privacy
             </Link>
-            <a href={PLAY_STORE_URL} className="hover:text-teal-700">
+            <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
               Google Play
+            </a>
+            <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+              App Store
             </a>
           </p>
           <p className="mt-2 text-xs">

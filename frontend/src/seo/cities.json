@@ -2,7 +2,8 @@
   "siteUrl": "https://app.luminex-a.com",
   "brand": "Luminexa",
   "sameAs": [
-    "https://play.google.com/store/apps/details?id=com.luminexa.app"
+    "https://play.google.com/store/apps/details?id=com.luminexa.app",
+    "https://apps.apple.com/ca/app/luminexa/id6804875374"
   ],
   "home": {
     "title": "Luminexa | Book local services",
@@ -278,7 +279,7 @@
         },
         {
           "q": "How do I book a service?",
-          "a": "Open Luminexa, enter your Ottawa address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play."
+          "a": "Open Luminexa, enter your Ottawa address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play or the App Store."
         },
         {
           "q": "Do you also serve Toronto?",
@@ -331,7 +332,7 @@
         },
         {
           "q": "How do I book a service?",
-          "a": "Open Luminexa, enter your Toronto address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play."
+          "a": "Open Luminexa, enter your Toronto address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play or the App Store."
         },
         {
           "q": "Do you also serve Ottawa?",
