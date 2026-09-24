@@ -140,12 +140,7 @@ function SiteHeader({ appBackTo = null }) {
             </Link>
           ) : (
             <>
-              <Link
-                to="/pricing"
-                className={`hidden min-h-[44px] items-center px-3 text-sm font-medium transition sm:inline-flex ${
-                  solid ? 'text-slate-600 hover:text-teal-700' : 'text-white/80 hover:text-white'
-                }`}
-              >
+              <Link to="/pricing" className={navLinkClass}>
                 Pricing
               </Link>
               <Link to="/login" className={navLinkClass}>
