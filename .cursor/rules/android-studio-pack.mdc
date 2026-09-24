@@ -17,7 +17,7 @@ When packaging Android for Android Studio / Play AAB (zip download, handoff, “
 
 ## Required node_modules (match `capacitor.settings.gradle`)
 
-- `@capacitor/android`, `app`, `filesystem`, `geolocation`, `push-notifications`, `share`, `splash-screen`, `status-bar`
+- `@capacitor/android`, `app`, `filesystem`, `geolocation`, `push-notifications`, `share`, `splash-screen`
 - `@capawesome/capacitor-android-edge-to-edge-support`
 - `capacitor-native-settings`
 

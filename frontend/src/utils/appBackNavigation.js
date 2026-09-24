@@ -18,6 +18,10 @@ export function registerOverlayCloser(close) {
   return () => overlayClosers.delete(close);
 }
 
+export function registeredOverlayCloserCount() {
+  return overlayClosers.size;
+}
+
 export function closeTopOverlay() {
   const closers = [...overlayClosers];
   if (!closers.length) return false;

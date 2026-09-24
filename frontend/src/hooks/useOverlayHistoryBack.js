@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { registerOverlayCloser } from '../utils/appBackNavigation';
+import { registerOverlayCloser, registeredOverlayCloserCount } from '../utils/appBackNavigation';
 
 /**
  * The menu drawer pushes a dummy history entry so system back closes it first.
@@ -9,6 +9,20 @@ import { registerOverlayCloser } from '../utils/appBackNavigation';
  */
 export function overlayUnmountShouldPopHistory(anchorUrl, currentUrl) {
   return Boolean(anchorUrl) && currentUrl === anchorUrl;
+}
+
+/** Reuse the open menu's trap instead of stacking a second dummy entry. */
+export function overlayShouldPushHistoryTrap(historyState) {
+  return !(historyState && historyState.lxOverlay);
+}
+
+/**
+ * Closing the menu and opening Log out? in the same tick must not pop the
+ * new dialog's history trap — that immediately dismissed confirm on phones.
+ */
+export function overlayCleanupShouldPopTrap({ successorOverlayCount, anchorUrl, currentUrl }) {
+  if (successorOverlayCount > 0) return false;
+  return overlayUnmountShouldPopHistory(anchorUrl, currentUrl);
 }
 
 function currentLocationUrl() {
@@ -34,7 +48,9 @@ export function useOverlayHistoryBack(active, onClose) {
     closedRef.current = false;
     pushedRef.current = true;
     anchorRef.current = `${location.pathname}${location.search}${location.hash}`;
-    window.history.pushState({ lxOverlay: true }, '');
+    if (overlayShouldPushHistoryTrap(window.history.state)) {
+      window.history.pushState({ lxOverlay: true }, '');
+    }
 
     const dismiss = () => {
       if (closedRef.current) return;
@@ -59,13 +75,24 @@ export function useOverlayHistoryBack(active, onClose) {
     return () => {
       window.removeEventListener('popstate', onPopState);
       unregister();
-      if (pushedRef.current && !closedRef.current) {
-        closedRef.current = true;
-        if (overlayUnmountShouldPopHistory(anchorRef.current, currentLocationUrl())) {
+      const shouldConsiderPop = pushedRef.current && !closedRef.current;
+      const anchor = anchorRef.current;
+      pushedRef.current = false;
+      if (!shouldConsiderPop) return;
+      closedRef.current = true;
+      // Menu cleanup runs before Log out? mounts. Defer the pop so a successor
+      // overlay can inherit this trap instead of being dismissed by history.back().
+      queueMicrotask(() => {
+        if (
+          overlayCleanupShouldPopTrap({
+            successorOverlayCount: registeredOverlayCloserCount(),
+            anchorUrl: anchor,
+            currentUrl: currentLocationUrl(),
+          })
+        ) {
           window.history.back();
         }
-      }
-      pushedRef.current = false;
+      });
     };
     // Only trap history when the overlay opens/closes — not when onClose identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- anchor captured at open time above

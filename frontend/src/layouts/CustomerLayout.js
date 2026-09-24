@@ -216,8 +216,7 @@ export default function CustomerLayout({ children }) {
   }
 
   if (!isAuthenticated && !children) {
-    navigate('/login', { replace: true });
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   if (isAuthenticated && isCustomerAppRoute && isProviderMember(memberships)) {

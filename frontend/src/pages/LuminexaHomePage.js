@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
 import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
 import { citySeo } from '../seo/citySeo';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
 const NEED_PROMPTS = [
@@ -140,6 +141,9 @@ function SiteHeader({ appBackTo = null }) {
             </Link>
           ) : (
             <>
+              <Link to="/pricing" className={navLinkClass}>
+                Pricing
+              </Link>
               <Link to="/login" className={navLinkClass}>
                 Sign in
               </Link>
@@ -182,7 +186,7 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
+          src="/images/home-hero.jpg"
           alt=""
           className="h-full w-full object-cover"
         />
@@ -569,6 +573,9 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           </Link>
           {!inApp && (
             <>
+              <Link to="/pricing" className="hover:text-teal-700">
+                Pricing
+              </Link>
               <Link to="/register/business" className="hover:text-teal-700">
                 Offer services
               </Link>
@@ -580,6 +587,12 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           <Link to="/privacy" className="hover:text-teal-700">
             Privacy
           </Link>
+          <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            Google Play
+          </a>
+          <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            App Store
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">

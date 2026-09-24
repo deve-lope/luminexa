@@ -22,8 +22,9 @@ describe('getPreferredStoreUrl', () => {
     expect(getPreferredStoreUrl(ANDROID_UA)).toBe(PLAY_STORE_URL);
   });
 
-  test('iOS browsers get the App Store listing (search until APP_STORE_URL is set)', () => {
-    expect(getPreferredStoreUrl(IOS_UA)).toBe(getAppStoreUrl());
+  test('iOS browsers get the live App Store listing', () => {
+    expect(getPreferredStoreUrl(IOS_UA)).toBe(APP_STORE_URL);
+    expect(getAppStoreUrl()).toBe(APP_STORE_URL);
   });
 
   test('desktop browsers are not prompted (Play URL still exists for Android)', () => {
@@ -39,12 +40,9 @@ describe('getStoreReviewUrl', () => {
     expect(getStoreReviewUrl('android')).toBe(PLAY_STORE_URL);
   });
 
-  test('iOS is skipped until APP_STORE_URL is set', () => {
-    if (APP_STORE_URL) {
-      expect(getStoreReviewUrl('ios')).toContain('action=write-review');
-    } else {
-      expect(getStoreReviewUrl('ios')).toBeNull();
-    }
+  test('iOS opens the App Store listing with write-review', () => {
+    expect(getStoreReviewUrl('ios')).toContain(APP_STORE_URL);
+    expect(getStoreReviewUrl('ios')).toContain('action=write-review');
   });
 
   test('web / unknown platform is skipped', () => {

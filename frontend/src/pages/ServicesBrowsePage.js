@@ -269,6 +269,9 @@ export default function ServicesBrowsePage({ embedded = false }) {
             Luminexa
           </Link>
           <div className="flex gap-3 text-sm">
+            <Link to="/pricing" className="font-medium text-slate-600">
+              Pricing
+            </Link>
             <Link
               to={authPathWithNext('/login', location.pathname + location.search)}
               className="font-medium text-slate-600"

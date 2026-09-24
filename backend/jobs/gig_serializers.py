@@ -14,7 +14,15 @@ from businesses.postal import validate_postal_code
 from luminexa.uploads import validate_uploaded_image_django
 
 from .gig_geocode import assign_gig_coordinates
+from .gig_public import CONTACT_INFO_ERROR, assert_no_contact_info
 from .models import GigComment, GigPost, GigPostImage, GigQuote, ServiceReview
+
+
+def _reject_contact_info(value):
+    try:
+        return assert_no_contact_info(value)
+    except ValueError as exc:
+        raise serializers.ValidationError(str(exc) or CONTACT_INFO_ERROR) from exc
 
 
 class BusinessTypeIdentifierField(serializers.Field):
@@ -180,7 +188,7 @@ class GigPostWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Title is required.')
         if len(title) > 200:
             raise serializers.ValidationError('Title must be 200 characters or fewer.')
-        return title
+        return _reject_contact_info(title)
 
     def validate_description(self, value):
         desc = (value or '').strip()
@@ -188,7 +196,7 @@ class GigPostWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Description is required.')
         if len(desc) > 2000:
             raise serializers.ValidationError('Description must be 2000 characters or fewer.')
-        return desc
+        return _reject_contact_info(desc)
 
     def validate_search_radius_miles(self, value):
         miles = float(value)
@@ -272,7 +280,7 @@ class GigCommentWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Comment cannot be empty.')
         if len(body) > 1000:
             raise serializers.ValidationError('Comment must be 1000 characters or fewer.')
-        return body
+        return _reject_contact_info(body)
 
 
 class GigQuoteOrganizationSerializer(serializers.Serializer):
@@ -366,7 +374,7 @@ class GigQuoteWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Describe what this bid covers.')
         if len(desc) > 1500:
             raise serializers.ValidationError('Description must be 1500 characters or fewer.')
-        return desc
+        return _reject_contact_info(desc)
 
 
 class GigQuoteListItemSerializer(GigQuoteSerializer):
