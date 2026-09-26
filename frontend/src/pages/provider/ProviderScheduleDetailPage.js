@@ -85,7 +85,10 @@ export default function ProviderScheduleDetailPage() {
     setActionBusy(true);
     try {
       await jobsAPI.acceptBooking(id);
-      showToast('Request approved.', 'success');
+      const isTimeChange =
+        data?.prior_start_at ||
+        (data?.quote_amount != null && data?.status === 'requested');
+      showToast(isTimeChange ? 'Time change accepted.' : 'Request approved.', 'success');
       setConfirmAction(null);
       load();
     } catch (e) {
@@ -382,6 +385,33 @@ export default function ProviderScheduleDetailPage() {
 
         {data.status === 'requested' &&
           !data.awaiting_customer_acceptance &&
+          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) &&
+          data.quote_amount != null && (
+          <div className="grid grid-cols-1 gap-2">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Customer requested a new time
+              {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+              Accept to keep the agreed price, or open the request to update the quote.
+            </p>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setConfirmAction('approve')}
+              className="lx-btn-primary min-h-[48px] disabled:opacity-60"
+            >
+              Accept change
+            </button>
+            <Link
+              to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
+              className="flex min-h-[48px] items-center justify-center rounded-xl border border-violet-200 font-medium text-violet-800"
+            >
+              Update quote
+            </Link>
+          </div>
+        )}
+
+        {data.status === 'requested' &&
+          !data.awaiting_customer_acceptance &&
           !(data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
@@ -390,7 +420,7 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setConfirmAction('approve')}
               className="lx-btn-primary min-h-[48px] disabled:opacity-60"
             >
-              Approve
+              {data.prior_start_at ? 'Accept change' : 'Approve'}
             </button>
             <button
               type="button"
@@ -398,7 +428,7 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
             >
-              Reschedule
+              {data.prior_start_at ? 'Change time' : 'Reschedule'}
             </button>
             <button
               type="button"
@@ -435,7 +465,8 @@ export default function ProviderScheduleDetailPage() {
         )}
 
         {(data.status === 'requested' || data.status === 'quoted') &&
-          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
+          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) &&
+          !(data.status === 'requested' && !data.awaiting_customer_acceptance && data.quote_amount != null) && (
           <Link
             to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
             className="lx-btn-primary flex min-h-[48px] items-center justify-center"
@@ -609,9 +640,19 @@ export default function ProviderScheduleDetailPage() {
 
         <ConfirmDialog
           open={confirmAction === 'approve'}
-          title="Approve this request?"
-          message="The customer will be notified that their booking is confirmed."
-          confirmLabel="Approve"
+          title={
+            data?.prior_start_at || data?.quote_amount != null
+              ? 'Accept this time change?'
+              : 'Approve this request?'
+          }
+          message={
+            data?.prior_start_at || data?.quote_amount != null
+              ? 'The booking will be confirmed at the new time. The customer will be notified.'
+              : 'The customer will be notified that their booking is confirmed.'
+          }
+          confirmLabel={
+            data?.prior_start_at || data?.quote_amount != null ? 'Accept change' : 'Approve'
+          }
           cancelLabel="Back"
           tone="success"
           busy={actionBusy}

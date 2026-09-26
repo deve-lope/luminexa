@@ -419,13 +419,21 @@ def accept_booking_request(booking, staff_user):
             ),
         })
     if booking_requires_quote(booking.organization, booking.service):
-        raise ValidationError({
-            'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
-            'code': 'quote_required',
-        })
+        # Fresh quote requests have no price yet — must send a quote first.
+        # After a customer reschedules an already-priced job (catalog quote or gig),
+        # quote_amount remains and staff can accept the new time without re-quoting.
+        if booking.quote_amount is None:
+            raise ValidationError({
+                'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
+                'code': 'quote_required',
+            })
     booking.status = Booking.Status.CONFIRMED
     booking.booked_by = staff_user
-    booking.save(update_fields=['status', 'booked_by', 'updated_at'])
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'status', 'booked_by', 'awaiting_customer_acceptance',
+        'prior_start_at', 'prior_end_at', 'prior_availability_slot', 'updated_at',
+    ])
     # Accepting the service request also approves invitation-only customers.
     if booking.customer_id:
         ensure_customer_membership(booking.organization, booking.customer, approve=True)
@@ -855,12 +863,13 @@ def reschedule_booking(booking, *, new_slot, by_user):
     booking.incomplete_tasks_reminder_sent_at = None
     # Customer reschedules always go back to the provider for approval, even if the
     # original booking was already confirmed or the business uses instant booking.
+    # Keep prior_* so the provider sees the old time and can "Accept change".
     if is_customer:
         booking.status = Booking.Status.REQUESTED
         booking.awaiting_customer_acceptance = False
-        booking.prior_start_at = None
-        booking.prior_end_at = None
-        booking.prior_availability_slot = None
+        booking.prior_start_at = prior_start
+        booking.prior_end_at = prior_end
+        booking.prior_availability_slot = old_slot
         booking.save(update_fields=[
             'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
             'incomplete_tasks_reminder_sent_at',

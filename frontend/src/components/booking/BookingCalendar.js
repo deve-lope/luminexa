@@ -12,6 +12,7 @@ function dayCellClass({
   isInRange,
   openOnly,
   allowSelectFutureDays,
+  allowFullDays,
 }) {
   if (isPast) return 'bg-slate-100 text-slate-300 cursor-not-allowed';
   if (isSelected) {
@@ -19,9 +20,9 @@ function dayCellClass({
   }
   if (isInRange) return 'bg-violet-100 text-violet-900 ring-1 ring-violet-200';
   if (status === 'available') {
-    return 'bg-emerald-400 text-white active:bg-emerald-600';
+    return 'bg-luminexa-accent text-white active:bg-luminexa-accent-dark';
   }
-  if (openOnly) {
+  if (openOnly && !(allowFullDays && status === 'full')) {
     return 'bg-slate-50 text-slate-400 cursor-not-allowed';
   }
   if (allowSelectFutureDays) {
@@ -40,6 +41,7 @@ export default function BookingCalendar({
   onPrevMonth,
   onNextMonth,
   openOnly = false,
+  allowFullDays = false,
   allowSelectFutureDays = false,
   showLegend = true,
   rangeStart = null,
@@ -71,6 +73,7 @@ export default function BookingCalendar({
         isPast,
         pad: false,
         hasOpen: status === 'available',
+        isFull: status === 'full',
         isToday: key === today,
       });
     }
@@ -91,9 +94,16 @@ export default function BookingCalendar({
   const weekText = size === 'compact' ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm';
   const gridGap = size === 'compact' ? 'gap-0.5 sm:gap-1' : 'gap-1 sm:gap-1.5';
 
+  const daySelectable = (cell) => {
+    if (cell.isPast) return false;
+    if (!openOnly) return true;
+    if (cell.hasOpen) return true;
+    if (allowFullDays && cell.isFull) return true;
+    return false;
+  };
+
   const selectDay = (cell) => {
-    if (cell.isPast) return;
-    if (openOnly && !cell.hasOpen) return;
+    if (!daySelectable(cell)) return;
     onSelectDay(cell.key);
   };
 
@@ -103,11 +113,12 @@ export default function BookingCalendar({
   };
 
   return (
-    <div className={shellClass}>
+    <div className={`${shellClass} [overflow-anchor:none]`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
           onMouseDown={keepScrollOnPress}
+          onTouchStart={keepScrollOnPress}
           onClick={onPrevMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -126,6 +137,7 @@ export default function BookingCalendar({
         <button
           type="button"
           onMouseDown={keepScrollOnPress}
+          onTouchStart={keepScrollOnPress}
           onClick={onNextMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -155,12 +167,12 @@ export default function BookingCalendar({
               key={cell.key}
               type="button"
               onClick={() => selectDay(cell)}
-              tabIndex={cell.isPast || (openOnly && !cell.hasOpen) ? -1 : 0}
+              tabIndex={daySelectable(cell) ? 0 : -1}
               aria-pressed={selectedDay === cell.key}
               aria-label={`${cell.day}${cell.isToday ? ', today' : ''}${
                 selectedDay === cell.key ? ', selected' : ''
-              }${cell.hasOpen ? ', has open slots' : ''}`}
-              aria-disabled={cell.isPast || (openOnly && !cell.hasOpen)}
+              }${cell.hasOpen ? ', has open slots' : ''}${cell.isFull ? ', fully booked' : ''}`}
+              aria-disabled={!daySelectable(cell)}
               className={`relative flex touch-manipulation select-none items-center justify-center rounded-lg font-semibold leading-none transition ${cellClass} ${dayCellClass(
                 {
                   status: cell.status,
@@ -169,14 +181,17 @@ export default function BookingCalendar({
                   isInRange: isDateKeyInRange(cell.key, rangeStart, rangeEnd),
                   openOnly,
                   allowSelectFutureDays,
+                  allowFullDays,
                 }
               )}`}
               title={
                 cell.hasOpen
                   ? 'Has open slots for customers'
-                  : allowSelectFutureDays
-                    ? 'Tap to manage this day'
-                    : undefined
+                  : cell.isFull
+                    ? 'All slots booked'
+                    : allowSelectFutureDays
+                      ? 'Tap to manage this day'
+                      : undefined
               }
             >
               {cell.day}
@@ -195,9 +210,15 @@ export default function BookingCalendar({
             Selected day
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-luminexa-accent" />
             {openOnly || allowSelectFutureDays ? 'Open slots' : 'Available'}
           </span>
+          {(allowFullDays || !openOnly) && (
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-sm bg-red-100 ring-1 ring-red-200" />
+              Fully booked
+            </span>
+          )}
           {allowSelectFutureDays && (
             <span className="flex items-center gap-1">
               <span className="h-2.5 w-2.5 rounded-sm border border-slate-300 bg-white" />

@@ -109,15 +109,23 @@ export default function ProviderRequestDetailPage() {
       isQuotePolicy ||
       serviceRequiresQuote(data?.service_pricing_type)) &&
     (status === 'requested' || status === 'quoted');
+  // Customer moved an already-accepted (or already-priced) job — provider must approve the new time.
+  const customerTimeChangePending =
+    kind === 'booking' &&
+    status === 'requested' &&
+    !data?.awaiting_customer_acceptance &&
+    (Boolean(data?.prior_start_at) || (needsQuote && data?.quote_amount != null));
+  const canAcceptTimeChange =
+    customerTimeChangePending && (!needsQuote || data?.quote_amount != null);
 
   useEffect(() => {
     if (!data || kind !== 'booking') return;
     const existing = data.quote_questions || [];
     if (existing.length) {
       setQuoteQuestions(existing.map((q) => q.question || ''));
-      if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
-      if (data.quote_message) setQuoteMessage(data.quote_message);
     }
+    if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
+    if (data.quote_message) setQuoteMessage(data.quote_message);
   }, [data, kind]);
 
   useEffect(() => {
@@ -198,7 +206,10 @@ export default function ProviderRequestDetailPage() {
     setActionBusy(true);
     try {
       await jobsAPI.acceptBooking(id);
-      showToast('Request approved.', 'success');
+      showToast(
+        canAcceptTimeChange ? 'Time change accepted.' : 'Request approved.',
+        'success',
+      );
       setConfirmAction(null);
       await load();
     } catch (e) {
@@ -285,6 +296,17 @@ export default function ProviderRequestDetailPage() {
               : ''}
           </p>
         )}
+        {kind === 'booking' && customerTimeChangePending && (
+          <p className="mt-3 rounded-xl bg-amber-400/20 px-3 py-2 text-sm text-white">
+            Customer requested a new time
+            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+            {canAcceptTimeChange
+              ? data.quote_amount != null
+                ? ` Accept to keep the agreed price (${currency.format(Number(data.quote_amount))}), or update the quote.`
+                : ' Accept to confirm the new time, or propose a different slot.'
+              : ' Send a quote to confirm this new time.'}
+          </p>
+        )}
         {kind === 'booking' && data.awaiting_quote_details && (
           <p className="mt-3 rounded-xl bg-amber-400/20 px-3 py-2 text-sm text-white">
             Waiting for answers — you can send a priced quote after the customer replies.
@@ -308,7 +330,7 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setConfirmAction('approve')}
               className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
             >
-              Approve
+              {canAcceptTimeChange ? 'Accept change' : 'Approve'}
             </button>
             <button
               type="button"
@@ -316,7 +338,7 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
             >
-              Reschedule
+              {canAcceptTimeChange ? 'Change time' : 'Reschedule'}
             </button>
             <button
               type="button"
@@ -350,6 +372,16 @@ export default function ProviderRequestDetailPage() {
         )}
         {kind === 'booking' && needsQuote && (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {canAcceptTimeChange && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('approve')}
+                className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60 sm:col-span-2"
+              >
+                Accept change
+              </button>
+            )}
             {status === 'requested' && (
               <button
                 type="button"
@@ -377,7 +409,7 @@ export default function ProviderRequestDetailPage() {
             >
               {quoteFormMode === 'quote'
                 ? 'Hide quote form'
-                : status === 'quoted'
+                : status === 'quoted' || data.quote_amount != null
                   ? 'Update quote'
                   : 'Send quote'}
             </button>
@@ -693,6 +725,26 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
+      {kind === 'booking' &&
+        status === 'requested' &&
+        data.quote_amount != null &&
+        quoteFormMode !== 'quote' && (
+        <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Agreed price</h2>
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {currency.format(Number(data.quote_amount))}
+          </p>
+          {data.quote_message && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{data.quote_message}</p>
+          )}
+          {canAcceptTimeChange && (
+            <p className="mt-2 text-sm text-slate-600">
+              Accept the time change to keep this price, or update the quote above.
+            </p>
+          )}
+        </section>
+      )}
+
       {kind === 'booking' && status === 'quoted' && data.quote_amount != null && quoteFormMode !== 'quote' && (
         <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Quote sent</h2>
@@ -938,9 +990,15 @@ export default function ProviderRequestDetailPage() {
 
       <ConfirmDialog
         open={confirmAction === 'approve'}
-        title="Approve this request?"
-        message="The customer will be notified that their booking is confirmed."
-        confirmLabel="Approve"
+        title={canAcceptTimeChange ? 'Accept this time change?' : 'Approve this request?'}
+        message={
+          canAcceptTimeChange
+            ? data?.quote_amount != null
+              ? `The booking will be confirmed at the new time with the agreed price of ${currency.format(Number(data.quote_amount))}. The customer will be notified.`
+              : 'The booking will be confirmed at the new time. The customer will be notified.'
+            : 'The customer will be notified that their booking is confirmed.'
+        }
+        confirmLabel={canAcceptTimeChange ? 'Accept change' : 'Approve'}
         cancelLabel="Back"
         tone="success"
         busy={actionBusy}

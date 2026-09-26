@@ -41,6 +41,34 @@ export function formatTimeRange(startIso, endIso) {
   return `${start} – ${formatTime(endIso)}`;
 }
 
+/**
+ * Compact single-line range for narrow slot tiles (avoids "AM" wrapping alone).
+ * Same period → "8:00–9:00 AM"; otherwise → "11:00 AM–1:00 PM".
+ */
+export function formatTimeRangeCompact(startIso, endIso) {
+  if (!startIso) return '';
+  const startDate = new Date(startIso);
+  if (Number.isNaN(startDate.getTime())) return '';
+  if (!endIso) return formatTime(startIso);
+
+  const endDate = new Date(endIso);
+  if (Number.isNaN(endDate.getTime())) return formatTime(startIso);
+
+  const startPeriod = startDate.getHours() < 12 ? 'AM' : 'PM';
+  const endPeriod = endDate.getHours() < 12 ? 'AM' : 'PM';
+  const clock = (d) => {
+    const h24 = d.getHours();
+    const h12 = h24 % 12 || 12;
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${h12}:${mins}`;
+  };
+
+  if (startPeriod === endPeriod) {
+    return `${clock(startDate)}–${clock(endDate)} ${endPeriod}`;
+  }
+  return `${clock(startDate)} ${startPeriod}–${clock(endDate)} ${endPeriod}`;
+}
+
 export function toDatetimeLocalValue(iso) {
   if (!iso) return '';
   const d = new Date(iso);

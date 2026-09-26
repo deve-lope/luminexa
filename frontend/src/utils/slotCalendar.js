@@ -17,6 +17,28 @@ export function isSlotBookableForCustomer(slot, nowMs = Date.now()) {
   return start >= earliestBookableTimestamp(nowMs);
 }
 
+/** Fully occupied — no seats left (show as booked / red in customer UI). */
+export function isSlotFullyBooked(slot) {
+  if (!slot) return false;
+  // Normalized calendar marks bookable opens as available: true — never treat those as booked.
+  if (slot.available === true) return false;
+  if (slot.remaining_capacity != null && slot.remaining_capacity !== '') {
+    const remaining = Number(slot.remaining_capacity);
+    if (Number.isFinite(remaining) && remaining <= 0) return true;
+  }
+  return slot.status === 'booked';
+}
+
+/**
+ * Slots to list for a selected day: bookable opens + fully booked (so red tiles show).
+ * Lead-time / past opens stay hidden.
+ */
+export function slotsForCustomerDayPicker(slots) {
+  return (slots || [])
+    .filter((slot) => isSlotBookableForCustomer(slot) || isSlotFullyBooked(slot))
+    .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+}
+
 export function slotLocalDayKey(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);

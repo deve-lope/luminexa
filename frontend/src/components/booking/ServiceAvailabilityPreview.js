@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import BookingCalendar from './BookingCalendar';
+import CustomerSlotTimeButton from './CustomerSlotTimeButton';
 import { businessesAPI } from '../../utils/api';
-import { formatTimeRange } from '../../utils/datetime';
 import {
   calendarDataForMonth,
   firstBookableDayKey,
-  isSlotBookableForCustomer,
   normalizeBookingCalendar,
+  slotsForCustomerDayPicker,
 } from '../../utils/slotCalendar';
+import { captureScrollSnapshot, restoreScrollSnapshot } from '../../utils/preserveScroll';
+import { useToast } from '../../contexts/ToastContext';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -30,92 +32,8 @@ function formatSelectedDayLabel(dayKey) {
   });
 }
 
-function SlotTimeTile({ slot, interactive, isSelected, onSelect, planningOnly = false }) {
-  const label = formatTimeRange(slot.start_at, slot.end_at);
-  const sharedClass =
-    'flex w-full min-h-[48px] flex-col items-center justify-center rounded-xl border-2 px-2 py-2.5 text-center transition';
-
-  if (interactive) {
-    return (
-      <button
-        type="button"
-        onClick={() => onSelect?.(slot)}
-        aria-pressed={isSelected}
-        className={`${sharedClass} ${
-          isSelected
-            ? 'border-luminexa-accent bg-teal-50 text-teal-900 shadow-sm ring-2 ring-teal-100'
-            : 'border-slate-200 bg-white text-slate-800 shadow-sm hover:border-teal-300 hover:bg-teal-50/40 active:scale-[0.98]'
-        }`}
-      >
-        <span className="text-sm font-semibold tabular-nums">{label}</span>
-        {planningOnly ? (
-          <span className="mt-0.5 text-[10px] font-medium text-slate-500">
-            {isSelected ? 'Selected (planning)' : 'Tap to compare'}
-          </span>
-        ) : (
-          Number(slot.capacity) > 1 &&
-          Number(slot.remaining_capacity) > 0 && (
-            <span className="mt-0.5 text-[10px] font-medium text-slate-500">
-              {slot.remaining_capacity} left
-            </span>
-          )
-        )}
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className={`${sharedClass} border-emerald-200/90 bg-gradient-to-b from-white to-emerald-50/80 text-emerald-950 shadow-sm`}
-    >
-      <span className="text-sm font-semibold tabular-nums">{label}</span>
-      <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-        Open
-      </span>
-    </div>
-  );
-}
-
-function captureScrollSnapshot(rootEl) {
-  const modalSheet = document.querySelector('.lx-modal-sheet');
-  let scrollParent = rootEl;
-  while (scrollParent && scrollParent !== document.body && scrollParent !== document.documentElement) {
-    const style = window.getComputedStyle(scrollParent);
-    const scrollable =
-      (style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflowY === 'overlay') &&
-      scrollParent.scrollHeight > scrollParent.clientHeight + 1;
-    if (scrollable) break;
-    scrollParent = scrollParent.parentElement;
-  }
-  if (
-    !scrollParent ||
-    scrollParent === document.body ||
-    scrollParent === document.documentElement
-  ) {
-    scrollParent = null;
-  }
-  return {
-    windowY: window.scrollY || document.documentElement.scrollTop || 0,
-    modalSheetTop: modalSheet?.scrollTop ?? null,
-    parent: scrollParent,
-    parentTop: scrollParent?.scrollTop ?? null,
-  };
-}
-
-function restoreScrollSnapshot(snapshot) {
-  if (!snapshot) return;
-  window.scrollTo({ top: snapshot.windowY, left: 0, behavior: 'auto' });
-  if (snapshot.modalSheetTop != null) {
-    const modalSheet = document.querySelector('.lx-modal-sheet');
-    if (modalSheet) modalSheet.scrollTop = snapshot.modalSheetTop;
-  }
-  if (snapshot.parent && snapshot.parentTop != null) {
-    snapshot.parent.scrollTop = snapshot.parentTop;
-  }
-}
-
 /**
- * Read-only (or selectable) open-slot preview for quote-first services.
+ * Open-slot preview / picker for quote, gig, and fixed-price booking flows.
  * When serviceId is omitted, loads the provider’s full open schedule.
  */
 export default function ServiceAvailabilityPreview({
@@ -131,6 +49,7 @@ export default function ServiceAvailabilityPreview({
   onPlanningChange = null,
   className = '',
 }) {
+  const { showToast } = useToast();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -141,6 +60,7 @@ export default function ServiceAvailabilityPreview({
   const [planningSlotId, setPlanningSlotId] = useState(null);
   const sectionRef = useRef(null);
   const scrollSnapshotRef = useRef(null);
+  const interactive = selectable || planningSelect;
 
   useEffect(() => {
     setPlanningSlotId(null);
@@ -178,7 +98,9 @@ export default function ServiceAvailabilityPreview({
         const days = normalized?.days || {};
         const firstAvailable = firstBookableDayKey(days);
         setSelectedDay((prev) => {
-          if (prev && days[prev]?.status === 'available') return prev;
+          if (prev && (days[prev]?.status === 'available' || days[prev]?.status === 'full')) {
+            return prev;
+          }
           return firstAvailable || null;
         });
       })
@@ -197,8 +119,10 @@ export default function ServiceAvailabilityPreview({
 
   const slotsForDay = useMemo(() => {
     if (!selectedDay) return [];
-    return (slotsByDay[selectedDay] || []).filter((slot) => isSlotBookableForCustomer(slot));
-  }, [selectedDay, slotsByDay]);
+    const daySlots = slotsByDay[selectedDay] || [];
+    if (interactive) return slotsForCustomerDayPicker(daySlots);
+    return daySlots.filter((slot) => slot.available === true);
+  }, [selectedDay, slotsByDay, interactive]);
 
   const highlightedSlotId = selectable ? selectedSlotId : planningSlotId;
 
@@ -225,6 +149,10 @@ export default function ServiceAvailabilityPreview({
         return nextId;
       });
     }
+  };
+
+  const handleBookedSelect = () => {
+    showToast('This slot is already booked. Pick an open time instead.', 'error');
   };
 
   const shiftMonth = (delta) => {
@@ -268,6 +196,7 @@ export default function ServiceAvailabilityPreview({
             onPrevMonth={() => shiftMonth(-1)}
             onNextMonth={() => shiftMonth(1)}
             openOnly={!selectable}
+            allowFullDays={selectable}
             size={compact ? 'compact' : 'full'}
           />
         )}
@@ -278,14 +207,19 @@ export default function ServiceAvailabilityPreview({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                Open times
+                {interactive ? 'Available times' : 'Open times'}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-900 sm:text-base">
                 {formatSelectedDayLabel(selectedDay)}
               </p>
+              {interactive && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Teal border = open. Solid teal = selected. Red = already booked.
+                </p>
+              )}
             </div>
             {slotsForDay.length > 0 && (
-              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200/80">
+              <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-800 ring-1 ring-teal-200/80">
                 {slotsForDay.length} {slotsForDay.length === 1 ? 'slot' : 'slots'}
               </span>
             )}
@@ -298,13 +232,13 @@ export default function ServiceAvailabilityPreview({
           ) : (
             <ul className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
               {slotsForDay.map((slot) => (
-                <li key={slot.id}>
-                  <SlotTimeTile
+                <li key={slot.id} className={interactive ? undefined : 'pointer-events-none'}>
+                  <CustomerSlotTimeButton
                     slot={slot}
-                    interactive={selectable || planningSelect}
+                    selected={slotIdsMatch(highlightedSlotId, slot.id)}
                     planningOnly={planningSelect && !selectable}
-                    isSelected={slotIdsMatch(highlightedSlotId, slot.id)}
-                    onSelect={handleSlotSelect}
+                    onSelect={interactive ? handleSlotSelect : undefined}
+                    onBookedSelect={interactive ? handleBookedSelect : undefined}
                   />
                 </li>
               ))}
