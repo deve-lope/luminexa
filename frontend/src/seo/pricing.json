@@ -65,10 +65,6 @@
     {
       "q": "Do you take a cut of every job?",
       "a": "There is no booking commission on cash or e-transfer. On card invoice payments only, Luminexa takes 0.5% plus Stripe’s own processing fee."
-    },
-    {
-      "q": "Where does Luminexa work?",
-      "a": "Launch cities are Ottawa and Toronto, Ontario. Matching uses your address and each provider’s service area."
     }
   ]
 }

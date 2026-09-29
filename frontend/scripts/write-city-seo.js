@@ -81,7 +81,9 @@ function footerLinks() {
     '<a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Google Play</a>';
   const appStore =
     '<a href="https://apps.apple.com/ca/app/luminexa/id6804875374">App Store</a>';
-  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy">Privacy</a> · ${play} · ${appStore}`;
+  const instagram =
+    '<a href="https://www.instagram.com/luminexa_services/">Instagram</a>';
+  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy">Privacy</a> · ${play} · ${appStore} · ${instagram}`;
 }
 
 function absoluteAsset(url) {

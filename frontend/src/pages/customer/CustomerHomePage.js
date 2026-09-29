@@ -406,7 +406,7 @@ export default function CustomerHomePage() {
                         </p>
                       )}
                       <span
-                        className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status, tone)}`}
+                        className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${bookingStatusClass(b.status, tone)}`}
                       >
                         {bookingStatusLabel(b.status, {
                           bookingPolicy: b.booking_policy,

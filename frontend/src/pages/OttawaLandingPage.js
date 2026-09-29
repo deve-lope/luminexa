@@ -1,5 +1,6 @@
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
+import InstagramLink from '../components/marketing/InstagramLink';
 import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import {
   alternativeBySlug,
@@ -95,6 +96,9 @@ function CityLayout({
       </main>
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500 md:px-8">
+          <div className="mb-3">
+            <InstagramLink />
+          </div>
           <p className="flex flex-wrap gap-x-3 gap-y-1">
             {citySeo.cities.map((c) => (
               <Link key={c.slug} to={`/${c.slug}`} className="text-teal-700 hover:underline">

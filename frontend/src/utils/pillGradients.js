@@ -29,9 +29,9 @@ export function lxPillTone(index = 0, count = LX_PILL_RAMP.length) {
       hoverRow: 'hover:bg-white/10',
       border: 'border-white/15',
       btn: 'border-white/25 bg-white/10 text-white hover:bg-white/20',
-      statusOk: 'bg-emerald-300/25 text-emerald-50 ring-1 ring-emerald-200/30',
-      statusWarn: 'bg-amber-300/25 text-amber-50 ring-1 ring-amber-200/30',
-      statusNeutral: 'bg-white/15 text-white/85 ring-1 ring-white/20',
+      statusOk: 'bg-white/95 text-teal-900 ring-1 ring-white/40',
+      statusWarn: 'bg-amber-50/95 text-amber-900 ring-1 ring-amber-200/70',
+      statusNeutral: 'bg-white/20 text-white ring-1 ring-white/30',
     };
   }
   return {
@@ -45,8 +45,8 @@ export function lxPillTone(index = 0, count = LX_PILL_RAMP.length) {
     hoverRow: 'hover:bg-teal-900/5',
     border: 'border-teal-100',
     btn: 'border-teal-200 bg-white/80 text-teal-800 hover:bg-white',
-    statusOk: 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200',
-    statusWarn: 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
+    statusOk: 'bg-sky-100 text-sky-900 ring-1 ring-sky-200',
+    statusWarn: 'bg-amber-50 text-amber-900 ring-1 ring-amber-200',
     statusNeutral: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
   };
 }

@@ -10,6 +10,10 @@ export const APP_STORE_SEARCH_URL = 'https://apps.apple.com/search?term=Luminexa
 
 export const IOS_APP_STORE_ID = '6804875374';
 
+/** Official Instagram. */
+export const INSTAGRAM_URL = 'https://www.instagram.com/luminexa_services/';
+export const INSTAGRAM_HANDLE = 'luminexa_services';
+
 export function getAppStoreUrl() {
   return APP_STORE_URL || APP_STORE_SEARCH_URL;
 }
