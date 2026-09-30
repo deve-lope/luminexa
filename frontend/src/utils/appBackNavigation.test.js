@@ -3,6 +3,7 @@ import {
   performAppBack,
   registerOverlayCloser,
   registeredOverlayCloserCount,
+  withServiceHashIfNeeded,
 } from './appBackNavigation';
 
 describe('performAppBack', () => {
@@ -21,6 +22,35 @@ describe('performAppBack', () => {
     expect(close).toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     unregister();
+  });
+});
+
+describe('withServiceHashIfNeeded', () => {
+  test('pins #service-id when returning from detail to the same storefront', () => {
+    expect(withServiceHashIfNeeded('/book/acme', '/book/acme/services/42')).toBe(
+      '/book/acme#service-42',
+    );
+  });
+
+  test('keeps customer provider storefront hash', () => {
+    expect(
+      withServiceHashIfNeeded(
+        '/customer/provider/acme',
+        '/customer/provider/acme/services/99',
+      ),
+    ).toBe('/customer/provider/acme#service-99');
+  });
+
+  test('does not rewrite unrelated previous paths', () => {
+    expect(withServiceHashIfNeeded('/customer/find', '/book/acme/services/42')).toBe(
+      '/customer/find',
+    );
+  });
+
+  test('leaves an existing hash alone', () => {
+    expect(
+      withServiceHashIfNeeded('/book/acme#service-1', '/book/acme/services/42'),
+    ).toBe('/book/acme#service-1');
   });
 });
 

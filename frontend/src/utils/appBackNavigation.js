@@ -7,6 +7,7 @@ import {
   consumePreviousInAppPath,
   locationEntry,
 } from './inAppNavStack';
+import { peekSavedScrollY } from '../components/ScrollToTop';
 
 /** @type {Set<() => void>} */
 const overlayClosers = new Set();
@@ -55,7 +56,14 @@ export function performAppBack({ pathname, search, navigate, preferFallback = fa
   if (!preferFallback) {
     const prev = consumePreviousInAppPath(entry);
     if (prev) {
-      navigate(prev, { replace: true });
+      // If we still remember scroll for that screen, return without #service-
+      // so ScrollToTop can restore Y once (avoids top → hash jump).
+      const prevKey = prev.split('#')[0];
+      const target =
+        peekSavedScrollY(prevKey) > 0
+          ? prevKey
+          : withServiceHashIfNeeded(prev, pathname, search);
+      navigate(target, { replace: true });
       return true;
     }
   }
@@ -67,4 +75,39 @@ export function performAppBack({ pathname, search, navigate, preferFallback = fa
   }
 
   return false;
+}
+
+/**
+ * When leaving a service detail page for its parent catalog/storefront,
+ * pin #service-{id} so Back lands on that row (not the top of the list).
+ */
+export function withServiceHashIfNeeded(prevPath, currentPathname, currentSearch = '') {
+  if (!prevPath || prevPath.includes('#')) return prevPath;
+  const path = (currentPathname || '').replace(/\/$/, '') || '/';
+  const detailMatch = path.match(/^(.*?)\/services\/([^/]+)$/);
+  if (!detailMatch) return prevPath;
+
+  const parentBase = detailMatch[1];
+  const serviceId = detailMatch[2];
+  const prevOnly = prevPath.split('?')[0].replace(/\/$/, '') || '/';
+  const parentNorm = parentBase.replace(/\/$/, '') || '/';
+
+  // Stack prev is the storefront/catalog for this org (or same path with ?cat=).
+  if (prevOnly !== parentNorm) return prevPath;
+
+  const cat = (() => {
+    try {
+      return new URLSearchParams(
+        (currentSearch || '').startsWith('?') ? currentSearch.slice(1) : currentSearch,
+      ).get('cat');
+    } catch {
+      return null;
+    }
+  })();
+  const hasCat = prevPath.includes('cat=');
+  let target = prevPath;
+  if (cat && !hasCat) {
+    target += `${prevPath.includes('?') ? '&' : '?'}cat=${encodeURIComponent(cat)}`;
+  }
+  return `${target}#service-${serviceId}`;
 }

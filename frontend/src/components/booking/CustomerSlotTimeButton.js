@@ -59,14 +59,12 @@ export default function CustomerSlotTimeButton({
         </span>
       ) : selected && open ? (
         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/90">
-          {planningOnly ? 'Selected' : 'Selected'}
+          Selected
         </span>
       ) : capacityHint ? (
         <span className="mt-0.5 text-[10px] font-medium text-teal-700">{capacityHint}</span>
-      ) : open ? (
-        <span className="mt-0.5 text-[10px] font-medium text-teal-700/80">
-          {planningOnly ? 'Tap to compare' : 'Open'}
-        </span>
+      ) : open && !planningOnly ? (
+        <span className="mt-0.5 text-[10px] font-medium text-teal-700/80">Open</span>
       ) : null}
     </button>
   );

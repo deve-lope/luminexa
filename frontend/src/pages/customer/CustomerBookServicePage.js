@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import BookingContactForm from '../../components/BookingContactForm';
 import BookingServiceLocationSection from '../../components/customer/BookingServiceLocationSection';
 import {
@@ -21,7 +21,7 @@ import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import ServiceRequestModal from '../../components/services/ServiceRequestModal';
 import ServiceAvailabilityPreview from '../../components/booking/ServiceAvailabilityPreview';
-import { serviceDetail, customerBookings, customerInquiryDetail } from '../../utils/customerPaths';
+import { serviceDetail, customerProviderServiceDetail, customerBookings, customerInquiryDetail } from '../../utils/customerPaths';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
 import {
@@ -51,8 +51,10 @@ function parseApiError(err) {
 export default function CustomerBookServicePage() {
   const { orgSlug, slug, providerKey, serviceId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   const businessSlug = providerKey || orgSlug || slug;
+  const isCustomerProviderRoute = location.pathname.startsWith('/customer/provider/');
   const { memberships, user, setUserFromProfile, refreshSession } = useAuth();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -488,7 +490,11 @@ export default function CustomerBookServicePage() {
               )}
               <ServiceVisitFacts service={service} />
               <Link
-                to={serviceDetail(businessSlug, service.id)}
+                to={
+                  isCustomerProviderRoute
+                    ? customerProviderServiceDetail(businessSlug, service.id)
+                    : serviceDetail(businessSlug, service.id)
+                }
                 className="mt-1.5 inline-block text-sm font-medium text-luminexa-accent"
               >
                 Show full details →
@@ -724,9 +730,6 @@ export default function CustomerBookServicePage() {
                   day: 'numeric',
                 })}
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Teal border = open. Solid teal = selected. Red = already booked.
-              </p>
               {slotsForDay.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">No open slots this day.</p>
               ) : (

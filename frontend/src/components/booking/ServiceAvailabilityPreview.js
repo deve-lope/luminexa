@@ -212,11 +212,6 @@ export default function ServiceAvailabilityPreview({
               <p className="mt-1 text-sm font-semibold text-slate-900 sm:text-base">
                 {formatSelectedDayLabel(selectedDay)}
               </p>
-              {interactive && (
-                <p className="mt-1 text-xs text-slate-500">
-                  Teal border = open. Solid teal = selected. Red = already booked.
-                </p>
-              )}
             </div>
             {slotsForDay.length > 0 && (
               <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-800 ring-1 ring-teal-200/80">
