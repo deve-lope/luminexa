@@ -8,7 +8,14 @@ import ConnectionLoadingPage from './pages/ConnectionLoadingPage';
 import MaintenancePage from './pages/MaintenancePage';
 import LandingRoute from './pages/LandingRoute';
 import AboutPage from './pages/AboutPage';
-import { CityCategoryPage, CityHubPage } from './pages/OttawaLandingPage';
+import PricingPage from './pages/PricingPage';
+import {
+  AlternativePage,
+  AlternativesHubPage,
+  CityCategoryPage,
+  CityHubPage,
+  CityNearMePage,
+} from './pages/OttawaLandingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import GuestBookingPage from './pages/GuestBookingPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
@@ -129,12 +136,26 @@ function AppRoutes() {
       {isNativeApp() && !isAuthShell && <StoreRatePrompt />}
       <Routes>
         <Route path="/" element={<LandingRoute />} />
+        <Route path="/alternatives" element={<AlternativesHubPage />} />
+        <Route path="/alternatives/" element={<AlternativesHubPage />} />
+        <Route path="/alternatives/:slug" element={<AlternativePage />} />
+        <Route path="/alternatives/:slug/" element={<AlternativePage />} />
         <Route path="/ottawa" element={<CityHubPage />} />
+        <Route path="/ottawa/near-me" element={<CityNearMePage />} />
+        <Route path="/ottawa/near-me/" element={<CityNearMePage />} />
+        <Route path="/ottawa/:slug/:category" element={<CityCategoryPage />} />
+        <Route path="/ottawa/:slug/:category/" element={<CityCategoryPage />} />
         <Route path="/ottawa/:slug" element={<CityCategoryPage />} />
         <Route path="/ottawa/:slug/" element={<CityCategoryPage />} />
         <Route path="/toronto" element={<CityHubPage />} />
+        <Route path="/toronto/near-me" element={<CityNearMePage />} />
+        <Route path="/toronto/near-me/" element={<CityNearMePage />} />
+        <Route path="/toronto/:slug/:category" element={<CityCategoryPage />} />
+        <Route path="/toronto/:slug/:category/" element={<CityCategoryPage />} />
         <Route path="/toronto/:slug" element={<CityCategoryPage />} />
         <Route path="/toronto/:slug/" element={<CityCategoryPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/pricing/" element={<PricingPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/b/:token" element={<GuestBookingPage />} />
         <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />

@@ -204,8 +204,20 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(booking.availability_slot_id, new_slot.id)
         self.assertEqual(booking.start_at, new_slot.start_at)
         self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertEqual(booking.prior_start_at, self.slot.start_at)
+        self.assertFalse(booking.awaiting_customer_acceptance)
         self.assertEqual(self.slot.status, AvailabilitySlot.Status.OPEN)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
+
+        self._auth(self.provider)
+        accept = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertIsNone(booking.prior_start_at)
 
     def test_customer_reschedule_unconfirmed_booking(self):
         new_start = timezone.now() + timedelta(days=4)
@@ -283,6 +295,73 @@ class BookingLifecycleTests(TestCase):
         new_slot.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.REQUESTED)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
+
+    def test_provider_can_accept_customer_reschedule_on_quote_booking(self):
+        """After customer reschedules a confirmed quote job, staff can accept without re-quoting."""
+        self.service.pricing_type = Service.PricingType.QUOTE
+        self.service.save(update_fields=['pricing_type'])
+        old_start = self.slot.start_at
+        new_start = timezone.now() + timedelta(days=5)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            quote_amount='120.00',
+            quoted_at=timezone.now(),
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save()
+
+        # Fresh quote request still cannot be approved without a price.
+        bare = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=None,
+            start_at=new_start + timedelta(days=1),
+            end_at=new_start + timedelta(days=1, hours=1),
+            status=Booking.Status.REQUESTED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self._auth(self.provider)
+        blocked = self.client.post(f'/api/v1/bookings/{bare.id}/accept/', HTTP_HOST='localhost')
+        self.assertEqual(blocked.status_code, 400)
+
+        self._auth(self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': new_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertEqual(str(booking.quote_amount), '120.00')
+        self.assertEqual(booking.prior_start_at, old_start)
+
+        self._auth(self.provider)
+        accept = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200, getattr(accept, 'data', accept.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertEqual(str(booking.quote_amount), '120.00')
+        self.assertIsNone(booking.prior_start_at)
 
     def test_provider_reschedule_on_instant_org_proposes_new_time(self):
         """Instant booking does not let staff move a confirmed job unilaterally."""

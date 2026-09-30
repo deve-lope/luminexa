@@ -160,6 +160,21 @@ class CookieAuthTests(TestCase):
         profile = self.client.get('/accounts/api/profile/', HTTP_HOST='localhost')
         self.assertEqual(profile.status_code, 401)
 
+    def test_logout_without_session_still_clears_cookie(self):
+        self.client.cookies[settings.AUTH_TOKEN_COOKIE_NAME] = 'stale-deleted-token'
+        out = self.client.post('/accounts/api/logout/', format='json', HTTP_HOST='localhost')
+        self.assertEqual(out.status_code, 200)
+        cookie = out.cookies.get(settings.AUTH_TOKEN_COOKIE_NAME)
+        self.assertIsNotNone(cookie)
+        self.assertEqual(str(cookie.get('max-age') or cookie['max-age']), '0')
+
+    @override_settings(AUTH_TOKEN_COOKIE_SECURE=True)
+    def test_logout_clears_secure_cookie_flag(self):
+        out = self.client.post('/accounts/api/logout/', format='json', HTTP_HOST='localhost')
+        self.assertEqual(out.status_code, 200)
+        cookie = out.cookies[settings.AUTH_TOKEN_COOKIE_NAME]
+        self.assertTrue(cookie.get('secure') or cookie['secure'])
+
     def test_stale_cookie_does_not_block_new_login(self):
         self.client.cookies[settings.AUTH_TOKEN_COOKIE_NAME] = 'stale-deleted-token'
         start = self.client.post(

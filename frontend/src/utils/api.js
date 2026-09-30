@@ -115,7 +115,9 @@ api.interceptors.response.use(
         /* ignore health handler failures */
       }
     }
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const requestUrl = String(error.config?.url || '');
+    const isLogoutRequest = requestUrl.includes('/accounts/api/logout/');
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !isLogoutRequest) {
       const { pathname, search } = window.location;
       if (!isPublicPath(pathname)) {
         storage.remove('token'); // legacy cleanup

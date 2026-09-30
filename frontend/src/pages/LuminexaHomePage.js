@@ -2,7 +2,10 @@ import React, { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
 import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
+import InstagramLink from '../components/marketing/InstagramLink';
+import PricingPlans from '../components/marketing/PricingPlans';
 import { citySeo } from '../seo/citySeo';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
 const NEED_PROMPTS = [
@@ -140,6 +143,14 @@ function SiteHeader({ appBackTo = null }) {
             </Link>
           ) : (
             <>
+              <Link
+                to="/pricing"
+                className={`hidden min-h-[44px] items-center px-3 text-sm font-medium transition md:inline-flex ${
+                  solid ? 'text-slate-700 hover:text-teal-700' : 'text-white/90 hover:text-white'
+                }`}
+              >
+                Pricing
+              </Link>
               <Link to="/login" className={navLinkClass}>
                 Sign in
               </Link>
@@ -182,7 +193,7 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
+          src="/images/home-hero.jpg"
           alt=""
           className="h-full w-full object-cover"
         />
@@ -553,6 +564,16 @@ function FinalCta({ inAppShell = false, findPath = '/services' }) {
   );
 }
 
+function HomePricing({ findPath = '/services' }) {
+  return (
+    <section id="pricing" className="scroll-mt-24 border-t border-teal-900/10 bg-luminexa-canvas py-16 md:py-20">
+      <div className="mx-auto max-w-6xl px-4 md:px-8">
+        <PricingPlans findPath={findPath} showHeading showFees={false} />
+      </div>
+    </section>
+  );
+}
+
 function SiteFooter({ findPath = '/services', inApp = false }) {
   return (
     <footer className="border-t border-teal-900/10 bg-white">
@@ -562,6 +583,9 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           <p className="mt-1 text-sm text-slate-500">
             Local services, booked the simple way.
           </p>
+          <div className="mt-4">
+            <InstagramLink />
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm font-medium text-slate-600">
           <Link to={findPath} className="hover:text-teal-700">
@@ -569,6 +593,9 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           </Link>
           {!inApp && (
             <>
+              <Link to="/pricing" className="hover:text-teal-700">
+                Pricing
+              </Link>
               <Link to="/register/business" className="hover:text-teal-700">
                 Offer services
               </Link>
@@ -580,6 +607,12 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           <Link to="/privacy" className="hover:text-teal-700">
             Privacy
           </Link>
+          <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            Google Play
+          </a>
+          <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            App Store
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">
@@ -643,6 +676,7 @@ export default function LuminexaHomePage({ inAppShell = false }) {
       <PlatformBand findPath={findPath} />
       <SplitShowcase />
       <FinalCta inAppShell={inAppShell} findPath={findPath} />
+      <HomePricing findPath={findPath} />
       {!inAppShell && <SiteFooter />}
       {inAppShell && (
         <div className="lg:hidden">

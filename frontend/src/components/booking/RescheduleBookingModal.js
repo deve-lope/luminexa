@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import BookingCalendar from './BookingCalendar';
+import CustomerSlotTimeButton from './CustomerSlotTimeButton';
 import ConfirmDialog from '../ConfirmDialog';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { businessesAPI, jobsAPI } from '../../utils/api';
@@ -178,18 +179,14 @@ export default function RescheduleBookingModal({
                 {selectedDay && slots.length === 0 && (
                   <p className="text-sm text-slate-500">No open slots this day.</p>
                 )}
-                <ul className="space-y-2">
+                <ul className="grid grid-cols-2 gap-2">
                   {slots.map((slot) => (
                     <li key={slot.id}>
-                      <button
-                        type="button"
-                        disabled={confirmBusy}
-                        onClick={() => setPendingSlot(slot)}
-                        className="flex w-full min-h-[44px] items-center justify-between rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-800 disabled:opacity-50"
-                      >
-                        <span>{formatTimeRange(slot.start_at, slot.end_at)}</span>
-                        <span className="text-luminexa-accent">Select</span>
-                      </button>
+                      <CustomerSlotTimeButton
+                        slot={slot}
+                        selected={false}
+                        onSelect={() => setPendingSlot(slot)}
+                      />
                     </li>
                   ))}
                 </ul>

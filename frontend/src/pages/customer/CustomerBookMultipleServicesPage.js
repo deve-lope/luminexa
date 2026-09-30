@@ -4,6 +4,7 @@ import BookingContactForm from '../../components/BookingContactForm';
 import BookingServiceLocationSection from '../../components/customer/BookingServiceLocationSection';
 import { validateServiceLocationValue } from '../../components/customer/ServiceLocationInput';
 import BookingCalendar from '../../components/booking/BookingCalendar';
+import CustomerSlotTimeButton from '../../components/booking/CustomerSlotTimeButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { formatTimeRange } from '../../utils/datetime';
@@ -528,33 +529,25 @@ export default function CustomerBookMultipleServicesPage() {
                           No {formatDurationMinutes(totalDurationMinutes)} windows this day.
                         </p>
                       ) : (
-                        <div className="flex flex-wrap gap-2">
+                        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {daySlots.map((slot) => {
                             const picked =
                               selectedSlot?.start_at === slot.start_at &&
                               selectedSlot?.end_at === slot.end_at;
                             return (
-                              <button
-                                key={`${slot.id}-${slot.start_at}`}
-                                type="button"
-                                onClick={() => {
-                                  setError(null);
-                                  setSelectedSlot(slot);
-                                }}
-                                className={`min-h-[44px] rounded-lg px-3 text-sm font-medium ${
-                                  picked
-                                    ? 'bg-luminexa-accent text-white'
-                                    : 'border border-slate-200 bg-white text-slate-800 hover:border-luminexa-accent'
-                                }`}
-                              >
-                                {formatTimeRange(slot.start_at, slot.end_at)}
-                                {Number(slot.capacity) > 1 && Number(slot.remaining_capacity) > 0
-                                  ? ` · ${slot.remaining_capacity} left`
-                                  : ''}
-                              </button>
+                              <li key={`${slot.id}-${slot.start_at}`}>
+                                <CustomerSlotTimeButton
+                                  slot={{ ...slot, available: true }}
+                                  selected={picked}
+                                  onSelect={() => {
+                                    setError(null);
+                                    setSelectedSlot(slot);
+                                  }}
+                                />
+                              </li>
                             );
                           })}
-                        </div>
+                        </ul>
                       )}
                     </div>
                   )}

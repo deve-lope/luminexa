@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import BookingContactForm from '../../components/BookingContactForm';
 import BookingServiceLocationSection from '../../components/customer/BookingServiceLocationSection';
 import {
   validateServiceLocationValue,
 } from '../../components/customer/ServiceLocationInput';
 import BookingCalendar from '../../components/booking/BookingCalendar';
+import CustomerSlotTimeButton from '../../components/booking/CustomerSlotTimeButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { businessesAPI, jobsAPI } from '../../utils/api';
 import { formatTimeRange } from '../../utils/datetime';
@@ -20,10 +21,16 @@ import { customerPolicyLabel } from '../../constants/bookingPolicies';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import ServiceRequestModal from '../../components/services/ServiceRequestModal';
 import ServiceAvailabilityPreview from '../../components/booking/ServiceAvailabilityPreview';
-import { serviceDetail, customerBookings, customerInquiryDetail } from '../../utils/customerPaths';
+import { serviceDetail, customerProviderServiceDetail, customerBookings, customerInquiryDetail } from '../../utils/customerPaths';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 import { isShopService, serviceRequiresQuote } from '../../utils/serviceDisplay';
-import { calendarDataForMonth, firstBookableDayKey, normalizeBookingCalendar } from '../../utils/slotCalendar';
+import {
+  calendarDataForMonth,
+  firstBookableDayKey,
+  normalizeBookingCalendar,
+  slotsForCustomerDayPicker,
+} from '../../utils/slotCalendar';
+import { captureScrollSnapshot, restoreScrollSnapshot } from '../../utils/preserveScroll';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
 import {
@@ -44,8 +51,10 @@ function parseApiError(err) {
 export default function CustomerBookServicePage() {
   const { orgSlug, slug, providerKey, serviceId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   const businessSlug = providerKey || orgSlug || slug;
+  const isCustomerProviderRoute = location.pathname.startsWith('/customer/provider/');
   const { memberships, user, setUserFromProfile, refreshSession } = useAuth();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -69,7 +78,10 @@ export default function CustomerBookServicePage() {
   const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
   const [alertPopup, setAlertPopup] = useState(null);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [quotePlanningPreference, setQuotePlanningPreference] = useState(null);
   const confirmPanelRef = useRef(null);
+  const calendarSectionRef = useRef(null);
+  const scrollSnapshotRef = useRef(null);
 
   useEffect(() => {
     const saved = (user?.default_service_address || '').trim();
@@ -143,7 +155,9 @@ export default function CustomerBookServicePage() {
         const days = normalized?.days || {};
         const firstAvailable = firstBookableDayKey(days);
         setSelectedDay((prev) => {
-          if (prev && days[prev]?.status === 'available') return prev;
+          if (prev && (days[prev]?.status === 'available' || days[prev]?.status === 'full')) {
+            return prev;
+          }
           return firstAvailable || null;
         });
       })
@@ -165,6 +179,24 @@ export default function CustomerBookServicePage() {
   useEffect(() => {
     loadCalendar();
   }, [loadCalendar]);
+
+  const restoreCapturedScroll = useCallback(() => {
+    if (!scrollSnapshotRef.current) return;
+    restoreScrollSnapshot(scrollSnapshotRef.current);
+  }, []);
+
+  useLayoutEffect(() => {
+    restoreCapturedScroll();
+  });
+
+  useEffect(() => {
+    if (!scrollSnapshotRef.current || calendarFetching) return undefined;
+    const id = window.requestAnimationFrame(() => {
+      restoreCapturedScroll();
+      scrollSnapshotRef.current = null;
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [calendarFetching, calendar, year, month, restoreCapturedScroll]);
 
   const service = calendar?.service || listedService;
   const bookingCtx = calendar?.booking;
@@ -237,7 +269,7 @@ export default function CustomerBookServicePage() {
 
   const slotsForDay = useMemo(() => {
     if (!selectedDay) return [];
-    return (slotsByDay[selectedDay] || []).filter((s) => s.available);
+    return slotsForCustomerDayPicker(slotsByDay[selectedDay] || []);
   }, [slotsByDay, selectedDay]);
 
   const canSubmitBooking = canBook && !needsContact;
@@ -305,6 +337,10 @@ export default function CustomerBookServicePage() {
     },
     [scrollToConfirmPanel]
   );
+
+  const handleBookedSlotTap = useCallback(() => {
+    showToast('This slot is already booked. Pick an open time instead.', 'error');
+  }, [showToast]);
 
   const promptBookingConfirm = useCallback(
     (slot) => {
@@ -400,6 +436,7 @@ export default function CustomerBookServicePage() {
     : '';
 
   const shiftMonth = (delta) => {
+    scrollSnapshotRef.current = captureScrollSnapshot(calendarSectionRef.current);
     let m = month + delta;
     let y = year;
     if (m < 1) {
@@ -411,7 +448,6 @@ export default function CustomerBookServicePage() {
     }
     setMonth(m);
     setYear(y);
-    setSelectedDay(null);
   };
 
   if (loading && !storefront && !calendar) {
@@ -435,24 +471,34 @@ export default function CustomerBookServicePage() {
     <div className="space-y-4">
       {service && (
         <section className="lx-card">
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             {service.image_url && (
-              <img src={service.image_url} alt="" className="h-20 w-20 rounded-lg object-cover" />
+              <img
+                src={service.image_url}
+                alt=""
+                className="h-16 w-16 shrink-0 rounded-lg object-cover sm:h-20 sm:w-20"
+              />
             )}
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">{service.name}</h1>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-bold leading-snug text-slate-900 sm:text-xl">
+                {service.name}
+              </h1>
               {service.rating_summary?.count > 0 && (
-                <div className="mt-2">
+                <div className="mt-1">
                   <ServiceRatingSummary summary={service.rating_summary} compact />
                 </div>
               )}
+              <ServiceVisitFacts service={service} />
               <Link
-                to={serviceDetail(businessSlug, service.id)}
-                className="mt-2 inline-block text-sm font-medium text-luminexa-accent"
+                to={
+                  isCustomerProviderRoute
+                    ? customerProviderServiceDetail(businessSlug, service.id)
+                    : serviceDetail(businessSlug, service.id)
+                }
+                className="mt-1.5 inline-block text-sm font-medium text-luminexa-accent"
               >
                 Show full details →
               </Link>
-              <ServiceVisitFacts service={service} />
             </div>
           </div>
         </section>
@@ -521,28 +567,53 @@ export default function CustomerBookServicePage() {
 
       {!staffOfOrg && !mustConnect && quoteFirst && (
         <section className="space-y-4">
-          <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-5">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3">
             <h2 className="font-semibold text-violet-950">Get a quote first</h2>
-            <p className="mt-2 text-sm text-violet-900/90">
-              This service doesn&apos;t have a fixed price. Request a quote with a few details — the
-              business will send a price. After you accept it, you&apos;ll pick an open appointment
-              time.
+            <p className="mt-1.5 text-sm text-violet-900/90">
+              This service doesn&apos;t have a fixed price. Pick a date (and time if you like), then
+              request a quote — nothing is reserved until you accept their price and confirm.
             </p>
-            <button
-              type="button"
-              onClick={() => setRequestOpen(true)}
-              className="mt-4 w-full min-h-[48px] rounded-xl bg-luminexa-accent text-sm font-semibold text-white"
-            >
-              Request quote
-            </button>
           </div>
           {serviceId && (
             <ServiceAvailabilityPreview
               orgSlug={businessSlug}
               serviceId={serviceId}
-              hint="Preview open slots while you wait — nothing is reserved until you accept a quote and confirm a time."
+              planningSelect
+              title="Choose a preferred date"
+              hint="Tap a day, then an open time if you have a preference. The business sees this with your quote request."
+              onPlanningChange={setQuotePlanningPreference}
             />
           )}
+          <div className="sticky bottom-0 z-20 -mx-1 border-t border-slate-200/80 bg-white/95 px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+            {quotePlanningPreference?.dayKey ? (
+              <p className="mb-2 text-center text-xs text-slate-600">
+                Preferred:{' '}
+                <span className="font-semibold text-slate-800">
+                  {new Date(`${quotePlanningPreference.dayKey}T12:00:00`).toLocaleDateString(
+                    undefined,
+                    { weekday: 'short', month: 'short', day: 'numeric' },
+                  )}
+                  {quotePlanningPreference.slot
+                    ? ` · ${formatTimeRange(
+                        quotePlanningPreference.slot.start_at,
+                        quotePlanningPreference.slot.end_at,
+                      )}`
+                    : ''}
+                </span>
+              </p>
+            ) : (
+              <p className="mb-2 text-center text-xs text-slate-500">
+                Tip: select a date above so the business knows when you prefer.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setRequestOpen(true)}
+              className="w-full min-h-[48px] rounded-xl bg-luminexa-accent text-sm font-semibold text-white shadow-lg shadow-teal-700/20"
+            >
+              Request quote
+            </button>
+          </div>
         </section>
       )}
 
@@ -598,11 +669,11 @@ export default function CustomerBookServicePage() {
             />
           )}
 
-          <section>
+          <section ref={calendarSectionRef} className="[overflow-anchor:none]">
             <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Choose a date</h2>
-            {calendarFetching ? (
+            {!calendar && calendarFetching ? (
               <p className="text-sm text-slate-500">Loading calendar…</p>
-            ) : !calendarInSync ? (
+            ) : !calendarInSync && !calendarFetching && calendarError ? (
               <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
                 <p>{calendarError || 'Could not load availability.'}</p>
                 {calendarError && (
@@ -621,17 +692,25 @@ export default function CustomerBookServicePage() {
               </div>
             ) : (
               <>
-                <BookingCalendar
-                  year={year}
-                  month={month}
-                  days={calendarDays}
-                  selectedDay={selectedDay}
-                  onSelectDay={setSelectedDay}
-                  onPrevMonth={() => shiftMonth(-1)}
-                  onNextMonth={() => shiftMonth(1)}
-                  openOnly
-                />
-                {!hasOpenDays && (
+                <div className="relative">
+                  {calendarFetching && (
+                    <p className="pointer-events-none absolute right-1 top-1 z-10 rounded-md bg-white/90 px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-sm">
+                      Updating…
+                    </p>
+                  )}
+                  <BookingCalendar
+                    year={year}
+                    month={month}
+                    days={calendarInSync ? calendarDays : {}}
+                    selectedDay={selectedDay}
+                    onSelectDay={setSelectedDay}
+                    onPrevMonth={() => shiftMonth(-1)}
+                    onNextMonth={() => shiftMonth(1)}
+                    openOnly
+                    allowFullDays
+                  />
+                </div>
+                {calendarInSync && !hasOpenDays && (
                   <p className="mt-3 text-sm text-slate-500">
                     No open appointments this month. Try another month or ask the business to add
                     availability.
@@ -641,8 +720,8 @@ export default function CustomerBookServicePage() {
             )}
           </section>
 
-          {selectedDay && (
-            <section className="lx-card">
+          {selectedDay && calendarInSync && (
+            <section className="lx-card [overflow-anchor:none]">
               <h3 className="text-sm font-semibold text-slate-800">
                 Available times —{' '}
                 {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
@@ -651,36 +730,20 @@ export default function CustomerBookServicePage() {
                   day: 'numeric',
                 })}
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Times already started, or starting within the next 2 hours, are not available to book.
-              </p>
               {slotsForDay.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">No open slots this day.</p>
               ) : (
                 <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {slotsForDay.map((slot) => {
-                    const isSelected = selectedSlot?.id === slot.id;
-                    return (
-                      <li key={slot.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleSlotTap(slot)}
-                          className={`w-full min-h-[44px] rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
-                            isSelected
-                              ? 'border-luminexa-accent bg-teal-50 text-teal-900 ring-2 ring-teal-100'
-                              : 'border-slate-200 bg-white text-slate-800 hover:border-teal-300 hover:bg-teal-50/50'
-                          }`}
-                        >
-                          <span className="block">{formatTimeRange(slot.start_at, slot.end_at)}</span>
-                          {Number(slot.capacity) > 1 && Number(slot.remaining_capacity) > 0 && (
-                            <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
-                              {slot.remaining_capacity} of {slot.capacity} spots left
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
+                  {slotsForDay.map((slot) => (
+                    <li key={slot.id}>
+                      <CustomerSlotTimeButton
+                        slot={slot}
+                        selected={String(selectedSlot?.id) === String(slot.id)}
+                        onSelect={handleSlotTap}
+                        onBookedSelect={handleBookedSlotTap}
+                      />
+                    </li>
+                  ))}
                 </ul>
               )}
             </section>
@@ -801,6 +864,8 @@ export default function CustomerBookServicePage() {
         <ServiceRequestModal
           orgSlug={businessSlug}
           service={service || listedService}
+          initialPlanning={quotePlanningPreference}
+          omitAvailabilityPreview
           onClose={() => setRequestOpen(false)}
           onSuccess={(inquiry) => {
             setRequestOpen(false);

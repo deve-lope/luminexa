@@ -92,6 +92,7 @@ export function mergeTabsIntoMenuItems(tabs, menuItems) {
 
 export function buildPublicBookMenuItems(nextPath) {
   return [
+    { id: 'pricing', label: 'Pricing', to: '/pricing' },
     { id: 'signin', label: 'Sign in', to: authPathWithNext('/login', nextPath) },
     { id: 'register', label: 'Create account', to: authPathWithNext('/register', nextPath) },
     {

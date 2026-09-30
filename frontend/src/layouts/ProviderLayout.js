@@ -361,7 +361,6 @@ function ProviderShell() {
 export default function ProviderLayout() {
   const { orgSlug: urlSlug } = useParams();
   const { isAuthenticated, loading, memberships } = useAuth();
-  const navigate = useNavigate();
 
   const providerOrgs = useMemo(
     () => (memberships || []).filter((m) => m.role === 'owner' || m.role === 'staff'),
@@ -377,13 +376,11 @@ export default function ProviderLayout() {
   }
 
   if (!isAuthenticated) {
-    navigate('/login', { replace: true });
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   if (!isProviderMember(memberships)) {
-    navigate('/customer', { replace: true });
-    return null;
+    return <Navigate to="/customer" replace />;
   }
 
   if (!providerOrgs.length) {

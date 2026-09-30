@@ -4,6 +4,12 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 /** Persists across navigations so Back can restore where you were. */
 const scrollPositions = new Map();
 
+export function peekSavedScrollY(pathAndSearch) {
+  const key = String(pathAndSearch || '').split('#')[0];
+  const y = scrollPositions.get(key);
+  return typeof y === 'number' ? y : 0;
+}
+
 function locationKey(location) {
   return `${location.pathname}${location.search || ''}`;
 }
@@ -21,7 +27,7 @@ function writeScrollY(y) {
 
 /**
  * Scroll to #service-123 (or any hash target) once it exists in the DOM.
- * This is reliable on Android after remount — pixel Y often cannot stick.
+ * Prefer calling this after list data has rendered (e.g. storefront load).
  */
 export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}) {
   if (!hash || hash === '#') return () => {};
@@ -50,9 +56,45 @@ export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}
 }
 
 /**
- * Scroll to top only on a fresh PUSH to a pathname (no restore hash).
- * Back to a service list uses #service-id and scrolls that row into view.
- * Search-only changes (?cat=) never jump.
+ * Restore Y only once the document is tall enough — avoids the visible
+ * jump from clamped top → mid-page after async content mounts.
+ */
+function restoreScrollY(saved) {
+  if (typeof saved !== 'number' || saved <= 0) return () => {};
+
+  let cancelled = false;
+  let tries = 0;
+  let timeoutId;
+  let rafId;
+
+  const attempt = () => {
+    if (cancelled) return;
+    const maxScroll = Math.max(
+      0,
+      (document.documentElement.scrollHeight || document.body.scrollHeight || 0) -
+        window.innerHeight,
+    );
+    // Wait until layout can actually hold this offset (or give up after ~1s).
+    if (maxScroll < saved - 40 && tries < 20) {
+      tries += 1;
+      timeoutId = window.setTimeout(attempt, 50);
+      return;
+    }
+    writeScrollY(Math.min(saved, maxScroll));
+  };
+
+  rafId = window.requestAnimationFrame(attempt);
+  return () => {
+    cancelled = true;
+    if (timeoutId) window.clearTimeout(timeoutId);
+    if (rafId) window.cancelAnimationFrame(rafId);
+  };
+}
+
+/**
+ * Scroll to top only on a fresh PUSH to a pathname.
+ * Back restores remembered Y. #service- row pinning is left to the page after
+ * its data loads (avoids double scroll / flash with BookingStorefrontPage).
  */
 export default function ScrollToTop() {
   const location = useLocation();
@@ -77,21 +119,21 @@ export default function ScrollToTop() {
     const pathnameChanged = prev.pathname !== location.pathname;
 
     if (prevKey !== nextKey) {
-      scrollPositions.set(prevKey, readScrollY());
+      const y = readScrollY();
+      // After route change the window is often already at 0 — don't wipe a good saved Y.
+      const prior = scrollPositions.get(prevKey);
+      if (y > 0 || typeof prior !== 'number') {
+        scrollPositions.set(prevKey, y);
+      }
     }
     prevLocationRef.current = location;
 
-    // Same pathname — keep scroll (?cat=). If hash appeared, aim at it.
+    // Same pathname — keep scroll (?cat=). Hash added in-place → pin the row.
     if (!pathnameChanged) {
       if (location.hash.startsWith('#service-')) {
         return scrollToHashTarget(location.hash);
       }
       return undefined;
-    }
-
-    // Return to a specific service row after "Show details".
-    if (location.hash.startsWith('#service-')) {
-      return scrollToHashTarget(location.hash);
     }
 
     const saved = scrollPositions.get(nextKey);
@@ -101,7 +143,11 @@ export default function ScrollToTop() {
       (navigationType === 'PUSH' && typeof saved === 'number' && saved > 0);
 
     if (isReturnNav) {
-      // Do not force top on back — leave page where it is / let hash handler work.
+      // Prefer saved Y when we have it (smoother than top→hash jump).
+      if (typeof saved === 'number' && saved > 0) {
+        return restoreScrollY(saved);
+      }
+      // #service- without saved Y: storefront scrolls after data loads.
       return undefined;
     }
 
