@@ -76,6 +76,7 @@ export default function CustomerBookServicePage() {
   const [bookingConfirmSlot, setBookingConfirmSlot] = useState(null);
   const [alertPopup, setAlertPopup] = useState(null);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [quotePlanningPreference, setQuotePlanningPreference] = useState(null);
   const confirmPanelRef = useRef(null);
   const calendarSectionRef = useRef(null);
   const scrollSnapshotRef = useRef(null);
@@ -560,28 +561,53 @@ export default function CustomerBookServicePage() {
 
       {!staffOfOrg && !mustConnect && quoteFirst && (
         <section className="space-y-4">
-          <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-5">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3">
             <h2 className="font-semibold text-violet-950">Get a quote first</h2>
-            <p className="mt-2 text-sm text-violet-900/90">
-              This service doesn&apos;t have a fixed price. Request a quote with a few details — the
-              business will send a price. After you accept it, you&apos;ll pick an open appointment
-              time.
+            <p className="mt-1.5 text-sm text-violet-900/90">
+              This service doesn&apos;t have a fixed price. Pick a date (and time if you like), then
+              request a quote — nothing is reserved until you accept their price and confirm.
             </p>
-            <button
-              type="button"
-              onClick={() => setRequestOpen(true)}
-              className="mt-4 w-full min-h-[48px] rounded-xl bg-luminexa-accent text-sm font-semibold text-white"
-            >
-              Request quote
-            </button>
           </div>
           {serviceId && (
             <ServiceAvailabilityPreview
               orgSlug={businessSlug}
               serviceId={serviceId}
-              hint="Preview open slots while you wait — nothing is reserved until you accept a quote and confirm a time."
+              planningSelect
+              title="Choose a preferred date"
+              hint="Tap a day, then an open time if you have a preference. The business sees this with your quote request."
+              onPlanningChange={setQuotePlanningPreference}
             />
           )}
+          <div className="sticky bottom-0 z-20 -mx-1 border-t border-slate-200/80 bg-white/95 px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+            {quotePlanningPreference?.dayKey ? (
+              <p className="mb-2 text-center text-xs text-slate-600">
+                Preferred:{' '}
+                <span className="font-semibold text-slate-800">
+                  {new Date(`${quotePlanningPreference.dayKey}T12:00:00`).toLocaleDateString(
+                    undefined,
+                    { weekday: 'short', month: 'short', day: 'numeric' },
+                  )}
+                  {quotePlanningPreference.slot
+                    ? ` · ${formatTimeRange(
+                        quotePlanningPreference.slot.start_at,
+                        quotePlanningPreference.slot.end_at,
+                      )}`
+                    : ''}
+                </span>
+              </p>
+            ) : (
+              <p className="mb-2 text-center text-xs text-slate-500">
+                Tip: select a date above so the business knows when you prefer.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setRequestOpen(true)}
+              className="w-full min-h-[48px] rounded-xl bg-luminexa-accent text-sm font-semibold text-white shadow-lg shadow-teal-700/20"
+            >
+              Request quote
+            </button>
+          </div>
         </section>
       )}
 
@@ -835,6 +861,8 @@ export default function CustomerBookServicePage() {
         <ServiceRequestModal
           orgSlug={businessSlug}
           service={service || listedService}
+          initialPlanning={quotePlanningPreference}
+          omitAvailabilityPreview
           onClose={() => setRequestOpen(false)}
           onSuccess={(inquiry) => {
             setRequestOpen(false);

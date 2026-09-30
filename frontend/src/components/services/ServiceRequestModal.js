@@ -47,7 +47,14 @@ function buildInquiryMessage(baseMessage, needsQuote, planning) {
  * Quote-first / custom service request — no calendar slot is held.
  * Provider responds with a quote; scheduling happens after they agree on price.
  */
-export default function ServiceRequestModal({ orgSlug, service, onClose, onSuccess }) {
+export default function ServiceRequestModal({
+  orgSlug,
+  service,
+  onClose,
+  onSuccess,
+  initialPlanning = null,
+  omitAvailabilityPreview = false,
+}) {
   const titleId = useId();
   const { user } = useAuth();
   const needsQuote = serviceRequiresQuote(service);
@@ -57,10 +64,15 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [planningPreference, setPlanningPreference] = useState(null);
+  const [planningPreference, setPlanningPreference] = useState(initialPlanning);
+  const [showCalendar, setShowCalendar] = useState(!omitAvailabilityPreview);
 
   const shop = isShopService(service);
   const shopLocation = (service?.shop_location || '').trim();
+
+  useEffect(() => {
+    setPlanningPreference(initialPlanning);
+  }, [initialPlanning]);
 
   useEffect(() => {
     const saved = (user?.default_service_address || '').trim();
@@ -95,6 +107,14 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
       setSubmitting(false);
     }
   };
+
+  const preferredSummary = planningPreference?.dayKey
+    ? `${formatPlanningDayLabel(planningPreference.dayKey)}${
+        planningPreference.slot
+          ? ` · ${formatTimeRange(planningPreference.slot.start_at, planningPreference.slot.end_at)}`
+          : ''
+      }`
+    : null;
 
   return (
     <ModalOverlay onClose={onClose} labelledBy={titleId}>
@@ -177,7 +197,26 @@ export default function ServiceRequestModal({ orgSlug, service, onClose, onSucce
             />
           </>
         )}
-        {service?.id && orgSlug && (
+        {omitAvailabilityPreview && !showCalendar ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            {preferredSummary ? (
+              <p className="text-slate-800">
+                <span className="font-medium text-slate-500">Preferred · </span>
+                {preferredSummary}
+              </p>
+            ) : (
+              <p className="text-slate-600">No preferred date selected yet.</p>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowCalendar(true)}
+              className="mt-2 text-sm font-medium text-luminexa-accent"
+            >
+              {preferredSummary ? 'Change date' : 'Choose a date'}
+            </button>
+          </div>
+        ) : null}
+        {service?.id && orgSlug && showCalendar && (
           <ServiceAvailabilityPreview
             orgSlug={orgSlug}
             serviceId={service.id}
