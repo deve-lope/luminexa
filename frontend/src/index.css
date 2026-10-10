@@ -338,6 +338,44 @@ html.lx-scroll-restoring body {
   padding-bottom: max(0.5rem, var(--lx-sab));
 }
 
+/* Photo viewer: next/prev picture slides in from the swipe direction. */
+@keyframes lx-lightbox-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes lx-lightbox-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.lx-lightbox-from-right {
+  animation: lx-lightbox-from-right 220ms ease-out;
+}
+
+.lx-lightbox-from-left {
+  animation: lx-lightbox-from-left 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-lightbox-from-right,
+  .lx-lightbox-from-left {
+    animation: none;
+  }
+}
+
 /* Full-screen modals — above bottom tabs (z-50), honor safe areas + keyboard. */
 .lx-modal-overlay {
   padding-top: max(0.75rem, var(--lx-sat));

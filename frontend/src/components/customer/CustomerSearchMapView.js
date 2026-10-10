@@ -2,12 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { businessesAPI } from '../../utils/api';
-import {
-  DEFAULT_RADIUS_MILES,
-  MILES_TO_METERS,
-  RADIUS_MILE_OPTIONS,
-  formatRadiusMiles,
-} from '../../constants/locationSearch';
+import { DEFAULT_RADIUS_MILES, MILES_TO_METERS } from '../../constants/locationSearch';
+import { IconMapPin } from '../icons/NavIcons';
+import RadiusSlider from './RadiusSlider';
 import { canUseBrowserGeolocation, formatPlaceLabel, requestGeolocationCoordinates } from '../../utils/geolocationSupport';
 import { bookService } from '../../utils/customerPaths';
 import {
@@ -199,8 +196,7 @@ export default function CustomerSearchMapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- init once
   }, []);
 
-  const handleRadiusChange = (e) => {
-    const next = Number(e.target.value);
+  const handleRadiusChange = (next) => {
     setRadiusMiles(next);
     radiusRef.current = next;
     if (circleRef.current && centerLat != null && centerLng != null) {
@@ -365,102 +361,78 @@ export default function CustomerSearchMapView({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label htmlFor="map-postal-search" className="mb-1 block text-xs font-medium text-slate-600">
-            ZIP / postal code <span className="font-normal text-slate-400">(optional)</span>
+      <div className="lx-card space-y-4">
+        <div>
+          <label htmlFor="map-postal-search" className="sr-only">
+            ZIP / postal code
           </label>
-          <input
-            id="map-postal-search"
-            value={formatPostalLabel(postal)}
-            onChange={(e) => setPostal(normalizePostalInput(e.target.value))}
-            placeholder="Or pan the map to browse…"
-            autoComplete="postal-code"
-            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-          />
-        </div>
-        <div className="w-32">
-          <label htmlFor="map-radius-search" className="mb-1 block text-xs font-medium text-slate-600">
-            Within
-          </label>
-          <select
-            id="map-radius-search"
-            value={radiusMiles}
-            onChange={handleRadiusChange}
-            disabled={!hasCenter}
-            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-2 text-sm outline-none focus:border-luminexa-accent disabled:bg-slate-50"
-          >
-            {RADIUS_MILE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        {gpsAvailable && (
-          <div className="flex flex-col justify-end">
-            <button
-              type="button"
-              onClick={handleUseLocation}
-              disabled={locating}
-              title="Use my location"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-50"
-            >
-              {locating ? '…' : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3"/><path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                <IconMapPin className="h-5 w-5" />
+              </span>
+              <input
+                id="map-postal-search"
+                value={formatPostalLabel(postal)}
+                onChange={(e) => setPostal(normalizePostalInput(e.target.value))}
+                placeholder="ZIP / postal code"
+                autoComplete="postal-code"
+                className="lx-input pl-11"
+              />
+            </div>
+            {gpsAvailable && (
+              <button
+                type="button"
+                onClick={handleUseLocation}
+                disabled={locating}
+                aria-label="Use my location"
+                className="lx-btn-secondary shrink-0 gap-1.5 px-3.5 sm:px-4"
+              >
+                <svg
+                  className={`h-4 w-4 shrink-0 ${locating ? 'animate-pulse' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
                 </svg>
-              )}
-            </button>
+                <span>{locating ? 'Locating…' : 'My location'}</span>
+              </button>
+            )}
           </div>
-        )}
-      </div>
-      {lookupStatus === 'loading' && (
-        <p className="text-xs text-slate-500">Looking up your area…</p>
-      )}
-
-      {error && <p className="text-xs text-amber-700">{error}</p>}
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-        <div ref={mapEl} className="h-[240px] w-full bg-slate-100 sm:h-[280px] md:h-[320px]" />
-      </div>
-      <p className="text-xs text-slate-500">
-        Drag the map to explore — providers update for the area you&apos;re viewing.
-      </p>
-
-      {hasCenter && (
-        <div className="rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-700">Search radius</span>
-            <span className="text-sm font-semibold text-luminexa-accent">{formatRadiusMiles(radiusMiles)}</span>
-          </div>
-          <input
-            type="range"
-            min={RADIUS_MILE_OPTIONS[0].value}
-            max={RADIUS_MILE_OPTIONS[RADIUS_MILE_OPTIONS.length - 1].value}
-            step={1}
-            value={radiusMiles}
-            onChange={handleRadiusChange}
-            className="w-full accent-luminexa-accent"
-          />
-          <div className="mt-1 flex justify-between text-xs text-slate-400">
-            {RADIUS_MILE_OPTIONS.map((o) => <span key={o.value}>{o.value} mi</span>)}
-          </div>
+          {lookupStatus === 'loading' && (
+            <p className="mt-2 text-xs text-slate-500">Looking up your area…</p>
+          )}
+          {error && <p className="mt-2 text-xs text-amber-700">{error}</p>}
         </div>
-      )}
+
+        <RadiusSlider value={radiusMiles} onChange={handleRadiusChange} disabled={!hasCenter} />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-luminexa-line shadow-lx-card">
+        <div ref={mapEl} className="h-[300px] w-full bg-slate-100 sm:h-[360px] md:h-[420px]" />
+      </div>
 
       {!hasCenter ? (
         <p className="text-center text-sm text-slate-500">
-          Pan the map, use your location, or enter a postal code to find providers.
+          Drag the map, tap My location, or enter a postal code to find providers.
         </p>
       ) : orgsOnMap.length === 0 ? (
-        <p className="rounded-xl bg-white px-4 py-4 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-100">
-          No providers with a set location in this area. Try widening the radius or panning elsewhere.
-        </p>
+        <div className="lx-empty">
+          <p className="text-sm text-slate-600">
+            No providers with a set location in this area. Try widening the radius or dragging the
+            map.
+          </p>
+        </div>
       ) : (
-        <p className="text-sm text-slate-600">
-          <span className="font-semibold text-slate-900">{orgsOnMap.length}</span> provider
-          {orgsOnMap.length !== 1 ? 's' : ''} on the map — tap a marker to see their services.
+        <p className="flex items-center gap-2 text-sm text-slate-600">
+          <span className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-violet-600 px-1.5 text-xs font-bold text-white">
+            {orgsOnMap.length}
+          </span>
+          provider{orgsOnMap.length !== 1 ? 's' : ''} on the map — tap a marker to see services.
         </p>
       )}
     </div>

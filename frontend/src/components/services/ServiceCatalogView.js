@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import ServiceRatingSummary from './ServiceRatingSummary';
 import ServiceThumb from './ServiceThumb';
+import { IconShop, IconTruck } from '../icons/NavIcons';
 import {
   customerProviderServiceDetail,
   serviceDetail,
@@ -38,70 +39,115 @@ export function ServiceRow({
     }
   }
 
+  const hasFooter = showPriceBadge || detailHref || actions;
+  const isShop = fulfillment === 'In-shop';
+
   return (
     <li
       id={`service-${service.id}`}
-      className={`overflow-hidden rounded-xl border shadow-sm ${
+      className={`lx-card flex h-full flex-col transition duration-200 ${
         selected
-          ? 'border-luminexa-accent bg-white ring-1 ring-luminexa-accent/30'
-          : 'border-teal-200/80 bg-gradient-to-br from-teal-50 via-white to-emerald-50/50 ring-1 ring-teal-100/70'
+          ? 'border-luminexa-accent bg-teal-50/40 ring-2 ring-luminexa-accent/30'
+          : 'hover:border-teal-200'
       }`}
     >
-      <div className="h-1 bg-gradient-to-r from-teal-700 via-luminexa-accent to-cyan-400" />
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {selectable && (
-            <label className="mt-0.5 flex shrink-0 cursor-pointer items-start">
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={() => onToggleSelect?.(service.id)}
-                className="mt-1 h-4 w-4 accent-luminexa-accent"
-                aria-label={`Select ${service.name}`}
-              />
-            </label>
+      <div className="flex items-start gap-3 sm:gap-4">
+        <ServiceThumb
+          service={service}
+          className="h-16 w-16 sm:h-20 sm:w-20"
+          iconClassName="h-8 w-8 sm:h-9 sm:w-9"
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-semibold leading-snug tracking-tight text-slate-900">
+            {service.name}
+          </h3>
+          {service.rating_summary?.count > 0 && (
+            <div className="mt-1">
+              <ServiceRatingSummary summary={service.rating_summary} compact />
+            </div>
           )}
-          <ServiceThumb service={service} className="h-14 w-14" iconClassName="h-7 w-7" />
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold leading-snug text-teal-950">{service.name}</h3>
-            {service.rating_summary?.count > 0 && (
-              <div className="mt-1">
-                <ServiceRatingSummary summary={service.rating_summary} compact />
-              </div>
-            )}
-            {showPriceBadge && (
-              <div className="mt-2">
-                <p className="inline-block max-w-full rounded-lg bg-teal-700 px-2 py-1 text-xs font-semibold leading-snug text-white">
-                  {price}
-                </p>
-                {priceForVisit && (
-                  <p className="mt-1 text-[11px] font-medium text-teal-800">for this visit</p>
-                )}
-              </div>
-            )}
-            {fulfillment && (
-              <div className="mt-2">
-                <span className="rounded-lg bg-white/90 px-2 py-0.5 text-xs font-medium text-teal-900 ring-1 ring-teal-200/80">
-                  {fulfillment}
-                </span>
-              </div>
-            )}
-            {detailHref && (
-              <Link
-                to={detailHref}
-                className="mt-2 inline-flex min-h-[36px] items-center text-sm font-medium text-luminexa-accent"
-              >
-                Show full details →
-              </Link>
-            )}
-          </div>
+          {fulfillment && (
+            <span
+              className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${
+                isShop
+                  ? 'bg-violet-50 text-violet-800 ring-violet-200/80'
+                  : 'bg-teal-50 text-teal-800 ring-teal-200/80'
+              }`}
+            >
+              {isShop ? (
+                <IconShop className="h-3.5 w-3.5" />
+              ) : (
+                <IconTruck className="h-3.5 w-3.5" />
+              )}
+              {fulfillment}
+            </span>
+          )}
         </div>
-        {actions && (
-          <div className="mt-3 border-t border-teal-100/80 pt-3 [&>a]:flex [&>a]:min-h-[44px] [&>a]:w-full [&>a]:items-center [&>a]:justify-center [&>button]:flex [&>button]:min-h-[44px] [&>button]:w-full [&>button]:items-center [&>button]:justify-center">
-            {actions}
-          </div>
+        {selectable && (
+          <label
+            className="-m-2 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
+            title={selected ? 'Remove from selection' : 'Select to book together'}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect?.(service.id)}
+              className="peer sr-only"
+              aria-label={`Select ${service.name}`}
+            />
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-transparent shadow-sm transition peer-checked:border-luminexa-accent peer-checked:bg-luminexa-accent peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-luminexa-accent/40">
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+          </label>
         )}
       </div>
+
+      {hasFooter && (
+        <div className="mt-auto flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          {showPriceBadge ? (
+            <div className="min-w-0 border-t border-slate-100 pt-3 sm:border-0 sm:pt-0">
+              <p className="text-lg font-bold leading-tight tracking-tight tabular-nums text-slate-900">
+                {price}
+              </p>
+              {priceForVisit && (
+                <p className="text-xs font-medium text-slate-500">for this visit</p>
+              )}
+            </div>
+          ) : (
+            <span className="hidden sm:block" />
+          )}
+          {(detailHref || actions) && (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
+              {detailHref && (
+                <Link
+                  to={detailHref}
+                  className={`lx-btn-ghost min-h-[44px] px-4 ${actions ? '' : 'col-span-2'}`}
+                >
+                  Full details
+                </Link>
+              )}
+              {actions && (
+                <div
+                  className={`contents [&>a]:w-full [&>button]:w-full sm:[&>a]:w-auto sm:[&>button]:w-auto ${
+                    detailHref ? '' : '[&>a]:col-span-2 [&>button]:col-span-2'
+                  }`}
+                >
+                  {actions}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }

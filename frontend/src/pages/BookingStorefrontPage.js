@@ -209,7 +209,7 @@ export default function BookingStorefrontPage() {
       return (
         <Link
           to={`/login?next=${encodeURIComponent(serviceBookPath(svc.id))}`}
-          className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
+          className="lx-btn-primary px-4"
         >
           {needsQuote ? 'Sign in to request quote' : 'Sign in to book'}
         </Link>
@@ -221,7 +221,7 @@ export default function BookingStorefrontPage() {
           type="button"
           disabled={connecting}
           onClick={connect}
-          className="rounded-lg border border-luminexa-accent px-3 py-2 text-sm font-medium text-luminexa-accent disabled:opacity-60"
+          className="lx-btn-secondary px-4 disabled:opacity-60"
         >
           Request access
         </button>
@@ -233,7 +233,7 @@ export default function BookingStorefrontPage() {
           <button
             type="button"
             onClick={() => setRequestModalService(svc)}
-            className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
+            className="lx-btn-primary px-4"
           >
             Request quote
           </button>
@@ -242,7 +242,7 @@ export default function BookingStorefrontPage() {
       return (
         <Link
           to={serviceBookPath(svc.id)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-luminexa-accent hover:text-luminexa-accent"
+          className="lx-btn-primary px-4"
         >
           Book now
         </Link>
@@ -465,15 +465,20 @@ export default function BookingStorefrontPage() {
             )}
 
             {canPickService && selectedServiceIds.length > 0 && (
-              <div className="lx-sticky-above-tabs z-30 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lg lg:bottom-3 lg:static">
-                <p className="text-sm font-medium text-slate-900">
-                  {selectedServiceIds.length} service
-                  {selectedServiceIds.length === 1 ? '' : 's'} selected
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Book them in one visit — same type only (mobile or in-shop). Combined duration
-                  needs one free window on the schedule.
-                </p>
+              <div className="lx-sticky-above-tabs z-30 rounded-2xl border border-luminexa-accent/30 bg-white p-4 shadow-lx-elevated lg:bottom-3 lg:static">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-luminexa-accent text-sm font-bold text-white">
+                    {selectedServiceIds.length}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {selectedServiceIds.length === 1 ? 'Service' : 'Services'} selected
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Booked in one visit · same type only (mobile or in-shop)
+                    </p>
+                  </div>
+                </div>
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
@@ -481,15 +486,15 @@ export default function BookingStorefrontPage() {
                       setSelectedServiceIds([]);
                       setSelectionHint(null);
                     }}
-                    className="min-h-[44px] flex-1 rounded-xl border border-slate-200 text-sm font-medium text-slate-700"
+                    className="lx-btn-ghost flex-1"
                   >
                     Clear
                   </button>
                   <Link
                     to={multiCheckoutPath(selectedServiceIds)}
-                    className="flex min-h-[44px] flex-[2] items-center justify-center rounded-xl bg-luminexa-accent text-sm font-medium text-white"
+                    className="lx-btn-primary flex-[2]"
                   >
-                    Book this
+                    Book {selectedServiceIds.length === 1 ? 'this' : `these ${selectedServiceIds.length}`}
                   </Link>
                 </div>
               </div>

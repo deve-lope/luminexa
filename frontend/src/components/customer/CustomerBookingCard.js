@@ -613,53 +613,88 @@ export default function CustomerBookingCard({
         </div>
       )}
       {showActions && (
-        <div className="mt-4 space-y-2 border-t border-slate-100/80 pt-4">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="mt-4 border-t border-slate-100/80 pt-4">
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/50 divide-y divide-slate-100">
             {detailTo && (
-              <Link to={detailTo} className="lx-btn-ghost w-full px-3 text-center">
-                Full details
+              <Link
+                to={detailTo}
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </span>
+                <span className="flex-1">Full details</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {providerKey && (
               <Link
                 to={customerProviderPage(providerKey)}
-                className="lx-btn-ghost w-full px-3 text-center"
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                View provider
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2M5 21H3m4-10h2m4 0h2m-6 4h2m4 0h2" />
+                  </svg>
+                </span>
+                <span className="flex-1">View provider</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {providerKey && booking.service && !isGigOrCustomJob && (
               <Link
                 to={customerProviderServiceDetail(providerKey, booking.service)}
-                className="lx-btn-ghost w-full px-3 text-center"
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                Service details
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </span>
+                <span className="flex-1">Service details</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {booking.status === 'confirmed' && (
               <button
                 type="button"
                 onClick={() => setCalendarOpen(true)}
-                className="lx-btn-ghost inline-flex w-full items-center justify-center gap-1.5 px-3 text-center"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                </span>
+                <span className="flex-1">Add to calendar</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                Add to calendar
               </button>
             )}
           </div>
           {(onReschedule || onCancel) && (
-            <div className={`grid gap-2 ${onReschedule && onCancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div className={`mt-3 grid gap-2 ${onReschedule && onCancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {onReschedule && (
                 <button
                   type="button"
                   onClick={() => onReschedule(booking)}
-                  className="lx-btn-secondary w-full px-3"
+                  className="lx-btn-secondary w-full gap-1.5 px-3"
                 >
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                   Reschedule
                 </button>
               )}
@@ -668,9 +703,12 @@ export default function CustomerBookingCard({
                   type="button"
                   disabled={cancelling}
                   onClick={() => onCancel(booking.id)}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
                 >
-                  {cancelling ? 'Cancelling…' : 'Cancel'}
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  {cancelling ? 'Cancelling…' : 'Cancel booking'}
                 </button>
               )}
             </div>
