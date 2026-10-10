@@ -345,7 +345,13 @@ export default function ProviderScheduleDetailPage() {
               ? 'Customer comes to your shop for this service.'
               : 'You go to the customer for this service.'
           }
-          emptyLabel="No address on file for this booking."
+          emptyLabel={
+            data.awaiting_customer_acceptance && data.source === 'provider_direct'
+              ? isShopService(data)
+                ? 'Waiting for the customer to confirm the invite.'
+                : 'Customer will add their address when they confirm the invite email.'
+              : 'No address on file for this booking.'
+          }
         />
 
         {data.customer_notes && (
@@ -381,9 +387,19 @@ export default function ProviderScheduleDetailPage() {
 
         {data.awaiting_customer_acceptance && (
           <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
-            Waiting for the customer to accept the new time
-            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
-            You can propose a different time, or cancel the booking.
+            {data.source === 'provider_direct' && !data.prior_start_at ? (
+              <>
+                Waiting for the customer to confirm via their invite email
+                {!isShopService(data) ? ' (they add the job address there)' : ''}.
+                You can change the time or cancel if needed.
+              </>
+            ) : (
+              <>
+                Waiting for the customer to accept the new time
+                {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+                You can propose a different time, or cancel the booking.
+              </>
+            )}
           </p>
         )}
 
@@ -779,6 +795,7 @@ export default function ProviderScheduleDetailPage() {
   }
 
   if (kind === 'block') {
+    const day = data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null;
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-slate-600 p-5 text-white shadow-lg">
@@ -792,7 +809,42 @@ export default function ProviderScheduleDetailPage() {
             <DetailRow label="To">{formatWhen(data.end_at)}</DetailRow>
             <DetailRow label="Note">{data.note || '—'}</DetailRow>
           </dl>
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => setConfirmAction('delete-block')}
+            className="mt-5 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-red-50 text-sm font-semibold text-red-700 ring-1 ring-red-200 active:bg-red-100 disabled:opacity-50"
+          >
+            Remove block (make available again)
+          </button>
         </section>
+        <ConfirmDialog
+          open={confirmAction === 'delete-block'}
+          title="Remove unavailable time?"
+          message="This block will be deleted. That time can be opened or booked again."
+          confirmLabel="Remove block"
+          cancelLabel="Keep"
+          tone="danger"
+          busy={actionBusy}
+          onConfirm={async () => {
+            setActionBusy(true);
+            setError(null);
+            try {
+              await jobsAPI.deleteUnavailableBlock(id);
+              showToast('Unavailable block removed.', 'success');
+              setConfirmAction(null);
+              navigate(providerSchedule(orgSlug, { day }));
+            } catch (e) {
+              setError(parseApiError(e));
+            } finally {
+              setActionBusy(false);
+            }
+          }}
+          onClose={() => {
+            if (actionBusy) return;
+            setConfirmAction(null);
+          }}
+        />
       </div>
     );
   }

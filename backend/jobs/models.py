@@ -86,8 +86,9 @@ class Service(models.Model):
     quote_questions = models.JSONField(
         default=list,
         blank=True,
-        help_text='Template questions for quote-priced services (list of strings). '
-                  'Customers answer these when requesting; providers can edit on the quote.',
+        help_text='Template questions for quote-priced services: strings or '
+                  '{question, type: text|choice, options?}. '
+                  'Customers answer when requesting; providers can also ask mid-request.',
     )
     allow_request = models.BooleanField(
         default=True,

@@ -39,6 +39,11 @@ import {
   getStoredReferralCode,
 } from '../../utils/referralStorage';
 import CustomerReferralCard from '../../components/customer/CustomerReferralCard';
+import {
+  isChoiceQuestion,
+  questionLabel,
+  toQuoteQuestionDraft,
+} from '../../utils/quoteQuestions';
 
 function parseApiError(err) {
   const d = err.response?.data;
@@ -214,9 +219,8 @@ export default function CustomerBookServicePage() {
         ? fromService
         : [];
     return raw
-      .map((q) => (typeof q === 'string' ? q : q?.question || ''))
-      .map((q) => q.trim())
-      .filter(Boolean);
+      .map((q) => toQuoteQuestionDraft(q))
+      .filter((q) => questionLabel(q));
   }, [bookingCtx?.service_quote_questions, service?.quote_questions]);
 
   useEffect(() => {
@@ -379,7 +383,7 @@ export default function CustomerBookServicePage() {
           quote_answers: requiresQuote
             ? quoteQuestionList.map((question, i) => ({
                 id: `q${i + 1}`,
-                question,
+                question: questionLabel(question),
                 answer: (quoteAnswers[`q${i + 1}`] || '').trim(),
               }))
             : undefined,
@@ -788,18 +792,49 @@ export default function CustomerBookServicePage() {
                   </p>
                   {quoteQuestionList.map((question, i) => {
                     const key = `q${i + 1}`;
+                    const value = quoteAnswers[key] || '';
+                    const setValue = (answer) =>
+                      setQuoteAnswers((prev) => ({ ...prev, [key]: answer }));
+                    if (isChoiceQuestion(question)) {
+                      return (
+                        <fieldset key={key} className="min-w-0">
+                          <legend className="mb-1.5 block text-sm font-medium text-slate-800">
+                            {questionLabel(question)}
+                          </legend>
+                          <div className="space-y-1.5">
+                            {(question.options || []).map((opt) => (
+                              <label
+                                key={opt}
+                                className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border px-3 text-sm ${
+                                  value === opt
+                                    ? 'border-luminexa-accent bg-violet-50 text-slate-900'
+                                    : 'border-slate-200 bg-white text-slate-700'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`book-quote-${key}`}
+                                  checked={value === opt}
+                                  onChange={() => setValue(opt)}
+                                  className="h-4 w-4 accent-violet-700"
+                                />
+                                <span>{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      );
+                    }
                     return (
                       <div key={key}>
                         <label htmlFor={`quote-ans-${key}`} className="mb-1 block text-sm font-medium text-slate-800">
-                          {question}
+                          {questionLabel(question)}
                         </label>
                         <textarea
                           id={`quote-ans-${key}`}
                           rows={2}
-                          value={quoteAnswers[key] || ''}
-                          onChange={(e) =>
-                            setQuoteAnswers((prev) => ({ ...prev, [key]: e.target.value }))
-                          }
+                          value={value}
+                          onChange={(e) => setValue(e.target.value)}
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                           placeholder="Your answer"
                         />

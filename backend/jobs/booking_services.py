@@ -578,7 +578,29 @@ def accept_booking_request(booking, staff_user):
     return booking
 
 
+_QUOTE_Q_TYPES = frozenset({'text', 'choice'})
+
+
+def _normalize_quote_question_options(raw_options):
+    options = []
+    if not isinstance(raw_options, list):
+        return options
+    for opt in raw_options:
+        text = str(opt or '').strip()[:120]
+        if text and text not in options:
+            options.append(text)
+        if len(options) >= 12:
+            break
+    return options
+
+
 def _normalize_quote_questions(raw):
+    """
+    Normalize to [{id, question, answer, type, options?}].
+
+    type: 'text' (default) or 'choice' (single select from options).
+    Plain strings stay free-text for backward compatibility.
+    """
     questions = []
     if not raw:
         return questions
@@ -589,7 +611,12 @@ def _normalize_quote_questions(raw):
             text = item.strip()
             if not text:
                 continue
-            questions.append({'id': f'q{i + 1}', 'question': text[:300], 'answer': ''})
+            questions.append({
+                'id': f'q{i + 1}',
+                'question': text[:300],
+                'answer': '',
+                'type': 'text',
+            })
             continue
         if not isinstance(item, dict):
             continue
@@ -598,29 +625,79 @@ def _normalize_quote_questions(raw):
             continue
         qid = (item.get('id') or f'q{i + 1}')[:40]
         answer = (item.get('answer') or '').strip()[:1000]
-        questions.append({'id': qid, 'question': text[:300], 'answer': answer})
+        qtype = (item.get('type') or 'text').strip().lower()
+        if qtype not in _QUOTE_Q_TYPES:
+            qtype = 'text'
+        entry = {
+            'id': qid,
+            'question': text[:300],
+            'answer': answer,
+            'type': qtype,
+        }
+        if qtype == 'choice':
+            options = _normalize_quote_question_options(item.get('options'))
+            if len(options) < 2:
+                raise ValidationError({
+                    'questions': (
+                        f'“{text[:60]}” is multiple choice — add at least 2 options.'
+                    ),
+                })
+            entry['options'] = options
+            if answer and answer not in options:
+                # Keep blank rather than an invalid prior answer.
+                entry['answer'] = ''
+        questions.append(entry)
     return questions[:20]
 
 
 def _merge_quote_questions(existing, incoming):
-    """Prefer incoming question list; preserve prior answers when possible."""
+    """Prefer incoming question list; preserve prior answers only for the same question text."""
     if incoming is None:
         return list(existing or [])
     normalized = _normalize_quote_questions(incoming)
     prior = list(existing or [])
     by_id = {str(q.get('id')): q for q in prior if q.get('id')}
     by_text = {(q.get('question') or '').strip().lower(): q for q in prior}
+    used_ids = set()
     for q in normalized:
-        if not (q.get('answer') or '').strip():
-            prev = by_id.get(str(q.get('id'))) or by_text.get((q.get('question') or '').strip().lower())
-            if prev and (prev.get('answer') or '').strip():
+        qtext = (q.get('question') or '').strip().lower()
+        prev = by_text.get(qtext) or by_id.get(str(q.get('id')))
+        same_text = bool(
+            prev and (prev.get('question') or '').strip().lower() == qtext
+        )
+        if same_text and prev:
+            if not (q.get('answer') or '').strip() and (prev.get('answer') or '').strip():
                 q['answer'] = prev['answer']
+            if prev.get('id'):
+                q['id'] = prev['id']
+        # Avoid colliding with prior ids when this is a different question.
+        qid = str(q.get('id') or '')
+        if qid and (qid in used_ids or (qid in by_id and not same_text)):
+            n = len(normalized) + len(used_ids) + 1
+            while f'q{n}' in by_id or f'q{n}' in used_ids:
+                n += 1
+            q['id'] = f'q{n}'
+            qid = q['id']
+        if qid:
+            used_ids.add(qid)
     return normalized
 
 
+_QUESTION_ANSWER_STATUSES = frozenset({
+    Booking.Status.REQUESTED,
+    Booking.Status.QUOTED,
+    Booking.Status.CONFIRMED,
+    Booking.Status.IN_PROGRESS,
+})
+
+
 def booking_awaiting_quote_details(booking) -> bool:
-    """True when provider asked questions and customer has not answered them all yet."""
-    if booking.status != Booking.Status.REQUESTED:
+    """
+    True when the customer still has unanswered clarifying questions.
+
+    Unanswered questions never change booking status — they are informational.
+    """
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
         return False
     questions = booking.quote_questions or []
     if not questions:
@@ -647,46 +724,37 @@ def ask_booking_quote_questions(
     message='',
 ):
     """
-    Provider asks clarifying questions before pricing.
+    Provider asks clarifying questions (before or after confirm).
 
-    This is not a quote — status stays/returns to REQUESTED and quote_amount is cleared.
+    Does not change booking status, quote amount, or confirmation — unanswered
+    questions are informational only.
     """
-    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
-        raise ValidationError({'status': 'Only open requests can receive quote questions.'})
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
+        raise ValidationError({
+            'status': 'Questions can only be asked on open or confirmed bookings.',
+        })
     normalized = _normalize_quote_questions(questions)
     if not normalized:
         raise ValidationError({'questions': 'Add at least one question for the customer.'})
 
     booking.quote_questions = _merge_quote_questions(booking.quote_questions, normalized)
-    # Ensure the asked set still has at least one unanswered question for the customer.
-    if not any(not (q.get('answer') or '').strip() for q in booking.quote_questions):
-        # All questions already answered (re-ask same set) — clear answers for newly listed blanks only
-        pass
-    booking.quote_amount = None
-    booking.quote_message = (message or '').strip()[:4000]
-    booking.quoted_at = None
-    booking.status = Booking.Status.REQUESTED
     booking.booked_by = staff_user
-    booking.save(
-        update_fields=[
-            'quote_questions',
-            'quote_amount',
-            'quote_message',
-            'quoted_at',
-            'status',
-            'booked_by',
-            'updated_at',
-        ]
-    )
+    update_fields = ['quote_questions', 'booked_by', 'updated_at']
+    note = (message or '').strip()[:4000]
+    # Keep an existing priced-quote note unless the provider sends a new message.
+    if note:
+        booking.quote_message = note
+        update_fields.append('quote_message')
+    booking.save(update_fields=update_fields)
     return booking
 
 
 @transaction.atomic
 def answer_booking_quote_questions(booking, *, customer, answers):
-    """Customer submits answers so the provider can send an accurate quote."""
+    """Customer submits answers to clarifying questions (any open booking status)."""
     if booking.customer_id != customer.id:
         raise PermissionDenied('Only the customer can answer these questions.')
-    if booking.status != Booking.Status.REQUESTED:
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
         raise ValidationError({'status': 'These questions are no longer open for answers.'})
     questions = list(booking.quote_questions or [])
     if not questions:
@@ -704,7 +772,16 @@ def answer_booking_quote_questions(booking, *, customer, answers):
     for q in questions:
         qid = str(q.get('id') or '')
         if qid in by_id:
-            q['answer'] = by_id[qid]
+            ans = by_id[qid]
+            if (q.get('type') or 'text') == 'choice':
+                options = q.get('options') or []
+                if ans and ans not in options:
+                    raise ValidationError({
+                        'answers': (
+                            f'Pick one of the listed options for “{q.get("question")}”.'
+                        ),
+                    })
+            q['answer'] = ans
 
     missing = [q['question'] for q in questions if not (q.get('answer') or '').strip()]
     if missing:
@@ -743,18 +820,8 @@ def send_booking_quote(
         reschedule_booking(booking, new_slot=new_slot, by_user=staff_user)
         booking.refresh_from_db()
 
+    # Unanswered clarifying questions do not block a priced quote or confirmation.
     merged = _merge_quote_questions(booking.quote_questions, questions)
-    unanswered = [
-        q for q in merged
-        if (q.get('question') or '').strip() and not (q.get('answer') or '').strip()
-    ]
-    if unanswered:
-        raise ValidationError({
-            'questions': (
-                'Ask the customer to answer questions first (Ask questions), '
-                'then send a priced quote. Unanswered questions cannot go out with a price.'
-            ),
-        })
 
     booking.quote_amount = amount
     booking.quote_message = (message or '').strip()[:4000]

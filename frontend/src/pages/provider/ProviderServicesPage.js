@@ -20,6 +20,13 @@ import {
   markProviderWizardStepDone,
   providerSetupPath,
 } from '../../utils/profileSetup';
+import {
+  QUOTE_Q_CHOICE,
+  QUOTE_Q_TEXT,
+  emptyQuoteQuestionDraft,
+  toQuoteQuestionDraft,
+  toServiceQuoteQuestionsPayload,
+} from '../../utils/quoteQuestions';
 
 const INPUT_CLASS =
   'w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-luminexa-accent focus:outline-none focus:ring-2 focus:ring-luminexa-accent/20';
@@ -83,9 +90,15 @@ function FieldToggle({ checked, onChange, label, description, info }) {
 }
 
 const DEFAULT_QUOTE_QUESTIONS = [
-  'What do you need done?',
-  'Any details that affect the price (size, condition, access)?',
-];
+  emptyQuoteQuestionDraft(),
+  emptyQuoteQuestionDraft(),
+].map((d, i) => ({
+  ...d,
+  question:
+    i === 0
+      ? 'What do you need done?'
+      : 'Any details that affect the price (size, condition, access)?',
+}));
 
 const emptyServiceDraft = () => ({
   name: '',
@@ -95,28 +108,43 @@ const emptyServiceDraft = () => ({
   pricing_type: 'fixed',
   base_price: '0',
   price_max: '',
-  quote_questions: [...DEFAULT_QUOTE_QUESTIONS],
+  quote_questions: DEFAULT_QUOTE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] })),
   show_price: true,
   allow_request: true,
   fulfillment_kind: 'mobile',
 });
 
 function normalizeQuoteQuestions(list) {
-  if (!Array.isArray(list) || !list.length) return [...DEFAULT_QUOTE_QUESTIONS];
-  return list.map((q) => (typeof q === 'string' ? q : q?.question || ''));
+  if (!Array.isArray(list) || !list.length) {
+    return DEFAULT_QUOTE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] }));
+  }
+  return list.map((q) => toQuoteQuestionDraft(q));
 }
 
 function questionsForPricingType(pricingType, current) {
-  const cleaned = (current || []).map((q) => String(q || '').trim()).filter(Boolean);
+  const drafts = (current || []).map((q) => toQuoteQuestionDraft(q));
+  const cleaned = drafts.filter((q) => q.question.trim());
   if (pricingType === 'quote' && cleaned.length === 0) {
-    return [...DEFAULT_QUOTE_QUESTIONS];
+    return DEFAULT_QUOTE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] }));
   }
-  if (cleaned.length) return current.map((q) => String(q ?? ''));
-  return pricingType === 'quote' ? [...DEFAULT_QUOTE_QUESTIONS] : [''];
+  if (cleaned.length) return drafts;
+  return pricingType === 'quote'
+    ? DEFAULT_QUOTE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] }))
+    : [emptyQuoteQuestionDraft()];
 }
 
 function QuoteQuestionsEditor({ questions, onChange, required }) {
-  const list = questions?.length ? questions : required ? [...DEFAULT_QUOTE_QUESTIONS] : [''];
+  const list = questions?.length
+    ? questions.map((q) => toQuoteQuestionDraft(q))
+    : required
+      ? DEFAULT_QUOTE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] }))
+      : [emptyQuoteQuestionDraft()];
+
+  const updateAt = (idx, patch) => {
+    const next = list.map((q, i) => (i === idx ? { ...q, ...patch } : q));
+    onChange(next);
+  };
+
   return (
     <div
       className={`space-y-3 rounded-2xl border p-4 ${
@@ -128,50 +156,128 @@ function QuoteQuestionsEditor({ questions, onChange, required }) {
           {required ? 'Quote questions' : 'Quote questions (optional)'}
         </p>
         <p className="mt-0.5 text-xs text-slate-600">
-          Asked when the customer books. Answers help you send an accurate price.
+          Asked when the customer books. Free text or multiple choice.
           {required ? ' Two starter questions are included — edit them or add more.' : null}
         </p>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-3">
         {list.map((q, idx) => (
           <li
             key={`qq-${idx}`}
-            className="flex items-start gap-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200/80"
+            className="space-y-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200/80"
           >
-            <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-[11px] font-bold text-white">
-              {idx + 1}
-            </span>
-            <input
-              type="text"
-              value={q}
-              placeholder={`Question ${idx + 1}`}
-              onChange={(e) => {
-                const next = [...list];
-                next[idx] = e.target.value;
-                onChange(next);
-              }}
-              className={`${INPUT_CLASS} mt-0`}
-            />
-            <button
-              type="button"
-              className="mt-1 shrink-0 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              aria-label={`Remove question ${idx + 1}`}
-              onClick={() => {
-                const next = list.filter((_, i) => i !== idx);
-                onChange(
-                  next.length > 0 ? next : required ? [...DEFAULT_QUOTE_QUESTIONS] : ['']
-                );
-              }}
-            >
-              Remove
-            </button>
+            <div className="flex items-start gap-2">
+              <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-[11px] font-bold text-white">
+                {idx + 1}
+              </span>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateAt(idx, { type: QUOTE_Q_TEXT })}
+                    className={`min-h-[32px] rounded-lg px-2.5 text-xs font-semibold ${
+                      q.type === QUOTE_Q_TEXT
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    Free text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateAt(idx, {
+                        type: QUOTE_Q_CHOICE,
+                        options: q.options?.length >= 2 ? q.options : ['', ''],
+                      })
+                    }
+                    className={`min-h-[32px] rounded-lg px-2.5 text-xs font-semibold ${
+                      q.type === QUOTE_Q_CHOICE
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    Multiple choice
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={q.question}
+                  placeholder={`Question ${idx + 1}`}
+                  onChange={(e) => updateAt(idx, { question: e.target.value })}
+                  className={`${INPUT_CLASS} mt-0`}
+                />
+                {q.type === QUOTE_Q_CHOICE && (
+                  <div className="space-y-1.5 pl-0.5">
+                    {q.options.map((opt, oi) => (
+                      <div key={`qq-opt-${idx}-${oi}`} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={opt}
+                          placeholder={`Option ${oi + 1}`}
+                          onChange={(e) => {
+                            const options = [...q.options];
+                            options[oi] = e.target.value;
+                            updateAt(idx, { options });
+                          }}
+                          className={`${INPUT_CLASS} mt-0`}
+                        />
+                        {q.options.length > 2 && (
+                          <button
+                            type="button"
+                            className="shrink-0 px-2 text-sm text-slate-500"
+                            aria-label={`Remove option ${oi + 1}`}
+                            onClick={() =>
+                              updateAt(idx, {
+                                options: q.options.filter((_, i) => i !== oi),
+                              })
+                            }
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {q.options.length < 12 && (
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-teal-800"
+                        onClick={() => updateAt(idx, { options: [...q.options, ''] })}
+                      >
+                        + Add option
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="mt-1 shrink-0 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label={`Remove question ${idx + 1}`}
+                onClick={() => {
+                  const next = list.filter((_, i) => i !== idx);
+                  onChange(
+                    next.length > 0
+                      ? next
+                      : required
+                        ? DEFAULT_QUOTE_QUESTIONS.map((d) => ({
+                            ...d,
+                            options: [...d.options],
+                          }))
+                        : [emptyQuoteQuestionDraft()],
+                  );
+                }}
+              >
+                Remove
+              </button>
+            </div>
           </li>
         ))}
       </ul>
       <button
         type="button"
         className="inline-flex min-h-[40px] items-center rounded-xl bg-white px-3 text-sm font-semibold text-teal-800 ring-1 ring-teal-200 hover:bg-teal-50"
-        onClick={() => onChange([...list, ''])}
+        onClick={() => onChange([...list, emptyQuoteQuestionDraft()])}
       >
         + Add question
       </button>
@@ -185,7 +291,10 @@ const emptyBulkRow = () => ({
   price_max: '',
   description: '',
   pricing_type: 'fixed',
-  quote_questions: [...DEFAULT_QUOTE_QUESTIONS],
+  quote_questions: DEFAULT_QUOTE_QUESTIONS.map((q) => ({
+    ...q,
+    options: [...q.options],
+  })),
 });
 
 const initialBulkRows = () => [emptyBulkRow()];
@@ -429,67 +538,11 @@ function ServiceDetailForm({
         )}
 
         {(serviceDraft.pricing_type === 'range' || serviceDraft.pricing_type === 'average') && (
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Quote questions (optional)</p>
-              <p className="mt-0.5 text-xs text-slate-600">
-                Asked when the customer books. Leave blank if you do not need them.
-              </p>
-            </div>
-            <ul className="space-y-2">
-              {(serviceDraft.quote_questions?.length
-                ? serviceDraft.quote_questions
-                : ['']
-              ).map((q, idx) => (
-                <li key={`qq-opt-${idx}`} className="flex items-start gap-2">
-                  <input
-                    type="text"
-                    value={q}
-                    placeholder={`Question ${idx + 1}`}
-                    onChange={(e) => {
-                      const next = [
-                        ...(serviceDraft.quote_questions?.length
-                          ? serviceDraft.quote_questions
-                          : ['']),
-                      ];
-                      next[idx] = e.target.value;
-                      setServiceDraft((d) => ({ ...d, quote_questions: next }));
-                    }}
-                    className={INPUT_CLASS}
-                  />
-                  <button
-                    type="button"
-                    className="mt-1 shrink-0 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-slate-100"
-                    aria-label={`Remove question ${idx + 1}`}
-                    onClick={() => {
-                      const cur = serviceDraft.quote_questions?.length
-                        ? serviceDraft.quote_questions
-                        : [''];
-                      const next = cur.filter((_, i) => i !== idx);
-                      setServiceDraft((d) => ({
-                        ...d,
-                        quote_questions: next.length ? next : [''],
-                      }));
-                    }}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="text-sm font-semibold text-teal-800 hover:underline"
-              onClick={() =>
-                setServiceDraft((d) => ({
-                  ...d,
-                  quote_questions: [...(d.quote_questions || []), ''],
-                }))
-              }
-            >
-              + Add question
-            </button>
-          </div>
+          <QuoteQuestionsEditor
+            questions={serviceDraft.quote_questions}
+            required={false}
+            onChange={(quote_questions) => setServiceDraft((d) => ({ ...d, quote_questions }))}
+          />
         )}
 
         <div className="space-y-2">
@@ -1250,9 +1303,19 @@ export default function ProviderServicesPage({ embedded = false }) {
       );
       return;
     }
-    const cleanedQuestions = (serviceDraft.quote_questions || [])
-      .map((q) => String(q || '').trim())
-      .filter(Boolean);
+    const cleanedQuestions = toServiceQuoteQuestionsPayload(serviceDraft.quote_questions);
+    const choiceMissingOpts = (serviceDraft.quote_questions || []).some((raw) => {
+      const d = toQuoteQuestionDraft(raw);
+      return (
+        d.question.trim() &&
+        d.type === QUOTE_Q_CHOICE &&
+        d.options.map((o) => o.trim()).filter(Boolean).length < 2
+      );
+    });
+    if (choiceMissingOpts) {
+      setError('Multiple-choice questions need at least 2 options.');
+      return;
+    }
     if (serviceDraft.pricing_type === 'quote' && cleanedQuestions.length < 1) {
       setError('Add at least one quote question so customers can describe the job.');
       return;
@@ -1326,9 +1389,7 @@ export default function ProviderServicesPage({ embedded = false }) {
         pricing_type: row.pricing_type || 'fixed',
         base_price: row.base_price,
         price_max: row.price_max,
-        quote_questions: (row.quote_questions || [])
-          .map((q) => String(q || '').trim())
-          .filter(Boolean),
+        quote_questions: toServiceQuoteQuestionsPayload(row.quote_questions),
       }))
       .filter((row) => row.name.length >= 2);
 

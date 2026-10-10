@@ -268,8 +268,8 @@ export default function BookCustomerForm({
         {submitting ? 'Booking…' : 'Book appointment'}
       </button>
       <p className="text-center text-xs text-slate-500">
-        We’ll email them a link to add their address and confirm the booking. It shows
-        under Upcoming for them after they confirm and sign in.
+        You don’t enter the job address here. We email them a link — for mobile jobs they
+        add where you should come, then confirm. After that it appears under their Upcoming.
       </p>
     </form>
   );

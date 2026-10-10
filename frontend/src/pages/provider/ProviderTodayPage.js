@@ -25,11 +25,9 @@ import {
 import { jobsAPI } from '../../utils/api';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import { parseApiError } from '../../utils/taskDisplay';
-import {
-  hasFinishedProviderSetupWizard,
-  markProviderSetupWizardDone,
-  providerResumeSetupPath,
-} from '../../utils/profileSetup';
+import { hasFinishedProviderSetupWizard } from '../../utils/profileSetup';
+import { buildProviderSetupChecklist } from '../../utils/providerSetupChecklist';
+import ProviderSetupProgressCard from '../../components/provider/ProviderSetupProgressCard';
 import { useAuth } from '../../contexts/AuthContext';
 
 function jobAccent(status) {
@@ -50,6 +48,8 @@ export default function ProviderTodayPage() {
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
   const [showSetupHint, setShowSetupHint] = useState(false);
+  const [orgDetails, setOrgDetails] = useState(null);
+  const [servicesCount, setServicesCount] = useState(null);
 
   const [openTasksExpanded, setOpenTasksExpanded] = useState(false);
   const [expandedOpenTasks, setExpandedOpenTasks] = useState(null);
@@ -68,15 +68,39 @@ export default function ProviderTodayPage() {
     setFetching(true);
     setError(null);
     try {
-      const res = await jobsAPI.getProviderDashboard(orgSlug);
-      setDashboard(res.data);
+      const [dashRes, orgRes, servicesRes] = await Promise.all([
+        jobsAPI.getProviderDashboard(orgSlug),
+        isOwner ? jobsAPI.getOrganization(orgSlug).catch(() => null) : Promise.resolve(null),
+        isOwner
+          ? jobsAPI.listServices({ organization: orgSlug }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      setDashboard(dashRes.data);
+      if (orgRes?.data) setOrgDetails(orgRes.data);
+      const svc = servicesRes?.data;
+      const count = Array.isArray(svc)
+        ? svc.length
+        : Array.isArray(svc?.results)
+          ? svc.results.length
+          : null;
+      setServicesCount(count);
     } catch (e) {
       setError(parseApiError(e));
       setDashboard(null);
     } finally {
       setFetching(false);
     }
-  }, [orgSlug]);
+  }, [orgSlug, isOwner]);
+
+  const setupChecklist = useMemo(() => {
+    if (!showSetupHint || !orgSlug) return null;
+    return buildProviderSetupChecklist({
+      orgSlug,
+      org: orgDetails,
+      servicesCount,
+      schedulingMode: orgDetails?.scheduling_mode || dashboard?.organization?.scheduling_mode,
+    });
+  }, [showSetupHint, orgSlug, orgDetails, servicesCount, dashboard]);
 
   useEffect(() => {
     load();
@@ -251,53 +275,12 @@ export default function ProviderTodayPage() {
         </div>
       </header>
 
-      {showSetupHint && (
-        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-slate-800">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold text-teal-950">Finish setting up your business</p>
-              <p className="mt-1 text-teal-900/80">
-                Set availability, service area, services, and your public page when you’re ready.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                markProviderSetupWizardDone(orgSlug);
-                setShowSetupHint(false);
-              }}
-              className="shrink-0 text-xs font-semibold text-teal-800 hover:text-teal-950"
-            >
-              Dismiss
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              to={providerResumeSetupPath(orgSlug)}
-              className="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white"
-            >
-              Continue setup
-            </Link>
-            <Link
-              to={providerSettings(orgSlug)}
-              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
-            >
-              Settings
-            </Link>
-            <Link
-              to={providerServices(orgSlug)}
-              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
-            >
-              Services
-            </Link>
-            <Link
-              to={providerShare(orgSlug)}
-              className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-900"
-            >
-              My page
-            </Link>
-          </div>
-        </div>
+      {showSetupHint && setupChecklist && !setupChecklist.complete && (
+        <ProviderSetupProgressCard
+          orgSlug={orgSlug}
+          checklist={setupChecklist}
+          onDismiss={() => setShowSetupHint(false)}
+        />
       )}
 
       {(dashboard.notifications || []).map((n) => (

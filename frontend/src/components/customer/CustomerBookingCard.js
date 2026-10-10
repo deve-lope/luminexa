@@ -27,7 +27,6 @@ import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
 import StarRating from '../services/StarRating';
 import { IconMapPin, IconSchedule } from '../icons/NavIcons';
-
 /** Gig-wall / custom quote bookings — not a catalog service page. */
 function isCustomOrGigBooking(booking) {
   return Boolean((booking?.job_title || '').trim()) || booking?.service_name === 'Custom job';
@@ -100,9 +99,10 @@ export default function CustomerBookingCard({
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
-  const [answers, setAnswers] = useState(() =>
-    (booking.quote_questions || []).map((q) => ({ id: q.id, answer: q.answer || '' }))
-  );
+  const answers = (booking.quote_questions || []).map((q) => ({
+    id: q.id,
+    answer: q.answer || '',
+  }));
   const past = isPastBooking(booking);
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
@@ -127,9 +127,9 @@ export default function CustomerBookingCard({
       'The business proposed a new time. They still need to send a quote before you can confirm.';
   } else if (awaitingTimeChange && !past) {
     statusHint = 'The business proposed a new appointment time. Accept to lock it in, or decline.';
-  } else if (awaitingQuoteDetails && !past) {
+  } else if (awaitingQuoteDetails) {
     statusHint =
-      'Answer the questions below so the business can send you an accurate quote.';
+      'The business asked questions at the top of this page — answering is optional and does not change your booking.';
   } else if (isQuoted && !past) {
     statusHint =
       'Quote ready — accept the price to confirm this appointment, or decline.';
@@ -163,11 +163,12 @@ export default function CustomerBookingCard({
 
   if (compact) {
     const needsAttention =
-      (!past && (isQuoted || awaitingTimeChange || awaitingQuoteDetails)) ||
+      awaitingQuoteDetails ||
+      (!past && (isQuoted || awaitingTimeChange)) ||
       (booking.status === 'completed' && canRate);
     const compactHint = needsAttention
-      ? awaitingQuoteDetails && !past
-        ? 'Answer questions for your quote — open for details'
+      ? awaitingQuoteDetails
+        ? 'Answer questions — open this booking'
         : isQuoted && !past
         ? 'Quote ready — open for details'
         : awaitingTimeChange && !past
@@ -380,22 +381,6 @@ export default function CustomerBookingCard({
     }
   };
 
-  const submitQuoteAnswers = async () => {
-    setQuoteBusy(true);
-    setQuoteError('');
-    try {
-      await jobsAPI.answerBookingQuoteQuestions(booking.id, { answers });
-      onQuoteUpdated?.();
-    } catch (e) {
-      const d = e.response?.data;
-      setQuoteError(
-        d?.answers || d?.detail || d?.status?.[0] || 'Could not send your answers.'
-      );
-    } finally {
-      setQuoteBusy(false);
-    }
-  };
-
   const declineQuote = async () => {
     setQuoteBusy(true);
     setQuoteError('');
@@ -496,68 +481,8 @@ export default function CustomerBookingCard({
         </div>
       )}
 
-      {booking.status === 'requested' &&
-        (booking.quote_questions || []).some((q) => (q.answer || '').trim()) &&
-        !awaitingQuoteDetails && (
-        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your answers</p>
-          <ul className="mt-2 space-y-2 text-sm text-slate-700">
-            {booking.quote_questions.map((q) => (
-              <li key={q.id}>
-                <span className="font-medium">{q.question}</span>
-                {q.answer ? <span className="text-slate-600"> — {q.answer}</span> : null}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-slate-500">
-            The business has your answers and will send a quote next.
-          </p>
-        </div>
-      )}
-
-      {awaitingQuoteDetails && !past && (
-        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/70 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">
-            Answer to get your quote
-          </p>
-          <p className="mt-1 text-sm text-slate-700">
-            {booking.organization_name} needs a few details before they can send an accurate price.
-          </p>
-          {booking.quote_message ? (
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{booking.quote_message}</p>
-          ) : null}
-          <div className="mt-3 space-y-2">
-            {(booking.quote_questions || []).map((q, idx) => (
-              <div key={q.id || idx}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{q.question}</label>
-                <input
-                  value={answers.find((a) => a.id === q.id)?.answer || ''}
-                  onChange={(e) => {
-                    setAnswers((prev) => {
-                      const next = [...prev];
-                      const i = next.findIndex((a) => a.id === q.id);
-                      if (i >= 0) next[i] = { ...next[i], answer: e.target.value };
-                      else next.push({ id: q.id, answer: e.target.value });
-                      return next;
-                    });
-                  }}
-                  className="w-full min-h-[40px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  placeholder="Your answer"
-                />
-              </div>
-            ))}
-          </div>
-          {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
-          <button
-            type="button"
-            disabled={quoteBusy}
-            onClick={submitQuoteAnswers}
-            className="mt-3 min-h-[44px] w-full rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {quoteBusy ? 'Sending…' : 'Submit answers'}
-          </button>
-        </div>
-      )}
+      {/* Questions answer UI lives at the top of CustomerBookingDetailPage
+          (BookingQuestionsPanel) so it is not buried under Message / Activity. */}
 
       {isQuoted && booking.quote_amount != null && (
         <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">

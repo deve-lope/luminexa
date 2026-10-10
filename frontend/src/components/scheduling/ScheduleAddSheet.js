@@ -40,7 +40,7 @@ export default function ScheduleAddSheet({
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <p className="text-sm font-semibold text-slate-900">Open hours / time off</p>
         <p className="mt-1 text-xs text-slate-500">
-          Add an open slot customers can book, or block unavailable time.
+          Set From / Until times below after you choose an option — no dragging on the timeline.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {MODES.map((mode) => {

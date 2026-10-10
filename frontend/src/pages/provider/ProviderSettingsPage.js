@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import BookingPolicySettings from '../../components/provider/BookingPolicySettings';
 import OrganizationTimezoneField from '../../components/provider/OrganizationTimezoneField';
 import ProviderBooksSettings from '../../components/provider/ProviderBooksSettings';
 import ProviderReferralSettings from '../../components/provider/ProviderReferralSettings';
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
+import ProviderSetupProgressCard from '../../components/provider/ProviderSetupProgressCard';
 import ProviderWebsiteSettings from '../../components/provider/ProviderWebsiteSettings';
 import SettingsSectionOverlay from '../../components/provider/SettingsSectionOverlay';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
@@ -17,6 +18,8 @@ import DateRangeControl from '../../components/scheduling/DateRangeControl';
 import SavingOverlay from '../../components/ui/SavingOverlay';
 import { formatLocalDateKey } from '../../utils/dateRange';
 import { IconChevronLeft } from '../../components/icons/NavIcons';
+import { hasFinishedProviderSetupWizard } from '../../utils/profileSetup';
+import { buildProviderSetupChecklist } from '../../utils/providerSetupChecklist';
 
 const WEEKDAYS = [
   { value: 0, label: 'Mon' },
@@ -73,6 +76,7 @@ function defaultDateRange() {
 export default function ProviderSettingsPage() {
   const { orgSlug, activeOrg } = useProviderOrg();
   const { memberships } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isOwner = useMemo(
     () => memberships?.some((m) => m.organization_slug === orgSlug && m.role === 'owner'),
     [memberships, orgSlug]
@@ -83,19 +87,53 @@ export default function ProviderSettingsPage() {
   const [validUntil, setValidUntil] = useState('');
   const [blocks, setBlocks] = useState([]);
   const [orgId, setOrgId] = useState(null);
+  const [orgDetails, setOrgDetails] = useState(null);
+  const [servicesCount, setServicesCount] = useState(null);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [openSection, setOpenSection] = useState(null);
 
+  const closeSection = useCallback(() => {
+    setOpenSection(null);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('section');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  const openSectionById = useCallback(
+    (id) => {
+      setOpenSection(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('section', id);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const load = useCallback(async () => {
     if (!orgSlug) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await jobsAPI.getSchedulingSettings(orgSlug);
-      const d = res.data;
+      const [schedRes, orgRes, servicesRes] = await Promise.all([
+        jobsAPI.getSchedulingSettings(orgSlug),
+        jobsAPI.getOrganization(orgSlug).catch(() => null),
+        jobsAPI.listServices({ organization: orgSlug }).catch(() => null),
+      ]);
+      const d = schedRes.data;
       setMode(d.scheduling_mode || 'flexi');
       setTimezone(d.timezone || 'America/New_York');
       const defaults = defaultDateRange();
@@ -114,6 +152,14 @@ export default function ProviderSettingsPage() {
       } else {
         setBlocks([0, 1, 2, 3, 4].map((wd) => ({ ...DEFAULT_BLOCK, weekday: wd })));
       }
+      if (orgRes?.data) setOrgDetails(orgRes.data);
+      const svc = servicesRes?.data;
+      const count = Array.isArray(svc)
+        ? svc.length
+        : Array.isArray(svc?.results)
+          ? svc.results.length
+          : null;
+      setServicesCount(count);
     } catch (e) {
       setError(parseApiError(e) || 'Could not load settings.');
     } finally {
@@ -128,6 +174,39 @@ export default function ProviderSettingsPage() {
   useEffect(() => {
     setOrgId(activeOrg?.organization ?? null);
   }, [activeOrg]);
+
+  useEffect(() => {
+    if (!orgSlug) return;
+    setSetupDismissed(hasFinishedProviderSetupWizard(orgSlug));
+  }, [orgSlug]);
+
+  useEffect(() => {
+    const section = searchParams.get('section');
+    if (section && SETTINGS_SECTIONS.some((s) => s.id === section)) {
+      setOpenSection(section);
+    }
+  }, [searchParams]);
+
+  const setupChecklist = useMemo(() => {
+    if (!isOwner || setupDismissed || !orgSlug) return null;
+    return buildProviderSetupChecklist({
+      orgSlug,
+      org: orgDetails,
+      servicesCount,
+      schedulingMode: mode,
+      weeklyBlocksCount: mode === 'recurring' ? blocks.filter((b) => b.is_active !== false).length : null,
+    });
+  }, [isOwner, setupDismissed, orgSlug, orgDetails, servicesCount, mode, blocks]);
+
+  const setupStatusBySection = useMemo(() => {
+    const map = {};
+    (setupChecklist?.items || []).forEach((item) => {
+      if (item.id === 'availability') map.availability = item.done;
+      if (item.id === 'service_area') map.locations = item.done;
+      if (item.id === 'website') map.website = item.done;
+    });
+    return map;
+  }, [setupChecklist]);
 
   const save = async () => {
     if (!orgSlug) return;
@@ -207,26 +286,62 @@ export default function ProviderSettingsPage() {
         Open a section to change it. Only one is shown at a time.
       </p>
 
+      {setupChecklist && !setupChecklist.complete && (
+        <ProviderSetupProgressCard
+          orgSlug={orgSlug}
+          checklist={setupChecklist}
+          onDismiss={() => setSetupDismissed(true)}
+        />
+      )}
+
       <ul className="space-y-2">
-        {SETTINGS_SECTIONS.map((section) => (
-          <li key={section.id}>
-            <button
-              type="button"
-              onClick={() => setOpenSection(section.id)}
-              className="flex w-full min-h-[64px] items-center gap-3 overflow-hidden rounded-2xl border border-teal-100/90 bg-gradient-to-br from-white via-luminexa-mist to-teal-50/70 px-4 py-3 text-left shadow-lx-card transition hover:border-teal-300 hover:shadow-lx-elevated"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold tracking-tight text-slate-900">
-                  {section.title}
+        {SETTINGS_SECTIONS.map((section) => {
+          const setupDone = setupStatusBySection[section.id];
+          const needsSetup = setupDone === false;
+          return (
+            <li key={section.id}>
+              <button
+                type="button"
+                onClick={() => openSectionById(section.id)}
+                className={`flex w-full min-h-[64px] items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left shadow-lx-card transition hover:shadow-lx-elevated ${
+                  needsSetup
+                    ? 'border-amber-300 bg-gradient-to-br from-amber-50 via-white to-amber-50/80 hover:border-amber-400'
+                    : setupDone
+                      ? 'border-teal-200 bg-gradient-to-br from-teal-50/80 via-white to-luminexa-mist hover:border-teal-300'
+                      : 'border-teal-100/90 bg-gradient-to-br from-white via-luminexa-mist to-teal-50/70 hover:border-teal-300'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="block text-sm font-bold tracking-tight text-slate-900">
+                      {section.title}
+                    </span>
+                    {needsSetup && (
+                      <span className="rounded-md bg-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                        Needs setup
+                      </span>
+                    )}
+                    {setupDone && (
+                      <span className="rounded-md bg-teal-200/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-900">
+                        Done
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{section.hint}</span>
                 </span>
-                <span className="mt-0.5 block text-xs text-slate-500">{section.hint}</span>
-              </span>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80 text-teal-800 ring-1 ring-teal-200/70">
-                <IconChevronLeft className="h-4 w-4 rotate-180" />
-              </span>
-            </button>
-          </li>
-        ))}
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${
+                    needsSetup
+                      ? 'bg-amber-100 text-amber-900 ring-amber-300'
+                      : 'bg-white/80 text-teal-800 ring-teal-200/70'
+                  }`}
+                >
+                  <IconChevronLeft className="h-4 w-4 rotate-180" />
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       {message && !openSection && <p className="text-sm text-emerald-700">{message}</p>}
@@ -235,7 +350,7 @@ export default function ProviderSettingsPage() {
       <SettingsSectionOverlay
         open={Boolean(openSection)}
         title={SETTINGS_SECTIONS.find((s) => s.id === openSection)?.title || 'Settings'}
-        onClose={() => setOpenSection(null)}
+        onClose={closeSection}
       >
         {openSection === 'availability' && (
           <div className="space-y-6">

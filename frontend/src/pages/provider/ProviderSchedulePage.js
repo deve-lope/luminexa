@@ -18,6 +18,7 @@ import { jobsAPI } from '../../utils/api';
 import { buildProviderScheduleDays, slotLocalDayKey } from '../../utils/slotCalendar';
 import { formatLocalDateKey, parseLocalDateKey } from '../../utils/dateRange';
 import LinkShareBar from '../../components/LinkShareBar';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { defaultDayBounds } from '../../utils/dayTimeline';
 import { normalizeRange, suggestDefaultDraftRange } from '../../utils/timelineInteraction';
 import {
@@ -25,6 +26,7 @@ import {
   readRememberedScheduleDay,
   rememberScheduleDay,
 } from '../../utils/scheduleDayMemory';
+
 function parseApiError(err) {
   const d = err.response?.data;
   if (typeof d === 'string') return d;
@@ -60,6 +62,7 @@ export default function ProviderSchedulePage() {
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [slots, setSlots] = useState([]);
+  const [monthBookings, setMonthBookings] = useState([]);
   const [unavailable, setUnavailable] = useState([]);
   const [weeklyBlocks, setWeeklyBlocks] = useState([]);
   const [pendingCustomers, setPendingCustomers] = useState([]);
@@ -75,6 +78,8 @@ export default function ProviderSchedulePage() {
 
   const [addMode, setAddMode] = useState(null);
   const [draftRange, setDraftRange] = useState(null);
+  const [deletingUnavailableId, setDeletingUnavailableId] = useState(null);
+  const [pendingDeleteUnavailableId, setPendingDeleteUnavailableId] = useState(null);
 
   const load = useCallback(async () => {
     if (!orgSlug || !activeOrg) return;
@@ -87,7 +92,7 @@ export default function ProviderSchedulePage() {
       const from = formatLocalDateKey(monthStart);
       const until = formatLocalDateKey(monthEnd);
 
-      const [svcRes, custRes, slotRes, pendingCustRes, unavailRes, schedRes] =
+      const [svcRes, custRes, slotRes, pendingCustRes, unavailRes, schedRes, bookRes] =
         await Promise.all([
           jobsAPI.listServices({ organization: orgSlug }),
           jobsAPI.listOrgCustomers(orgSlug),
@@ -95,6 +100,12 @@ export default function ProviderSchedulePage() {
           jobsAPI.listOrgCustomers(orgSlug, { status: 'pending' }),
           jobsAPI.listUnavailableBlocks({ organization: orgSlug }),
           jobsAPI.getSchedulingSettings(orgSlug),
+          jobsAPI.listBookings({
+            organization: orgSlug,
+            from,
+            until,
+            status: 'requested,quoted,confirmed,in_progress,needs_return',
+          }),
         ]);
       const svcList = Array.isArray(svcRes.data) ? svcRes.data : svcRes.data?.results || [];
       setServices(svcList);
@@ -102,6 +113,11 @@ export default function ProviderSchedulePage() {
       const slotPayload = slotRes.data;
       let loadedSlots = slotPayload?.slots ?? (Array.isArray(slotPayload) ? slotPayload : []);
       if (!Array.isArray(loadedSlots)) loadedSlots = [];
+      const bookPayload = bookRes.data;
+      const loadedBookings = Array.isArray(bookPayload)
+        ? bookPayload
+        : bookPayload?.results || [];
+      setMonthBookings(Array.isArray(loadedBookings) ? loadedBookings : []);
 
       const mode = schedRes.data?.scheduling_mode || 'flexi';
       const blocks = schedRes.data?.weekly_blocks || [];
@@ -222,6 +238,29 @@ export default function ProviderSchedulePage() {
   const resetAddFlow = () => {
     setAddMode(null);
     setDraftRange(null);
+  };
+
+  const requestDeleteUnavailable = (blockId) => {
+    if (!blockId) return;
+    setPendingDeleteUnavailableId(blockId);
+  };
+
+  const confirmDeleteUnavailable = async () => {
+    const blockId = pendingDeleteUnavailableId;
+    if (!blockId) return;
+    setDeletingUnavailableId(blockId);
+    setError(null);
+    try {
+      await jobsAPI.deleteUnavailableBlock(blockId);
+      setMessage('Unavailable block removed. That time can be opened or booked again.');
+      setCustomerShareUrl('');
+      setPendingDeleteUnavailableId(null);
+      await load();
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setDeletingUnavailableId(null);
+    }
   };
 
   const startBookCustomer = () => {
@@ -457,6 +496,15 @@ export default function ProviderSchedulePage() {
             <p className="rounded-lg bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900 ring-1 ring-violet-100">
               Selected: {dayLabel}
             </p>
+            {!addMode && (
+              <DayBookingsSummary
+                orgSlug={orgSlug}
+                dayKey={selectedDay}
+                bookings={monthBookings}
+                slots={daySlotsAll}
+                returnTo={providerSchedule(orgSlug, { day: selectedDay })}
+              />
+            )}
             {services.length > 0 && addMode !== 'book' && (
               <button
                 type="button"
@@ -547,21 +595,10 @@ export default function ProviderSchedulePage() {
                   slots={daySlotsAll}
                   unavailable={unavailable}
                   weeklyBlocks={weeklyBlocks}
-                  addMode={addMode}
-                  draftRange={draftRange}
-                  onDraftRangeChange={setDraftRange}
-                  onClearDraft={() => setDraftRange(null)}
+                  onDeleteUnavailable={requestDeleteUnavailable}
+                  deletingUnavailableId={deletingUnavailableId}
                 />
               </div>
-              {!addMode && daySlotsAll.some((s) => s.booking_id) && (
-                <div className="mt-3 border-t border-slate-100 pt-3 sm:mt-4 sm:pt-4">
-                  <DayBookingsSummary
-                    orgSlug={orgSlug}
-                    slots={daySlotsAll}
-                    returnTo={providerSchedule(orgSlug, { day: selectedDay })}
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -582,6 +619,21 @@ export default function ProviderSchedulePage() {
           . You can still add manual slots above.
         </p>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteUnavailableId)}
+        title="Remove unavailable time?"
+        message="This block will be deleted. That time can be opened or booked again."
+        confirmLabel="Remove block"
+        cancelLabel="Keep"
+        tone="danger"
+        busy={Boolean(deletingUnavailableId)}
+        onConfirm={confirmDeleteUnavailable}
+        onClose={() => {
+          if (deletingUnavailableId) return;
+          setPendingDeleteUnavailableId(null);
+        }}
+      />
     </div>
   );
 }

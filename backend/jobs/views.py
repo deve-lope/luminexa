@@ -1292,7 +1292,38 @@ class BookingViewSet(viewsets.ModelViewSet):
             qs = qs.filter(organization__slug=slug)
         status_filter = self.request.query_params.get('status')
         if status_filter:
-            qs = qs.filter(status=status_filter)
+            statuses = [s.strip() for s in status_filter.split(',') if s.strip()]
+            if len(statuses) == 1:
+                qs = qs.filter(status=statuses[0])
+            elif statuses:
+                qs = qs.filter(status__in=statuses)
+        # Optional window (provider schedule day cards).
+        from django.utils.dateparse import parse_datetime, parse_date
+        from datetime import datetime, time as dt_time
+        from django.utils import timezone as dj_tz
+
+        start_param = self.request.query_params.get('from') or self.request.query_params.get('start')
+        end_param = self.request.query_params.get('until') or self.request.query_params.get('end')
+        if start_param:
+            start_dt = parse_datetime(start_param)
+            if start_dt is None:
+                d = parse_date(start_param)
+                if d:
+                    start_dt = datetime.combine(d, dt_time.min)
+            if start_dt is not None:
+                if dj_tz.is_naive(start_dt):
+                    start_dt = dj_tz.make_aware(start_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__gte=start_dt)
+        if end_param:
+            end_dt = parse_datetime(end_param)
+            if end_dt is None:
+                d = parse_date(end_param)
+                if d:
+                    end_dt = datetime.combine(d, dt_time.max)
+            if end_dt is not None:
+                if dj_tz.is_naive(end_dt):
+                    end_dt = dj_tz.make_aware(end_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__lte=end_dt)
         if self.action in ('retrieve', 'list'):
             qs = qs.prefetch_related('status_events__actor', 'return_visits', 'cost_lines')
         return qs.distinct().order_by('-start_at')

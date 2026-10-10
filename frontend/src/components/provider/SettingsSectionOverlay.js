@@ -2,12 +2,15 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { IconChevronLeft } from '../icons/NavIcons';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
+import { useOverlayHistoryBack } from '../../hooks/useOverlayHistoryBack';
 
 /**
  * Full-screen settings sheet so the Settings list can stay headings-only.
+ * Header / system Back closes this sheet before leaving Settings.
  */
 export default function SettingsSectionOverlay({ open, title, onClose, children }) {
   useModalBodyLock(open);
+  useOverlayHistoryBack(open, onClose);
 
   useEffect(() => {
     if (!open) return undefined;
