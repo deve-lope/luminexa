@@ -924,6 +924,12 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     customer_confirmed_attendance_at = serializers.DateTimeField(read_only=True)
     customer_reported_no_show_at = serializers.DateTimeField(read_only=True)
     needs_attendance_prompt = serializers.SerializerMethodField()
+    en_route_active = serializers.SerializerMethodField()
+    en_route_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    en_route_distance_km = serializers.DecimalField(
+        max_digits=8, decimal_places=2, read_only=True, allow_null=True,
+    )
+    en_route_updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = Booking
@@ -944,12 +950,16 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
 
     def get_service_name(self, obj):
         return booking_display_service_name(obj)
+
+    def get_en_route_active(self, obj):
+        return bool(obj.en_route_at)
 
     def get_customer_view_url(self, obj):
         return obj.customer_view_url()
@@ -1078,6 +1088,12 @@ class BookingSerializer(serializers.ModelSerializer):
     customer_view_url = serializers.SerializerMethodField()
     customer_view_token = serializers.CharField(read_only=True)
     needs_attendance_prompt = serializers.SerializerMethodField()
+    en_route_active = serializers.SerializerMethodField()
+    en_route_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    en_route_distance_km = serializers.DecimalField(
+        max_digits=8, decimal_places=2, read_only=True, allow_null=True,
+    )
+    en_route_updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = Booking
@@ -1099,6 +1115,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -1117,6 +1134,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -1165,6 +1183,9 @@ class BookingSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated or obj.customer_id != user.id:
             return False
         return booking_needs_attendance_prompt(obj)
+
+    def get_en_route_active(self, obj):
+        return bool(obj.en_route_at)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -1389,26 +1410,53 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
     organization_public_ref = serializers.CharField(
         source='organization.public_ref', read_only=True,
     )
+    organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
+    organization_tagline = serializers.CharField(source='organization.tagline', read_only=True)
+    organization_logo_url = serializers.SerializerMethodField()
+    organization_location = serializers.SerializerMethodField()
+    organization_profile_public = serializers.BooleanField(
+        source='organization.profile_public', read_only=True,
+    )
     fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
+    service_duration_minutes = serializers.IntegerField(
+        source='service.duration_minutes', read_only=True, allow_null=True,
+    )
+    reference = serializers.SerializerMethodField()
     job_location = serializers.SerializerMethodField()
     job_location_label = serializers.SerializerMethodField()
     customer_first_name = serializers.SerializerMethodField()
     needs_customer_confirm = serializers.SerializerMethodField()
     needs_job_address = serializers.SerializerMethodField()
+    saved_service_address = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = (
-            'id', 'status', 'start_at', 'end_at', 'source',
+            'id', 'reference', 'status', 'start_at', 'end_at', 'source',
             'awaiting_customer_acceptance',
-            'service_name', 'organization_name', 'organization_public_ref',
+            'service_name', 'service_duration_minutes',
+            'organization_name', 'organization_public_ref', 'organization_slug',
+            'organization_tagline', 'organization_logo_url', 'organization_location',
+            'organization_profile_public',
             'fulfillment_kind', 'job_location', 'job_location_label',
             'customer_first_name', 'needs_customer_confirm', 'needs_job_address',
+            'saved_service_address',
         )
         read_only_fields = fields
 
     def get_service_name(self, obj):
         return booking_display_service_name(obj)
+
+    def get_reference(self, obj):
+        return f'BK-{obj.pk:05d}'
+
+    def get_organization_logo_url(self, obj):
+        return _absolute_media_url(self.context.get('request'), obj.organization.logo)
+
+    def get_organization_location(self, obj):
+        from businesses.utils import organization_location_short
+
+        return organization_location_short(obj.organization) or ''
 
     def get_customer_first_name(self, obj):
         name = (getattr(obj.customer, 'full_name', None) or '').strip()
@@ -1426,6 +1474,15 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
             return False
         kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
         return kind == Service.FulfillmentKind.MOBILE
+
+    def get_saved_service_address(self, obj):
+        """Customer's profile default when valid — for invite confirm pre-fill only."""
+        if not self.get_needs_customer_confirm(obj):
+            return ''
+        from .service_address import is_valid_structured_service_address
+
+        raw = (getattr(obj.customer, 'default_service_address', None) or '').strip()
+        return raw if is_valid_structured_service_address(raw) else ''
 
     def get_job_location(self, obj):
         addr = (obj.service_address or '').strip()

@@ -6,6 +6,7 @@ import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import {
   providerAddTask,
   providerAnalytics,
+  providerRequestDetail,
   providerRequests,
   providerSchedule,
   providerScheduleDetail,
@@ -15,6 +16,7 @@ import {
   providerTasks,
   providerGigs,
 } from '../../utils/providerPaths';
+import { requestStatusLabel } from '../../utils/requestStatus';
 import {
   PROVIDER_NOTIFICATIONS_CHANGED_EVENT,
   dismissProviderNotificationQuietly,
@@ -265,10 +267,17 @@ export default function ProviderTodayPage() {
               <p className="text-[10px] uppercase tracking-wide text-white/70">Upcoming</p>
             </Link>
             <Link
-              to={providerRequests(orgSlug)}
+              to={providerRequests(
+                orgSlug,
+                (stats.pending_requests_count || 0) + (stats.customer_inquiries_count || 0) > 0
+                  ? 'pending'
+                  : undefined,
+              )}
               className="rounded-xl bg-white/10 py-2 ring-1 ring-white/10 backdrop-blur-sm transition hover:bg-white/20"
             >
-              <p className="text-lg font-bold">{stats.pending_requests_count ?? 0}</p>
+              <p className="text-lg font-bold">
+                {(stats.pending_requests_count ?? 0) + (stats.customer_inquiries_count ?? 0)}
+              </p>
               <p className="text-[10px] uppercase tracking-wide text-white/70">Requests</p>
             </Link>
           </div>
@@ -315,25 +324,85 @@ export default function ProviderTodayPage() {
       ))}
 
       {(() => {
-        const pendingCount =
-          (dashboard.pending_requests?.length ?? 0) +
-          (dashboard.customer_inquiries?.length ?? 0);
+        const pendingBookings = dashboard.pending_requests || [];
+        const pendingInquiries = dashboard.customer_inquiries || [];
+        const pendingCount = pendingBookings.length + pendingInquiries.length;
         if (!pendingCount) return null;
         return (
-          <Link
-            to={providerRequests(orgSlug)}
-            className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+          <section
+            id="lx-attention"
+            className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
           >
-            <div>
-              <p className="text-sm font-semibold text-amber-900">
-                {pendingCount} request{pendingCount === 1 ? '' : 's'} need your attention
-              </p>
-              <p className="mt-0.5 text-xs text-amber-700">Tap to review and respond</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  {pendingCount} request{pendingCount === 1 ? '' : 's'} need your attention
+                </p>
+                <p className="mt-0.5 text-xs text-amber-700">
+                  These are waiting for your response
+                </p>
+              </div>
+              <Link
+                to={providerRequests(orgSlug, 'pending')}
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white"
+              >
+                Review all
+              </Link>
             </div>
-            <span className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white">
-              Review
-            </span>
-          </Link>
+            <ul className="space-y-2">
+              {pendingBookings.map((b) => (
+                <li key={`booking-${b.id}`}>
+                  <Link
+                    to={providerRequestDetail(orgSlug, 'booking', b.id)}
+                    className="block rounded-lg border border-amber-200/80 bg-white px-3 py-2.5 shadow-sm ring-2 ring-amber-300/70 transition hover:border-amber-300"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-slate-900">
+                        {b.service_name || 'Booking request'}
+                      </p>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                        {requestStatusLabel('booking', b.status)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-slate-600">
+                      {b.customer_name || b.customer_email || 'Customer'}
+                    </p>
+                    {b.start_at && (
+                      <p className="mt-1 text-xs text-slate-500">{formatWhen(b.start_at)}</p>
+                    )}
+                  </Link>
+                </li>
+              ))}
+              {pendingInquiries.map((inq) => (
+                <li key={`inquiry-${inq.id}`}>
+                  <Link
+                    to={providerRequestDetail(orgSlug, 'inquiry', inq.id)}
+                    className="block rounded-lg border border-amber-200/80 bg-white px-3 py-2.5 shadow-sm ring-2 ring-amber-300/70 transition hover:border-amber-300"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-slate-900">
+                        {inq.service_name || inq.service_label || 'Custom request'}
+                      </p>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                        {requestStatusLabel('inquiry', inq.status)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-slate-600">
+                      {inq.customer_name || inq.customer_email || 'Customer'}
+                    </p>
+                    {inq.preferred_date && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Preferred: {inq.preferred_date}
+                      </p>
+                    )}
+                    {inq.message && (
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">{inq.message}</p>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         );
       })()}
 
@@ -409,22 +478,28 @@ export default function ProviderTodayPage() {
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Upcoming jobs</h2>
+          <h2 className="font-semibold text-slate-900">Jobs</h2>
           <Link to={providerSchedule(orgSlug)} className="text-sm text-luminexa-accent">
             Schedule
           </Link>
         </div>
         {!jobs.length ? (
           <p className="lx-empty py-6 text-sm text-slate-500">
-            No upcoming jobs.
+            No jobs today or upcoming.
           </p>
         ) : (
           <ul className="space-y-2">
-            {jobs.map((job) => (
+            {jobs.map((job) => {
+              const startMs = job.start_at ? new Date(job.start_at).getTime() : 0;
+              const overdue =
+                job.status === 'confirmed' && startMs > 0 && startMs < Date.now();
+              return (
               <li key={job.id}>
                 <Link
                   to={providerScheduleDetail(orgSlug, 'booking', job.id)}
-                  className="lx-card-interactive block overflow-hidden p-0 hover:ring-violet-100/80"
+                  className={`lx-card-interactive block overflow-hidden p-0 hover:ring-violet-100/80 ${
+                    overdue ? 'ring-1 ring-amber-200' : ''
+                  }`}
                 >
                   <div className={`h-1 bg-gradient-to-r ${jobAccent(job.status)}`} />
                   <div className="flex gap-3 p-3">
@@ -441,6 +516,11 @@ export default function ProviderTodayPage() {
                       <p className="font-medium text-slate-900">{job.service_name}</p>
                       <p className="text-sm text-slate-600">{job.customer_name}</p>
                       <p className="mt-1 text-xs text-slate-500">{formatWhen(job.start_at)}</p>
+                      {overdue && (
+                        <p className="mt-1 text-xs font-medium text-amber-800">
+                          Start time passed — open to start or complete
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center text-slate-300">
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
@@ -448,7 +528,8 @@ export default function ProviderTodayPage() {
                   </div>
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
         {moreJobs > 0 && (

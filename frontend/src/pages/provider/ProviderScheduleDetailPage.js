@@ -26,6 +26,9 @@ import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
 import { canStartOrCompleteJob } from '../../utils/jobActions';
+import { isNativeApp } from '../../native/capacitorNative';
+import { requestGeolocationCoordinates } from '../../utils/geolocationSupport';
+import { EN_ROUTE_PING_MS, formatDistanceKm } from '../../utils/enRouteDistance';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -51,7 +54,9 @@ export default function ProviderScheduleDetailPage() {
   const [returnVisitMode, setReturnVisitMode] = useState('full');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [enRouteBusy, setEnRouteBusy] = useState(false);
   const { showToast } = useToast();
+  const nativeApp = isNativeApp();
 
   const runNoShow = async () => {
     setActionBusy(true);
@@ -182,6 +187,65 @@ export default function ProviderScheduleDetailPage() {
       cancelled = true;
     };
   }, [kind, id, orgSlug]);
+
+  const pingEnRouteLocation = useCallback(async (bookingId) => {
+    if (!nativeApp || !bookingId) return;
+    try {
+      const coords = await requestGeolocationCoordinates();
+      const res = await jobsAPI.updateOnMyWayLocation(bookingId, {
+        lat: coords.latitude,
+        lng: coords.longitude,
+      });
+      setData(res.data);
+    } catch (e) {
+      // Throttle / permission errors are non-fatal while sharing stays active.
+      const msg = parseApiError(e, '');
+      if (msg && !/every 5 minutes|limited/i.test(msg)) {
+        showToast(msg, 'error');
+      }
+    }
+  }, [nativeApp, showToast]);
+
+  useEffect(() => {
+    if (!nativeApp || kind !== 'booking' || !data?.en_route_active || !data?.id) {
+      return undefined;
+    }
+    const bookingId = data.id;
+    const timer = setInterval(() => {
+      pingEnRouteLocation(bookingId);
+    }, EN_ROUTE_PING_MS);
+    return () => clearInterval(timer);
+  }, [nativeApp, kind, data?.en_route_active, data?.id, pingEnRouteLocation]);
+
+  const startOnMyWay = async () => {
+    setEnRouteBusy(true);
+    try {
+      const coords = await requestGeolocationCoordinates();
+      const res = await jobsAPI.startOnMyWay(data.id, {
+        lat: coords.latitude,
+        lng: coords.longitude,
+      });
+      setData(res.data);
+      showToast('Customer notified — you’re on the way.', 'success');
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setEnRouteBusy(false);
+    }
+  };
+
+  const stopOnMyWay = async () => {
+    setEnRouteBusy(true);
+    try {
+      const res = await jobsAPI.stopOnMyWay(data.id);
+      setData(res.data);
+      showToast('Stopped sharing location.', 'success');
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setEnRouteBusy(false);
+    }
+  };
 
   const currency = useMemo(
     () => moneyFormatter(data?.currency || data?.invoice?.currency || 'CAD'),
@@ -368,30 +432,13 @@ export default function ProviderScheduleDetailPage() {
           </div>
         </section>
 
-        <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Send this link so they can view the appointment in the browser or the Luminexa app.
-          </p>
-          <div className="mt-3">
-            <LinkShareBar
-              url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
-              title={data.organization_name || 'Your Luminexa booking'}
-              text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}`}
-              showInput={false}
-              copyLabel="Copy link"
-              compact
-            />
-          </div>
-        </section>
-
         {data.awaiting_customer_acceptance && (
           <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
             {data.source === 'provider_direct' && !data.prior_start_at ? (
               <>
                 Waiting for the customer to confirm via their invite email
                 {!isShopService(data) ? ' (they add the job address there)' : ''}.
-                You can change the time or cancel if needed.
+                You can change the time or cancel if needed — or share the job link at the bottom by text.
               </>
             ) : (
               <>
@@ -471,7 +518,9 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
             >
-              Change time again
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Change time'
+                : 'Change time again'}
             </button>
             <button
               type="button"
@@ -508,6 +557,38 @@ export default function ProviderScheduleDetailPage() {
 
         {(data.status === 'confirmed' || data.status === 'in_progress') && (
           <div className="flex flex-col gap-2">
+            {nativeApp && data.status === 'confirmed' && canJobAction && (
+              data.en_route_active ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                  <p className="text-sm font-semibold text-sky-900">
+                    Sharing location with customer
+                    {formatDistanceKm(data.en_route_distance_km)
+                      ? ` · about ${formatDistanceKm(data.en_route_distance_km)} away`
+                      : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-sky-800/80">
+                    Updates about every 5 minutes while this screen is open.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={enRouteBusy || actionBusy}
+                    onClick={stopOnMyWay}
+                    className="mt-3 min-h-[44px] w-full rounded-xl border border-sky-300 bg-white font-medium text-sky-900 disabled:opacity-60"
+                  >
+                    Stop sharing
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={enRouteBusy || actionBusy}
+                  onClick={startOnMyWay}
+                  className="min-h-[48px] w-full rounded-xl border border-sky-300 bg-sky-50 font-medium text-sky-900 disabled:opacity-60"
+                >
+                  I’m on my way
+                </button>
+              )
+            )}
             {data.status === 'confirmed' && canJobAction && (
               <button
                 type="button"
@@ -585,6 +666,33 @@ export default function ProviderScheduleDetailPage() {
           >
             Schedule return visit
           </button>
+        )}
+
+        {(data.customer_view_url || data.customer_view_token) && (
+          <section className="lx-card">
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {data.awaiting_customer_acceptance
+                ? 'Text or message this link if they didn’t get the email — they can confirm (and add the address) from it.'
+                : 'Send this link so they can view the appointment in the browser or the Luminexa app.'}
+              {data.customer_phone ? ` Customer phone: ${data.customer_phone}.` : ''}
+            </p>
+            <div className="mt-3">
+              <LinkShareBar
+                url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
+                title={data.organization_name || 'Your Luminexa booking'}
+                text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}${
+                  data.start_at ? ` — ${formatWhen(data.start_at)}` : ''
+                }. Open here:`}
+                phone={data.customer_phone}
+                email={data.customer_email}
+                showInput={false}
+                copyLabel="Copy link"
+                shareLabel="Share"
+                compact
+              />
+            </div>
+          </section>
         )}
 
         <RescheduleBookingModal

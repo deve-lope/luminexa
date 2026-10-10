@@ -61,6 +61,8 @@ export default function ShareSheet({
   url,
   title,
   text,
+  phone,
+  email,
   onClose,
   onCopied,
 }) {
@@ -69,7 +71,7 @@ export default function ShareSheet({
   if (!open || !url) return null;
 
   const iOS = isIOSUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
-  const payload = { title, text, url };
+  const payload = { title, text, url, phone, email };
 
   const openTarget = (id) => {
     const href = shareHref(id, payload, { iOS });
@@ -105,6 +107,13 @@ export default function ShareSheet({
           Share
         </h2>
         <p className="mt-1 truncate text-sm text-slate-500">{url}</p>
+        {(phone || email) && (
+          <p className="mt-1 text-xs text-slate-500">
+            {phone ? `Messages / WhatsApp → ${phone}` : null}
+            {phone && email ? ' · ' : null}
+            {email ? `Email → ${email}` : null}
+          </p>
+        )}
         <div className="mt-4 grid grid-cols-3 gap-3">
           {SHARE_TARGETS.map((target) => (
             <button

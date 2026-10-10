@@ -1010,6 +1010,10 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.data['service_name'], 'Oil change')
         self.assertEqual(public.data['organization_name'], 'Test Co')
+        self.assertEqual(public.data['organization_slug'], self.org.slug)
+        self.assertEqual(public.data['reference'], f"BK-{public.data['id']:05d}")
+        self.assertIn('service_duration_minutes', public.data)
+        self.assertIn('organization_logo_url', public.data)
         self.assertNotIn('customer_email', public.data)
         self.assertNotIn('customer_phone', public.data)
         self.assertNotIn('email', public.data)
@@ -1084,7 +1088,7 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(booking.customer_id, self.customer.id)
         self.assertEqual(User.objects.filter(email__iexact=self.customer.email).count(), 1)
 
-    def test_customer_confirms_provider_invite_with_address(self):
+    def _provider_direct_token(self):
         start = timezone.now() + timedelta(days=5)
         end = start + timedelta(hours=1)
         self._auth(self.provider)
@@ -1101,7 +1105,33 @@ class BookingLifecycleTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
-        token = res.data['customer_view_token']
+        return res.data['id'], res.data['customer_view_token']
+
+    def test_customer_confirms_provider_invite_with_address(self):
+        booking_id, token = self._provider_direct_token()
+        self.client.logout()
+        structured = (
+            'Country: Canada\n'
+            'Province: Ontario\n'
+            'City: Ottawa\n'
+            'Address 1: 77 Pine Rd\n'
+            'Postal code: K1A0B1'
+        )
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {'service_address': structured},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(confirm.status_code, 200, getattr(confirm, 'data', confirm.content))
+        booking = Booking.objects.get(pk=booking_id)
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertFalse(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.service_address, structured)
+        self.assertFalse(confirm.data.get('needs_customer_confirm'))
+
+    def test_customer_confirm_rejects_incomplete_address(self):
+        _booking_id, token = self._provider_direct_token()
         self.client.logout()
         confirm = self.client.post(
             f'/api/v1/public/bookings/{token}/',
@@ -1109,12 +1139,41 @@ class BookingLifecycleTests(TestCase):
             format='json',
             HTTP_HOST='localhost',
         )
+        self.assertEqual(confirm.status_code, 400, getattr(confirm, 'data', confirm.content))
+        self.assertIn('service_address', confirm.data)
+
+    def test_provider_book_existing_customer_uses_saved_address(self):
+        saved = (
+            'Country: Canada\n'
+            'Province: Ontario\n'
+            'City: Ottawa\n'
+            'Address 1: 12 Maple Ave\n'
+            'Postal code: K1A0B1'
+        )
+        self.customer.default_service_address = saved
+        self.customer.save(update_fields=['default_service_address'])
+
+        booking_id, token = self._provider_direct_token()
+        booking = Booking.objects.get(pk=booking_id)
+        self.assertEqual(booking.service_address, saved)
+
+        self.client.logout()
+        public = self.client.get(f'/api/v1/public/bookings/{token}/', HTTP_HOST='localhost')
+        self.assertEqual(public.status_code, 200)
+        self.assertTrue(public.data['needs_customer_confirm'])
+        self.assertTrue(public.data['needs_job_address'])
+        self.assertEqual(public.data['saved_service_address'], saved)
+
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
         self.assertEqual(confirm.status_code, 200, getattr(confirm, 'data', confirm.content))
-        booking = Booking.objects.get(pk=res.data['id'])
+        booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.CONFIRMED)
-        self.assertFalse(booking.awaiting_customer_acceptance)
-        self.assertEqual(booking.service_address, '77 Pine Rd')
-        self.assertFalse(confirm.data.get('needs_customer_confirm'))
+        self.assertEqual(booking.service_address, saved)
 
     def test_provider_cannot_book_staff_email_as_new_caller(self):
         start = timezone.now() + timedelta(days=6)

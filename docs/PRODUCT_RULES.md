@@ -163,6 +163,30 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 
 ---
 
+## On the way — optional provider location share (app only)
+
+### What it means
+
+For a **confirmed** booking (same 6-hour window as Start job), staff on the **Capacitor app** may optionally tap **I’m on my way**. The customer gets a push/in-app alert and can see **distance in km** (text only, no map). Sharing ends when they stop, start the job, complete, cancel, or mark no-show.
+
+### Binding details
+
+- Optional — providers can skip it and still Start job.
+- **App only** — do not show the control on web.
+- Distance is haversine km from provider GPS to geocoded `service_address` (stored as booking `service_latitude` / `service_longitude`).
+- Provider app pings location about every **5 minutes** while sharing is active (screen open).
+- Customer gets a **one-time** nearby notification when distance first drops to **≤ 5 km**.
+- Customer sees distance on **Home** (banner + Up next card) and booking detail — text km only.
+- Not a booking status — status stays `confirmed` until Start job.
+
+### What NOT to simplify away
+
+- Do not require on-my-way before Start job.
+- Do not expose a live map or continuous GPS stream in v1.
+- Do not show the action outside the native app.
+
+---
+
 ## App store rating (native only)
 
 After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enjoying Luminexa?” prompt that opens the **store listing** (Play, or App Store when `APP_STORE_URL` is set). This is separate from **provider/job reviews** (`CustomerRatePrompt`).
@@ -185,6 +209,7 @@ After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enj
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
 5b. App rating = native only after ≥1 week; Play / App Store listing only (not webview).
+5c. On-my-way = optional, app-only, km text + 5 km nearby push; not a status.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
 8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.

@@ -331,13 +331,24 @@ def provider_book_customer(
             })
         slot = _lock_slot(slot)
 
-    # Shop address is known; mobile address is collected when the customer confirms.
+    # Shop address is known. Mobile: use provider-supplied or the customer's saved
+    # default when valid; otherwise the customer adds it on the invite confirm link.
+    from .service_address import (
+        is_valid_structured_service_address,
+        validate_structured_service_address,
+    )
+
     resolved_address = resolve_booking_service_address(
         service=service,
         customer_address=(service_address or '').strip(),
     )
     if service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
-        resolved_address = ''
+        provided = (service_address or '').strip()
+        if provided and is_valid_structured_service_address(provided):
+            resolved_address = validate_structured_service_address(provided)
+        else:
+            default = (getattr(customer, 'default_service_address', None) or '').strip()
+            resolved_address = default if is_valid_structured_service_address(default) else ''
 
     booking = Booking.objects.create(
         organization=org,
@@ -367,6 +378,8 @@ def customer_confirm_provider_booking(booking, *, service_address=''):
     """
     Customer accepts a provider-direct invite: sets address (mobile) and confirms.
     """
+    from .service_address import validate_structured_service_address
+
     if booking.source != Booking.Source.PROVIDER_DIRECT:
         raise ValidationError({'status': 'This booking cannot be confirmed this way.'})
     if booking.status != Booking.Status.REQUESTED or not booking.awaiting_customer_acceptance:
@@ -376,9 +389,10 @@ def customer_confirm_provider_booking(booking, *, service_address=''):
     address = (service_address or '').strip()
     if service and service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
         if not address:
-            raise ValidationError({
-                'service_address': 'Enter the address where the provider should come.',
-            })
+            address = (booking.service_address or '').strip()
+        if not address:
+            address = (getattr(booking.customer, 'default_service_address', None) or '').strip()
+        address = validate_structured_service_address(address)
         booking.service_address = address
         if hasattr(booking.customer, 'default_service_address'):
             if not (booking.customer.default_service_address or '').strip():
@@ -931,8 +945,22 @@ def cancel_booking(booking, *, by_user):
                         f'{cutoff} hours of the appointment. Contact them if you need help.'
                     ),
                 })
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.CANCELLED
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         release_slot(_lock_slot(booking.availability_slot))
     return booking
@@ -975,8 +1003,22 @@ def start_booking(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can start bookings.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.IN_PROGRESS
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     return booking
 
 
@@ -994,8 +1036,22 @@ def complete_booking(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can complete bookings.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.COMPLETED
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         # Completed jobs free a seat so remaining capacity can be booked again.
         release_slot(_lock_slot(booking.availability_slot))
@@ -1207,12 +1263,27 @@ def mark_booking_no_show(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can mark no-show.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.CANCELLED
     booking.customer_notes = (booking.customer_notes or '').strip()
     if booking.customer_notes:
         booking.customer_notes += '\n'
     booking.customer_notes += '[Marked no-show by provider]'
-    booking.save(update_fields=['status', 'customer_notes', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'customer_notes',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         release_slot(_lock_slot(booking.availability_slot))
     return booking

@@ -40,7 +40,7 @@ describe('performAppBack', () => {
     expect(handled).toBe(true);
     expect(navigate).toHaveBeenCalledWith(
       '/provider/acme/schedule?day=2026-11-11',
-      { replace: true },
+      { replace: true, state: { lxRestoreScroll: true } },
     );
   });
 
@@ -57,7 +57,7 @@ describe('performAppBack', () => {
     expect(handled).toBe(true);
     expect(navigate).toHaveBeenCalledWith(
       '/provider/acme/schedule?day=2026-11-11',
-      { replace: true },
+      { replace: true, state: { lxRestoreScroll: true } },
     );
   });
 });

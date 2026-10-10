@@ -720,6 +720,46 @@ def notify_booking_completed(booking):
     send_booking_email('booking_completed', booking)
 
 
+def notify_provider_en_route(booking):
+    """Customer: provider tapped “I’m on my way”."""
+    org_name = booking.organization.name
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.PROVIDER_EN_ROUTE,
+        title=f'{org_name} is on the way',
+        message=(
+            f'{org_name} is heading to your appointment. '
+            f'Open the booking to see how far away they are.'
+        ),
+        organization=booking.organization,
+        booking=booking,
+        link_path=customer_booking_link_path(booking),
+    )
+
+
+def notify_provider_nearby(booking):
+    """Customer: provider crossed within 5 km (once per sharing session)."""
+    org_name = booking.organization.name
+    distance = booking.en_route_distance_km
+    if distance is not None:
+        try:
+            km_label = f'{float(distance):.1f}'.rstrip('0').rstrip('.')
+        except (TypeError, ValueError):
+            km_label = '5'
+        distance_bit = f'About {km_label} km away.'
+    else:
+        distance_bit = 'Within 5 km of your location.'
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.PROVIDER_NEARBY,
+        title=f'{org_name} is nearby',
+        message=f'{org_name} is almost there. {distance_bit}',
+        organization=booking.organization,
+        booking=booking,
+        link_path=customer_booking_link_path(booking),
+    )
+
+
 def notify_invoice_ready(booking):
     """Create or refresh the customer's actionable invoice notification."""
     service_name = booking.service.name if booking.service_id else 'Service'

@@ -1736,6 +1736,64 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='on-my-way')
+    def on_my_way(self, request, pk=None):
+        from .en_route_services import start_en_route
+        from .notifications import notify_provider_en_route, notify_provider_nearby
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        lat = request.data.get('lat', None)
+        lng = request.data.get('lng', None)
+        booking, nearby = start_en_route(
+            booking,
+            staff_user=request.user,
+            lat=lat,
+            lng=lng,
+        )
+        log_booking_event(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.ON_THE_WAY,
+            note='Provider started on-my-way sharing',
+        )
+        notify_provider_en_route(booking)
+        if nearby:
+            notify_provider_nearby(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='on-my-way/location')
+    def on_my_way_location(self, request, pk=None):
+        from .en_route_services import update_en_route_location
+        from .notifications import notify_provider_nearby
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        booking, nearby = update_en_route_location(
+            booking,
+            staff_user=request.user,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
+        )
+        if nearby:
+            notify_provider_nearby(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='on-my-way/stop')
+    def on_my_way_stop(self, request, pk=None):
+        from .en_route_services import stop_en_route
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        booking = stop_en_route(booking, staff_user=request.user)
+        log_booking_event(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.EN_ROUTE_STOPPED,
+            note='Provider stopped on-my-way sharing',
+        )
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         from .invoice_services import default_invoice_amount, issue_or_update_invoice

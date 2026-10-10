@@ -45,11 +45,18 @@ class ProviderDashboardAPIView(APIView):
 
         now = timezone.now()
         window_end = now + timedelta(days=HOME_JOB_WINDOW_DAYS)
+        # Include today's overdue confirmed jobs (never tapped Start) — do not drop
+        # them the second start_at passes. Bound "today" in the org's timezone.
+        from .datetime_display import resolve_display_timezone
+
+        org_tz = resolve_display_timezone(org)
+        local_now = timezone.localtime(now, org_tz)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         upcoming_qs = (
             Booking.objects.filter(
                 organization=org,
-                start_at__gte=now,
+                start_at__gte=today_start,
                 start_at__lte=window_end,
                 status__in=(Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS),
             )
@@ -80,14 +87,20 @@ class ProviderDashboardAPIView(APIView):
         needs_return_total = needs_return_qs.count()
         needs_return = needs_return_qs[:HOME_JOB_LIMIT]
 
-        pending_requests = (
+        # Only jobs the provider still needs to act on — match Requests → Pending.
+        # Provider-direct / awaiting_customer_acceptance means the ball is with the customer.
+        pending_requests_qs = (
             Booking.objects.filter(
                 organization=org,
                 status__in=(Booking.Status.REQUESTED, Booking.Status.QUOTED),
             )
+            .exclude(source=Booking.Source.PROVIDER_DIRECT)
+            .exclude(awaiting_customer_acceptance=True)
             .select_related('service', 'customer')
-            .order_by('start_at')[:50]
+            .order_by('start_at')
         )
+        pending_requests_total = pending_requests_qs.count()
+        pending_requests = pending_requests_qs[:50]
 
         refresh_recurring_tasks(org, now=now)
 
@@ -119,7 +132,6 @@ class ProviderDashboardAPIView(APIView):
 
         dashboard_tasks = open_tasks_shown + done_tasks_shown
 
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
         jobs_today = upcoming_qs.filter(
             start_at__gte=today_start, start_at__lt=today_end,
@@ -153,7 +165,7 @@ class ProviderDashboardAPIView(APIView):
                 'tasks_open_shown': len(open_tasks_shown),
                 'tasks_done_total': done_tasks_total,
                 'tasks_done_shown': len(done_tasks_shown),
-                'pending_requests_count': pending_requests.count(),
+                'pending_requests_count': pending_requests_total,
                 'customer_inquiries_count': customer_inquiries.count(),
             },
             'upcoming_jobs': BookingDashboardSerializer(upcoming, many=True).data,

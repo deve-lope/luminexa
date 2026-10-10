@@ -263,6 +263,8 @@ class CustomerNotification(models.Model):
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on your gig'
         GIG_EXPIRED = 'gig_expired', 'Gig post expired'
         GIG_COUNTER_DECLINED = 'gig_counter_declined', 'Provider declined your counter-offer'
+        PROVIDER_EN_ROUTE = 'provider_en_route', 'Provider is on the way'
+        PROVIDER_NEARBY = 'provider_nearby', 'Provider is nearby'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -619,6 +621,44 @@ class Booking(models.Model):
         blank=True,
         default='',
         help_text='Where the service will take place (customer-provided).',
+    )
+    service_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded job location (set when provider starts on-my-way).',
+    )
+    service_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded job location (set when provider starts on-my-way).',
+    )
+    en_route_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the provider started optional “I’m on my way” sharing.',
+    )
+    en_route_lat = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    en_route_lng = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    en_route_updated_at = models.DateTimeField(null=True, blank=True)
+    en_route_distance_km = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Last computed distance from provider GPS to job location (km).',
+    )
+    en_route_nearby_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer was notified that the provider is within 5 km.',
     )
     reminder_sent_at = models.DateTimeField(
         null=True,
@@ -1079,6 +1119,8 @@ class BookingStatusEvent(models.Model):
         CUSTOMER_NO_SHOW_REPORTED = 'customer_no_show_reported', 'Customer reported no-show'
         INCOMPLETE = 'incomplete', 'Marked incomplete'
         RETURN_SCHEDULED = 'return_scheduled', 'Return visit scheduled'
+        ON_THE_WAY = 'on_the_way', 'On the way'
+        EN_ROUTE_STOPPED = 'en_route_stopped', 'Stopped sharing location'
 
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='status_events')
     actor = models.ForeignKey(

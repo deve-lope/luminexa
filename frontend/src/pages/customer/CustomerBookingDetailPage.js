@@ -20,6 +20,7 @@ import {
   dismissNotificationsForBooking,
   emitNotificationsChanged,
 } from '../../utils/customerNotifications';
+import { formatDistanceKm } from '../../utils/enRouteDistance';
 
 function formatMoney(amount, currency = 'CAD') {
   try {
@@ -78,6 +79,18 @@ export default function CustomerBookingDetailPage() {
     };
   }, [bookingId]);
 
+  // Refresh distance while provider is sharing location.
+  useEffect(() => {
+    if (!booking?.en_route_active || !bookingId) return undefined;
+    const timer = setInterval(() => {
+      jobsAPI
+        .getBooking(bookingId)
+        .then((res) => setBooking(res.data))
+        .catch(() => {});
+    }, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [booking?.en_route_active, bookingId]);
+
   const cancelBooking = async () => {
     if (!booking) return;
     setCancelling(true);
@@ -130,6 +143,26 @@ export default function CustomerBookingDetailPage() {
           booking={booking}
           onAnswered={(updated) => setBooking(updated)}
         />
+      )}
+
+      {booking?.en_route_active && (
+        <section
+          className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 ring-1 ring-teal-100"
+          aria-live="polite"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800">
+            On the way
+          </p>
+          <p className="mt-1 text-base font-semibold text-slate-900">
+            {booking.organization_name || 'Your provider'} is heading to you
+            {formatDistanceKm(booking.en_route_distance_km)
+              ? ` · about ${formatDistanceKm(booking.en_route_distance_km)} away`
+              : ''}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Distance updates as they travel. You’ll get a notification when they’re within 5 km.
+          </p>
+        </section>
       )}
 
       {booking && (

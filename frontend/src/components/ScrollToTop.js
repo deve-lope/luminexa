@@ -69,74 +69,44 @@ export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}
 }
 
 /**
- * Pin scroll before paint the way native stacks do:
- * 1) Pad document height so target Y is reachable immediately
- * 2) Hide for 1–2 frames while jumping (no visible top → scroll-down)
- * 3) Reveal already at the right offset; keep pad until real content is tall
+ * Restore scroll once after Back. Keep it light — padding / intervals / opacity
+ * fights caused visible glitching on desktop when schedule remounts.
  */
 export function pinScrollPosition(saved) {
   if (typeof saved !== 'number' || saved <= 0) return () => {};
 
   const html = document.documentElement;
-  const prevMinHeight = html.style.minHeight;
-  html.style.minHeight = `${Math.ceil(saved + window.innerHeight + 120)}px`;
   html.classList.add(RESTORE_CLASS);
   writeScrollY(saved);
 
   let cancelled = false;
-  let intervalId = null;
-  let revealRaf1 = 0;
-  let revealRaf2 = 0;
-  let releaseTimer = 0;
+  let raf1 = 0;
+  let raf2 = 0;
+  let t1 = 0;
+  let t2 = 0;
 
   const hold = () => {
     if (cancelled) return;
     writeScrollY(saved);
   };
 
-  // Re-pin while React mounts panels (prevents the browser clamping to 0).
-  intervalId = window.setInterval(hold, 32);
-
-  // Reveal after the jump is applied — still before the user perceives motion.
-  revealRaf1 = window.requestAnimationFrame(() => {
+  raf1 = window.requestAnimationFrame(() => {
     hold();
-    revealRaf2 = window.requestAnimationFrame(() => {
+    raf2 = window.requestAnimationFrame(() => {
       hold();
       html.classList.remove(RESTORE_CLASS);
     });
   });
-
-  const tryReleasePad = () => {
-    if (cancelled) return;
-    // Measure without counting our own min-height pad: temporarily clear it.
-    const pad = html.style.minHeight;
-    html.style.minHeight = '';
-    const naturalMax = Math.max(
-      0,
-      (document.documentElement.scrollHeight || 0) - window.innerHeight,
-    );
-    if (naturalMax >= saved - 40) {
-      writeScrollY(saved);
-      if (intervalId) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
-      return;
-    }
-    html.style.minHeight = pad || prevMinHeight;
-    writeScrollY(saved);
-    releaseTimer = window.setTimeout(tryReleasePad, 100);
-  };
-
-  releaseTimer = window.setTimeout(tryReleasePad, 300);
+  // One late settle after the destination paints (no looping pad fight).
+  t1 = window.setTimeout(hold, 50);
+  t2 = window.setTimeout(hold, 150);
 
   return () => {
     cancelled = true;
-    if (intervalId) window.clearInterval(intervalId);
-    if (releaseTimer) window.clearTimeout(releaseTimer);
-    if (revealRaf1) window.cancelAnimationFrame(revealRaf1);
-    if (revealRaf2) window.cancelAnimationFrame(revealRaf2);
-    html.style.minHeight = prevMinHeight;
+    if (raf1) window.cancelAnimationFrame(raf1);
+    if (raf2) window.cancelAnimationFrame(raf2);
+    if (t1) window.clearTimeout(t1);
+    if (t2) window.clearTimeout(t2);
     html.classList.remove(RESTORE_CLASS);
   };
 }
@@ -194,23 +164,20 @@ export default function ScrollToTop() {
     prevLocationRef.current = location;
 
     // Same pathname — keep scroll (?day= / ?cat=). Hash added in-place → pin the row.
+    // Do not re-pin on query-only changes (schedule day picks) — that glitches on desktop.
     if (!pathnameChanged) {
       if (location.hash.startsWith('#service-')) {
         return scrollToHashTarget(location.hash);
-      }
-      // Day query changed on schedule: re-pin if we have a saved Y for the new key.
-      const savedSame = scrollPositions.get(nextKey);
-      if (typeof savedSame === 'number' && savedSame > 0) {
-        return pinScrollPosition(savedSame);
       }
       return undefined;
     }
 
     const saved = scrollPositions.get(nextKey);
+    const wantsRestore = Boolean(location.state?.lxRestoreScroll);
     const isReturnNav =
       navigationType === 'POP' ||
-      navigationType === 'REPLACE' ||
-      (navigationType === 'PUSH' && typeof saved === 'number' && saved > 0);
+      (navigationType === 'REPLACE' && wantsRestore) ||
+      (navigationType === 'PUSH' && wantsRestore && typeof saved === 'number' && saved > 0);
 
     if (isReturnNav) {
       if (typeof saved === 'number' && saved > 0) {

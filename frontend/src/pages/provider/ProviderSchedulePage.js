@@ -41,6 +41,33 @@ function parseApiError(err) {
   return Array.isArray(first) ? first[0] : first || 'Something went wrong.';
 }
 
+/** Keep last month paint so Show more → Back doesn’t blank the day list. */
+const SCHEDULE_CACHE_TTL_MS = 5 * 60 * 1000;
+const schedulePageCache = new Map();
+
+function scheduleCacheKey(orgSlug, year, month) {
+  return `${orgSlug || ''}:${year}:${month}`;
+}
+
+function readScheduleCache(orgSlug, year, month) {
+  const key = scheduleCacheKey(orgSlug, year, month);
+  const hit = schedulePageCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > SCHEDULE_CACHE_TTL_MS) {
+    schedulePageCache.delete(key);
+    return null;
+  }
+  return hit.data;
+}
+
+function writeScheduleCache(orgSlug, year, month, data) {
+  if (!orgSlug) return;
+  schedulePageCache.set(scheduleCacheKey(orgSlug, year, month), {
+    at: Date.now(),
+    data,
+  });
+}
+
 export default function ProviderSchedulePage() {
   const { orgSlug, activeOrg } = useProviderOrg();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -51,30 +78,35 @@ export default function ProviderSchedulePage() {
   })();
   const initialDate = initialDay ? parseLocalDateKey(initialDay) : null;
   const today = new Date();
-  const [calYear, setCalYear] = useState(
-    () => (initialDate ? initialDate.getFullYear() : today.getFullYear()),
-  );
-  const [calMonth, setCalMonth] = useState(
-    () => (initialDate ? initialDate.getMonth() + 1 : today.getMonth() + 1),
-  );
+  const bootYear = initialDate ? initialDate.getFullYear() : today.getFullYear();
+  const bootMonth = initialDate ? initialDate.getMonth() + 1 : today.getMonth() + 1;
+  const cachedMonth = readScheduleCache(orgSlug, bootYear, bootMonth);
+  const [calYear, setCalYear] = useState(() => bootYear);
+  const [calMonth, setCalMonth] = useState(() => bootMonth);
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
-  const [services, setServices] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [slots, setSlots] = useState([]);
-  const [monthBookings, setMonthBookings] = useState([]);
-  const [unavailable, setUnavailable] = useState([]);
-  const [weeklyBlocks, setWeeklyBlocks] = useState([]);
-  const [pendingCustomers, setPendingCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [services, setServices] = useState(() => cachedMonth?.services || []);
+  const [customers, setCustomers] = useState(() => cachedMonth?.customers || []);
+  const [slots, setSlots] = useState(() => cachedMonth?.slots || []);
+  const [monthBookings, setMonthBookings] = useState(() => cachedMonth?.monthBookings || []);
+  const [unavailable, setUnavailable] = useState(() => cachedMonth?.unavailable || []);
+  const [weeklyBlocks, setWeeklyBlocks] = useState(() => cachedMonth?.weeklyBlocks || []);
+  const [pendingCustomers, setPendingCustomers] = useState(
+    () => cachedMonth?.pendingCustomers || [],
+  );
+  const [loading, setLoading] = useState(() => !cachedMonth);
   const [message, setMessage] = useState(null);
   const [customerShareUrl, setCustomerShareUrl] = useState('');
+  const [customerSharePhone, setCustomerSharePhone] = useState('');
+  const [customerShareEmail, setCustomerShareEmail] = useState('');
   const [error, setError] = useState(null);
 
-  const [slotService, setSlotService] = useState('');
+  const [slotService, setSlotService] = useState(() => cachedMonth?.slotService || '');
   const [slotSubmitting, setSlotSubmitting] = useState(false);
   const [serviceSubmitting, setServiceSubmitting] = useState(false);
-  const [schedulingMode, setSchedulingMode] = useState('flexi');
+  const [schedulingMode, setSchedulingMode] = useState(
+    () => cachedMonth?.schedulingMode || 'flexi',
+  );
 
   const [addMode, setAddMode] = useState(null);
   const [draftRange, setDraftRange] = useState(null);
@@ -83,7 +115,10 @@ export default function ProviderSchedulePage() {
 
   const load = useCallback(async () => {
     if (!orgSlug || !activeOrg) return;
-    setLoading(true);
+    // Soft refresh when we already painted this month (Back from Show more).
+    if (!readScheduleCache(orgSlug, calYear, calMonth)) {
+      setLoading(true);
+    }
     setError(null);
     try {
       // Visible month only — recurring shops can have thousands of slots across the range.
@@ -142,11 +177,28 @@ export default function ProviderSchedulePage() {
 
       setSlots(loadedSlots);
       const unavailPayload = unavailRes.data;
-      setUnavailable(
-        Array.isArray(unavailPayload) ? unavailPayload : unavailPayload?.results || []
-      );
-      setPendingCustomers(pendingCustRes.data || []);
-      if (svcList.length && !slotService) setSlotService(String(svcList[0].id));
+      const loadedUnavailable = Array.isArray(unavailPayload)
+        ? unavailPayload
+        : unavailPayload?.results || [];
+      setUnavailable(loadedUnavailable);
+      const loadedPending = pendingCustRes.data || [];
+      setPendingCustomers(loadedPending);
+      let resolvedSlotService = '';
+      setSlotService((prev) => {
+        resolvedSlotService = prev || (svcList[0] ? String(svcList[0].id) : '');
+        return resolvedSlotService;
+      });
+      writeScheduleCache(orgSlug, calYear, calMonth, {
+        services: svcList,
+        customers: custRes.data || [],
+        slots: loadedSlots,
+        monthBookings: Array.isArray(loadedBookings) ? loadedBookings : [],
+        unavailable: loadedUnavailable,
+        weeklyBlocks: blocks,
+        pendingCustomers: loadedPending,
+        schedulingMode: mode,
+        slotService: resolvedSlotService,
+      });
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -254,6 +306,8 @@ export default function ProviderSchedulePage() {
       await jobsAPI.deleteUnavailableBlock(blockId);
       setMessage('Unavailable block removed. That time can be opened or booked again.');
       setCustomerShareUrl('');
+      setCustomerSharePhone('');
+      setCustomerShareEmail('');
       setPendingDeleteUnavailableId(null);
       await load();
     } catch (err) {
@@ -354,6 +408,8 @@ export default function ProviderSchedulePage() {
         });
         setMessage('Open slot saved — customers can book this time.');
         setCustomerShareUrl('');
+        setCustomerSharePhone('');
+        setCustomerShareEmail('');
       } else if (mode === 'unavailable') {
         const unavailRes = await jobsAPI.createUnavailableBlock({
           organization: activeOrg.organization,
@@ -372,6 +428,8 @@ export default function ProviderSchedulePage() {
         }
         setMessage(unavailMsg);
         setCustomerShareUrl('');
+        setCustomerSharePhone('');
+        setCustomerShareEmail('');
       } else if (mode === 'book') {
         const payload = {
           organization: activeOrg.organization,
@@ -394,9 +452,15 @@ export default function ProviderSchedulePage() {
         const bookRes = await jobsAPI.providerBook(payload);
         const url = bookRes.data?.customer_view_url || '';
         setCustomerShareUrl(url);
+        setCustomerSharePhone(
+          bookRes.data?.customer_phone || newCustomer?.phone || '',
+        );
+        setCustomerShareEmail(
+          bookRes.data?.customer_email || newCustomer?.email || '',
+        );
         setMessage(
           url
-            ? 'Invite sent. They’ll add their address and confirm via email — you can also copy the link below.'
+            ? 'Invite sent by email. Share the link below by text if you have their number.'
             : 'Invite sent. They’ll confirm via the email we sent.'
         );
       }
@@ -433,9 +497,12 @@ export default function ProviderSchedulePage() {
               <LinkShareBar
                 url={customerShareUrl}
                 title="Your Luminexa booking"
-                text="Here is your appointment"
+                text="Here is your appointment — confirm here:"
+                phone={customerSharePhone}
+                email={customerShareEmail}
                 showInput={false}
                 copyLabel="Copy link"
+                shareLabel="Share"
                 compact
               />
             </div>

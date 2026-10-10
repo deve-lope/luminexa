@@ -312,6 +312,10 @@ export const jobsAPI = {
   cancelBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/cancel/`, data),
   reportBookingAttendance: (id, data) => api.post(`/api/v1/bookings/${id}/report-attendance/`, data),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
+  startOnMyWay: (id, data = {}) => api.post(`/api/v1/bookings/${id}/on-my-way/`, data),
+  updateOnMyWayLocation: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/on-my-way/location/`, data),
+  stopOnMyWay: (id) => api.post(`/api/v1/bookings/${id}/on-my-way/stop/`),
   completeBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/complete/`, data),
   getBookingInvoice: (id) => api.get(`/api/v1/bookings/${id}/invoice/`),
   issueBookingInvoice: (id, data) => api.post(`/api/v1/bookings/${id}/invoice/`, data),

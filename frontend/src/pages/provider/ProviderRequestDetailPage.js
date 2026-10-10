@@ -7,10 +7,12 @@ import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
+import LinkShareBar from '../../components/LinkShareBar';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
+import { getCustomerAppointmentUrl } from '../../utils/bookingLink';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
@@ -313,11 +315,21 @@ export default function ProviderRequestDetailPage() {
         )}
         {kind === 'booking' && data.awaiting_customer_acceptance && (
           <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95">
-            Waiting for the customer to accept the new time
-            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
-            {needsQuote && status !== 'quoted'
-              ? ' Ask questions anytime — you do not need answers to send a quote or confirm.'
-              : ''}
+            {data.source === 'provider_direct' && !data.prior_start_at ? (
+              <>
+                Waiting for the customer to confirm via their invite email
+                {!isShopService(data) ? ' (they add the job address there)' : ''}.
+                You can change the time or cancel if needed.
+              </>
+            ) : (
+              <>
+                Waiting for the customer to accept the new time
+                {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+                {needsQuote && status !== 'quoted'
+                  ? ' Ask questions anytime — you do not need answers to send a quote or confirm.'
+                  : ''}
+              </>
+            )}
           </p>
         )}
         {kind === 'booking' && customerTimeChangePending && (
@@ -391,7 +403,9 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
             >
-              Change time again
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Change time'
+                : 'Change time again'}
             </button>
             <button
               type="button"
@@ -399,7 +413,9 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setConfirmAction('cancel')}
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
-              Cancel request
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Cancel booking'
+                : 'Cancel request'}
             </button>
           </div>
         )}
@@ -964,7 +980,15 @@ export default function ProviderRequestDetailPage() {
                 : 'You go to the customer for this service.'
               : ''
           }
-          emptyLabel="No address provided."
+          emptyLabel={
+            kind === 'booking' &&
+            data.awaiting_customer_acceptance &&
+            data.source === 'provider_direct'
+              ? isShopService(data)
+                ? 'Waiting for the customer to confirm the invite.'
+                : 'Customer will add their address when they confirm the invite email.'
+              : 'No address provided.'
+          }
         />
       )}
 
@@ -1077,6 +1101,33 @@ export default function ProviderRequestDetailPage() {
           customerId: data.customer || data.customer_id,
         }}
       />
+
+      {kind === 'booking' && (data.customer_view_url || data.customer_view_token) && (
+        <section className="lx-card">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {data.awaiting_customer_acceptance
+              ? 'Text or message this link if they didn’t get the email — they can confirm from it.'
+              : 'Send this link by text or message so they can open the appointment.'}
+            {data.customer_phone ? ` Phone on file: ${data.customer_phone}.` : ''}
+          </p>
+          <div className="mt-3">
+            <LinkShareBar
+              url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
+              title={data.organization_name || 'Your Luminexa booking'}
+              text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}${
+                data.start_at ? ` — ${formatWhen(data.start_at)}` : ''
+              }. ${data.awaiting_customer_acceptance ? 'Confirm here:' : 'Open here:'}`}
+              phone={data.customer_phone}
+              email={data.customer_email}
+              showInput={false}
+              copyLabel="Copy link"
+              shareLabel="Share"
+              compact
+            />
+          </div>
+        </section>
+      )}
 
       {kind === 'booking' && (
         <RescheduleBookingModal

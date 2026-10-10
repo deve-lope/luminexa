@@ -94,7 +94,7 @@ export function performAppBack({ pathname, search, navigate, preferFallback = fa
       const bare = `/provider/${orgSlug}/schedule`;
       aliasSavedScrollY(bare, target);
     }
-    navigate(target, { replace: true });
+    navigate(target, { replace: true, state: { lxRestoreScroll: true } });
     return true;
   }
 
