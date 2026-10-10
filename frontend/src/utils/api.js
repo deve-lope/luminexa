@@ -291,6 +291,8 @@ export const jobsAPI = {
     ),
   getBooking: (id) => api.get(`/api/v1/bookings/${id}/`),
   getPublicBooking: (token) => api.get(`/api/v1/public/bookings/${encodeURIComponent(token)}/`),
+  confirmPublicBooking: (token, data) =>
+    api.post(`/api/v1/public/bookings/${encodeURIComponent(token)}/`, data || {}),
   getSlot: (id) => api.get(`/api/v1/availability-slots/${id}/`),
   getUnavailableBlock: (id) => api.get(`/api/v1/unavailable-blocks/${id}/`),
   createBooking: (data) => api.post('/api/v1/bookings/', data),

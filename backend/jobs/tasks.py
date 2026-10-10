@@ -43,6 +43,14 @@ def send_incomplete_job_task_reminders():
 
 
 @shared_task
+def send_task_due_reminders():
+    """Remind providers ~24h before open tasks reach their due time."""
+    from .notifications import send_task_due_reminders_for_window
+
+    return send_task_due_reminders_for_window()
+
+
+@shared_task
 def send_unpaid_invoice_payment_reminders():
     """Send email follow-ups for unpaid issued invoices."""
     from .notifications import send_unpaid_invoice_followups

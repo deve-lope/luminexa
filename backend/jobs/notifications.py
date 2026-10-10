@@ -7,7 +7,7 @@ from django.utils import timezone
 from businesses.models import Organization
 
 from .datetime_display import format_booking_when, resolve_display_timezone
-from .models import CustomerNotification, ProviderNotification, Service
+from .models import Booking, CustomerNotification, ProviderNotification, Service
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,11 @@ def provider_request_link_path(org_slug, booking_id):
 def provider_jobs_link_path(org_slug):
     """In-app path to accepted jobs (shows incomplete tasks per booking)."""
     return f'/provider/{org_slug}/jobs'
+
+
+def provider_tasks_link_path(org_slug):
+    """In-app path to the provider task list (open tasks)."""
+    return f'/provider/{org_slug}/tasks'
 
 
 def provider_inquiry_request_link_path(org_slug, inquiry_id):
@@ -66,6 +71,20 @@ def customer_appointment_url(booking):
 
 def customer_bookings_url():
     return f'{_public_app_url()}/customer/bookings'
+
+
+def customer_home_url():
+    return f'{_public_app_url()}/customer'
+
+
+def customer_login_url(*, next_path='/customer'):
+    """Login URL that returns the customer to next_path after sign-in."""
+    from urllib.parse import quote
+
+    path = (next_path or '/customer').strip() or '/customer'
+    if not path.startswith('/'):
+        path = f'/{path}'
+    return f'{_public_app_url()}/login?next={quote(path, safe="/")}'
 
 
 def customer_history_url():
@@ -224,19 +243,40 @@ def _push_org_staff(organization, *, title, body, link_path=''):
 
 
 def notify_customer_provider_direct(booking):
-    """Customer confirmation after staff books on their behalf. Do not ping staff."""
+    """Invite customer to confirm a provider-created booking (and add address if needed)."""
+    org = booking.organization
+    service_name = booking.service.name if booking.service_id else 'a service'
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
+        title=f'Confirm your appointment — {org.name}',
+        message=(
+            f'{org.name} reserved {service_name} for you on '
+            f'{_format_when(booking.start_at, booking)}. '
+            f'Open the link to add your address and confirm.'
+        ),
+        organization=org,
+        booking=booking,
+        link_path=booking.customer_view_path(),
+    )
+    send_booking_email('provider_booking_invite', booking)
+
+
+def notify_customer_provider_booking_confirmed(booking):
+    """After the customer confirms a provider-direct invite."""
     create_customer_notification(
         customer=booking.customer,
         kind=CustomerNotification.Kind.BOOKING_CONFIRMED,
         title=f'Booking confirmed — {booking.organization.name}',
         message=(
-            f'{booking.organization.name} booked '
+            f'Your appointment for '
             f'{booking.service.name if booking.service_id else "a service"} '
-            f'for you on {_format_when(booking.start_at, booking)}.'
+            f'on {_format_when(booking.start_at, booking)} is confirmed. '
+            f'It appears under Upcoming on Home after you sign in.'
         ),
         organization=booking.organization,
         booking=booking,
-        link_path=booking.customer_view_path(),
+        link_path='/customer',
     )
     send_booking_email('booking_confirmed', booking)
 
@@ -889,16 +929,56 @@ def send_booking_email(event, booking, *, reason=''):
                     f'View bookings: {bookings_url}',
                 ],
             )
+    elif event == 'provider_booking_invite':
+        recipients = [booking.customer.email] if booking.customer.email else []
+        appt_url = customer_appointment_url(booking)
+        home_login_url = customer_login_url(next_path='/customer')
+        needs_address = (
+            booking.service_id
+            and booking.service.fulfillment_kind == Service.FulfillmentKind.MOBILE
+        )
+        subject = f'{org.name} reserved an appointment — confirm on Luminexa'
+        body_lines = [
+            f'{org.name} reserved {service_name} for you on Luminexa.',
+            '',
+            f'When: {when}',
+            f'Business: {org.name}',
+            '',
+            (
+                'Please open this link to enter your job address and confirm the booking:'
+                if needs_address
+                else 'Please open this link to confirm the booking:'
+            ),
+            appt_url,
+            '',
+            'After you confirm, log in to Luminexa to see it under Upcoming on Home:',
+            home_login_url,
+        ]
+        customer = booking.customer
+        if customer and not customer.has_usable_password():
+            body_lines.extend([
+                '',
+                'New to Luminexa? Use this same email — we’ll send a one-time code so you can '
+                'finish your profile.',
+            ])
     elif event == 'booking_confirmed':
         recipients = [booking.customer.email] if booking.customer.email else []
+        appt_url = customer_appointment_url(booking)
+        home_login_url = customer_login_url(next_path='/customer')
+        location_lines = _job_location_lines(booking)
+        if not location_lines:
+            location_lines = ['Address: confirm with the business if not listed here.']
         subject = f'Booking confirmed — {org.name}'
         body_lines = [
             f'Your appointment for {service_name} is confirmed.',
             f'When: {when}',
             f'Business: {org.name}',
-            *_job_location_lines(booking),
+            *location_lines,
             '',
-            f'View your appointment: {customer_appointment_url(booking)}',
+            'Log in to Luminexa to see it under Upcoming on Home:',
+            home_login_url,
+            '',
+            f'Or open your appointment: {appt_url}',
         ]
     elif event == 'booking_rescheduled':
         recipients = [booking.customer.email] if booking.customer.email else []
@@ -1201,6 +1281,77 @@ def send_incomplete_job_task_reminders_for_window(*, hours_ahead=48, window_hour
         notify_provider_incomplete_job_tasks(booking, open_count=booking.open_task_count)
         booking.incomplete_tasks_reminder_sent_at = now
         booking.save(update_fields=['incomplete_tasks_reminder_sent_at'])
+        sent += 1
+    return sent
+
+
+def notify_provider_task_due(task):
+    """In-app + push when an open task is ~24 hours from its due time."""
+    org = task.organization
+    when = _format_when(task.due_at, task.job or org)
+    link_path = (
+        provider_jobs_link_path(org.slug)
+        if task.job_id
+        else provider_tasks_link_path(org.slug)
+    )
+    if task.job_id:
+        service_name = task.job.service.name if task.job.service_id else 'job'
+        customer_name = _customer_label(task.job)
+        message = (
+            f'“{task.title}” is due in 24 hours ({when}) for {service_name} '
+            f'with {customer_name}. Finish it before the deadline.'
+        )
+        body = f'“{task.title}” is due tomorrow for {service_name}.'
+    else:
+        message = (
+            f'“{task.title}” is due in 24 hours ({when}). '
+            f'Open Tasks to finish it before the deadline.'
+        )
+        body = f'“{task.title}” is due tomorrow.'
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=task.job,
+        kind=ProviderNotification.Kind.TASK_DUE,
+        message=message[:500],
+        link_path=link_path,
+    )
+    _push_org_staff(
+        org,
+        title=f'Task due soon — {org.name}',
+        body=body[:200],
+        link_path=link_path,
+    )
+
+
+def send_task_due_reminders_for_window(*, hours_ahead=24, window_hours=1):
+    """Notify provider staff ~24 hours before open tasks reach their due time."""
+    from datetime import timedelta
+
+    from .models import Task
+
+    now = timezone.now()
+    window_start = now + timedelta(hours=hours_ahead)
+    window_end = window_start + timedelta(hours=window_hours)
+    sent = 0
+    tasks = (
+        Task.objects.filter(
+            is_done=False,
+            due_at__isnull=False,
+            due_reminder_sent_at__isnull=True,
+            due_at__gte=window_start,
+            due_at__lt=window_end,
+        )
+        .select_related(
+            'organization',
+            'job',
+            'job__service',
+            'job__customer',
+        )
+    )
+    for task in tasks:
+        notify_provider_task_due(task)
+        task.due_reminder_sent_at = now
+        task.save(update_fields=['due_reminder_sent_at', 'updated_at'])
         sent += 1
     return sent
 

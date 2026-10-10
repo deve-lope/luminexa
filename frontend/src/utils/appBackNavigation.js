@@ -1,4 +1,5 @@
 import {
+  parseReturnTo,
   resolveCustomerBack,
   resolveProviderBack,
   resolvePublicBack,
@@ -7,7 +8,41 @@ import {
   consumePreviousInAppPath,
   locationEntry,
 } from './inAppNavStack';
-import { peekSavedScrollY } from '../components/ScrollToTop';
+import { aliasSavedScrollY, peekSavedScrollY } from '../components/ScrollToTop';
+import { withRememberedScheduleDay } from './scheduleDayMemory';
+
+function orgSlugFromProviderPath(pathname) {
+  if (!pathname?.startsWith('/provider/')) return null;
+  return pathname.split('/')[2] || null;
+}
+
+function resolveBackTarget(pathname, search, preferFallback) {
+  const returnTo = parseReturnTo(search);
+  const entry = locationEntry({ pathname, search });
+  const orgSlug = orgSlugFromProviderPath(pathname);
+
+  // Explicit returnTo (e.g. Show more from a selected schedule day) wins over the
+  // in-app stack, which often still has bare /schedule from an earlier visit.
+  if (!preferFallback && returnTo) {
+    consumePreviousInAppPath(entry);
+    return withRememberedScheduleDay(returnTo, orgSlug);
+  }
+
+  if (!preferFallback) {
+    const prev = consumePreviousInAppPath(entry);
+    if (prev) {
+      const prevKey = prev.split('#')[0];
+      const target =
+        peekSavedScrollY(prevKey) > 0
+          ? prevKey
+          : withServiceHashIfNeeded(prev, pathname, search);
+      return withRememberedScheduleDay(target, orgSlug);
+    }
+  }
+
+  const fallback = resolveAppBackFallback(pathname, search);
+  return fallback ? withRememberedScheduleDay(fallback, orgSlug) : null;
+}
 
 /** @type {Set<() => void>} */
 const overlayClosers = new Set();
@@ -46,31 +81,20 @@ export function resolveAppBackFallback(pathname, search = '') {
 }
 
 /**
- * Same behavior as the header ← button: close overlays first, then in-app stack,
- * then the semantic parent route. Does not use browser history(-1).
+ * Same behavior as the header ← button: close overlays first, then returnTo,
+ * then in-app stack, then the semantic parent route. Does not use browser history(-1).
  */
 export function performAppBack({ pathname, search, navigate, preferFallback = false }) {
   if (closeTopOverlay()) return true;
 
-  const entry = locationEntry({ pathname, search });
-  if (!preferFallback) {
-    const prev = consumePreviousInAppPath(entry);
-    if (prev) {
-      // If we still remember scroll for that screen, return without #service-
-      // so ScrollToTop can restore Y once (avoids top → hash jump).
-      const prevKey = prev.split('#')[0];
-      const target =
-        peekSavedScrollY(prevKey) > 0
-          ? prevKey
-          : withServiceHashIfNeeded(prev, pathname, search);
-      navigate(target, { replace: true });
-      return true;
+  const target = resolveBackTarget(pathname, search, preferFallback);
+  if (target) {
+    const orgSlug = orgSlugFromProviderPath(pathname);
+    if (orgSlug) {
+      const bare = `/provider/${orgSlug}/schedule`;
+      aliasSavedScrollY(bare, target);
     }
-  }
-
-  const fallback = resolveAppBackFallback(pathname, search);
-  if (fallback) {
-    navigate(fallback, { replace: true });
+    navigate(target, { replace: true });
     return true;
   }
 

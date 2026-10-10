@@ -83,6 +83,71 @@ def ensure_customer_membership(org, customer, *, approve=False):
     return membership
 
 
+def resolve_customer_for_provider_book(
+    *,
+    org,
+    customer=None,
+    email='',
+    full_name='',
+    phone='',
+):
+    """
+    Existing customer id, or find/create from caller details (phone-book / walk-in).
+    New accounts get an unusable password — they finish via email OTP + profile.
+    """
+    from django.contrib.auth import get_user_model
+
+    from accounts.otp import normalize_email
+
+    User = get_user_model()
+
+    if customer is not None:
+        return customer
+
+    email_norm = normalize_email(email or '')
+    name = (full_name or '').strip()
+    phone_norm = (phone or '').strip()
+    if not email_norm:
+        raise ValidationError({'email': 'Customer email is required.'})
+    if '@' not in email_norm or '.' not in email_norm.split('@')[-1]:
+        raise ValidationError({'email': 'Enter a valid email address.'})
+    if not name:
+        raise ValidationError({'full_name': 'Customer name is required.'})
+
+    existing = User.objects.filter(email__iexact=email_norm).first()
+    if existing:
+        staff_role = OrganizationMembership.objects.filter(
+            organization=org,
+            user=existing,
+            role__in=(
+                OrganizationMembership.Role.OWNER,
+                OrganizationMembership.Role.STAFF,
+            ),
+        ).exists()
+        if staff_role:
+            raise ValidationError({
+                'email': 'This email belongs to staff on this business. Use a customer email.',
+            })
+        updates = []
+        if name and not (existing.full_name or '').strip():
+            existing.full_name = name[:255]
+            updates.append('full_name')
+        if phone_norm and not (existing.phone or '').strip():
+            existing.phone = phone_norm[:32]
+            updates.append('phone')
+        if updates:
+            existing.save(update_fields=updates)
+        return existing
+
+    return User.objects.create_user(
+        email=email_norm,
+        full_name=name[:255],
+        password=None,
+        phone=(phone_norm[:32] if phone_norm else ''),
+        email_verified=False,
+    )
+
+
 def customer_is_blocked(org, customer):
     if not customer or not getattr(customer, 'is_authenticated', False):
         return False
@@ -236,8 +301,14 @@ def _lock_slot(slot):
 def provider_book_customer(
     *, org, service, customer, start_at, end_at, staff_user, slot=None, notes='', service_address='',
 ):
+    """
+    Staff books a customer directly. Always attaches an AvailabilitySlot so the
+    appointment appears on Schedule (month heat + day timeline).
+    """
     if service.organization_id != org.id:
         raise ValidationError({'service': 'Service does not belong to this organization.'})
+    if not start_at or not end_at or start_at >= end_at:
+        raise ValidationError({'end_at': 'End time must be after start time.'})
     ensure_customer_membership(org, customer, approve=True)
     if slot:
         slot = _lock_slot(slot)
@@ -249,6 +320,24 @@ def provider_book_customer(
             raise ValidationError({'slot_id': 'This slot is not available.'})
         if slot.start_at != start_at or slot.end_at != end_at:
             raise ValidationError({'slot_id': 'Slot times must match the booking times.'})
+    else:
+        # Prefer an existing open window at these times; otherwise create one.
+        from .combined_booking import _find_or_create_segment_slot
+
+        slot = _find_or_create_segment_slot(org, service, start_at, end_at)
+        if not slot.is_bookable():
+            raise ValidationError({
+                'start_at': 'That time is already fully booked. Pick another window.',
+            })
+        slot = _lock_slot(slot)
+
+    # Shop address is known; mobile address is collected when the customer confirms.
+    resolved_address = resolve_booking_service_address(
+        service=service,
+        customer_address=(service_address or '').strip(),
+    )
+    if service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
+        resolved_address = ''
 
     booking = Booking.objects.create(
         organization=org,
@@ -257,16 +346,59 @@ def provider_book_customer(
         availability_slot=slot,
         start_at=start_at,
         end_at=end_at,
-        status=Booking.Status.CONFIRMED,
+        status=Booking.Status.REQUESTED,
         source=Booking.Source.PROVIDER_DIRECT,
         booked_by=staff_user,
         customer_notes=notes or '',
-        service_address=(service_address or '').strip(),
+        service_address=resolved_address,
+        awaiting_customer_acceptance=True,
     )
-    if slot:
-        slot.refresh_status(save=True)
+    slot.refresh_status(save=True)
+    from .combined_booking import _claim_empty_overlapping_slots
     from .message_services import ensure_booking_card
+
+    _claim_empty_overlapping_slots(org, start_at, end_at, keep_slot_ids={slot.id})
     ensure_booking_card(booking=booking, sender=staff_user)
+    return booking
+
+
+@transaction.atomic
+def customer_confirm_provider_booking(booking, *, service_address=''):
+    """
+    Customer accepts a provider-direct invite: sets address (mobile) and confirms.
+    """
+    if booking.source != Booking.Source.PROVIDER_DIRECT:
+        raise ValidationError({'status': 'This booking cannot be confirmed this way.'})
+    if booking.status != Booking.Status.REQUESTED or not booking.awaiting_customer_acceptance:
+        raise ValidationError({'status': 'This booking is already confirmed or no longer pending.'})
+
+    service = booking.service
+    address = (service_address or '').strip()
+    if service and service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
+        if not address:
+            raise ValidationError({
+                'service_address': 'Enter the address where the provider should come.',
+            })
+        booking.service_address = address
+        if hasattr(booking.customer, 'default_service_address'):
+            if not (booking.customer.default_service_address or '').strip():
+                booking.customer.default_service_address = address
+                booking.customer.save(update_fields=['default_service_address'])
+    elif service and service.fulfillment_kind == Service.FulfillmentKind.SHOP:
+        booking.service_address = resolve_booking_service_address(
+            service=service,
+            customer_address='',
+        )
+    elif address:
+        booking.service_address = address
+
+    booking.status = Booking.Status.CONFIRMED
+    booking.awaiting_customer_acceptance = False
+    booking.save(update_fields=[
+        'status', 'awaiting_customer_acceptance', 'service_address', 'updated_at',
+    ])
+    if booking.availability_slot_id:
+        _lock_slot(booking.availability_slot).refresh_status(save=True)
     return booking
 
 

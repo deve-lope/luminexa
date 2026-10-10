@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
-import { providerRequestDetail, providerScheduleDetail } from '../../utils/providerPaths';
+import { withReturnTo } from '../../utils/navigationBack';
+import {
+  providerRequestDetail,
+  providerSchedule,
+  providerScheduleDetail,
+} from '../../utils/providerPaths';
 import { buildDayTimeline, TIMELINE_COLORS, TIMELINE_LABELS } from '../../utils/dayTimeline';
 import {
   ADD_MODE_META,
@@ -15,7 +20,7 @@ import {
 } from '../../utils/timelineInteraction';
 import { formatTime } from '../../utils/datetime';
 
-function bookingNavPath(seg, orgSlug) {
+function bookingNavPath(seg, orgSlug, dayKey) {
   if (!orgSlug) return null;
   if (seg.type !== 'booked' && seg.type !== 'pending') return null;
   const slot = seg.slot;
@@ -23,10 +28,11 @@ function bookingNavPath(seg, orgSlug) {
   // Confirmed / in-progress style jobs → schedule booking detail ("jobs" view).
   // Quote / request-style pending → requests detail when status suggests it.
   const status = (slot.booking_status || '').toLowerCase();
-  if (status === 'requested' || status === 'quoted') {
-    return providerRequestDetail(orgSlug, 'booking', slot.booking_id);
-  }
-  return providerScheduleDetail(orgSlug, 'booking', slot.booking_id);
+  const path =
+    status === 'requested' || status === 'quoted'
+      ? providerRequestDetail(orgSlug, 'booking', slot.booking_id)
+      : providerScheduleDetail(orgSlug, 'booking', slot.booking_id);
+  return withReturnTo(path, providerSchedule(orgSlug, { day: dayKey }));
 }
 
 export default function InteractiveDayTimeline({
@@ -39,7 +45,6 @@ export default function InteractiveDayTimeline({
   onDraftRangeChange,
   onClearDraft,
 }) {
-  const navigate = useNavigate();
   const { orgSlug } = useProviderOrg();
   const trackRef = useRef(null);
   const [hoverMs, setHoverMs] = useState(null);
@@ -169,11 +174,17 @@ export default function InteractiveDayTimeline({
       return;
     }
     if (seg.type === 'booked' || seg.type === 'pending') {
-      const path = bookingNavPath(seg, orgSlug);
-      if (path) {
-        setSelection(null);
-        navigate(path);
-      }
+      const slot = seg.slot;
+      setSelection({
+        kind: 'booking',
+        startMs: seg.startMs,
+        endMs: seg.endMs,
+        path: bookingNavPath(seg, orgSlug, dayKey),
+        customerName: (slot?.customer_name || '').trim() || 'Customer',
+        serviceName: (slot?.service_name || '').trim() || 'Service',
+        address: (slot?.service_address || '').trim(),
+        bookingStatus: slot?.booking_status || '',
+      });
       return;
     }
     if (seg.type === 'unavailable') {
@@ -334,7 +345,7 @@ export default function InteractiveDayTimeline({
             Drag to draw · pull edges to resize
           </span>
         ) : (
-          <span className="text-slate-400">Tap a colored block for details</span>
+          <span className="text-slate-400">Tap a job block for a quick preview</span>
         )}
       </div>
 
@@ -374,6 +385,42 @@ export default function InteractiveDayTimeline({
               Close
             </button>
           </div>
+        </div>
+      )}
+
+      {selection?.kind === 'booking' && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/90 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-violet-950">
+                {selection.customerName}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-violet-900">{selection.serviceName}</p>
+              <p className="mt-1 text-xs text-violet-800">
+                {formatMsRange(selection.startMs, selection.endMs)}
+              </p>
+              {selection.address ? (
+                <p className="mt-1 line-clamp-2 text-xs text-violet-800/90">{selection.address}</p>
+              ) : (
+                <p className="mt-1 text-xs text-violet-700/70">Address pending</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="shrink-0 text-xs font-medium text-violet-800 underline"
+            >
+              Close
+            </button>
+          </div>
+          {selection.path && (
+            <Link
+              to={selection.path}
+              className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-violet-700 text-sm font-semibold text-white active:bg-violet-800"
+            >
+              Show more
+            </Link>
+          )}
         </div>
       )}
 

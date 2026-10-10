@@ -130,6 +130,69 @@ export function buildOpenSlotDays(openSlots) {
   return days;
 }
 
+/** Seats already taken on a slot (partial open, pending, or fully booked). */
+export function slotWorkSeats(slot) {
+  if (!slot) return 0;
+  const occupied = Number(slot.occupied_count);
+  if (Number.isFinite(occupied) && occupied > 0) return occupied;
+  if (slot.status === 'booked' || slot.status === 'pending') return 1;
+  return 0;
+}
+
+/** Map job-seat count to a month-cell heat level. */
+export function busyLevelFromWorkCount(workCount) {
+  const n = Number(workCount) || 0;
+  if (n <= 0) return 'none';
+  if (n === 1) return 'light';
+  if (n <= 3) return 'medium';
+  return 'heavy';
+}
+
+/**
+ * Provider schedule month map: open slots (teal) + workload heat (violet).
+ * Includes booked/pending/partial seats so busy days are visible without tapping in.
+ */
+export function buildProviderScheduleDays(slots, nowMs = Date.now()) {
+  const earliest = earliestBookableTimestamp(nowMs);
+  const days = {};
+
+  for (const slot of slots || []) {
+    const key = slotLocalDayKey(slot.start_at);
+    if (!key) continue;
+    if (!days[key]) {
+      days[key] = {
+        status: 'none',
+        open_count: 0,
+        work_count: 0,
+        busy_level: 'none',
+      };
+    }
+    const day = days[key];
+    const start = new Date(slot.start_at).getTime();
+    if (
+      slot.status === 'open' &&
+      !Number.isNaN(start) &&
+      start >= earliest
+    ) {
+      day.open_count += 1;
+    }
+    day.work_count += slotWorkSeats(slot);
+  }
+
+  for (const day of Object.values(days)) {
+    day.busy_level = busyLevelFromWorkCount(day.work_count);
+    if (day.open_count > 0) {
+      day.status = 'available';
+    } else if (day.work_count > 0) {
+      day.status = 'busy';
+    } else {
+      day.status = 'none';
+    }
+  }
+
+  return days;
+}
+
 export function openSlotsOnDay(openSlots, dayKey) {
   const earliest = earliestBookableTimestamp();
   return (openSlots || [])

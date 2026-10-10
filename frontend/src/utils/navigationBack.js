@@ -1,3 +1,5 @@
+import { readRememberedScheduleDay } from './scheduleDayMemory';
+
 /** Marketing/auth pages with no in-app header navigation. */
 
 const NO_NAV_EXACT = new Set(['/', '/login']);
@@ -137,7 +139,10 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   if (path === `${base}/clients`) return { to: base };
 
   if (path.startsWith(`${base}/schedule/`)) {
-    return { to: `${base}/schedule` };
+    const day = readRememberedScheduleDay(orgSlug);
+    return {
+      to: day ? `${base}/schedule?day=${encodeURIComponent(day)}` : `${base}/schedule`,
+    };
   }
   if (path.startsWith(`${base}/requests/`)) {
     return { to: `${base}/requests` };

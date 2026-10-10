@@ -19,7 +19,7 @@ import {
   emitProviderNotificationsChanged,
 } from '../../utils/providerNotifications';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
-import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
+import { canStartOrCompleteJob } from '../../utils/jobActions';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
 
 function DetailRow({ label, children }) {
@@ -100,7 +100,6 @@ export default function ProviderRequestDetailPage() {
 
   const status = data?.status;
   const canJobAction = kind === 'booking' && canStartOrCompleteJob(data);
-  const jobActionFrom = kind === 'booking' ? jobActionAvailableAt(data) : null;
   const statusBadgeClass = requestStatusTone(kind, status);
   const isQuotePolicy = data?.booking_policy === 'quote';
   const needsQuote =
@@ -453,12 +452,6 @@ export default function ProviderRequestDetailPage() {
                 </button>
               )}
             </div>
-            {!canJobAction && jobActionFrom && (
-              <p className="text-sm text-white/85">
-                Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours
-                before the appointment).
-              </p>
-            )}
           </div>
         )}
         {kind === 'booking' && status === 'in_progress' && canJobAction && (
@@ -470,12 +463,6 @@ export default function ProviderRequestDetailPage() {
           >
             Mark complete
           </button>
-        )}
-        {kind === 'booking' && status === 'in_progress' && !canJobAction && jobActionFrom && (
-          <p className="mt-4 text-sm text-white/85">
-            Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours before
-            the appointment).
-          </p>
         )}
         {kind === 'inquiry' && status === 'pending' && (
           <div className="mt-4 flex gap-2">

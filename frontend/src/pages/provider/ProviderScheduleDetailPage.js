@@ -25,7 +25,7 @@ import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
-import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
+import { canStartOrCompleteJob } from '../../utils/jobActions';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -73,7 +73,11 @@ export default function ProviderScheduleDetailPage() {
       const payload = reason ? { reason } : {};
       await jobsAPI.cancelBooking(id, payload);
       showToast('Booking cancelled.', 'success');
-      navigate(providerSchedule(orgSlug));
+      navigate(
+        providerSchedule(orgSlug, {
+          day: data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null,
+        }),
+      );
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -104,7 +108,8 @@ export default function ProviderScheduleDetailPage() {
       await jobsAPI.declineBooking(id);
       showToast('Request declined.', 'success');
       setConfirmAction(null);
-      navigate(providerSchedule(orgSlug));
+      const day = data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null;
+      navigate(providerSchedule(orgSlug, { day }));
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -200,7 +205,6 @@ export default function ProviderScheduleDetailPage() {
   }
 
   const canJobAction = canStartOrCompleteJob(data);
-  const jobActionFrom = jobActionAvailableAt(data);
 
   if (kind === 'booking') {
     return (
@@ -488,12 +492,6 @@ export default function ProviderScheduleDetailPage() {
 
         {(data.status === 'confirmed' || data.status === 'in_progress') && (
           <div className="flex flex-col gap-2">
-            {!canJobAction && jobActionFrom && (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                Start job and mark complete are available from {formatWhen(jobActionFrom.toISOString())}{' '}
-                (6 hours before the appointment).
-              </p>
-            )}
             {data.status === 'confirmed' && canJobAction && (
               <button
                 type="button"

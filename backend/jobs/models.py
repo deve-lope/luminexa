@@ -205,6 +205,7 @@ class ProviderNotification(models.Model):
         QUOTE_ANSWERS_RECEIVED = 'quote_answers_received', 'Quote answers received'
         CUSTOMER_REPORTED_NO_SHOW = 'customer_reported_no_show', 'Customer reported no-show'
         INCOMPLETE_JOB_TASKS = 'incomplete_job_tasks', 'Incomplete job tasks'
+        TASK_DUE = 'task_due', 'Task due soon'
         SUBSCRIPTION_ENDING = 'subscription_ending', 'Subscription ending'
         NEW_GIG_IN_AREA = 'new_gig_in_area', 'New gig in your area'
         GIG_QUOTE_ACCEPTED = 'gig_quote_accepted', 'Gig quote accepted'
@@ -1473,6 +1474,11 @@ class Task(models.Model):
         choices=Priority.choices, default=Priority.NORMAL
     )
     due_at = models.DateTimeField(null=True, blank=True)
+    due_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were reminded ~24h before this task’s due time.',
+    )
     recurrence = models.CharField(
         max_length=10,
         choices=Recurrence.choices,

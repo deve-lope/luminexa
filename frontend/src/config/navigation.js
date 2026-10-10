@@ -94,10 +94,14 @@ export function buildPublicBookMenuItems(nextPath) {
   return [
     { id: 'pricing', label: 'Pricing', to: '/pricing' },
     { id: 'signin', label: 'Sign in', to: authPathWithNext('/login', nextPath) },
-    { id: 'register', label: 'Create account', to: authPathWithNext('/register', nextPath) },
+    {
+      id: 'register',
+      label: 'Customer account',
+      to: authPathWithNext('/register', nextPath),
+    },
     {
       id: 'business',
-      label: 'For your business',
+      label: 'Register business',
       to: authPathWithNext('/register/business', nextPath),
     },
   ];

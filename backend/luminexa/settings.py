@@ -230,6 +230,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_incomplete_job_task_reminders',
         'schedule': 3600.0,
     },
+    'task-due-reminders-hourly': {
+        'task': 'jobs.tasks.send_task_due_reminders',
+        'schedule': 3600.0,
+    },
     'invoice-payment-reminders-hourly': {
         'task': 'jobs.tasks.send_unpaid_invoice_payment_reminders',
         'schedule': 3600.0,

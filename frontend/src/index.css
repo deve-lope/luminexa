@@ -4,6 +4,16 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
+/* Hide 1–2 frames while Back re-pins scroll (avoids top → scroll-down flash). */
+html.lx-scroll-restoring,
+html.lx-scroll-restoring body {
+  scroll-behavior: auto !important;
+  overflow-anchor: none !important;
+}
+html.lx-scroll-restoring body {
+  opacity: 0 !important;
+}
+
 @layer base {
   :root {
     --lx-accent: 13 148 136;

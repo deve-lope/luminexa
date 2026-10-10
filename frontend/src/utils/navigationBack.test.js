@@ -61,6 +61,24 @@ describe('resolveProviderBack', () => {
       to: '/provider/anu-garden',
     });
   });
+
+  test('schedule detail honors returnTo with selected day', () => {
+    expect(
+      resolveProviderBack(
+        '/provider/anu-garden/schedule/booking/12',
+        'anu-garden',
+        '?returnTo=%2Fprovider%2Fanu-garden%2Fschedule%3Fday%3D2026-10-20'
+      )
+    ).toEqual({ to: '/provider/anu-garden/schedule?day=2026-10-20' });
+  });
+
+  test('schedule detail falls back to remembered day', () => {
+    sessionStorage.setItem('luminexa.scheduleSelectedDay.anu-garden', '2026-11-11');
+    expect(
+      resolveProviderBack('/provider/anu-garden/schedule/booking/12', 'anu-garden')
+    ).toEqual({ to: '/provider/anu-garden/schedule?day=2026-11-11' });
+    sessionStorage.removeItem('luminexa.scheduleSelectedDay.anu-garden');
+  });
 });
 
 describe('resolveCustomerBack', () => {

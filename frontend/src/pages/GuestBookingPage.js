@@ -17,6 +17,9 @@ export default function GuestBookingPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [jobAddress, setJobAddress] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState(null);
   /** true = Play app installed; false = not; null = unknown / unsupported. */
   const [appInstalled, setAppInstalled] = useState(null);
   const native = isNativeApp();
@@ -55,10 +58,39 @@ export default function GuestBookingPage() {
   const showOpenInApp =
     Boolean(openInAppUrl) &&
     (appInstalled === true || (appInstalled === null && isAndroidUserAgent(ua)));
-  // Hide store CTAs when we already know the app is installed, or when Android
-  // "Open in app" Intent already falls back to Play if missing.
   const showInstall =
     appInstalled === false || (appInstalled === null && !showOpenInApp);
+
+  const needsConfirm = Boolean(data?.needs_customer_confirm);
+  const needsAddress = Boolean(data?.needs_job_address);
+
+  const confirmBooking = async (e) => {
+    e.preventDefault();
+    if (!token || confirming) return;
+    if (needsAddress && !jobAddress.trim()) {
+      setConfirmError('Enter the address where the provider should come.');
+      return;
+    }
+    setConfirming(true);
+    setConfirmError(null);
+    try {
+      const res = await jobsAPI.confirmPublicBooking(token, {
+        service_address: needsAddress ? jobAddress.trim() : '',
+      });
+      setData(res.data);
+      setJobAddress('');
+    } catch (err) {
+      const d = err.response?.data;
+      const msg =
+        d?.service_address?.[0] ||
+        d?.status?.[0] ||
+        d?.detail ||
+        'Could not confirm this booking. Try again.';
+      setConfirmError(String(msg));
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] bg-luminexa-canvas text-slate-900">
@@ -127,7 +159,11 @@ export default function GuestBookingPage() {
             </p>
             <h1 className="mt-1 text-xl font-bold text-slate-900">{data.service_name}</h1>
             <p className="mt-2 text-sm text-slate-600">
-              {bookingStatusLabel(data.status)}
+              {needsConfirm
+                ? 'Reserved — confirm to finish'
+                : bookingStatusLabel(data.status, {
+                    awaitingCustomerAcceptance: data.awaiting_customer_acceptance,
+                  })}
               {data.customer_first_name ? ` · ${data.customer_first_name}` : ''}
             </p>
             <dl className="mt-4 space-y-3 text-sm">
@@ -147,12 +183,60 @@ export default function GuestBookingPage() {
                 </div>
               )}
             </dl>
-            <Link
-              to={`/login?next=${encodeURIComponent(customerBookingDetail(data.id))}`}
-              className="mt-6 inline-flex min-h-[40px] items-center text-sm font-medium text-luminexa-accent"
-            >
-              Sign in to cancel, reschedule, or pay
-            </Link>
+
+            {needsConfirm ? (
+              <form onSubmit={confirmBooking} className="mt-6 space-y-3">
+                <p className="text-sm text-slate-700">
+                  {needsAddress
+                    ? 'Add the job address and confirm so this appointment is locked in.'
+                    : 'Confirm this appointment so it is locked in on Luminexa.'}
+                </p>
+                {needsAddress && (
+                  <label className="block text-sm font-medium text-slate-700">
+                    Job address
+                    <input
+                      type="text"
+                      value={jobAddress}
+                      onChange={(e) => setJobAddress(e.target.value)}
+                      placeholder="Street, city, postal code"
+                      autoComplete="street-address"
+                      className="mt-1 block w-full min-h-[48px] rounded-xl border border-slate-200 px-3 text-base"
+                    />
+                  </label>
+                )}
+                {confirmError && (
+                  <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{confirmError}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={confirming || (needsAddress && !jobAddress.trim())}
+                  className="lx-btn-primary flex w-full min-h-[48px] items-center justify-center disabled:opacity-50"
+                >
+                  {confirming ? 'Confirming…' : 'Confirm booking'}
+                </button>
+              </form>
+            ) : (
+              <div className="mt-6 space-y-2">
+                <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-100">
+                  Booking confirmed. Log in to see it under Upcoming on Home.
+                </p>
+                <Link
+                  to={`/login?next=${encodeURIComponent('/customer')}`}
+                  className="lx-btn-primary flex min-h-[44px] items-center justify-center"
+                >
+                  Log in to Luminexa
+                </Link>
+                <p className="text-center text-xs text-slate-500">
+                  Use the email this booking was sent to — we’ll send a one-time code.
+                </p>
+                <Link
+                  to={`/login?next=${encodeURIComponent(customerBookingDetail(data.id))}`}
+                  className="flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 text-sm font-medium text-slate-800"
+                >
+                  Sign in to open this booking
+                </Link>
+              </div>
+            )}
           </section>
         )}
       </main>

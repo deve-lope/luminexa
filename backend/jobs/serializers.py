@@ -1393,14 +1393,17 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
     job_location = serializers.SerializerMethodField()
     job_location_label = serializers.SerializerMethodField()
     customer_first_name = serializers.SerializerMethodField()
+    needs_customer_confirm = serializers.SerializerMethodField()
+    needs_job_address = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = (
-            'id', 'status', 'start_at', 'end_at',
+            'id', 'status', 'start_at', 'end_at', 'source',
+            'awaiting_customer_acceptance',
             'service_name', 'organization_name', 'organization_public_ref',
             'fulfillment_kind', 'job_location', 'job_location_label',
-            'customer_first_name',
+            'customer_first_name', 'needs_customer_confirm', 'needs_job_address',
         )
         read_only_fields = fields
 
@@ -1410,6 +1413,19 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
     def get_customer_first_name(self, obj):
         name = (getattr(obj.customer, 'full_name', None) or '').strip()
         return name.split()[0] if name else ''
+
+    def get_needs_customer_confirm(self, obj):
+        return (
+            obj.source == Booking.Source.PROVIDER_DIRECT
+            and obj.status == Booking.Status.REQUESTED
+            and bool(obj.awaiting_customer_acceptance)
+        )
+
+    def get_needs_job_address(self, obj):
+        if not self.get_needs_customer_confirm(obj):
+            return False
+        kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
+        return kind == Service.FulfillmentKind.MOBILE
 
     def get_job_location(self, obj):
         addr = (obj.service_address or '').strip()
@@ -1431,7 +1447,15 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
 class ProviderBookSerializer(serializers.Serializer):
     organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.all())
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all())
-    customer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    customer = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    # Phone-book / walk-in: create or link by email when customer id is omitted.
+    email = serializers.EmailField(required=False, allow_blank=True)
+    full_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         required=False,
@@ -1462,6 +1486,10 @@ class ProviderBookSerializer(serializers.Serializer):
             raise serializers.ValidationError({'service': 'Service is required.'})
         if org and service and service.organization_id != org.id:
             raise serializers.ValidationError({'service': 'Service must belong to the organization.'})
+        if not attrs.get('customer') and not (attrs.get('email') or '').strip():
+            raise serializers.ValidationError({
+                'customer': 'Pick an existing customer or enter a new customer email.',
+            })
         return attrs
 
 
@@ -1557,6 +1585,9 @@ class TaskSerializer(serializers.ModelSerializer):
                 validated_data['done_at'] = timezone.now()
             elif not validated_data['is_done']:
                 validated_data['done_at'] = None
+        if 'due_at' in validated_data and validated_data['due_at'] != instance.due_at:
+            # New deadline → allow another 24h due reminder.
+            validated_data['due_reminder_sent_at'] = None
         return super().update(instance, validated_data)
 
 

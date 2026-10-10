@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -1015,6 +1016,124 @@ class BookingLifecycleTests(TestCase):
 
         missing = self.client.get('/api/v1/public/bookings/not-a-real-token/', HTTP_HOST='localhost')
         self.assertEqual(missing.status_code, 404)
+
+    @patch('jobs.notifications.send_booking_email')
+    def test_provider_books_new_caller_creates_account(self, _email):
+        start = timezone.now() + timedelta(days=4)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'New Caller',
+                'email': 'newcaller@test.local',
+                'phone': '5550199',
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        caller = User.objects.get(email='newcaller@test.local')
+        self.assertEqual(caller.full_name, 'New Caller')
+        self.assertFalse(caller.has_usable_password())
+        booking = Booking.objects.get(pk=res.data['id'])
+        self.assertEqual(booking.customer_id, caller.id)
+        self.assertEqual(booking.source, Booking.Source.PROVIDER_DIRECT)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.service_address, '')
+        self.assertIsNotNone(booking.availability_slot_id)
+        booking.availability_slot.refresh_from_db()
+        self.assertEqual(booking.availability_slot.start_at, booking.start_at)
+        self.assertEqual(booking.availability_slot.end_at, booking.end_at)
+        membership = OrganizationMembership.objects.get(
+            organization=self.org,
+            user=caller,
+            role=OrganizationMembership.Role.CUSTOMER,
+        )
+        self.assertEqual(
+            membership.customer_status,
+            OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        self.assertIn('/b/', res.data.get('customer_view_url') or '')
+
+    @patch('jobs.notifications.send_booking_email')
+    def test_provider_books_new_caller_links_existing_email(self, _email):
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'Customer Alias',
+                'email': self.customer.email,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        booking = Booking.objects.get(pk=res.data['id'])
+        self.assertEqual(booking.customer_id, self.customer.id)
+        self.assertEqual(User.objects.filter(email__iexact=self.customer.email).count(), 1)
+
+    def test_customer_confirms_provider_invite_with_address(self):
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'customer': self.customer.id,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        token = res.data['customer_view_token']
+        self.client.logout()
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {'service_address': '77 Pine Rd'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(confirm.status_code, 200, getattr(confirm, 'data', confirm.content))
+        booking = Booking.objects.get(pk=res.data['id'])
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertFalse(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.service_address, '77 Pine Rd')
+        self.assertFalse(confirm.data.get('needs_customer_confirm'))
+
+    def test_provider_cannot_book_staff_email_as_new_caller(self):
+        start = timezone.now() + timedelta(days=6)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'Provider Self',
+                'email': self.provider.email,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400, getattr(res, 'data', res.content))
 
     def test_customer_reports_attendance_after_appointment(self):
         start = timezone.now() - timedelta(hours=3)

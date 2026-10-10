@@ -4,8 +4,12 @@ export function providerHome(orgSlug) {
   return `/provider/${orgSlug}`;
 }
 
-export function providerSchedule(orgSlug) {
-  return `/provider/${orgSlug}/schedule`;
+export function providerSchedule(orgSlug, { day } = {}) {
+  const base = `/provider/${orgSlug}/schedule`;
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(String(day))) {
+    return `${base}?day=${encodeURIComponent(day)}`;
+  }
+  return base;
 }
 
 export function providerScheduleDetail(orgSlug, kind, id) {

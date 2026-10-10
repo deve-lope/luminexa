@@ -1307,25 +1307,40 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        if request.data.get('customer') is not None:
+        # Provider booking: existing customer id and/or new-caller email fields.
+        if (
+            request.data.get('customer') is not None
+            or (request.data.get('email') or '').strip()
+            or (request.data.get('full_name') or '').strip()
+        ):
             return self._provider_book(request)
         return self._customer_request(request)
 
     def _provider_book(self, request):
+        from .booking_services import resolve_customer_for_provider_book
+
         ser = ProviderBookSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
         org = data['organization']
         require_staff_ops(request.user, org)
+        customer = resolve_customer_for_provider_book(
+            org=org,
+            customer=data.get('customer'),
+            email=data.get('email') or '',
+            full_name=data.get('full_name') or '',
+            phone=data.get('phone') or '',
+        )
         booking = provider_book_customer(
             org=org,
             service=data['service'],
-            customer=data['customer'],
+            customer=customer,
             start_at=data['start_at'],
             end_at=data['end_at'],
             staff_user=request.user,
             slot=data.get('slot_id'),
             notes=data.get('customer_notes') or '',
+            service_address=data.get('service_address') or '',
         )
         from .notifications import notify_customer_provider_direct
 

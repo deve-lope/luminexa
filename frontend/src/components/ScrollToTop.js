@@ -4,10 +4,23 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 /** Persists across navigations so Back can restore where you were. */
 const scrollPositions = new Map();
 
+const RESTORE_CLASS = 'lx-scroll-restoring';
+
 export function peekSavedScrollY(pathAndSearch) {
   const key = String(pathAndSearch || '').split('#')[0];
   const y = scrollPositions.get(key);
   return typeof y === 'number' ? y : 0;
+}
+
+/** Copy a remembered Y onto another path (e.g. /schedule → /schedule?day=…). */
+export function aliasSavedScrollY(fromPathAndSearch, toPathAndSearch) {
+  const fromKey = String(fromPathAndSearch || '').split('#')[0];
+  const toKey = String(toPathAndSearch || '').split('#')[0];
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  const y = scrollPositions.get(fromKey);
+  if (typeof y !== 'number' || y <= 0) return;
+  if (typeof scrollPositions.get(toKey) === 'number' && scrollPositions.get(toKey) > 0) return;
+  scrollPositions.set(toKey, y);
 }
 
 function locationKey(location) {
@@ -56,45 +69,86 @@ export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}
 }
 
 /**
- * Restore Y only once the document is tall enough — avoids the visible
- * jump from clamped top → mid-page after async content mounts.
+ * Pin scroll before paint the way native stacks do:
+ * 1) Pad document height so target Y is reachable immediately
+ * 2) Hide for 1–2 frames while jumping (no visible top → scroll-down)
+ * 3) Reveal already at the right offset; keep pad until real content is tall
  */
-function restoreScrollY(saved) {
+export function pinScrollPosition(saved) {
   if (typeof saved !== 'number' || saved <= 0) return () => {};
 
-  let cancelled = false;
-  let tries = 0;
-  let timeoutId;
-  let rafId;
+  const html = document.documentElement;
+  const prevMinHeight = html.style.minHeight;
+  html.style.minHeight = `${Math.ceil(saved + window.innerHeight + 120)}px`;
+  html.classList.add(RESTORE_CLASS);
+  writeScrollY(saved);
 
-  const attempt = () => {
+  let cancelled = false;
+  let intervalId = null;
+  let revealRaf1 = 0;
+  let revealRaf2 = 0;
+  let releaseTimer = 0;
+
+  const hold = () => {
     if (cancelled) return;
-    const maxScroll = Math.max(
+    writeScrollY(saved);
+  };
+
+  // Re-pin while React mounts panels (prevents the browser clamping to 0).
+  intervalId = window.setInterval(hold, 32);
+
+  // Reveal after the jump is applied — still before the user perceives motion.
+  revealRaf1 = window.requestAnimationFrame(() => {
+    hold();
+    revealRaf2 = window.requestAnimationFrame(() => {
+      hold();
+      html.classList.remove(RESTORE_CLASS);
+    });
+  });
+
+  const tryReleasePad = () => {
+    if (cancelled) return;
+    // Measure without counting our own min-height pad: temporarily clear it.
+    const pad = html.style.minHeight;
+    html.style.minHeight = '';
+    const naturalMax = Math.max(
       0,
-      (document.documentElement.scrollHeight || document.body.scrollHeight || 0) -
-        window.innerHeight,
+      (document.documentElement.scrollHeight || 0) - window.innerHeight,
     );
-    // Wait until layout can actually hold this offset (or give up after ~1s).
-    if (maxScroll < saved - 40 && tries < 20) {
-      tries += 1;
-      timeoutId = window.setTimeout(attempt, 50);
+    if (naturalMax >= saved - 40) {
+      writeScrollY(saved);
+      if (intervalId) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
       return;
     }
-    writeScrollY(Math.min(saved, maxScroll));
+    html.style.minHeight = pad || prevMinHeight;
+    writeScrollY(saved);
+    releaseTimer = window.setTimeout(tryReleasePad, 100);
   };
 
-  rafId = window.requestAnimationFrame(attempt);
+  releaseTimer = window.setTimeout(tryReleasePad, 300);
+
   return () => {
     cancelled = true;
-    if (timeoutId) window.clearTimeout(timeoutId);
-    if (rafId) window.cancelAnimationFrame(rafId);
+    if (intervalId) window.clearInterval(intervalId);
+    if (releaseTimer) window.clearTimeout(releaseTimer);
+    if (revealRaf1) window.cancelAnimationFrame(revealRaf1);
+    if (revealRaf2) window.cancelAnimationFrame(revealRaf2);
+    html.style.minHeight = prevMinHeight;
+    html.classList.remove(RESTORE_CLASS);
   };
+}
+
+/** @deprecated Prefer pinScrollPosition. */
+export function restoreScrollY(saved) {
+  return pinScrollPosition(saved);
 }
 
 /**
  * Scroll to top only on a fresh PUSH to a pathname.
- * Back restores remembered Y. #service- row pinning is left to the page after
- * its data loads (avoids double scroll / flash with BookingStorefrontPage).
+ * Back restores remembered Y before paint (no visible top→down jump).
  */
 export default function ScrollToTop() {
   const location = useLocation();
@@ -102,8 +156,16 @@ export default function ScrollToTop() {
   const prevLocationRef = useRef(location);
 
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useEffect(() => {
     const key = locationKey(location);
     const onScroll = () => {
+      // Ignore transient positions while we are pinning a restore.
+      if (document.documentElement.classList.contains(RESTORE_CLASS)) return;
       scrollPositions.set(key, readScrollY());
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -122,16 +184,24 @@ export default function ScrollToTop() {
       const y = readScrollY();
       // After route change the window is often already at 0 — don't wipe a good saved Y.
       const prior = scrollPositions.get(prevKey);
-      if (y > 0 || typeof prior !== 'number') {
+      if (
+        !document.documentElement.classList.contains(RESTORE_CLASS) &&
+        (y > 0 || typeof prior !== 'number')
+      ) {
         scrollPositions.set(prevKey, y);
       }
     }
     prevLocationRef.current = location;
 
-    // Same pathname — keep scroll (?cat=). Hash added in-place → pin the row.
+    // Same pathname — keep scroll (?day= / ?cat=). Hash added in-place → pin the row.
     if (!pathnameChanged) {
       if (location.hash.startsWith('#service-')) {
         return scrollToHashTarget(location.hash);
+      }
+      // Day query changed on schedule: re-pin if we have a saved Y for the new key.
+      const savedSame = scrollPositions.get(nextKey);
+      if (typeof savedSame === 'number' && savedSame > 0) {
+        return pinScrollPosition(savedSame);
       }
       return undefined;
     }
@@ -143,11 +213,9 @@ export default function ScrollToTop() {
       (navigationType === 'PUSH' && typeof saved === 'number' && saved > 0);
 
     if (isReturnNav) {
-      // Prefer saved Y when we have it (smoother than top→hash jump).
       if (typeof saved === 'number' && saved > 0) {
-        return restoreScrollY(saved);
+        return pinScrollPosition(saved);
       }
-      // #service- without saved Y: storefront scrolls after data loads.
       return undefined;
     }
 
