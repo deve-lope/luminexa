@@ -75,6 +75,14 @@ def send_subscription_ending_reminders():
 
 
 @shared_task
+def send_provider_job_nudges():
+    """Remind providers 1h before, nudge on-my-way at 30m, ask if started 30m after."""
+    from .notifications import send_provider_job_nudges as _send
+
+    return _send()
+
+
+@shared_task
 def purge_stale_quotes():
     """Delete quote requests and unconfirmed quote bookings older than one year."""
     from .quote_cleanup_services import purge_stale_quotes as _purge

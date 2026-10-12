@@ -246,6 +246,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_subscription_ending_reminders',
         'schedule': 3600.0,
     },
+    'provider-job-nudges-every-5-min': {
+        'task': 'jobs.tasks.send_provider_job_nudges',
+        'schedule': 300.0,
+    },
     'purge-stale-quotes-daily': {
         'task': 'jobs.tasks.purge_stale_quotes',
         'schedule': 86400.0,

@@ -1116,9 +1116,19 @@ def reschedule_booking(booking, *, new_slot, by_user):
     booking.end_at = new_slot.end_at
     booking.reminder_sent_at = None
     booking.incomplete_tasks_reminder_sent_at = None
+    booking.provider_1h_reminder_sent_at = None
+    booking.provider_en_route_nudge_sent_at = None
+    booking.provider_start_overdue_sent_at = None
     # Customer reschedules always go back to the provider for approval, even if the
     # original booking was already confirmed or the business uses instant booking.
     # Keep prior_* so the provider sees the old time and can "Accept change".
+    reminder_reset_fields = [
+        'reminder_sent_at',
+        'incomplete_tasks_reminder_sent_at',
+        'provider_1h_reminder_sent_at',
+        'provider_en_route_nudge_sent_at',
+        'provider_start_overdue_sent_at',
+    ]
     if is_customer:
         booking.status = Booking.Status.REQUESTED
         booking.awaiting_customer_acceptance = False
@@ -1126,8 +1136,8 @@ def reschedule_booking(booking, *, new_slot, by_user):
         booking.prior_end_at = prior_end
         booking.prior_availability_slot = old_slot
         booking.save(update_fields=[
-            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
-            'incomplete_tasks_reminder_sent_at',
+            'availability_slot', 'start_at', 'end_at', 'status',
+            *reminder_reset_fields,
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])
@@ -1146,8 +1156,8 @@ def reschedule_booking(booking, *, new_slot, by_user):
         else:
             booking.status = Booking.Status.REQUESTED
         booking.save(update_fields=[
-            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
-            'incomplete_tasks_reminder_sent_at',
+            'availability_slot', 'start_at', 'end_at', 'status',
+            *reminder_reset_fields,
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])

@@ -139,6 +139,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'referral_rewards_enabled',
             'referral_reward_amount',
             'referral_max_earnings_per_referrer',
+            'referral_max_credit_percent_per_job',
+            'referral_max_credit_amount_per_job',
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
@@ -179,6 +181,24 @@ class OrganizationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Keep the earnings cap at $100,000 or less.')
         return amount.quantize(Decimal('0.01'))
 
+    def validate_referral_max_credit_percent_per_job(self, value):
+        if value is None:
+            return Decimal('100.00')
+        amount = Decimal(str(value))
+        if amount < 0 or amount > Decimal('100.00'):
+            raise serializers.ValidationError('Use 0–100 percent of the job total.')
+        return amount.quantize(Decimal('0.01'))
+
+    def validate_referral_max_credit_amount_per_job(self, value):
+        if value is None:
+            return Decimal('0.00')
+        amount = Decimal(str(value))
+        if amount < 0:
+            raise serializers.ValidationError('Per-job credit cap cannot be negative.')
+        if amount > Decimal('100000.00'):
+            raise serializers.ValidationError('Keep the per-job credit cap at $100,000 or less.')
+        return amount.quantize(Decimal('0.01'))
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         enabled = attrs.get(
@@ -193,6 +213,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'referral_max_earnings_per_referrer',
             getattr(self.instance, 'referral_max_earnings_per_referrer', None) if self.instance else None,
         )
+        job_pct = attrs.get(
+            'referral_max_credit_percent_per_job',
+            getattr(self.instance, 'referral_max_credit_percent_per_job', None) if self.instance else None,
+        )
+        job_amt = attrs.get(
+            'referral_max_credit_amount_per_job',
+            getattr(self.instance, 'referral_max_credit_amount_per_job', None) if self.instance else None,
+        )
         if enabled:
             if reward is not None and Decimal(str(reward)) <= 0:
                 raise serializers.ValidationError({
@@ -205,6 +233,18 @@ class OrganizationSerializer(serializers.ModelSerializer):
             if reward is not None and cap is not None and Decimal(str(reward)) > Decimal(str(cap)):
                 raise serializers.ValidationError({
                     'referral_reward_amount': 'Per-referral reward cannot exceed the lifetime cap.',
+                })
+            if job_pct is not None and Decimal(str(job_pct)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_max_credit_percent_per_job': (
+                        'Set the max percent of a job that referral credit can cover.'
+                    ),
+                })
+            if job_amt is not None and Decimal(str(job_amt)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_max_credit_amount_per_job': (
+                        'Set the max dollar amount of referral credit one job can use.'
+                    ),
                 })
         return attrs
 

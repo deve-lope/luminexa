@@ -52,6 +52,8 @@ export default function ProviderTodayPage() {
   const [showSetupHint, setShowSetupHint] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [servicesCount, setServicesCount] = useState(null);
+  const [weeklyBlocksCount, setWeeklyBlocksCount] = useState(null);
+  const [schedulingMode, setSchedulingMode] = useState(null);
 
   const [openTasksExpanded, setOpenTasksExpanded] = useState(false);
   const [expandedOpenTasks, setExpandedOpenTasks] = useState(null);
@@ -70,11 +72,14 @@ export default function ProviderTodayPage() {
     setFetching(true);
     setError(null);
     try {
-      const [dashRes, orgRes, servicesRes] = await Promise.all([
+      const [dashRes, orgRes, servicesRes, schedRes] = await Promise.all([
         jobsAPI.getProviderDashboard(orgSlug),
         isOwner ? jobsAPI.getOrganization(orgSlug).catch(() => null) : Promise.resolve(null),
         isOwner
           ? jobsAPI.listServices({ organization: orgSlug }).catch(() => null)
+          : Promise.resolve(null),
+        isOwner
+          ? jobsAPI.getSchedulingSettings(orgSlug).catch(() => null)
           : Promise.resolve(null),
       ]);
       setDashboard(dashRes.data);
@@ -86,6 +91,12 @@ export default function ProviderTodayPage() {
           ? svc.results.length
           : null;
       setServicesCount(count);
+      const sched = schedRes?.data;
+      if (sched) {
+        setSchedulingMode(sched.scheduling_mode || null);
+        const blocks = Array.isArray(sched.weekly_blocks) ? sched.weekly_blocks : [];
+        setWeeklyBlocksCount(blocks.filter((b) => b?.is_active !== false).length);
+      }
     } catch (e) {
       setError(parseApiError(e));
       setDashboard(null);
@@ -100,9 +111,26 @@ export default function ProviderTodayPage() {
       orgSlug,
       org: orgDetails,
       servicesCount,
-      schedulingMode: orgDetails?.scheduling_mode || dashboard?.organization?.scheduling_mode,
+      schedulingMode:
+        schedulingMode ||
+        orgDetails?.scheduling_mode ||
+        dashboard?.organization?.scheduling_mode,
+      weeklyBlocksCount,
     });
-  }, [showSetupHint, orgSlug, orgDetails, servicesCount, dashboard]);
+  }, [
+    showSetupHint,
+    orgSlug,
+    orgDetails,
+    servicesCount,
+    schedulingMode,
+    weeklyBlocksCount,
+    dashboard,
+  ]);
+
+  useEffect(() => {
+    if (!orgSlug || !isOwner) return;
+    if (setupChecklist?.complete) setShowSetupHint(false);
+  }, [orgSlug, isOwner, setupChecklist?.complete]);
 
   useEffect(() => {
     load();

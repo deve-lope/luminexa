@@ -74,6 +74,21 @@ export function markProviderWizardStepDone(orgSlug, step) {
   }
 }
 
+/**
+ * Mark only this step done (no cascading earlier steps).
+ * Used when syncing from live org data so e.g. having services
+ * does not pretend service area was configured.
+ */
+export function markProviderWizardStepDoneExact(orgSlug, step) {
+  if (!orgSlug || !PROVIDER_WIZARD_STEPS.includes(step)) return;
+  const progress = readProgress(orgSlug);
+  progress[step] = true;
+  writeProgress(orgSlug, progress);
+  if (PROVIDER_WIZARD_STEPS.every((s) => progress[s])) {
+    markProviderSetupWizardDone(orgSlug);
+  }
+}
+
 export function isProviderWizardStepDone(orgSlug, step) {
   if (hasFinishedProviderSetupWizard(orgSlug)) return true;
   return Boolean(readProgress(orgSlug)[step]);

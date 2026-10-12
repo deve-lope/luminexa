@@ -212,7 +212,28 @@ After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enj
 5c. On-my-way = optional, app-only, km text + 5 km nearby push; not a status.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
-8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.
+5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or cancel.
+8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount; per-job apply caps (% and $).
+
+---
+
+## Provider job nudges (confirmed appointments)
+
+### What it means
+
+For **confirmed** bookings, Celery Beat (`jobs.tasks.send_provider_job_nudges`, every 5 minutes) sends staff **in-app + push**:
+
+1. **~1 hour before** — reminder that the job is coming up  
+2. **~30 minutes before** — ask if they are on the way / can share location (skipped if already sharing)  
+3. **~30 minutes after start** — ask if the job started; open the job to **Start** or **cancel** (not sent once status is `in_progress` / cancelled / completed)
+
+Deep link: schedule booking detail. Reschedule clears the three sent-at sentinels so nudges can fire for the new time.
+
+### What NOT to simplify away
+
+- Do not auto-cancel — provider must cancel themselves.
+- Do not require on-my-way before Start (nudge is optional).
+- Do not spam — one notification per stage per booking (sentinel fields).
 
 ---
 
@@ -224,16 +245,21 @@ Owners enable **Referral rewards** in Settings (toggle) with:
 
 - **Credit per referral** (`referral_reward_amount`)
 - **Max a person can earn** (`referral_max_earnings_per_referrer`) lifetime coupon credit at that business
+- **Max percent of job** (`referral_max_credit_percent_per_job`) — share of invoice pre-tax that credit may cover
+- **Max dollars per job** (`referral_max_credit_amount_per_job`) — hard dollar ceiling on one invoice
 
 Customers share `?ref=CODE` on the booking URL. Attribution is stored when the referred person books. **Coupon credit is issued only when that referred person's booking is marked completed.** Credit applies automatically as invoice discount on the referrer's next invoice with that provider (pre-tax).
 
-Turning the toggle **off** stops new attributions / share UI. Existing available coupon credit still applies on invoices. Pending referrals (already booked with a code) still qualify on completion.
+**Per-job apply rule:** discount = `min(available credit, pre_tax × percent/100, dollar cap)`. Example: 50% + $100 on a $1,000 job → $100 off (not $500). Leftover credit stays for later invoices with the same provider.
+
+Turning the toggle **off** stops new attributions / share UI. Existing available coupon credit still applies on invoices (still within per-job caps). Pending referrals (already booked with a code) still qualify on completion.
 
 ### What NOT to simplify away
 
 - Do not grant credit on book / pay alone — completion is required.
 - Do not allow self-referral.
 - Do not ignore the lifetime cap (partial last grant is OK).
+- Do not ignore per-job % and $ caps when applying credit (both apply; use the lower).
 - Coupons are provider-scoped.
 - Do not wipe existing coupons when the program is turned off.
 

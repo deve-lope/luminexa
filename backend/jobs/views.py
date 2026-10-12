@@ -176,6 +176,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'referral_rewards_enabled',
             'referral_reward_amount',
             'referral_max_earnings_per_referrer',
+            'referral_max_credit_percent_per_job',
+            'referral_max_credit_amount_per_job',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:

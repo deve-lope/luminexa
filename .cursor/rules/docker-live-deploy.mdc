@@ -1,0 +1,18 @@
+---
+description: Always rebuild Docker for live site; :3000 is the live SPA container
+alwaysApply: true
+---
+
+# Docker = live site
+
+The owner verifies changes on the **live site** (`https://app.luminex-a.com`), not localhost in a browser discussion.
+
+## Binding rules
+
+- After frontend and/or backend changes that should be visible live, **always** rebuild and restart Docker before saying the work is ready:
+  - UI-only: `docker compose up -d --build frontend`
+  - API/migrations too: `docker compose up -d --build`
+- Do **not** tell the user to check `localhost:3000` as if that were a separate environment. Port **:3000** is this host’s Docker SPA container — the same stack the live domain proxies to.
+- After a frontend rebuild, remind once to hard-refresh the live site (or reopen the app WebView) so the new JS bundle loads.
+- Do not assume a separate “staging” deploy unless the user says so.
+---

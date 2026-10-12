@@ -188,15 +188,19 @@ export default function ProviderSettingsPage() {
   }, [searchParams]);
 
   const setupChecklist = useMemo(() => {
-    if (!isOwner || setupDismissed || !orgSlug) return null;
+    if (!isOwner || !orgSlug) return null;
     return buildProviderSetupChecklist({
       orgSlug,
       org: orgDetails,
       servicesCount,
       schedulingMode: mode,
-      weeklyBlocksCount: mode === 'recurring' ? blocks.filter((b) => b.is_active !== false).length : null,
+      weeklyBlocksCount: blocks.filter((b) => b.is_active !== false).length,
     });
-  }, [isOwner, setupDismissed, orgSlug, orgDetails, servicesCount, mode, blocks]);
+  }, [isOwner, orgSlug, orgDetails, servicesCount, mode, blocks]);
+
+  useEffect(() => {
+    if (setupChecklist?.complete) setSetupDismissed(true);
+  }, [setupChecklist?.complete]);
 
   const setupStatusBySection = useMemo(() => {
     const map = {};
@@ -286,7 +290,7 @@ export default function ProviderSettingsPage() {
         Open a section to change it. Only one is shown at a time.
       </p>
 
-      {setupChecklist && !setupChecklist.complete && (
+      {!setupDismissed && setupChecklist && !setupChecklist.complete && (
         <ProviderSetupProgressCard
           orgSlug={orgSlug}
           checklist={setupChecklist}

@@ -30,6 +30,7 @@ import {
   providerResumeSetupPath,
   providerSetupPath,
 } from '../../utils/profileSetup';
+import { syncProviderSetupFromReality } from '../../utils/providerSetupChecklist';
 import {
   firstProviderHome,
   providerHome,
@@ -121,8 +122,9 @@ export default function ProviderSetupPage() {
     Promise.all([
       businessesAPI.getPublicStorefront(orgSlug),
       jobsAPI.getSchedulingSettings(orgSlug).catch(() => null),
+      jobsAPI.listServices({ organization: orgSlug }).catch(() => null),
     ])
-      .then(([storeRes, schedRes]) => {
+      .then(([storeRes, schedRes, servicesRes]) => {
         if (cancelled) return;
         const org = storeRes.data?.organization;
         if (org) {
@@ -138,13 +140,13 @@ export default function ProviderSetupPage() {
           if (existing.trim()) setBizAddress(existing);
         }
         const d = schedRes?.data;
+        const list = d?.weekly_blocks || [];
         if (d) {
           setMode(d.scheduling_mode || 'flexi');
           if (d.timezone) setTimezone(d.timezone);
           const defaults = defaultDateRange();
           setValidFrom(d.schedule_valid_from || defaults.from);
           setValidUntil(d.schedule_valid_until || defaults.until);
-          const list = d.weekly_blocks || [];
           if (list.length) {
             setBlocks(
               list.map((b) => ({
@@ -155,23 +157,41 @@ export default function ProviderSetupPage() {
               }))
             );
           }
-          // Already configured on the server — don't force this step again.
-          const scheduleConfigured =
-            d.scheduling_mode === 'flexi' ||
-            (d.scheduling_mode === 'recurring' && list.length > 0);
-          if (scheduleConfigured) {
-            markProviderWizardStepDone(orgSlug, 'availability');
-            const onAvailability =
-              stepParam === 'availability' ||
-              (!stepParam && step === 'availability') ||
-              step === 'availability';
-            if (onAvailability && !hasFinishedProviderSetupWizard(orgSlug)) {
-              const resume = providerResumeSetupPath(orgSlug);
-              if (!resume.includes('step=availability')) {
-                navigate(resume, { replace: true });
-              }
-            }
-          }
+        }
+        const svc = servicesRes?.data;
+        const servicesCount = Array.isArray(svc)
+          ? svc.length
+          : Array.isArray(svc?.results)
+            ? svc.results.length
+            : 0;
+        const blocksCount = list.filter((b) => b?.is_active !== false).length;
+
+        // Credit steps already satisfied on the server (pre-guidance businesses).
+        syncProviderSetupFromReality({
+          orgSlug,
+          org,
+          servicesCount,
+          schedulingMode: d?.scheduling_mode || org?.scheduling_mode || null,
+          weeklyBlocksCount: blocksCount,
+        });
+
+        if (hasFinishedProviderSetupWizard(orgSlug)) {
+          navigate(providerHome(orgSlug), { replace: true });
+          return;
+        }
+
+        const resume = providerResumeSetupPath(orgSlug);
+        const resumeStep = new URLSearchParams(resume.split('?')[1] || '').get('step');
+        const onWizardStep =
+          stepParam && PROVIDER_WIZARD_STEPS.includes(stepParam) ? stepParam : step;
+        if (
+          resumeStep &&
+          onWizardStep &&
+          PROVIDER_WIZARD_STEPS.includes(onWizardStep) &&
+          resumeStep !== onWizardStep &&
+          isProviderWizardStepDone(orgSlug, onWizardStep)
+        ) {
+          navigate(resume, { replace: true });
         }
       })
       .catch(() => {})

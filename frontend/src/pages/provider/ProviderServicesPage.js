@@ -20,6 +20,7 @@ import {
   markProviderWizardStepDone,
   providerSetupPath,
 } from '../../utils/profileSetup';
+import { syncProviderSetupFromReality } from '../../utils/providerSetupChecklist';
 import {
   QUOTE_Q_CHOICE,
   QUOTE_Q_TEXT,
@@ -1121,10 +1122,6 @@ export default function ProviderServicesPage({ embedded = false }) {
   const [searchParams] = useSearchParams();
   const orgId = activeOrg?.organization;
   const fromSetup = searchParams.get('from') === 'setup';
-  const showSetupContinue =
-    !embedded &&
-    Boolean(orgSlug) &&
-    (fromSetup || (!hasFinishedProviderSetupWizard(orgSlug) && !isProviderWizardStepDone(orgSlug, 'services')));
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1169,6 +1166,23 @@ export default function ProviderServicesPage({ embedded = false }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Existing catalogs (pre-guidance businesses) count as the services step done.
+  useEffect(() => {
+    if (!orgSlug || loading) return;
+    syncProviderSetupFromReality({
+      orgSlug,
+      servicesCount: services.length,
+    });
+  }, [orgSlug, loading, services.length]);
+
+  // Hide once the catalog already has services (unless deep-linked from setup).
+  const showSetupContinue =
+    !embedded &&
+    Boolean(orgSlug) &&
+    !hasFinishedProviderSetupWizard(orgSlug) &&
+    (fromSetup ||
+      (services.length === 0 && !isProviderWizardStepDone(orgSlug, 'services')));
 
   const activeCategories = useMemo(
     () => categories.filter((c) => c.is_active !== false),
@@ -1512,7 +1526,9 @@ export default function ProviderServicesPage({ embedded = false }) {
         <section className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
           <p className="text-sm font-semibold text-teal-950">Business setup</p>
           <p className="mt-1 text-sm text-teal-900/80">
-            Add at least one service customers can book, then continue. You can edit these anytime.
+            {services.length > 0
+              ? 'Your catalog already has services. Continue setup when you’re ready.'
+              : 'Add at least one service customers can book, then continue. You can edit these anytime.'}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -1523,7 +1539,7 @@ export default function ProviderServicesPage({ embedded = false }) {
               }}
               className="min-h-[44px] rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white"
             >
-              Save & continue setup
+              {services.length > 0 ? 'Continue setup' : 'Save & continue setup'}
             </button>
             <button
               type="button"

@@ -172,11 +172,35 @@ def qualify_referral_on_completion(*, booking: Booking) -> ReferralCoupon | None
     return coupon
 
 
+def per_job_credit_budget(*, organization: Organization, pre_tax: Decimal) -> Decimal:
+    """
+    Max referral credit that may apply on one invoice.
+    min(pre_tax, pre_tax × percent/100, dollar cap when dollar cap > 0).
+    """
+    pre_tax = _money(pre_tax)
+    if pre_tax <= ZERO:
+        return ZERO
+
+    budget = pre_tax
+    percent = _money(getattr(organization, 'referral_max_credit_percent_per_job', None))
+    if percent > ZERO:
+        # Cap at 100% so a bad value cannot exceed the invoice.
+        pct = min(percent, Decimal('100.00'))
+        budget = min(budget, (pre_tax * pct / Decimal('100')).quantize(Decimal('0.01')))
+
+    dollar_cap = _money(getattr(organization, 'referral_max_credit_amount_per_job', None))
+    if dollar_cap > ZERO:
+        budget = min(budget, dollar_cap)
+
+    return _money(budget)
+
+
 @transaction.atomic
 def consume_referral_credit(*, booking: Booking, pre_tax: Decimal) -> Decimal:
     """
     Draw down the customer's available referral coupons for this org.
-    Returns discount amount (≤ pre_tax). Caller should link coupons to the invoice.
+    Returns discount amount (≤ per-job budget). Caller should link coupons to the invoice.
+    Unused credit stays for later invoices with the same provider.
     """
     pre_tax = _money(pre_tax)
     if pre_tax <= ZERO:
@@ -184,10 +208,14 @@ def consume_referral_credit(*, booking: Booking, pre_tax: Decimal) -> Decimal:
 
     org = booking.organization
     customer = booking.customer
-    budget = pre_tax
+    budget = per_job_credit_budget(organization=org, pre_tax=pre_tax)
     discount = ZERO
     now = timezone.now()
     touched_ids: list[int] = []
+
+    if budget <= ZERO:
+        booking._referral_coupon_ids_touched = touched_ids  # noqa: SLF001
+        return ZERO
 
     coupons = list(
         ReferralCoupon.objects.select_for_update()
@@ -442,9 +470,11 @@ def customer_referrals_overview(*, user) -> dict:
         'how_to_use': (
             'Referral credit is per business. Book again with that company — '
             'when they send your invoice, unused credit is applied automatically '
-            'before tax. Credit cannot move to a different business. '
-            'Each business sets a lifetime max; once you hit it, further referrals '
-            'there do not earn more credit.'
+            'before tax (each business may limit how much credit one job can use). '
+            'Leftover credit stays for later invoices with the same business. '
+            'Credit cannot move to a different business. '
+            'Each business also sets a lifetime max; once you hit it, further '
+            'referrals there do not earn more credit.'
         ),
         'credits': credit_rows,
         'completed': completed,

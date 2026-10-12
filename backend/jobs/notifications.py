@@ -30,6 +30,11 @@ def provider_jobs_link_path(org_slug):
     return f'/provider/{org_slug}/jobs'
 
 
+def provider_schedule_booking_link_path(org_slug, booking_id):
+    """In-app path to the schedule booking detail (start / on-my-way / cancel)."""
+    return f'/provider/{org_slug}/schedule/booking/{booking_id}'
+
+
 def provider_tasks_link_path(org_slug):
     """In-app path to the provider task list (open tasks)."""
     return f'/provider/{org_slug}/tasks'
@@ -158,6 +163,9 @@ PROVIDER_BOOKING_UPDATE_KINDS = (
     ProviderNotification.Kind.QUOTE_ANSWERS_RECEIVED,
     ProviderNotification.Kind.PAYMENT_RECEIVED,
     ProviderNotification.Kind.INCOMPLETE_JOB_TASKS,
+    ProviderNotification.Kind.JOB_STARTING_SOON,
+    ProviderNotification.Kind.JOB_EN_ROUTE_NUDGE,
+    ProviderNotification.Kind.JOB_START_OVERDUE,
 )
 
 
@@ -1525,5 +1533,167 @@ def send_rate_service_reminders():
             rate_reminder_sent_at=now,
             updated_at=now,
         )
+        sent += 1
+    return sent
+
+
+def _provider_job_service_label(booking):
+    return (
+        (booking.job_title or '').strip()
+        or (booking.service.name if booking.service_id else '')
+        or 'Job'
+    )
+
+
+def notify_provider_job_starting_soon(booking):
+    """~1 hour before: remind staff about the upcoming appointment."""
+    org = booking.organization
+    service_name = _provider_job_service_label(booking)
+    customer_name = _customer_label(booking)
+    when = _format_when(booking.start_at, booking)
+    link_path = provider_schedule_booking_link_path(org.slug, booking.pk)
+    message = (
+        f'Reminder: {service_name} with {customer_name} starts in about 1 hour ({when}).'
+    )
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.JOB_STARTING_SOON,
+        message=message[:500],
+        link_path=link_path,
+    )
+    _push_org_staff(
+        org,
+        title=f'Job in 1 hour — {org.name}',
+        body=f'{service_name} with {customer_name} at {when}.',
+        link_path=link_path,
+    )
+
+
+def notify_provider_job_en_route_nudge(booking):
+    """~30 minutes before: ask if they are on the way / can share location."""
+    org = booking.organization
+    service_name = _provider_job_service_label(booking)
+    customer_name = _customer_label(booking)
+    when = _format_when(booking.start_at, booking)
+    link_path = provider_schedule_booking_link_path(org.slug, booking.pk)
+    message = (
+        f'{service_name} with {customer_name} starts soon ({when}). '
+        f'Are you on the way? Open the job to share your location with the customer.'
+    )
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.JOB_EN_ROUTE_NUDGE,
+        message=message[:500],
+        link_path=link_path,
+    )
+    _push_org_staff(
+        org,
+        title=f'On the way? — {org.name}',
+        body=f'{service_name} with {customer_name} starts soon. Share location if you can.',
+        link_path=link_path,
+    )
+
+
+def notify_provider_job_start_overdue(booking):
+    """~30 minutes after start: ask if the job started, or cancel if not."""
+    org = booking.organization
+    service_name = _provider_job_service_label(booking)
+    customer_name = _customer_label(booking)
+    when = _format_when(booking.start_at, booking)
+    link_path = provider_schedule_booking_link_path(org.slug, booking.pk)
+    message = (
+        f'{service_name} with {customer_name} was due at {when}. '
+        f'Has the job started? Open to Start job, or cancel if you cannot make it.'
+    )
+    ProviderNotification.objects.create(
+        organization=org,
+        booking=booking,
+        kind=ProviderNotification.Kind.JOB_START_OVERDUE,
+        message=message[:500],
+        link_path=link_path,
+    )
+    _push_org_staff(
+        org,
+        title=f'Did the job start? — {org.name}',
+        body=f'{service_name} with {customer_name} was due at {when}. Start or cancel.',
+        link_path=link_path,
+    )
+
+
+def _send_provider_ahead_job_nudges(
+    *,
+    minutes_ahead,
+    window_minutes,
+    sentinel_field,
+    notify_fn,
+    now,
+    skip_en_route=False,
+):
+    from datetime import timedelta
+
+    window_start = now + timedelta(minutes=minutes_ahead)
+    window_end = window_start + timedelta(minutes=window_minutes)
+    filters = {
+        'status': Booking.Status.CONFIRMED,
+        f'{sentinel_field}__isnull': True,
+        'start_at__gte': window_start,
+        'start_at__lt': window_end,
+    }
+    if skip_en_route:
+        filters['en_route_at__isnull'] = True
+
+    sent = 0
+    bookings = Booking.objects.filter(**filters).select_related(
+        'organization', 'service', 'customer',
+    )
+    for booking in bookings:
+        notify_fn(booking)
+        setattr(booking, sentinel_field, now)
+        booking.save(update_fields=[sentinel_field])
+        sent += 1
+    return sent
+
+
+def send_provider_job_nudges(*, now=None):
+    """
+    Provider appointment nudges (in-app + push):
+    - ~1 hour before: reminder
+    - ~30 minutes before: on-my-way / share location prompt
+    - ~30 minutes after start: did the job start? (or cancel)
+    """
+    from datetime import timedelta
+
+    now = now or timezone.now()
+    sent = 0
+    sent += _send_provider_ahead_job_nudges(
+        minutes_ahead=60,
+        window_minutes=10,
+        sentinel_field='provider_1h_reminder_sent_at',
+        notify_fn=notify_provider_job_starting_soon,
+        now=now,
+    )
+    sent += _send_provider_ahead_job_nudges(
+        minutes_ahead=30,
+        window_minutes=10,
+        sentinel_field='provider_en_route_nudge_sent_at',
+        notify_fn=notify_provider_job_en_route_nudge,
+        now=now,
+        skip_en_route=True,
+    )
+
+    overdue_cutoff = now - timedelta(minutes=30)
+    catch_up_floor = now - timedelta(hours=6)
+    overdue = Booking.objects.filter(
+        status=Booking.Status.CONFIRMED,
+        provider_start_overdue_sent_at__isnull=True,
+        start_at__lte=overdue_cutoff,
+        start_at__gte=catch_up_floor,
+    ).select_related('organization', 'service', 'customer')
+    for booking in overdue:
+        notify_provider_job_start_overdue(booking)
+        booking.provider_start_overdue_sent_at = now
+        booking.save(update_fields=['provider_start_overdue_sent_at'])
         sent += 1
     return sent

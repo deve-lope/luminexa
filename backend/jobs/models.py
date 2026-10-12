@@ -213,6 +213,9 @@ class ProviderNotification(models.Model):
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on gig'
         GIG_QUOTE_COUNTERED = 'gig_quote_countered', 'Customer countered your gig bid'
         GIG_QUOTE_REJECTED = 'gig_quote_rejected', 'Customer rejected your gig bid'
+        JOB_STARTING_SOON = 'job_starting_soon', 'Job starting in 1 hour'
+        JOB_EN_ROUTE_NUDGE = 'job_en_route_nudge', 'Share location / on the way?'
+        JOB_START_OVERDUE = 'job_start_overdue', 'Did the job start?'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -669,6 +672,21 @@ class Booking(models.Model):
         null=True,
         blank=True,
         help_text='When staff were reminded about incomplete tasks ~48h before the job.',
+    )
+    provider_1h_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were reminded ~1 hour before the job.',
+    )
+    provider_en_route_nudge_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were nudged ~30 minutes before to share location / go on the way.',
+    )
+    provider_start_overdue_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were asked if the job started after start time + 30 minutes.',
     )
     quote_amount = models.DecimalField(
         max_digits=10,

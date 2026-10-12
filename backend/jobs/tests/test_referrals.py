@@ -43,6 +43,8 @@ class ReferralRewardsTests(TestCase):
             referral_rewards_enabled=True,
             referral_reward_amount=Decimal('10.00'),
             referral_max_earnings_per_referrer=Decimal('25.00'),
+            referral_max_credit_percent_per_job=Decimal('100.00'),
+            referral_max_credit_amount_per_job=Decimal('100000.00'),
         )
         OrganizationMembership.objects.create(
             organization=self.org,
@@ -175,6 +177,8 @@ class ReferralRewardsTests(TestCase):
                 'referral_rewards_enabled': True,
                 'referral_reward_amount': '15.00',
                 'referral_max_earnings_per_referrer': '50.00',
+                'referral_max_credit_percent_per_job': '50.00',
+                'referral_max_credit_amount_per_job': '100.00',
             },
             format='json',
             HTTP_HOST='localhost',
@@ -183,6 +187,40 @@ class ReferralRewardsTests(TestCase):
         self.org.refresh_from_db()
         self.assertEqual(self.org.referral_reward_amount, Decimal('15.00'))
         self.assertEqual(self.org.referral_max_earnings_per_referrer, Decimal('50.00'))
+        self.assertEqual(self.org.referral_max_credit_percent_per_job, Decimal('50.00'))
+        self.assertEqual(self.org.referral_max_credit_amount_per_job, Decimal('100.00'))
+
+    def test_per_job_caps_percent_and_dollar(self):
+        """50% + $100: $100 job → $50; $1000 job → $100 (not $500)."""
+        self.org.referral_reward_amount = Decimal('500.00')
+        self.org.referral_max_earnings_per_referrer = Decimal('500.00')
+        self.org.referral_max_credit_percent_per_job = Decimal('50.00')
+        self.org.referral_max_credit_amount_per_job = Decimal('100.00')
+        self.org.save(update_fields=[
+            'referral_reward_amount',
+            'referral_max_earnings_per_referrer',
+            'referral_max_credit_percent_per_job',
+            'referral_max_credit_amount_per_job',
+        ])
+
+        booking_ref = self._make_booking(self.referred, status=Booking.Status.IN_PROGRESS)
+        attach_referral_attribution(booking=booking_ref, code=self.code.code)
+        complete_booking(booking_ref, staff_user=self.owner)
+        coupon = ReferralCoupon.objects.get(owner=self.referrer)
+        self.assertEqual(coupon.remaining, Decimal('500.00'))
+
+        small = self._make_booking(self.referrer, status=Booking.Status.IN_PROGRESS)
+        inv_small = issue_or_update_invoice(small, staff_user=self.owner, subtotal='100.00')
+        self.assertEqual(inv_small.discount, Decimal('50.00'))
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.remaining, Decimal('450.00'))
+        self.assertEqual(coupon.status, ReferralCoupon.Status.AVAILABLE)
+
+        large = self._make_booking(self.referrer, status=Booking.Status.IN_PROGRESS)
+        inv_large = issue_or_update_invoice(large, staff_user=self.owner, subtotal='1000.00')
+        self.assertEqual(inv_large.discount, Decimal('100.00'))
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.remaining, Decimal('350.00'))
 
     def test_referral_endpoint_returns_code(self):
         self.client.force_authenticate(self.referrer)
