@@ -212,7 +212,7 @@ After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enj
 5c. On-my-way = optional, app-only, km text + 5 km nearby push; not a status.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
-5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or cancel.
+5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or “I couldn’t make it”.
 8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount; per-job apply caps (% and $).
 
 ---
@@ -225,13 +225,23 @@ For **confirmed** bookings, Celery Beat (`jobs.tasks.send_provider_job_nudges`, 
 
 1. **~1 hour before** — reminder that the job is coming up  
 2. **~30 minutes before** — ask if they are on the way / can share location (skipped if already sharing)  
-3. **~30 minutes after start** — ask if the job started; open the job to **Start** or **cancel** (not sent once status is `in_progress` / cancelled / completed)
+3. **~30 minutes after start** — ask if the job started; open to **Start job** or **I couldn’t make it** (not sent once status is `in_progress` / cancelled / completed)
 
 Deep link: schedule booking detail. Reschedule clears the three sent-at sentinels so nudges can fire for the new time.
 
+
+### Past-due confirmed jobs (provider missed)
+
+After **scheduled start**, staff cannot use generic Cancel on a still-`confirmed` booking. They must choose:
+
+- **Start job** — they are doing the work (late), or  
+- **I couldn’t make it** — provider fault; cancels the job; timeline `provider_could_not_make_it`; customer notified they can rebook; **not** counted as customer no-show  
+- **Mark customer no-show** — only when the *customer* didn’t show
+
 ### What NOT to simplify away
 
-- Do not auto-cancel — provider must cancel themselves.
+- Do not auto-cancel — provider must resolve.
+- Do not use customer no-show when the provider missed the job.
 - Do not require on-my-way before Start (nudge is optional).
 - Do not spam — one notification per stage per booking (sentinel fields).
 

@@ -360,6 +360,8 @@ export const jobsAPI = {
   rescheduleBooking: (id, slotId, data = {}) =>
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId, ...data }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),
+  markBookingCouldNotMakeIt: (id, data = {}) =>
+    api.post(`/api/v1/bookings/${id}/could-not-make-it/`, data),
   bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
   downloadBookingIcal: (id) =>
     api.get(`/api/v1/bookings/${id}/ical/`, { responseType: 'blob' }),

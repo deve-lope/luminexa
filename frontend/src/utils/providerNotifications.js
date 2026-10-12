@@ -102,7 +102,7 @@ export function providerNotificationCtaLabel(n) {
   if (n?.kind === 'task_due') return 'Review tasks';
   if (n?.kind === 'job_starting_soon') return 'Open job';
   if (n?.kind === 'job_en_route_nudge') return 'Share location';
-  if (n?.kind === 'job_start_overdue') return 'Start or cancel';
+  if (n?.kind === 'job_start_overdue') return 'Start or resolve';
   if (n?.kind === 'quote_answers_received') return 'Send quote';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';

@@ -1135,6 +1135,7 @@ class BookingStatusEvent(models.Model):
         RESCHEDULED = 'rescheduled', 'Rescheduled'
         NO_SHOW = 'no_show', 'No-show'
         CUSTOMER_NO_SHOW_REPORTED = 'customer_no_show_reported', 'Customer reported no-show'
+        PROVIDER_COULD_NOT_MAKE_IT = 'provider_could_not_make_it', 'Provider could not make it'
         INCOMPLETE = 'incomplete', 'Marked incomplete'
         RETURN_SCHEDULED = 'return_scheduled', 'Return visit scheduled'
         ON_THE_WAY = 'on_the_way', 'On the way'

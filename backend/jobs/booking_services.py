@@ -1299,6 +1299,50 @@ def mark_booking_no_show(booking, *, staff_user):
     return booking
 
 
+@transaction.atomic
+def mark_provider_could_not_make_it(booking, *, staff_user, reason=''):
+    """
+    Close a past-due confirmed job when the provider (not the customer) missed it.
+    Before start_at, staff should use cancel_booking instead.
+    """
+    if booking.status != Booking.Status.CONFIRMED:
+        raise ValidationError({
+            'status': 'Only confirmed bookings can be marked as could not make it.',
+        })
+    _require_staff(booking, staff_user, 'mark bookings as could not make it')
+    if booking.start_at and booking.start_at > timezone.now():
+        raise ValidationError({
+            'status': 'Before the appointment time, cancel the booking instead.',
+        })
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
+    booking.status = Booking.Status.CANCELLED
+    booking.customer_notes = (booking.customer_notes or '').strip()
+    if booking.customer_notes:
+        booking.customer_notes += '\n'
+    reason_text = (reason or '').strip()
+    booking.customer_notes += '[Provider could not make this appointment]'
+    if reason_text:
+        booking.customer_notes += f' {reason_text}'
+    booking.save(
+        update_fields=[
+            'status',
+            'customer_notes',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
+    if booking.availability_slot_id:
+        release_slot(_lock_slot(booking.availability_slot))
+    return booking
+
+
 def _require_staff(booking, staff_user, action_label='do this'):
     if not OrganizationMembership.objects.filter(
         organization=booking.organization,

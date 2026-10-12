@@ -1597,7 +1597,7 @@ def notify_provider_job_en_route_nudge(booking):
 
 
 def notify_provider_job_start_overdue(booking):
-    """~30 minutes after start: ask if the job started, or cancel if not."""
+    """~30 minutes after start: ask if the job started, or provider couldn't make it."""
     org = booking.organization
     service_name = _provider_job_service_label(booking)
     customer_name = _customer_label(booking)
@@ -1605,7 +1605,7 @@ def notify_provider_job_start_overdue(booking):
     link_path = provider_schedule_booking_link_path(org.slug, booking.pk)
     message = (
         f'{service_name} with {customer_name} was due at {when}. '
-        f'Has the job started? Open to Start job, or cancel if you cannot make it.'
+        f'Has the job started? Open to Start job, or say you couldn’t make it.'
     )
     ProviderNotification.objects.create(
         organization=org,
@@ -1617,9 +1617,49 @@ def notify_provider_job_start_overdue(booking):
     _push_org_staff(
         org,
         title=f'Did the job start? — {org.name}',
-        body=f'{service_name} with {customer_name} was due at {when}. Start or cancel.',
+        body=f'{service_name} with {customer_name} was due at {when}. Start or resolve.',
         link_path=link_path,
     )
+
+
+
+def notify_provider_could_not_make_it(booking, *, by_user, reason=''):
+    """Customer-facing notice when staff closes a past-due job they missed."""
+    reason_text = (reason or '').strip()
+    service_name = booking.service.name if booking.service_id else 'a service'
+    when = _format_when(booking.start_at, booking)
+    message = (
+        f'{booking.organization.name} couldn’t make your appointment for '
+        f'{service_name} on {when}. We’re sorry — you can book again anytime.'
+    )
+    if reason_text:
+        message = f'{message} Note: {reason_text}'
+
+    create_customer_notification(
+        customer=booking.customer,
+        kind=CustomerNotification.Kind.BOOKING_CANCELLED,
+        title=f'Provider couldn’t make it — {booking.organization.name}',
+        message=message[:500],
+        organization=booking.organization,
+        booking=booking,
+        link_path=customer_booking_link_path(booking),
+    )
+    send_booking_email('booking_cancelled', booking, reason=reason_text or (
+        'Your provider could not make this appointment.'
+    ))
+    try:
+        from .message_services import post_booking_cancellation_message
+
+        post_booking_cancellation_message(
+            booking=booking,
+            sender=by_user,
+            reason=reason_text or 'We couldn’t make this appointment. Sorry for the inconvenience.',
+        )
+    except Exception:
+        logger.exception(
+            'Failed to post could-not-make-it message for booking %s', booking.pk
+        )
+
 
 
 def _send_provider_ahead_job_nudges(

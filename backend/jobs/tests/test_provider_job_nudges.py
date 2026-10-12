@@ -116,7 +116,7 @@ class ProviderJobNudgeTests(TestCase):
             kind=ProviderNotification.Kind.JOB_START_OVERDUE,
         )
         self.assertIn('started', note.message.lower())
-        self.assertIn('cancel', note.message.lower())
+        self.assertIn('make it', note.message.lower())
         booking.refresh_from_db()
         self.assertIsNotNone(booking.provider_start_overdue_sent_at)
         self.assertEqual(send_provider_job_nudges(now=now), 0)

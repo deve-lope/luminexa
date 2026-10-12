@@ -23,6 +23,7 @@ from .booking_services import (
     complete_booking,
     mark_booking_incomplete,
     mark_booking_no_show,
+    mark_provider_could_not_make_it,
     reschedule_booking,
     schedule_return_visit,
     customer_can_view_calendar,
@@ -1999,6 +2000,33 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
         from .notifications import notify_booking_cancelled
         notify_booking_cancelled(booking, by_user=request.user)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+
+    @action(detail=True, methods=['post'], url_path='could-not-make-it')
+    def could_not_make_it(self, request, pk=None):
+        """Staff closes a past-due confirmed job they missed (not a customer no-show)."""
+        from .booking_services import parse_optional_action_reason
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        reason = parse_optional_action_reason(request.data)
+        old = booking.status
+        mark_provider_could_not_make_it(
+            booking, staff_user=request.user, reason=reason,
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.PROVIDER_COULD_NOT_MAKE_IT,
+            old_status=old,
+            new_status=booking.status,
+            note=reason[:500] if reason else 'Provider could not make this appointment',
+        )
+        from .notifications import notify_provider_could_not_make_it
+        notify_provider_could_not_make_it(
+            booking, by_user=request.user, reason=reason,
+        )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])

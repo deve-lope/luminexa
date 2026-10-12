@@ -72,6 +72,24 @@ export default function ProviderScheduleDetailPage() {
     }
   };
 
+  const runCouldNotMakeIt = async (reason = '') => {
+    setActionBusy(true);
+    try {
+      const payload = reason ? { reason } : {};
+      await jobsAPI.markBookingCouldNotMakeIt(id, payload);
+      showToast('Marked as could not make it. Customer notified.', 'success');
+      navigate(
+        providerSchedule(orgSlug, {
+          day: data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null,
+        }),
+      );
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const runCancel = async (reason = '') => {
     setActionBusy(true);
     try {
@@ -269,6 +287,14 @@ export default function ProviderScheduleDetailPage() {
   }
 
   const canJobAction = canStartOrCompleteJob(data);
+  const isPastScheduledStart =
+    Boolean(data?.start_at) && new Date(data.start_at).getTime() <= Date.now();
+  const showCouldNotMakeIt =
+    data?.status === 'confirmed' && isPastScheduledStart;
+  // After scheduled start, confirmed jobs use “I couldn’t make it” (not Cancel).
+  const showCancelBooking =
+    data?.status === 'in_progress' ||
+    (data?.status === 'confirmed' && !isPastScheduledStart);
 
   if (kind === 'booking') {
     return (
@@ -640,17 +666,29 @@ export default function ProviderScheduleDetailPage() {
                 onClick={() => setConfirmAction('noshow')}
                 className="min-h-[48px] w-full rounded-xl border border-amber-200 font-medium text-amber-800 disabled:opacity-60"
               >
-                Mark no-show
+                Mark customer no-show
               </button>
             )}
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => setConfirmAction('cancel')}
-              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-            >
-              Cancel booking
-            </button>
+            {showCouldNotMakeIt && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('could-not-make-it')}
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+              >
+                I couldn’t make it
+              </button>
+            )}
+            {showCancelBooking && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('cancel')}
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+              >
+                Cancel booking
+              </button>
+            )}
           </div>
         )}
 
@@ -794,12 +832,24 @@ export default function ProviderScheduleDetailPage() {
         <ConfirmDialog
           open={confirmAction === 'noshow'}
           title="Mark customer as no-show?"
-          message="This cancels the booking and frees the slot. Use this when the customer didn't show up."
-          confirmLabel="Mark no-show"
+          message="Use this when the customer didn’t show up. This cancels the booking and frees the slot."
+          confirmLabel="Mark customer no-show"
           cancelLabel="Back"
           tone="default"
           busy={actionBusy}
           onConfirm={runNoShow}
+          onClose={() => setConfirmAction(null)}
+        />
+        <ConfirmDialog
+          open={confirmAction === 'could-not-make-it'}
+          title="You couldn’t make this appointment?"
+          message="Use this when your business missed the job. The customer is notified that you couldn’t make it (not marked as their no-show). This can’t be undone."
+          confirmLabel="I couldn’t make it"
+          cancelLabel="Keep booking"
+          busy={actionBusy}
+          noteLabel="Note for customer (optional)"
+          notePlaceholder="e.g. Emergency — sorry we missed this appointment"
+          onConfirm={runCouldNotMakeIt}
           onClose={() => setConfirmAction(null)}
         />
         <ConfirmDialog
