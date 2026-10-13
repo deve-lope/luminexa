@@ -4,6 +4,13 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
+/* Stabilize scroll while Back re-pins (no opacity hide — that flickers on desktop). */
+html.lx-scroll-restoring,
+html.lx-scroll-restoring body {
+  scroll-behavior: auto !important;
+  overflow-anchor: none !important;
+}
+
 @layer base {
   :root {
     --lx-accent: 13 148 136;
@@ -331,6 +338,44 @@
   padding-bottom: max(0.5rem, var(--lx-sab));
 }
 
+/* Photo viewer: next/prev picture slides in from the swipe direction. */
+@keyframes lx-lightbox-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes lx-lightbox-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.lx-lightbox-from-right {
+  animation: lx-lightbox-from-right 220ms ease-out;
+}
+
+.lx-lightbox-from-left {
+  animation: lx-lightbox-from-left 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-lightbox-from-right,
+  .lx-lightbox-from-left {
+    animation: none;
+  }
+}
+
 /* Full-screen modals — above bottom tabs (z-50), honor safe areas + keyboard. */
 .lx-modal-overlay {
   padding-top: max(0.75rem, var(--lx-sat));
@@ -350,6 +395,11 @@
 
 html.lx-modal-open .lx-bottom-tabs {
   display: none;
+}
+
+/* App tour spotlights tab bar targets — keep tabs measurable and visible. */
+html.lx-modal-open.lx-tour-open .lx-bottom-tabs {
+  display: block;
 }
 
 .lx-sticky-above-tabs {

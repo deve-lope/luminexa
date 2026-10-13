@@ -1,5 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ConfirmDialog from '../ConfirmDialog';
+import {
+  CONTACT_HINT,
+  CONTACT_INFO_ERROR,
+  textContainsContactInfo,
+} from '../../utils/contactInfo';
 
 export default function GigQuoteForm({
   onSubmit,
@@ -15,6 +20,10 @@ export default function GigQuoteForm({
   });
   const [errors, setErrors] = useState({});
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const contactBlocked = useMemo(
+    () => textContainsContactInfo(formData.description),
+    [formData.description],
+  );
 
   useEffect(() => {
     if (initialData) {
@@ -39,6 +48,7 @@ export default function GigQuoteForm({
     const description = (formData.description || '').trim();
     if (!description) nextErrors.description = 'Describe what this bid covers.';
     if (description.length > 1500) nextErrors.description = 'Max 1500 characters.';
+    if (textContainsContactInfo(description)) nextErrors.description = CONTACT_INFO_ERROR;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -91,6 +101,12 @@ export default function GigQuoteForm({
           required
         />
         <div className="mt-1 text-xs text-slate-500">{formData.description.length}/1500</div>
+        <p className="mt-1 text-xs text-slate-500">{CONTACT_HINT}</p>
+        {contactBlocked && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-sm text-amber-900">
+            {CONTACT_INFO_ERROR}
+          </p>
+        )}
         {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description}</p>}
       </div>
       <div>
@@ -112,7 +128,7 @@ export default function GigQuoteForm({
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <button
           type="submit"
-          disabled={loading || withdrawBusy}
+          disabled={loading || withdrawBusy || contactBlocked}
           className="lx-btn-primary px-4 py-2 text-sm disabled:opacity-50"
         >
           {loading ? 'Saving…' : initialData ? 'Update bid' : 'Place bid'}

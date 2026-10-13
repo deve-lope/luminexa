@@ -586,12 +586,20 @@ def customer_home_api(request):
         .order_by('organization__name')
     )
 
+    # Keep today's in-window jobs + active “on the way” shares even after start_at.
+    # Do not drop a confirmed job the second the clock passes start time.
     upcoming_qs = (
-        Booking.objects.filter(
-            customer=user,
-            start_at__gte=now,
+        Booking.objects.filter(customer=user)
+        .exclude(
+            status__in=(Booking.Status.CANCELLED, Booking.Status.COMPLETED),
         )
-        .exclude(status=Booking.Status.CANCELLED)
+        .filter(
+            Q(en_route_at__isnull=False)
+            | Q(status=Booking.Status.IN_PROGRESS)
+            | Q(status=Booking.Status.NEEDS_RETURN)
+            | Q(end_at__gte=now)
+            | Q(start_at__gte=now)
+        )
         .select_related('organization', 'service')
         .prefetch_related('status_events')
         .order_by('start_at')[:12]

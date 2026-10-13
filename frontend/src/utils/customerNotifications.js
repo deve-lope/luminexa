@@ -12,12 +12,15 @@ export const CUSTOMER_BOOKING_BADGE_KINDS = new Set([
   'booking_time_change',
   'booking_completed',
   'invoice_ready',
+  'provider_en_route',
+  'provider_nearby',
 ]);
 
 /** Booking-tied alerts cleared when that booking is opened. */
 export const CUSTOMER_BOOKING_UPDATE_KINDS = new Set([
   ...CUSTOMER_BOOKING_BADGE_KINDS,
   'payment_confirmed',
+  'rebook_reminder',
 ]);
 
 export function isCustomerBookingUpdateNotification(notification) {

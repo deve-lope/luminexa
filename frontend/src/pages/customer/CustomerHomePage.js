@@ -20,6 +20,7 @@ import { lxPillTone } from '../../utils/pillGradients';
 import useUnpaidInvoice, { markInvoiceBookingPaid } from '../../hooks/useUnpaidInvoice';
 import InvoiceStripePayModal from '../../components/booking/InvoiceStripePayModal';
 import { IconMapPin, IconSchedule } from '../../components/icons/NavIcons';
+import { formatDistanceKm } from '../../utils/enRouteDistance';
 
 const MAX_HOME_PROVIDERS = 3;
 const MAX_HOME_CATEGORIES = 8;
@@ -102,23 +103,39 @@ export default function CustomerHomePage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    businessesAPI
+  const loadHome = useCallback(({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    return businessesAPI
       .getCustomerHome()
       .then((res) => {
-        if (!cancelled) setHome(res.data);
+        setHome(res.data);
+        setError(null);
       })
       .catch(() => {
-        if (!cancelled) setError('Could not load your dashboard.');
+        if (!quiet) setError('Could not load your dashboard.');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!quiet) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadHome();
+  }, [loadHome]);
+
+  const enRouteBookings = useMemo(
+    () => (home?.upcoming_bookings || []).filter((b) => b.en_route_active),
+    [home?.upcoming_bookings],
+  );
+
+  // Refresh distance while any provider is sharing location.
+  useEffect(() => {
+    if (enRouteBookings.length === 0) return undefined;
+    const timer = setInterval(() => {
+      loadHome({ quiet: true });
+    }, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [enRouteBookings.length, loadHome]);
 
   useEffect(() => {
     loadNotifications();
@@ -351,7 +368,7 @@ export default function CustomerHomePage() {
       </section>
 
       {upcoming.length > 0 && (
-        <section className="min-w-0">
+        <section className="min-w-0" aria-live="polite">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="lx-eyebrow">Schedule</p>
@@ -372,23 +389,38 @@ export default function CustomerHomePage() {
           >
             {upcoming.map((b, i) => {
               const tone = lxPillTone(i, upcoming.length);
+              const enRoute = Boolean(b.en_route_active);
+              const km = enRoute ? formatDistanceKm(b.en_route_distance_km) : null;
+              // En-route uses a light teal surface — never mix with onDark white ink.
+              const titleCls = enRoute ? 'text-slate-900' : tone.title;
+              const bodyCls = enRoute ? 'text-slate-600' : tone.body;
+              const linkCls = enRoute ? 'text-teal-800 hover:text-teal-950' : tone.link;
               return (
                 <li key={b.id} className="min-w-0">
                   <Link
                     to={customerBookingDetail(b.id)}
-                    className={`flex min-h-[148px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 transition hover:-translate-y-0.5 hover:shadow-lx-elevated ${tone.surface} ${tone.ring}`}
+                    className={`flex min-h-[148px] flex-col justify-between rounded-3xl p-4 shadow-lx-soft ring-1 transition hover:-translate-y-0.5 hover:shadow-lx-elevated ${
+                      enRoute
+                        ? 'bg-teal-50 ring-teal-200'
+                        : `${tone.surface} ${tone.ring}`
+                    }`}
                   >
                     <div>
-                      <p className={`font-semibold tracking-tight ${tone.title}`}>{b.service_name}</p>
-                      <p className={`mt-0.5 text-sm ${tone.body}`}>{b.organization_name}</p>
+                      <p className={`font-semibold tracking-tight ${titleCls}`}>{b.service_name}</p>
+                      <p className={`mt-0.5 text-sm ${bodyCls}`}>{b.organization_name}</p>
+                      {enRoute && (
+                        <p className="mt-2 text-sm font-semibold text-teal-900">
+                          On the way{km ? ` · about ${km} away` : ''}
+                        </p>
+                      )}
                       {b.quote_amount != null && (
-                        <p className={`mt-1 text-sm font-medium tabular-nums ${tone.title}`}>
+                        <p className={`mt-1 text-sm font-medium tabular-nums ${titleCls}`}>
                           Agreed · ${Number(b.quote_amount).toFixed(2)}
                         </p>
                       )}
-                      <p className={`mt-3 flex items-start gap-2 text-sm font-medium ${tone.title}`}>
+                      <p className={`mt-3 flex items-start gap-2 text-sm font-medium ${titleCls}`}>
                         <IconSchedule
-                          className={`mt-0.5 h-4 w-4 shrink-0 ${tone.body}`}
+                          className={`mt-0.5 h-4 w-4 shrink-0 ${bodyCls}`}
                           aria-hidden
                         />
                         <span>
@@ -397,7 +429,7 @@ export default function CustomerHomePage() {
                         </span>
                       </p>
                       {(b.job_location || b.service_address) && (
-                        <p className={`mt-1.5 flex items-start gap-2 text-sm ${tone.body}`}>
+                        <p className={`mt-1.5 flex items-start gap-2 text-sm ${bodyCls}`}>
                           <IconMapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                           <span className="line-clamp-2">
                             <span className="sr-only">Place: </span>
@@ -406,16 +438,22 @@ export default function CustomerHomePage() {
                         </p>
                       )}
                       <span
-                        className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs capitalize ${bookingStatusClass(b.status, tone)}`}
+                        className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          enRoute
+                            ? 'bg-teal-700 text-white'
+                            : bookingStatusClass(b.status, tone)
+                        }`}
                       >
-                        {bookingStatusLabel(b.status, {
-                          bookingPolicy: b.booking_policy,
-                          servicePricingType: b.service_pricing_type,
-                          awaitingCustomerAcceptance: b.awaiting_customer_acceptance,
-                        })}
+                        {enRoute
+                          ? 'On the way'
+                          : bookingStatusLabel(b.status, {
+                              bookingPolicy: b.booking_policy,
+                              servicePricingType: b.service_pricing_type,
+                              awaitingCustomerAcceptance: b.awaiting_customer_acceptance,
+                            })}
                       </span>
                     </div>
-                    <span className={`mt-3 text-sm font-medium ${tone.link}`}>
+                    <span className={`mt-3 text-sm font-medium ${linkCls}`}>
                       View details →
                     </span>
                   </Link>

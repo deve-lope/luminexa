@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import GigImageUpload from '../../components/gigs/GigImageUpload';
 import { businessesAPI, jobsAPI } from '../../utils/api';
+import {
+  CONTACT_HINT,
+  CONTACT_INFO_ERROR,
+  textContainsContactInfo,
+} from '../../utils/contactInfo';
 import { customerGigDetail, customerGigs } from '../../utils/customerPaths';
 import { validatePostalCode } from '../../utils/postalInput';
 
@@ -22,6 +27,13 @@ export default function CreateGigPostPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const contactBlocked = useMemo(
+    () =>
+      textContainsContactInfo(formData.title) ||
+      textContainsContactInfo(formData.description),
+    [formData.title, formData.description],
+  );
+
   useEffect(() => {
     businessesAPI
       .listBusinessTypes()
@@ -41,6 +53,14 @@ export default function CreateGigPostPage() {
     e.preventDefault();
     setLoading(true);
     setErrors({});
+    if (
+      textContainsContactInfo(formData.title) ||
+      textContainsContactInfo(formData.description)
+    ) {
+      setErrors({ detail: CONTACT_INFO_ERROR });
+      setLoading(false);
+      return;
+    }
     const city = (formData.location_city || '').trim();
     const postalCheck = validatePostalCode(formData.location_postal_code);
     if (city.length < 2 || !postalCheck.valid) {
@@ -137,6 +157,15 @@ export default function CreateGigPostPage() {
               className="lx-input resize-y text-sm"
             />
             <div className="mt-1 text-xs text-slate-500">{formData.description.length}/2000</div>
+            <p className="mt-1 text-xs text-slate-500">{CONTACT_HINT}</p>
+            {contactBlocked && (
+              <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {CONTACT_INFO_ERROR}
+              </p>
+            )}
+            {errors.description && (
+              <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-luminexa-ink">Category</label>
@@ -233,7 +262,7 @@ export default function CreateGigPostPage() {
           </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || contactBlocked}
             className="lx-btn-primary px-4 py-2 text-sm disabled:opacity-50"
           >
             {loading ? 'Posting…' : 'Pin to gig wall'}

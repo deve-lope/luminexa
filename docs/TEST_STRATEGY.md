@@ -27,6 +27,8 @@ Use the focused suite that matches the change. Full suite before claiming done o
 | Capacity | `jobs.tests.test_bookings` | Two bookings same slot; third rejected; default capacity=1 rejects second; cancel frees a seat; public calendar `available` when 1 of 2 filled; owner PATCH capacity |
 | Dual radius + multi-location | `businesses.tests.test_location_radius` | Provider radius hides far orgs; both radii required; tight customer radius; ungeocoded postal; any-branch match; nearby but provider radius too small; inactive locations excluded; locations API; primary → `service_*` sync; max locations enforced |
 | Concurrent sessions | `accounts.tests.test_email_auth.ConcurrentSessionTests` | Web + phone stay signed in; third login signs out oldest; logout on one device keeps the other; same-client re-login reuses token |
+| Rebook reminders | `jobs.tests.test_rebook_reminders` | Per-job schedule on complete; due sweep sends in-app+email; skip if already rebooked; cancel; past date / gig rejected |
+| Provider job nudges | `jobs.tests.test_provider_job_nudges` | 1h reminder; 30m en-route nudge (skip if already sharing); 30m overdue start/cancel; idempotent; skip once in progress |
 
 ## Browse categories vs catalog services
 

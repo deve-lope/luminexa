@@ -185,27 +185,48 @@ export default function LoginPage() {
       ? 'Enter the password for your business account.'
       : step === 'otp'
         ? 'Enter the 6-digit code we emailed you.'
-        : 'Enter your email — we’ll send a code, or ask for your password if you run a business.';
+        : 'Use the email on your booking invite. We’ll send a one-time code, or ask for a password if you run a business.';
 
   return (
     <AuthFormShell
       title="Sign in"
       subtitle={subtitle}
       backTo={isSafeNextPath(nextPath) ? nextPath : '/'}
+      brandLine="Local services. Real open times."
+      panel={{
+        headline: 'Book trusted local help without the phone tag.',
+        support:
+          'See who’s nearby, compare clear prices, and lock in a real open slot — then stay in touch until the job is done.',
+        points: [
+          'Browse providers by what you need',
+          'Book confirmed open times',
+          'Message, pay, and track in one place',
+        ],
+      }}
       footer={
-        <>
-          New here?{' '}
-          <Link to={`/register${registerQs}`} className="font-semibold text-teal-700 hover:text-teal-800">
-            Create account
-          </Link>
-          {' · '}
-          <Link
-            to={`/register/business${registerQs}`}
-            className="font-semibold text-teal-700 hover:text-teal-800"
-          >
-            Register a business
-          </Link>
-        </>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-luminexa-line bg-white px-4 py-4 shadow-lx-soft">
+            <p className="text-sm font-semibold text-luminexa-ink">New here?</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              Most people start with a customer account to book services.
+            </p>
+            <Link
+              to={`/register${registerQs}`}
+              className="lx-btn-primary mt-3 flex min-h-[48px] w-full items-center justify-center text-sm"
+            >
+              Create customer account
+            </Link>
+            <p className="mt-3 text-center text-xs text-slate-500">
+              Offer services on Luminexa?{' '}
+              <Link
+                to={`/register/business${registerQs}`}
+                className="font-semibold text-luminexa-accent-dark underline-offset-2 hover:underline"
+              >
+                Register your business
+              </Link>
+            </p>
+          </div>
+        </div>
       }
     >
       <motion.form
@@ -230,22 +251,24 @@ export default function LoginPage() {
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
             <p className="font-medium">{error}</p>
             {accountMissing && (
-              <div className="mt-3 space-y-2">
-                <p className="text-red-800/80">New here? Create an account:</p>
-                <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="mt-3 space-y-3 border-t border-red-100 pt-3">
+                <p className="text-sm text-red-900/80">
+                  No account for this email yet. How do you want to use Luminexa?
+                </p>
+                <div className="flex flex-col gap-2">
                   <Link
                     to={`/register${registerQs}`}
                     state={{ email: email.trim() }}
-                    className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-luminexa-accent px-3 text-sm font-semibold text-white hover:bg-luminexa-accent-dark"
                   >
-                    I’m a customer
+                    I’m booking a service
                   </Link>
                   <Link
                     to={`/register/business${registerQs}`}
                     state={{ email: email.trim() }}
-                    className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    I’m a service provider
+                    I offer services (business)
                   </Link>
                 </div>
               </div>

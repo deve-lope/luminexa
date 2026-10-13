@@ -764,3 +764,34 @@ class BookingNotificationTests(TestCase):
         note.refresh_from_db()
         self.assertIsNotNone(note.dismissed_at)
 
+    def test_provider_direct_invite_email_asks_to_confirm_and_add_address(self):
+        from django.core import mail
+
+        from jobs.notifications import notify_customer_provider_direct
+
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.REQUESTED,
+            source=Booking.Source.PROVIDER_DIRECT,
+            awaiting_customer_acceptance=True,
+            booked_by=self.provider,
+        )
+        mail.outbox.clear()
+        notify_customer_provider_direct(booking)
+
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, [self.customer.email])
+        self.assertIn('confirm', msg.subject.lower())
+        body = msg.body
+        self.assertIn('When:', body)
+        self.assertIn('address', body.lower())
+        self.assertIn('/b/', body)
+        self.assertIn('/login?next=', body)
+        self.assertIn('Upcoming', body)
+

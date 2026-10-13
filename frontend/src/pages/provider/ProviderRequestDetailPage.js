@@ -3,14 +3,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import AddToCalendarModal from '../../components/booking/AddToCalendarModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import RebookReminderPanel from '../../components/booking/RebookReminderPanel';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
+import LinkShareBar from '../../components/LinkShareBar';
 import RequestMessageThread from '../../components/provider/RequestMessageThread';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
+import { getCustomerAppointmentUrl } from '../../utils/bookingLink';
 import { formatTime, formatWhen } from '../../utils/datetime';
 import parseApiError from '../../utils/parseApiError';
 import { providerRequests, providerScheduleDetail } from '../../utils/providerPaths';
@@ -19,8 +22,15 @@ import {
   emitProviderNotificationsChanged,
 } from '../../utils/providerNotifications';
 import { requestStatusLabel, requestStatusTone } from '../../utils/requestStatus';
-import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
+import { canStartOrCompleteJob } from '../../utils/jobActions';
 import { formatDurationLabel, formatJobLocationLabel, isShopService, moneyFormatter, serviceRequiresQuote } from '../../utils/serviceDisplay';
+import {
+  QUOTE_Q_CHOICE,
+  QUOTE_Q_TEXT,
+  emptyQuoteQuestionDraft,
+  toQuoteQuestionDraft,
+  toQuoteQuestionPayload,
+} from '../../utils/quoteQuestions';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -47,7 +57,7 @@ export default function ProviderRequestDetailPage() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [quoteAmount, setQuoteAmount] = useState('');
   const [quoteMessage, setQuoteMessage] = useState('');
-  const [quoteQuestions, setQuoteQuestions] = useState(['']);
+  const [quoteQuestions, setQuoteQuestions] = useState([emptyQuoteQuestionDraft()]);
   const [quoteFormMode, setQuoteFormMode] = useState(null); // 'ask' | 'quote' | null
 
   const load = useCallback(async () => {
@@ -100,7 +110,6 @@ export default function ProviderRequestDetailPage() {
 
   const status = data?.status;
   const canJobAction = kind === 'booking' && canStartOrCompleteJob(data);
-  const jobActionFrom = kind === 'booking' ? jobActionAvailableAt(data) : null;
   const statusBadgeClass = requestStatusTone(kind, status);
   const isQuotePolicy = data?.booking_policy === 'quote';
   const needsQuote =
@@ -109,15 +118,23 @@ export default function ProviderRequestDetailPage() {
       isQuotePolicy ||
       serviceRequiresQuote(data?.service_pricing_type)) &&
     (status === 'requested' || status === 'quoted');
+  // Customer moved an already-accepted (or already-priced) job — provider must approve the new time.
+  const customerTimeChangePending =
+    kind === 'booking' &&
+    status === 'requested' &&
+    !data?.awaiting_customer_acceptance &&
+    (Boolean(data?.prior_start_at) || (needsQuote && data?.quote_amount != null));
+  const canAcceptTimeChange =
+    customerTimeChangePending && (!needsQuote || data?.quote_amount != null);
 
   useEffect(() => {
     if (!data || kind !== 'booking') return;
     const existing = data.quote_questions || [];
     if (existing.length) {
-      setQuoteQuestions(existing.map((q) => q.question || ''));
-      if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
-      if (data.quote_message) setQuoteMessage(data.quote_message);
+      setQuoteQuestions(existing.map((q) => toQuoteQuestionDraft(q)));
     }
+    if (data.quote_amount != null) setQuoteAmount(String(data.quote_amount));
+    if (data.quote_message) setQuoteMessage(data.quote_message);
   }, [data, kind]);
 
   useEffect(() => {
@@ -151,9 +168,21 @@ export default function ProviderRequestDetailPage() {
   };
 
   const askQuestions = async () => {
-    const questions = quoteQuestions.map((q) => q.trim()).filter(Boolean);
+    const questions = toQuoteQuestionPayload(quoteQuestions);
     if (!questions.length) {
-      setError('Add at least one question for the customer.');
+      const hasChoiceMissingOpts = quoteQuestions.some((q) => {
+        const d = toQuoteQuestionDraft(q);
+        return (
+          d.question.trim() &&
+          d.type === QUOTE_Q_CHOICE &&
+          d.options.map((o) => o.trim()).filter(Boolean).length < 2
+        );
+      });
+      setError(
+        hasChoiceMissingOpts
+          ? 'Multiple-choice questions need at least 2 options.'
+          : 'Add at least one question for the customer.',
+      );
       return;
     }
     await runBookingAction(
@@ -162,9 +191,17 @@ export default function ProviderRequestDetailPage() {
           questions,
           message: quoteMessage.trim(),
         }),
-      'Questions sent — customer will be notified.'
+      'Questions sent — customer will be notified.',
     );
     setQuoteFormMode(null);
+  };
+
+  const updateAskQuestion = (idx, patch) => {
+    setQuoteQuestions((list) => {
+      const next = list.map((q) => toQuoteQuestionDraft(q));
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
   };
 
   const runBookingAction = async (fn, successMessage) => {
@@ -198,7 +235,10 @@ export default function ProviderRequestDetailPage() {
     setActionBusy(true);
     try {
       await jobsAPI.acceptBooking(id);
-      showToast('Request approved.', 'success');
+      showToast(
+        canAcceptTimeChange ? 'Time change accepted.' : 'Request approved.',
+        'success',
+      );
       setConfirmAction(null);
       await load();
     } catch (e) {
@@ -276,39 +316,67 @@ export default function ProviderRequestDetailPage() {
         )}
         {kind === 'booking' && data.awaiting_customer_acceptance && (
           <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95">
-            Waiting for the customer to accept the new time
+            {data.source === 'provider_direct' && !data.prior_start_at ? (
+              <>
+                Waiting for the customer to confirm via their invite email
+                {!isShopService(data) ? ' (they add the job address there)' : ''}.
+                You can change the time or cancel if needed.
+              </>
+            ) : (
+              <>
+                Waiting for the customer to accept the new time
+                {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+                {needsQuote && status !== 'quoted'
+                  ? ' Ask questions anytime — you do not need answers to send a quote or confirm.'
+                  : ''}
+              </>
+            )}
+          </p>
+        )}
+        {kind === 'booking' && customerTimeChangePending && (
+          <p className="mt-3 rounded-xl bg-amber-400/20 px-3 py-2 text-sm text-white">
+            Customer requested a new time
             {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
-            {needsQuote && status !== 'quoted'
-              ? data?.awaiting_quote_details
-                ? ' Waiting for the customer to answer your questions.'
-                : ' Ask questions if you need details, then send a quote.'
-              : ''}
+            {canAcceptTimeChange
+              ? data.quote_amount != null
+                ? ` Accept to keep the agreed price (${currency.format(Number(data.quote_amount))}), or update the quote.`
+                : ' Accept to confirm the new time, or propose a different slot.'
+              : ' Send a quote to confirm this new time.'}
           </p>
         )}
         {kind === 'booking' && data.awaiting_quote_details && (
           <p className="mt-3 rounded-xl bg-amber-400/20 px-3 py-2 text-sm text-white">
-            Waiting for answers — you can send a priced quote after the customer replies.
+            Waiting for answers — the booking stays unchanged until they reply (optional).
           </p>
         )}
         {kind === 'booking' &&
-          status === 'requested' &&
-          needsQuote &&
           !data.awaiting_quote_details &&
           (data.quote_questions || []).length > 0 &&
           (data.quote_questions || []).every((q) => (q.answer || '').trim()) && (
           <p className="mt-3 rounded-xl bg-emerald-400/20 px-3 py-2 text-sm text-white">
-            Answers received — send a quote when ready.
+            Answers received
+            {needsQuote && status === 'requested' ? ' — send a quote when ready.' : '.'}
           </p>
         )}
         {kind === 'booking' && status === 'requested' && !needsQuote && !data.awaiting_customer_acceptance && (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
               disabled={actionBusy}
               onClick={() => setConfirmAction('approve')}
               className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
             >
-              Approve
+              {canAcceptTimeChange ? 'Accept change' : 'Approve'}
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() =>
+                setQuoteFormMode((m) => (m === 'ask' ? null : 'ask'))
+              }
+              className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+            >
+              {quoteFormMode === 'ask' ? 'Hide questions' : 'Ask questions'}
             </button>
             <button
               type="button"
@@ -316,7 +384,7 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
             >
-              Reschedule
+              {canAcceptTimeChange ? 'Change time' : 'Reschedule'}
             </button>
             <button
               type="button"
@@ -336,7 +404,9 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[44px] rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
             >
-              Change time again
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Change time'
+                : 'Change time again'}
             </button>
             <button
               type="button"
@@ -344,13 +414,25 @@ export default function ProviderRequestDetailPage() {
               onClick={() => setConfirmAction('cancel')}
               className="min-h-[44px] rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
             >
-              Cancel request
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Cancel booking'
+                : 'Cancel request'}
             </button>
           </div>
         )}
         {kind === 'booking' && needsQuote && (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {status === 'requested' && (
+            {canAcceptTimeChange && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('approve')}
+                className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60 sm:col-span-2"
+              >
+                Accept change
+              </button>
+            )}
+            {(status === 'requested' || status === 'quoted') && (
               <button
                 type="button"
                 disabled={actionBusy}
@@ -364,20 +446,15 @@ export default function ProviderRequestDetailPage() {
             )}
             <button
               type="button"
-              disabled={actionBusy || Boolean(data.awaiting_quote_details)}
+              disabled={actionBusy}
               onClick={() =>
                 setQuoteFormMode((m) => (m === 'quote' ? null : 'quote'))
               }
               className="min-h-[44px] rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
-              title={
-                data.awaiting_quote_details
-                  ? 'Wait for the customer to answer your questions first'
-                  : undefined
-              }
             >
               {quoteFormMode === 'quote'
                 ? 'Hide quote form'
-                : status === 'quoted'
+                : status === 'quoted' || data.quote_amount != null
                   ? 'Update quote'
                   : 'Send quote'}
             </button>
@@ -405,45 +482,57 @@ export default function ProviderRequestDetailPage() {
               <button
                 type="button"
                 disabled={actionBusy}
+                onClick={() =>
+                  setQuoteFormMode((m) => (m === 'ask' ? null : 'ask'))
+                }
+                className="min-h-[44px] flex-1 rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+              >
+                {quoteFormMode === 'ask' ? 'Hide questions' : 'Ask questions'}
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy}
                 onClick={() => setRescheduleOpen(true)}
                 className="min-h-[44px] flex-1 rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
               >
                 Reschedule
               </button>
-              {canJobAction && (
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => setCompleteOpen(true)}
-                  className="min-h-[44px] flex-1 rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
-                >
-                  Mark complete
-                </button>
-              )}
             </div>
-            {!canJobAction && jobActionFrom && (
-              <p className="text-sm text-white/85">
-                Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours
-                before the appointment).
-              </p>
+            {canJobAction && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setCompleteOpen(true)}
+                className="min-h-[44px] w-full rounded-xl bg-white/20 font-semibold text-white disabled:opacity-60"
+              >
+                Mark complete
+              </button>
             )}
           </div>
         )}
-        {kind === 'booking' && status === 'in_progress' && canJobAction && (
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => setCompleteOpen(true)}
-            className="mt-4 min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
-          >
-            Mark complete
-          </button>
-        )}
-        {kind === 'booking' && status === 'in_progress' && !canJobAction && jobActionFrom && (
-          <p className="mt-4 text-sm text-white/85">
-            Mark complete is available from {formatWhen(jobActionFrom.toISOString())} (6 hours before
-            the appointment).
-          </p>
+        {kind === 'booking' && status === 'in_progress' && (
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() =>
+                setQuoteFormMode((m) => (m === 'ask' ? null : 'ask'))
+              }
+              className="min-h-[44px] w-full rounded-xl bg-white/90 font-semibold text-violet-700 disabled:opacity-60"
+            >
+              {quoteFormMode === 'ask' ? 'Hide questions' : 'Ask questions'}
+            </button>
+            {canJobAction && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setCompleteOpen(true)}
+                className="min-h-[44px] w-full rounded-xl bg-white font-semibold text-violet-700 disabled:opacity-60"
+              >
+                Mark complete
+              </button>
+            )}
+          </div>
         )}
         {kind === 'inquiry' && status === 'pending' && (
           <div className="mt-4 flex gap-2">
@@ -565,12 +654,14 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
-      {kind === 'booking' && quoteFormMode === 'ask' && needsQuote && (
+      {kind === 'booking' &&
+        quoteFormMode === 'ask' &&
+        ['requested', 'quoted', 'confirmed', 'in_progress'].includes(status) && (
         <section className="rounded-xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-amber-900">Ask questions</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Not a quote yet — the customer will answer these so you can price accurately. They get a
-            notification to reply.
+            Customer answers on their booking page (they get a notification). Free text or multiple
+            choice. Not answering does not change this booking — you can confirm or quote anytime.
           </p>
           <div className="mt-4 space-y-3">
             <div>
@@ -588,24 +679,117 @@ export default function ProviderRequestDetailPage() {
             </div>
             <div>
               <p className="mb-1 text-xs font-medium text-slate-600">Questions</p>
-              <div className="space-y-2">
-                {quoteQuestions.map((q, idx) => (
-                  <input
-                    key={`ask-q-${idx}`}
-                    value={q}
-                    onChange={(e) => {
-                      const next = [...quoteQuestions];
-                      next[idx] = e.target.value;
-                      setQuoteQuestions(next);
-                    }}
-                    className="w-full min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm"
-                    placeholder={`Question ${idx + 1}`}
-                  />
-                ))}
+              <div className="space-y-3">
+                {quoteQuestions.map((raw, idx) => {
+                  const q = toQuoteQuestionDraft(raw);
+                  return (
+                    <div
+                      key={`ask-q-${idx}`}
+                      className="rounded-xl border border-amber-100/80 bg-white p-3 space-y-2"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateAskQuestion(idx, { type: QUOTE_Q_TEXT })}
+                          className={`min-h-[36px] rounded-lg px-3 text-xs font-semibold ${
+                            q.type === QUOTE_Q_TEXT
+                              ? 'bg-amber-800 text-white'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          Free text
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateAskQuestion(idx, {
+                              type: QUOTE_Q_CHOICE,
+                              options:
+                                q.options?.filter(Boolean).length >= 2
+                                  ? q.options
+                                  : ['', ''],
+                            })
+                          }
+                          className={`min-h-[36px] rounded-lg px-3 text-xs font-semibold ${
+                            q.type === QUOTE_Q_CHOICE
+                              ? 'bg-amber-800 text-white'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          Multiple choice
+                        </button>
+                        {quoteQuestions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setQuoteQuestions((list) => list.filter((_, i) => i !== idx))
+                            }
+                            className="ml-auto text-xs font-semibold text-slate-500 hover:text-slate-800"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        value={q.question}
+                        onChange={(e) => updateAskQuestion(idx, { question: e.target.value })}
+                        className="w-full min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm"
+                        placeholder={`Question ${idx + 1}`}
+                      />
+                      {q.type === QUOTE_Q_CHOICE && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                            Choices (customer picks one)
+                          </p>
+                          {q.options.map((opt, oi) => (
+                            <div key={`opt-${idx}-${oi}`} className="flex gap-2">
+                              <input
+                                value={opt}
+                                onChange={(e) => {
+                                  const options = [...q.options];
+                                  options[oi] = e.target.value;
+                                  updateAskQuestion(idx, { options });
+                                }}
+                                className="w-full min-h-[36px] rounded-lg border border-slate-200 px-3 text-sm"
+                                placeholder={`Option ${oi + 1}`}
+                              />
+                              {q.options.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const options = q.options.filter((_, i) => i !== oi);
+                                    updateAskQuestion(idx, { options });
+                                  }}
+                                  className="shrink-0 px-2 text-xs text-slate-500"
+                                  aria-label={`Remove option ${oi + 1}`}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {q.options.length < 12 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateAskQuestion(idx, { options: [...q.options, ''] })
+                              }
+                              className="text-xs font-semibold text-amber-900"
+                            >
+                              + Add option
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <button
                 type="button"
-                onClick={() => setQuoteQuestions((list) => [...list, ''])}
+                onClick={() =>
+                  setQuoteQuestions((list) => [...list, emptyQuoteQuestionDraft()])
+                }
                 className="mt-2 text-xs font-semibold text-amber-900"
               >
                 + Add question
@@ -627,8 +811,8 @@ export default function ProviderRequestDetailPage() {
         <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-violet-800">Send quote</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Set the price after you have enough detail. Use Ask questions first if you still need
-            answers. Use Change time if you need a different slot.
+            You can send a price anytime — no need to wait for question answers. Use Change time if
+            you need a different slot.
           </p>
           <div className="mt-4 space-y-3">
             <div>
@@ -671,9 +855,7 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
-      {kind === 'booking' &&
-        status === 'requested' &&
-        (data.quote_questions || []).length > 0 && (
+      {kind === 'booking' && (data.quote_questions || []).length > 0 && (
         <section className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase text-slate-500">
             {data.awaiting_quote_details ? 'Questions sent' : 'Customer answers'}
@@ -681,7 +863,14 @@ export default function ProviderRequestDetailPage() {
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
             {data.quote_questions.map((q) => (
               <li key={q.id} className="rounded-lg bg-slate-50 px-3 py-2">
-                <p className="font-medium">{q.question}</p>
+                <p className="font-medium">
+                  {q.question}
+                  {q.type === 'choice' ? (
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      Multiple choice
+                    </span>
+                  ) : null}
+                </p>
                 {q.answer ? (
                   <p className="mt-1 text-slate-600">{q.answer}</p>
                 ) : (
@@ -690,6 +879,26 @@ export default function ProviderRequestDetailPage() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {kind === 'booking' &&
+        status === 'requested' &&
+        data.quote_amount != null &&
+        quoteFormMode !== 'quote' && (
+        <section className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Agreed price</h2>
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {currency.format(Number(data.quote_amount))}
+          </p>
+          {data.quote_message && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{data.quote_message}</p>
+          )}
+          {canAcceptTimeChange && (
+            <p className="mt-2 text-sm text-slate-600">
+              Accept the time change to keep this price, or update the quote above.
+            </p>
+          )}
         </section>
       )}
 
@@ -772,7 +981,15 @@ export default function ProviderRequestDetailPage() {
                 : 'You go to the customer for this service.'
               : ''
           }
-          emptyLabel="No address provided."
+          emptyLabel={
+            kind === 'booking' &&
+            data.awaiting_customer_acceptance &&
+            data.source === 'provider_direct'
+              ? isShopService(data)
+                ? 'Waiting for the customer to confirm the invite.'
+                : 'Customer will add their address when they confirm the invite email.'
+              : 'No address provided.'
+          }
         />
       )}
 
@@ -832,6 +1049,13 @@ export default function ProviderRequestDetailPage() {
         </section>
       )}
 
+      {kind === 'booking' && status === 'completed' && data && (
+        <RebookReminderPanel
+          booking={data}
+          onUpdated={(updated) => setData(updated)}
+        />
+      )}
+
       {kind === 'booking' && (status === 'confirmed' || status === 'completed') && (
         <button
           type="button"
@@ -886,6 +1110,33 @@ export default function ProviderRequestDetailPage() {
         }}
       />
 
+      {kind === 'booking' && (data.customer_view_url || data.customer_view_token) && (
+        <section className="lx-card">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {data.awaiting_customer_acceptance
+              ? 'Text or message this link if they didn’t get the email — they can confirm from it.'
+              : 'Send this link by text or message so they can open the appointment.'}
+            {data.customer_phone ? ` Phone on file: ${data.customer_phone}.` : ''}
+          </p>
+          <div className="mt-3">
+            <LinkShareBar
+              url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
+              title={data.organization_name || 'Your Luminexa booking'}
+              text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}${
+                data.start_at ? ` — ${formatWhen(data.start_at)}` : ''
+              }. ${data.awaiting_customer_acceptance ? 'Confirm here:' : 'Open here:'}`}
+              phone={data.customer_phone}
+              email={data.customer_email}
+              showInput={false}
+              copyLabel="Copy link"
+              shareLabel="Share"
+              compact
+            />
+          </div>
+        </section>
+      )}
+
       {kind === 'booking' && (
         <RescheduleBookingModal
           open={rescheduleOpen}
@@ -938,9 +1189,15 @@ export default function ProviderRequestDetailPage() {
 
       <ConfirmDialog
         open={confirmAction === 'approve'}
-        title="Approve this request?"
-        message="The customer will be notified that their booking is confirmed."
-        confirmLabel="Approve"
+        title={canAcceptTimeChange ? 'Accept this time change?' : 'Approve this request?'}
+        message={
+          canAcceptTimeChange
+            ? data?.quote_amount != null
+              ? `The booking will be confirmed at the new time with the agreed price of ${currency.format(Number(data.quote_amount))}. The customer will be notified.`
+              : 'The booking will be confirmed at the new time. The customer will be notified.'
+            : 'The customer will be notified that their booking is confirmed.'
+        }
+        confirmLabel={canAcceptTimeChange ? 'Accept change' : 'Approve'}
         cancelLabel="Back"
         tone="success"
         busy={actionBusy}

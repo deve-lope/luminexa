@@ -1,23 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { defaultDayBounds } from '../../utils/dayTimeline';
-import { formatMsRange, normalizeRange, validateDraftRange } from '../../utils/timelineInteraction';
-
-function msToTimeInput(ms) {
-  const d = new Date(ms);
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function timeInputToMs(dayKey, timeStr) {
-  const [h, m] = timeStr.split(':').map(Number);
-  const d = new Date(`${dayKey}T00:00:00`);
-  d.setHours(h, m || 0, 0, 0);
-  return d.getTime();
-}
+import {
+  buildDayTimeOptions,
+  formatMsRange,
+  msToTimeValue,
+  normalizeRange,
+  timeValueToMs,
+  validateDraftRange,
+} from '../../utils/timelineInteraction';
 
 /**
- * Manual from/until time inputs that sync with timeline draft range.
+ * From / Until dropdowns (15-minute steps). Primary way to set add-mode times —
+ * timeline drag is optional.
  */
 export default function TimelineTimeAdjust({
   dayKey,
@@ -30,7 +24,12 @@ export default function TimelineTimeAdjust({
   unavailable,
   weeklyBlocks,
 }) {
-  if (!draftRange || !dayKey) return null;
+  const options = useMemo(
+    () => buildDayTimeOptions(dayKey, weeklyBlocks),
+    [dayKey, weeklyBlocks],
+  );
+
+  if (!dayKey || !draftRange || !options.length) return null;
 
   const applyRange = (startMs, endMs) => {
     const bounds = defaultDayBounds(dayKey, weeklyBlocks);
@@ -53,43 +52,60 @@ export default function TimelineTimeAdjust({
   };
 
   const updateStart = (timeStr) => {
-    const startMs = timeInputToMs(dayKey, timeStr);
-    applyRange(startMs, draftRange.endMs);
+    const startMs = timeValueToMs(dayKey, timeStr);
+    let endMs = draftRange.endMs;
+    if (endMs <= startMs) {
+      endMs = startMs + 60 * 60 * 1000;
+    }
+    applyRange(startMs, endMs);
   };
 
   const updateEnd = (timeStr) => {
-    const endMs = timeInputToMs(dayKey, timeStr);
+    const endMs = timeValueToMs(dayKey, timeStr);
     applyRange(draftRange.startMs, endMs);
   };
 
+  const startValue = msToTimeValue(draftRange.startMs);
+  const endValue = msToTimeValue(draftRange.endMs);
+  const startOptions = options;
+  const endOptions = options.filter((o) => o.ms > draftRange.startMs);
+
   return (
-    <div className="rounded-lg border border-violet-100 bg-violet-50/60 p-3">
-      <p className="text-xs font-medium text-violet-900">
-        Time: {formatMsRange(draftRange.startMs, draftRange.endMs)}
+    <div className="rounded-lg border border-white/80 bg-white/90 p-3 ring-1 ring-slate-200/80">
+      <p className="text-xs font-semibold text-slate-800">
+        Time · {formatMsRange(draftRange.startMs, draftRange.endMs)}
       </p>
-      <p className="mt-0.5 text-[11px] text-violet-700">
-        Drag on the bar below, or set times here.
-      </p>
+      <p className="mt-0.5 text-[11px] text-slate-500">Choose From and Until — no need to drag.</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="block text-xs font-medium text-slate-600">
           From
-          <input
-            type="time"
+          <select
             disabled={disabled}
-            value={msToTimeInput(draftRange.startMs)}
+            value={startValue}
             onChange={(e) => updateStart(e.target.value)}
-            className="mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-          />
+            className="mt-1 w-full min-h-[48px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
+          >
+            {startOptions.map((o) => (
+              <option key={`from-${o.value}`} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="block text-xs font-medium text-slate-600">
           Until
-          <input
-            type="time"
+          <select
             disabled={disabled}
-            value={msToTimeInput(draftRange.endMs)}
+            value={endOptions.some((o) => o.value === endValue) ? endValue : endOptions[0]?.value}
             onChange={(e) => updateEnd(e.target.value)}
-            className="mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-          />
+            className="mt-1 w-full min-h-[48px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
+          >
+            {endOptions.map((o) => (
+              <option key={`until-${o.value}`} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
     </div>

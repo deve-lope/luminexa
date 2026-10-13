@@ -27,7 +27,6 @@ import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 import { formatServiceAddressDisplay } from './ServiceLocationInput';
 import StarRating from '../services/StarRating';
 import { IconMapPin, IconSchedule } from '../icons/NavIcons';
-
 /** Gig-wall / custom quote bookings — not a catalog service page. */
 function isCustomOrGigBooking(booking) {
   return Boolean((booking?.job_title || '').trim()) || booking?.service_name === 'Custom job';
@@ -100,9 +99,10 @@ export default function CustomerBookingCard({
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
-  const [answers, setAnswers] = useState(() =>
-    (booking.quote_questions || []).map((q) => ({ id: q.id, answer: q.answer || '' }))
-  );
+  const answers = (booking.quote_questions || []).map((q) => ({
+    id: q.id,
+    answer: q.answer || '',
+  }));
   const past = isPastBooking(booking);
   const approved = wasApprovedByProvider(booking);
   const declined = wasDeclinedByProvider(booking);
@@ -127,9 +127,9 @@ export default function CustomerBookingCard({
       'The business proposed a new time. They still need to send a quote before you can confirm.';
   } else if (awaitingTimeChange && !past) {
     statusHint = 'The business proposed a new appointment time. Accept to lock it in, or decline.';
-  } else if (awaitingQuoteDetails && !past) {
+  } else if (awaitingQuoteDetails) {
     statusHint =
-      'Answer the questions below so the business can send you an accurate quote.';
+      'The business asked questions at the top of this page — answering is optional and does not change your booking.';
   } else if (isQuoted && !past) {
     statusHint =
       'Quote ready — accept the price to confirm this appointment, or decline.';
@@ -163,11 +163,12 @@ export default function CustomerBookingCard({
 
   if (compact) {
     const needsAttention =
-      (!past && (isQuoted || awaitingTimeChange || awaitingQuoteDetails)) ||
+      awaitingQuoteDetails ||
+      (!past && (isQuoted || awaitingTimeChange)) ||
       (booking.status === 'completed' && canRate);
     const compactHint = needsAttention
-      ? awaitingQuoteDetails && !past
-        ? 'Answer questions for your quote — open for details'
+      ? awaitingQuoteDetails
+        ? 'Answer questions — open this booking'
         : isQuoted && !past
         ? 'Quote ready — open for details'
         : awaitingTimeChange && !past
@@ -380,22 +381,6 @@ export default function CustomerBookingCard({
     }
   };
 
-  const submitQuoteAnswers = async () => {
-    setQuoteBusy(true);
-    setQuoteError('');
-    try {
-      await jobsAPI.answerBookingQuoteQuestions(booking.id, { answers });
-      onQuoteUpdated?.();
-    } catch (e) {
-      const d = e.response?.data;
-      setQuoteError(
-        d?.answers || d?.detail || d?.status?.[0] || 'Could not send your answers.'
-      );
-    } finally {
-      setQuoteBusy(false);
-    }
-  };
-
   const declineQuote = async () => {
     setQuoteBusy(true);
     setQuoteError('');
@@ -496,68 +481,8 @@ export default function CustomerBookingCard({
         </div>
       )}
 
-      {booking.status === 'requested' &&
-        (booking.quote_questions || []).some((q) => (q.answer || '').trim()) &&
-        !awaitingQuoteDetails && (
-        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your answers</p>
-          <ul className="mt-2 space-y-2 text-sm text-slate-700">
-            {booking.quote_questions.map((q) => (
-              <li key={q.id}>
-                <span className="font-medium">{q.question}</span>
-                {q.answer ? <span className="text-slate-600"> — {q.answer}</span> : null}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-slate-500">
-            The business has your answers and will send a quote next.
-          </p>
-        </div>
-      )}
-
-      {awaitingQuoteDetails && !past && (
-        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/70 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">
-            Answer to get your quote
-          </p>
-          <p className="mt-1 text-sm text-slate-700">
-            {booking.organization_name} needs a few details before they can send an accurate price.
-          </p>
-          {booking.quote_message ? (
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{booking.quote_message}</p>
-          ) : null}
-          <div className="mt-3 space-y-2">
-            {(booking.quote_questions || []).map((q, idx) => (
-              <div key={q.id || idx}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{q.question}</label>
-                <input
-                  value={answers.find((a) => a.id === q.id)?.answer || ''}
-                  onChange={(e) => {
-                    setAnswers((prev) => {
-                      const next = [...prev];
-                      const i = next.findIndex((a) => a.id === q.id);
-                      if (i >= 0) next[i] = { ...next[i], answer: e.target.value };
-                      else next.push({ id: q.id, answer: e.target.value });
-                      return next;
-                    });
-                  }}
-                  className="w-full min-h-[40px] rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  placeholder="Your answer"
-                />
-              </div>
-            ))}
-          </div>
-          {quoteError && <p className="mt-2 text-sm text-red-700">{quoteError}</p>}
-          <button
-            type="button"
-            disabled={quoteBusy}
-            onClick={submitQuoteAnswers}
-            className="mt-3 min-h-[44px] w-full rounded-xl bg-luminexa-accent text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {quoteBusy ? 'Sending…' : 'Submit answers'}
-          </button>
-        </div>
-      )}
+      {/* Questions answer UI lives at the top of CustomerBookingDetailPage
+          (BookingQuestionsPanel) so it is not buried under Message / Activity. */}
 
       {isQuoted && booking.quote_amount != null && (
         <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
@@ -688,53 +613,88 @@ export default function CustomerBookingCard({
         </div>
       )}
       {showActions && (
-        <div className="mt-4 space-y-2 border-t border-slate-100/80 pt-4">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="mt-4 border-t border-slate-100/80 pt-4">
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/50 divide-y divide-slate-100">
             {detailTo && (
-              <Link to={detailTo} className="lx-btn-ghost w-full px-3 text-center">
-                Full details
+              <Link
+                to={detailTo}
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </span>
+                <span className="flex-1">Full details</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {providerKey && (
               <Link
                 to={customerProviderPage(providerKey)}
-                className="lx-btn-ghost w-full px-3 text-center"
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                View provider
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2M5 21H3m4-10h2m4 0h2m-6 4h2m4 0h2" />
+                  </svg>
+                </span>
+                <span className="flex-1">View provider</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {providerKey && booking.service && !isGigOrCustomJob && (
               <Link
                 to={customerProviderServiceDetail(providerKey, booking.service)}
-                className="lx-btn-ghost w-full px-3 text-center"
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                Service details
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </span>
+                <span className="flex-1">Service details</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
             )}
             {booking.status === 'confirmed' && (
               <button
                 type="button"
                 onClick={() => setCalendarOpen(true)}
-                className="lx-btn-ghost inline-flex w-full items-center justify-center gap-1.5 px-3 text-center"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100/70 active:bg-slate-100"
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                </span>
+                <span className="flex-1">Add to calendar</span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                Add to calendar
               </button>
             )}
           </div>
           {(onReschedule || onCancel) && (
-            <div className={`grid gap-2 ${onReschedule && onCancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div className={`mt-3 grid gap-2 ${onReschedule && onCancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {onReschedule && (
                 <button
                   type="button"
                   onClick={() => onReschedule(booking)}
-                  className="lx-btn-secondary w-full px-3"
+                  className="lx-btn-secondary w-full gap-1.5 px-3"
                 >
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                   Reschedule
                 </button>
               )}
@@ -743,9 +703,12 @@ export default function CustomerBookingCard({
                   type="button"
                   disabled={cancelling}
                   onClick={() => onCancel(booking.id)}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
                 >
-                  {cancelling ? 'Cancelling…' : 'Cancel'}
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  {cancelling ? 'Cancelling…' : 'Cancel booking'}
                 </button>
               )}
             </div>

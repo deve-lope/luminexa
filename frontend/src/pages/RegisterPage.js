@@ -53,27 +53,40 @@ export default function RegisterPage() {
 
   return (
     <AuthFormShell
-      title="Create account"
-      subtitle="Email is required. We’ll send a one-time code so you can sign in — no password needed."
+      title="Create customer account"
+      subtitle="For people booking services. We’ll email a one-time code — no password needed."
       backTo={backTo}
+      brandLine="Local services. Real open times."
+      panel={{
+        headline: 'One account to book, message, and pay.',
+        support: 'Join free as a customer. Find nearby providers and keep every appointment in one place.',
+        points: [
+          'No password to remember — sign in with email codes',
+          'See upcoming jobs on your Home screen',
+          'Message providers and manage bookings anytime',
+        ],
+      }}
       footer={
-        <>
-          <p>
-            Running a business?{' '}
+        <div className="space-y-2 text-center">
+          <p className="text-xs text-slate-500">
+            Want to offer services instead?{' '}
             <Link
               to={`/register/business${nextQs}`}
-              className="font-semibold text-teal-700 hover:text-teal-800"
+              className="font-semibold text-luminexa-accent-dark underline-offset-2 hover:underline"
             >
               Register your business
             </Link>
           </p>
-          <p className="mt-2">
+          <p className="text-sm text-slate-600">
             Already have an account?{' '}
-            <Link to={`/login${nextQs}`} className="font-semibold text-teal-700 hover:text-teal-800">
+            <Link
+              to={`/login${nextQs}`}
+              className="font-semibold text-luminexa-accent-dark underline-offset-2 hover:underline"
+            >
               Sign in
             </Link>
           </p>
-        </>
+        </div>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">

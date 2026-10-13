@@ -20,7 +20,9 @@ export default function useLogoutConfirm(logout, navigate, { homeTo = '/' } = {}
     setBusy(true);
     try {
       await logout();
-      navigate(homeTo);
+      // Replace the overlay history trap so system-back does not restore the
+      // signed-in page after the session is already cleared.
+      navigate(homeTo, { replace: true });
     } finally {
       setBusy(false);
       setOpen(false);

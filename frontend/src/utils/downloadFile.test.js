@@ -1,11 +1,20 @@
 import api from './api';
-import { fetchPdfBlob, resolveAbsoluteUrl } from './downloadFile';
+import {
+  downloadBlob,
+  fetchPdfBlob,
+  parseDownloadError,
+  resolveAbsoluteUrl,
+} from './downloadFile';
 
 jest.mock('./api', () => ({
   __esModule: true,
   default: {
     get: jest.fn(),
   },
+}));
+
+jest.mock('../native/capacitorNative', () => ({
+  isNativeApp: () => false,
 }));
 
 describe('downloadFile', () => {
@@ -38,5 +47,47 @@ describe('downloadFile', () => {
     await expect(fetchPdfBlob('/api/v1/bookings/1/invoice/download/')).rejects.toThrow(
       'Invoice not found.',
     );
+  });
+
+  test('parseDownloadError reads blob JSON detail', async () => {
+    const msg = await parseDownloadError({
+      response: {
+        status: 403,
+        data: new Blob([JSON.stringify({ detail: 'Pro subscription required.' })], {
+          type: 'application/json',
+        }),
+      },
+    });
+    expect(msg).toBe('Pro subscription required.');
+  });
+
+  test('downloadBlob triggers a browser download without crashing', async () => {
+    const click = jest.fn();
+    const remove = jest.fn();
+    const appendChild = jest.spyOn(document.body, 'appendChild').mockImplementation((el) => {
+      el.click = click;
+      el.remove = remove;
+      return el;
+    });
+    const createObjectURL = jest.fn(() => 'blob:test');
+    const revokeObjectURL = jest.fn();
+    window.URL.createObjectURL = createObjectURL;
+    window.URL.revokeObjectURL = revokeObjectURL;
+
+    const result = await downloadBlob({
+      blob: new Blob(['a,b\n'], { type: 'text/csv' }),
+      filename: 'books.csv',
+    });
+    expect(result.method).toBe('browser');
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    expect(remove).toHaveBeenCalled();
+    appendChild.mockRestore();
+  });
+
+  test('export success copy explains saved path vs system download', () => {
+    const { exportDownloadSuccessMessage } = require('./downloadFile');
+    expect(exportDownloadSuccessMessage('saved')).toMatch(/Documents/);
+    expect(exportDownloadSuccessMessage('android-download')).toMatch(/notification/i);
   });
 });

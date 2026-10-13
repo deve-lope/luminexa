@@ -76,14 +76,16 @@ export function needsAttendancePrompt(booking, now = new Date()) {
   return isPastBooking(booking, now);
 }
 
-/** Confirmed appointments still in the future (or actively in progress). */
+/** Confirmed appointments still active (before end, in progress, or provider en route). */
 export function isFutureUpcomingBooking(booking, now = new Date()) {
   if (booking.status === 'completed' || booking.status === 'cancelled') return false;
   if (booking.customer_reported_no_show_at) return false;
   if (booking.status === 'in_progress') return true;
   if (booking.status === 'needs_return') return true;
+  if (booking.en_route_active) return true;
   if (booking.status !== 'confirmed') return false;
-  return isFutureStart(booking, now);
+  // Keep visible through the appointment window — not only before start_at.
+  return !isPastBooking(booking, now);
 }
 
 /** Past confirmed visit waiting on a show-up answer — shown at top of Upcoming, not as a future job. */

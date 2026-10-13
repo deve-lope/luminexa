@@ -98,6 +98,8 @@ function MenuRow({ item, onNavigate }) {
     </>
   );
 
+  const tourAttr = item.dataTour ? { 'data-tour': item.dataTour } : {};
+
   if (item.onClick) {
     return (
       <button
@@ -107,6 +109,7 @@ function MenuRow({ item, onNavigate }) {
           item.onClick();
           onNavigate();
         }}
+        {...tourAttr}
       >
         {label}
       </button>
@@ -121,6 +124,7 @@ function MenuRow({ item, onNavigate }) {
         target={item.external ? '_blank' : undefined}
         rel={item.external ? 'noopener noreferrer' : undefined}
         onClick={onNavigate}
+        {...tourAttr}
       >
         {label}
       </a>
@@ -128,7 +132,7 @@ function MenuRow({ item, onNavigate }) {
   }
 
   return (
-    <Link to={item.to} end={item.end} className={className} onClick={onNavigate}>
+    <Link to={item.to} end={item.end} className={className} onClick={onNavigate} {...tourAttr}>
       {label}
     </Link>
   );

@@ -67,7 +67,7 @@ export default function PublicProviderServicesPage() {
       return (
         <Link
           to={`/login?next=${encodeURIComponent(bookService(slug, svc.id))}`}
-          className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white"
+          className="lx-btn-primary px-4"
         >
           {needsQuote ? 'Sign in to request quote' : 'Sign in to book'}
         </Link>
@@ -79,7 +79,7 @@ export default function PublicProviderServicesPage() {
           type="button"
           disabled={connecting}
           onClick={connect}
-          className="rounded-lg border border-luminexa-accent px-3 py-2 text-sm font-medium text-luminexa-accent disabled:opacity-60"
+          className="lx-btn-secondary px-4 disabled:opacity-60"
         >
           {connecting ? 'Sending request…' : 'Request access'}
         </button>
@@ -90,7 +90,7 @@ export default function PublicProviderServicesPage() {
         <button
           type="button"
           onClick={() => setRequestModalService(svc)}
-          className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
+          className="lx-btn-primary px-4"
         >
           Request quote
         </button>
@@ -99,7 +99,7 @@ export default function PublicProviderServicesPage() {
     return (
       <Link
         to={bookService(slug, svc.id)}
-        className="rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white hover:bg-luminexa-accent/90"
+        className="lx-btn-primary px-4"
       >
         Book
       </Link>

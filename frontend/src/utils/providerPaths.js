@@ -4,8 +4,12 @@ export function providerHome(orgSlug) {
   return `/provider/${orgSlug}`;
 }
 
-export function providerSchedule(orgSlug) {
-  return `/provider/${orgSlug}/schedule`;
+export function providerSchedule(orgSlug, { day } = {}) {
+  const base = `/provider/${orgSlug}/schedule`;
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(String(day))) {
+    return `${base}?day=${encodeURIComponent(day)}`;
+  }
+  return base;
 }
 
 export function providerScheduleDetail(orgSlug, kind, id) {
@@ -40,8 +44,20 @@ export function providerServices(orgSlug) {
   return `/provider/${orgSlug}/services`;
 }
 
-export function providerRequests(orgSlug) {
-  return `/provider/${orgSlug}/requests`;
+export function providerTraining(orgSlug) {
+  return `/provider/${orgSlug}/training`;
+}
+
+export function providerTrainingLesson(orgSlug, lessonId) {
+  return `/provider/${orgSlug}/training/${lessonId}`;
+}
+
+export function providerRequests(orgSlug, filter) {
+  const base = `/provider/${orgSlug}/requests`;
+  if (filter && ['all', 'pending', 'active', 'done', 'archive'].includes(filter)) {
+    return `${base}?filter=${filter}`;
+  }
+  return base;
 }
 
 export function providerJobs(orgSlug) {

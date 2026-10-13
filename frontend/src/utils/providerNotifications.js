@@ -6,6 +6,8 @@ import {
   providerRequestDetail,
   providerRequests,
   providerSchedule,
+  providerScheduleDetail,
+  providerTasks,
 } from './providerPaths';
 
 export const PROVIDER_NOTIFICATIONS_CHANGED_EVENT = 'luminexa:provider-notifications-changed';
@@ -24,6 +26,10 @@ export const PROVIDER_BOOKING_UPDATE_KINDS = new Set([
   ...BOOKING_ACTION_KINDS,
   'payment_received',
   'incomplete_job_tasks',
+  'task_due',
+  'job_starting_soon',
+  'job_en_route_nudge',
+  'job_start_overdue',
 ]);
 
 export function isProviderBookingUpdateNotification(notification) {
@@ -60,6 +66,19 @@ export function providerNotificationDestination(orgSlug, n) {
     return providerJobs(orgSlug);
   }
 
+  if (
+    n?.kind === 'job_starting_soon' ||
+    n?.kind === 'job_en_route_nudge' ||
+    n?.kind === 'job_start_overdue'
+  ) {
+    if (n.booking_id) return providerScheduleDetail(orgSlug, 'booking', n.booking_id);
+    return providerSchedule(orgSlug);
+  }
+
+  if (n?.kind === 'task_due') {
+    return n.booking_id ? providerJobs(orgSlug) : providerTasks(orgSlug);
+  }
+
   if (n?.kind === 'new_message') {
     if (n.booking_id) return `${providerMessages(orgSlug)}?booking=${n.booking_id}`;
     if (n.inquiry_id) return `${providerMessages(orgSlug)}?inquiry=${n.inquiry_id}`;
@@ -80,6 +99,10 @@ export function providerNotificationCtaLabel(n) {
   if (n?.kind === 'subscription_ending') return 'Renew on Billing';
   if (n?.kind === 'payment_received') return 'View booking';
   if (n?.kind === 'incomplete_job_tasks') return 'Review tasks';
+  if (n?.kind === 'task_due') return 'Review tasks';
+  if (n?.kind === 'job_starting_soon') return 'Open job';
+  if (n?.kind === 'job_en_route_nudge') return 'Share location';
+  if (n?.kind === 'job_start_overdue') return 'Start or resolve';
   if (n?.kind === 'quote_answers_received') return 'Send quote';
   if (n?.kind === 'new_message') return 'Open messages';
   if (BOOKING_ACTION_KINDS.has(n?.kind)) return 'Open request';

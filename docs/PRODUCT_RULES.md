@@ -163,6 +163,30 @@ Chrome “Install app” / Add to Home Screen creates a **second Luminexa** that
 
 ---
 
+## On the way — optional provider location share (app only)
+
+### What it means
+
+For a **confirmed** booking (same 6-hour window as Start job), staff on the **Capacitor app** may optionally tap **I’m on my way**. The customer gets a push/in-app alert and can see **distance in km** (text only, no map). Sharing ends when they stop, start the job, complete, cancel, or mark no-show.
+
+### Binding details
+
+- Optional — providers can skip it and still Start job.
+- **App only** — do not show the control on web.
+- Distance is haversine km from provider GPS to geocoded `service_address` (stored as booking `service_latitude` / `service_longitude`).
+- Provider app pings location about every **5 minutes** while sharing is active (screen open).
+- Customer gets a **one-time** nearby notification when distance first drops to **≤ 5 km**.
+- Customer sees distance on **Home** (banner + Up next card) and booking detail — text km only.
+- Not a booking status — status stays `confirmed` until Start job.
+
+### What NOT to simplify away
+
+- Do not require on-my-way before Start job.
+- Do not expose a live map or continuous GPS stream in v1.
+- Do not show the action outside the native app.
+
+---
+
 ## App store rating (native only)
 
 After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enjoying Luminexa?” prompt that opens the **store listing** (Play, or App Store when `APP_STORE_URL` is set). This is separate from **provider/job reviews** (`CustomerRatePrompt`).
@@ -185,9 +209,59 @@ After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enj
 4. Behavior changes need tests per `docs/TEST_STRATEGY.md`, not conflicting reinvention.
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
 5b. App rating = native only after ≥1 week; Play / App Store listing only (not webview).
+5c. On-my-way = optional, app-only, km text + 5 km nearby push; not a status.
+5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or “I couldn’t make it”.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
-8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount.
+8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount; per-job apply caps (% and $).
+9. Rebook reminders: per **completed** catalog job; one-shot date; in-app + push + email; skip if already rebooked.
+
+---
+
+## Provider job nudges (confirmed appointments)
+
+### What it means
+
+For **confirmed** bookings, Celery Beat (`jobs.tasks.send_provider_job_nudges`, every 5 minutes) sends staff **in-app + push**:
+
+1. **~1 hour before** — reminder that the job is coming up  
+2. **~30 minutes before** — ask if they are on the way / can share location (skipped if already sharing)  
+3. **~30 minutes after start** — ask if the job started; open to **Start job** or **I couldn’t make it** (not sent once status is `in_progress` / cancelled / completed)
+
+Deep link: schedule booking detail. Reschedule clears the three sent-at sentinels so nudges can fire for the new time.
+
+### Past-due confirmed jobs (provider missed)
+
+After **scheduled start**, staff cannot use generic Cancel on a still-`confirmed` booking. They must choose:
+
+- **Start job** — they are doing the work (late), or  
+- **I couldn’t make it** — provider fault; cancels the job; timeline `provider_could_not_make_it`; customer notified they can rebook; **not** counted as customer no-show  
+- **Mark customer no-show** — only when the *customer* didn’t show
+
+### What NOT to simplify away
+
+- Do not auto-cancel — provider must resolve.
+- Do not use customer no-show when the provider missed the job.
+- Do not require on-my-way before Start (nudge is optional).
+- Do not spam — one notification per stage per booking (sentinel fields).
+
+---
+
+## Rebook reminders (per completed job)
+
+### What it means
+
+When completing a catalog booking (or later from the completed job detail), the provider may schedule a **one-shot** “book again” reminder for a future calendar date (e.g. tire change → next Apr 1, snow cleaning → next Oct 1).
+
+On that date (org timezone), Luminexa sends **in-app + push + email** with a deep link to book the same service again. Model: `BookingRebookReminder` · sweep: Celery Beat `jobs.tasks.send_due_rebook_reminders`.
+
+If the customer already booked the same org+service again after the source job, the reminder is **skipped** (not sent). Gig/custom jobs (`job_title` set) cannot schedule rebook reminders.
+
+### What NOT to simplify away
+
+- Do not invent service-level default cadence in place of per-job scheduling (v1 is per completed job only).
+- Do not drop email/push — channels match appointment reminders.
+- Do not send when the customer already rebooked the same service.
 
 ---
 
@@ -199,16 +273,21 @@ Owners enable **Referral rewards** in Settings (toggle) with:
 
 - **Credit per referral** (`referral_reward_amount`)
 - **Max a person can earn** (`referral_max_earnings_per_referrer`) lifetime coupon credit at that business
+- **Max percent of job** (`referral_max_credit_percent_per_job`) — share of invoice pre-tax that credit may cover
+- **Max dollars per job** (`referral_max_credit_amount_per_job`) — hard dollar ceiling on one invoice
 
 Customers share `?ref=CODE` on the booking URL. Attribution is stored when the referred person books. **Coupon credit is issued only when that referred person's booking is marked completed.** Credit applies automatically as invoice discount on the referrer's next invoice with that provider (pre-tax).
 
-Turning the toggle **off** stops new attributions / share UI. Existing available coupon credit still applies on invoices. Pending referrals (already booked with a code) still qualify on completion.
+**Per-job apply rule:** discount = `min(available credit, pre_tax × percent/100, dollar cap)`. Example: 50% + $100 on a $1,000 job → $100 off (not $500). Leftover credit stays for later invoices with the same provider.
+
+Turning the toggle **off** stops new attributions / share UI. Existing available coupon credit still applies on invoices (still within per-job caps). Pending referrals (already booked with a code) still qualify on completion.
 
 ### What NOT to simplify away
 
 - Do not grant credit on book / pay alone — completion is required.
 - Do not allow self-referral.
 - Do not ignore the lifetime cap (partial last grant is OK).
+- Do not ignore per-job % and $ caps when applying credit (both apply; use the lower).
 - Coupons are provider-scoped.
 - Do not wipe existing coupons when the program is turned off.
 

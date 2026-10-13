@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -204,8 +205,20 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(booking.availability_slot_id, new_slot.id)
         self.assertEqual(booking.start_at, new_slot.start_at)
         self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertEqual(booking.prior_start_at, self.slot.start_at)
+        self.assertFalse(booking.awaiting_customer_acceptance)
         self.assertEqual(self.slot.status, AvailabilitySlot.Status.OPEN)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
+
+        self._auth(self.provider)
+        accept = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertIsNone(booking.prior_start_at)
 
     def test_customer_reschedule_unconfirmed_booking(self):
         new_start = timezone.now() + timedelta(days=4)
@@ -283,6 +296,73 @@ class BookingLifecycleTests(TestCase):
         new_slot.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.REQUESTED)
         self.assertEqual(new_slot.status, AvailabilitySlot.Status.PENDING)
+
+    def test_provider_can_accept_customer_reschedule_on_quote_booking(self):
+        """After customer reschedules a confirmed quote job, staff can accept without re-quoting."""
+        self.service.pricing_type = Service.PricingType.QUOTE
+        self.service.save(update_fields=['pricing_type'])
+        old_start = self.slot.start_at
+        new_start = timezone.now() + timedelta(days=5)
+        new_slot = AvailabilitySlot.objects.create(
+            organization=self.org,
+            service=self.service,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+            status=AvailabilitySlot.Status.OPEN,
+        )
+        booking = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=self.slot,
+            start_at=self.slot.start_at,
+            end_at=self.slot.end_at,
+            status=Booking.Status.CONFIRMED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+            quote_amount='120.00',
+            quoted_at=timezone.now(),
+        )
+        self.slot.status = AvailabilitySlot.Status.BOOKED
+        self.slot.save()
+
+        # Fresh quote request still cannot be approved without a price.
+        bare = Booking.objects.create(
+            organization=self.org,
+            service=self.service,
+            customer=self.customer,
+            availability_slot=None,
+            start_at=new_start + timedelta(days=1),
+            end_at=new_start + timedelta(days=1, hours=1),
+            status=Booking.Status.REQUESTED,
+            source=Booking.Source.CUSTOMER_REQUEST,
+        )
+        self._auth(self.provider)
+        blocked = self.client.post(f'/api/v1/bookings/{bare.id}/accept/', HTTP_HOST='localhost')
+        self.assertEqual(blocked.status_code, 400)
+
+        self._auth(self.customer)
+        res = self.client.post(
+            f'/api/v1/bookings/{booking.id}/reschedule/',
+            {'slot_id': new_slot.id},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertEqual(str(booking.quote_amount), '120.00')
+        self.assertEqual(booking.prior_start_at, old_start)
+
+        self._auth(self.provider)
+        accept = self.client.post(
+            f'/api/v1/bookings/{booking.id}/accept/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(accept.status_code, 200, getattr(accept, 'data', accept.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertEqual(str(booking.quote_amount), '120.00')
+        self.assertIsNone(booking.prior_start_at)
 
     def test_provider_reschedule_on_instant_org_proposes_new_time(self):
         """Instant booking does not let staff move a confirmed job unilaterally."""
@@ -930,12 +1010,189 @@ class BookingLifecycleTests(TestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.data['service_name'], 'Oil change')
         self.assertEqual(public.data['organization_name'], 'Test Co')
+        self.assertEqual(public.data['organization_slug'], self.org.slug)
+        self.assertEqual(public.data['reference'], f"BK-{public.data['id']:05d}")
+        self.assertIn('service_duration_minutes', public.data)
+        self.assertIn('organization_logo_url', public.data)
         self.assertNotIn('customer_email', public.data)
         self.assertNotIn('customer_phone', public.data)
         self.assertNotIn('email', public.data)
 
         missing = self.client.get('/api/v1/public/bookings/not-a-real-token/', HTTP_HOST='localhost')
         self.assertEqual(missing.status_code, 404)
+
+    @patch('jobs.notifications.send_booking_email')
+    def test_provider_books_new_caller_creates_account(self, _email):
+        start = timezone.now() + timedelta(days=4)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'New Caller',
+                'email': 'newcaller@test.local',
+                'phone': '5550199',
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        caller = User.objects.get(email='newcaller@test.local')
+        self.assertEqual(caller.full_name, 'New Caller')
+        self.assertFalse(caller.has_usable_password())
+        booking = Booking.objects.get(pk=res.data['id'])
+        self.assertEqual(booking.customer_id, caller.id)
+        self.assertEqual(booking.source, Booking.Source.PROVIDER_DIRECT)
+        self.assertEqual(booking.status, Booking.Status.REQUESTED)
+        self.assertTrue(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.service_address, '')
+        self.assertIsNotNone(booking.availability_slot_id)
+        booking.availability_slot.refresh_from_db()
+        self.assertEqual(booking.availability_slot.start_at, booking.start_at)
+        self.assertEqual(booking.availability_slot.end_at, booking.end_at)
+        membership = OrganizationMembership.objects.get(
+            organization=self.org,
+            user=caller,
+            role=OrganizationMembership.Role.CUSTOMER,
+        )
+        self.assertEqual(
+            membership.customer_status,
+            OrganizationMembership.CustomerStatus.APPROVED,
+        )
+        self.assertIn('/b/', res.data.get('customer_view_url') or '')
+
+    @patch('jobs.notifications.send_booking_email')
+    def test_provider_books_new_caller_links_existing_email(self, _email):
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'Customer Alias',
+                'email': self.customer.email,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        booking = Booking.objects.get(pk=res.data['id'])
+        self.assertEqual(booking.customer_id, self.customer.id)
+        self.assertEqual(User.objects.filter(email__iexact=self.customer.email).count(), 1)
+
+    def _provider_direct_token(self):
+        start = timezone.now() + timedelta(days=5)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'customer': self.customer.id,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 201, getattr(res, 'data', res.content))
+        return res.data['id'], res.data['customer_view_token']
+
+    def test_customer_confirms_provider_invite_with_address(self):
+        booking_id, token = self._provider_direct_token()
+        self.client.logout()
+        structured = (
+            'Country: Canada\n'
+            'Province: Ontario\n'
+            'City: Ottawa\n'
+            'Address 1: 77 Pine Rd\n'
+            'Postal code: K1A0B1'
+        )
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {'service_address': structured},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(confirm.status_code, 200, getattr(confirm, 'data', confirm.content))
+        booking = Booking.objects.get(pk=booking_id)
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertFalse(booking.awaiting_customer_acceptance)
+        self.assertEqual(booking.service_address, structured)
+        self.assertFalse(confirm.data.get('needs_customer_confirm'))
+
+    def test_customer_confirm_rejects_incomplete_address(self):
+        _booking_id, token = self._provider_direct_token()
+        self.client.logout()
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {'service_address': '77 Pine Rd'},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(confirm.status_code, 400, getattr(confirm, 'data', confirm.content))
+        self.assertIn('service_address', confirm.data)
+
+    def test_provider_book_existing_customer_uses_saved_address(self):
+        saved = (
+            'Country: Canada\n'
+            'Province: Ontario\n'
+            'City: Ottawa\n'
+            'Address 1: 12 Maple Ave\n'
+            'Postal code: K1A0B1'
+        )
+        self.customer.default_service_address = saved
+        self.customer.save(update_fields=['default_service_address'])
+
+        booking_id, token = self._provider_direct_token()
+        booking = Booking.objects.get(pk=booking_id)
+        self.assertEqual(booking.service_address, saved)
+
+        self.client.logout()
+        public = self.client.get(f'/api/v1/public/bookings/{token}/', HTTP_HOST='localhost')
+        self.assertEqual(public.status_code, 200)
+        self.assertTrue(public.data['needs_customer_confirm'])
+        self.assertTrue(public.data['needs_job_address'])
+        self.assertEqual(public.data['saved_service_address'], saved)
+
+        confirm = self.client.post(
+            f'/api/v1/public/bookings/{token}/',
+            {},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(confirm.status_code, 200, getattr(confirm, 'data', confirm.content))
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
+        self.assertEqual(booking.service_address, saved)
+
+    def test_provider_cannot_book_staff_email_as_new_caller(self):
+        start = timezone.now() + timedelta(days=6)
+        end = start + timedelta(hours=1)
+        self._auth(self.provider)
+        res = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'organization': self.org.id,
+                'service': self.service.id,
+                'full_name': 'Provider Self',
+                'email': self.provider.email,
+                'start_at': start.isoformat(),
+                'end_at': end.isoformat(),
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(res.status_code, 400, getattr(res, 'data', res.content))
 
     def test_customer_reports_attendance_after_appointment(self):
         start = timezone.now() - timedelta(hours=3)

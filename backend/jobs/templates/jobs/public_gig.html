@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title_tag }}</title>
+  <meta name="description" content="{{ meta_description }}" />
+  <link rel="canonical" href="{{ gig.canonical_url }}" />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Luminexa" />
+  <meta property="og:locale" content="en_CA" />
+  <meta property="og:title" content="{{ title_tag }}" />
+  <meta property="og:description" content="{{ meta_description }}" />
+  <meta property="og:url" content="{{ gig.canonical_url }}" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{{ title_tag }}" />
+  <meta name="twitter:description" content="{{ meta_description }}" />
+  <link rel="icon" href="/favicon.ico" />
+  <script type="application/ld+json">{{ json_ld|safe }}</script>
+  <style>
+    :root { --ink:#0f172a; --teal:#0d9488; --teal-dark:#134e4a; --muted:#475569; --bg:#f8fafc; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+    a { color: var(--teal); }
+    .nav { position:absolute; inset:0 0 auto 0; z-index:2; display:flex; justify-content:space-between; align-items:center; max-width:64rem; margin:0 auto; padding:1rem 1.25rem; }
+    .nav a { color:#fff; text-decoration:none; font-weight:800; letter-spacing:-0.02em; }
+    .nav .ghost { font-weight:600; font-size:0.9rem; opacity:0.9; }
+    .hero { position:relative; min-height:42vh; color:#fff; display:flex; align-items:flex-end; overflow:hidden; background:#134e4a; }
+    .hero .grad { position:absolute; inset:0; background:linear-gradient(to top, rgba(15,23,42,0.88) 8%, rgba(15,23,42,0.35) 55%, rgba(13,148,136,0.45)); }
+    .hero-inner { position:relative; z-index:1; max-width:42rem; margin:0 auto; padding:5.5rem 1.25rem 2rem; width:100%; }
+    .kicker { font-size:0.75rem; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:#99f6e4; margin:0 0 0.65rem; }
+    h1 { font-size:clamp(1.55rem, 3.6vw, 2.35rem); line-height:1.12; letter-spacing:-0.03em; margin:0 0 0.65rem; }
+    .meta { color:rgba(240,253,250,0.88); font-size:0.95rem; margin:0; }
+    .banner { max-width:42rem; margin:1.25rem auto 0; padding:0.9rem 1.1rem; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:0.9rem; color:#065f46; font-size:0.95rem; }
+    .panel { max-width:42rem; margin:0 auto; padding:1.5rem 1.25rem 3rem; }
+    article { background:#fff; border:1px solid #e2e8f0; border-radius:1.1rem; padding:1.25rem 1.35rem; }
+    article p { color:var(--muted); white-space:pre-wrap; margin:0; }
+    .ctas { display:flex; flex-wrap:wrap; gap:0.65rem; margin-top:1.35rem; }
+    .cta { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:0.7rem 1.25rem; border-radius:999px; text-decoration:none !important; font-weight:700; font-size:0.95rem; }
+    .cta.primary { background:#0d9488; color:#fff !important; }
+    .cta.secondary { background:#fff; color:#134e4a !important; border:1px solid #cbd5e1; }
+    footer { border-top:1px solid #e2e8f0; background:#fff; font-size:0.85rem; color:var(--muted); }
+    footer .inner { max-width:42rem; margin:0 auto; padding:1.25rem; }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="grad"></div>
+    <div class="nav">
+      <a href="/">Luminexa</a>
+      <a class="ghost" href="/{{ gig.city_slug }}/">{{ city_display }}</a>
+    </div>
+    <div class="hero-inner">
+      <p class="kicker">{{ city_display }} · Gig wall · {{ gig.category_name }}</p>
+      <h1>{{ gig.title }}</h1>
+      <p class="meta">Posted by {{ gig.customer_name }} · {{ gig.area_label }}</p>
+    </div>
+  </section>
+
+  {% if not accepting_bids %}
+  <div class="panel" style="padding-bottom:0;">
+    <div class="banner">
+      This gig in {{ gig.area_label }} has been completed by a Luminexa provider (or closed).
+      You can still post a similar request.
+    </div>
+  </div>
+  {% endif %}
+
+  <main class="panel">
+    <article>
+      <p>{{ gig.description }}</p>
+    </article>
+
+    <div class="ctas">
+      {% if accepting_bids %}
+      <a class="cta primary" href="/login">Are you a local pro? Bid on this gig.</a>
+      {% endif %}
+      <a class="cta {% if accepting_bids %}secondary{% else %}primary{% endif %}" href="/register">
+        Need similar help? Post your own gig.
+      </a>
+      <a class="cta secondary" href="/{{ gig.city_slug }}/">More {{ city_display }} services</a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <p>
+        <a href="/">Home</a>
+        · <a href="/{{ gig.city_slug }}/">{{ city_display }}</a>
+        · <a href="/privacy">Privacy</a>
+      </p>
+      <p style="margin-top:0.5rem;font-size:0.8rem;">
+        Luminexa never shows your street address, phone, or email on public gig pages.
+        Providers contact you privately after you accept a quote.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -115,7 +115,9 @@ api.interceptors.response.use(
         /* ignore health handler failures */
       }
     }
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const requestUrl = String(error.config?.url || '');
+    const isLogoutRequest = requestUrl.includes('/accounts/api/logout/');
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !isLogoutRequest) {
       const { pathname, search } = window.location;
       if (!isPublicPath(pathname)) {
         storage.remove('token'); // legacy cleanup
@@ -289,6 +291,8 @@ export const jobsAPI = {
     ),
   getBooking: (id) => api.get(`/api/v1/bookings/${id}/`),
   getPublicBooking: (token) => api.get(`/api/v1/public/bookings/${encodeURIComponent(token)}/`),
+  confirmPublicBooking: (token, data) =>
+    api.post(`/api/v1/public/bookings/${encodeURIComponent(token)}/`, data || {}),
   getSlot: (id) => api.get(`/api/v1/availability-slots/${id}/`),
   getUnavailableBlock: (id) => api.get(`/api/v1/unavailable-blocks/${id}/`),
   createBooking: (data) => api.post('/api/v1/bookings/', data),
@@ -308,7 +312,15 @@ export const jobsAPI = {
   cancelBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/cancel/`, data),
   reportBookingAttendance: (id, data) => api.post(`/api/v1/bookings/${id}/report-attendance/`, data),
   startBooking: (id) => api.post(`/api/v1/bookings/${id}/start/`),
+  startOnMyWay: (id, data = {}) => api.post(`/api/v1/bookings/${id}/on-my-way/`, data),
+  updateOnMyWayLocation: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/on-my-way/location/`, data),
+  stopOnMyWay: (id) => api.post(`/api/v1/bookings/${id}/on-my-way/stop/`),
   completeBooking: (id, data = {}) => api.post(`/api/v1/bookings/${id}/complete/`, data),
+  setBookingRebookReminder: (id, data) =>
+    api.post(`/api/v1/bookings/${id}/rebook-reminder/`, data),
+  cancelBookingRebookReminder: (id) =>
+    api.delete(`/api/v1/bookings/${id}/rebook-reminder/`),
   getBookingInvoice: (id) => api.get(`/api/v1/bookings/${id}/invoice/`),
   issueBookingInvoice: (id, data) => api.post(`/api/v1/bookings/${id}/invoice/`, data),
   markBookingInvoicePaid: (id) => api.post(`/api/v1/bookings/${id}/invoice/mark-paid/`),
@@ -352,6 +364,8 @@ export const jobsAPI = {
   rescheduleBooking: (id, slotId, data = {}) =>
     api.post(`/api/v1/bookings/${id}/reschedule/`, { slot_id: slotId, ...data }),
   markBookingNoShow: (id) => api.post(`/api/v1/bookings/${id}/no-show/`),
+  markBookingCouldNotMakeIt: (id, data = {}) =>
+    api.post(`/api/v1/bookings/${id}/could-not-make-it/`, data),
   bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
   downloadBookingIcal: (id) =>
     api.get(`/api/v1/bookings/${id}/ical/`, { responseType: 'blob' }),
@@ -412,11 +426,19 @@ export const jobsAPI = {
     api.get('/api/v1/provider-books-export/', {
       params: { organization: organizationSlug, period },
       responseType: 'blob',
+      timeout: 60000,
     }),
+  getOrganizationDataExportUrl: (organizationSlug, format = 'json') => {
+    const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+    const q = new URLSearchParams({ export_format: format });
+    return `${base}/api/v1/organizations/${organizationSlug}/data-export/?${q.toString()}`;
+  },
   downloadOrganizationDataExport: (organizationSlug, format = 'json') =>
     api.get(`/api/v1/organizations/${organizationSlug}/data-export/`, {
       params: { export_format: format },
       responseType: 'blob',
+      // Full business export can be large.
+      timeout: 120000,
     }),
   patchOrganization: (orgSlug, data) => api.patch(`/api/v1/organizations/${orgSlug}/`, data),
   getOrganization: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/`),

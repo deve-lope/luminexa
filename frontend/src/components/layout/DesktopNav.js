@@ -118,9 +118,11 @@ function DesktopMenuRow({ item }) {
     </>
   );
 
+  const tourAttr = item.dataTour ? { 'data-tour': item.dataTour } : {};
+
   if (item.onClick) {
     return (
-      <button type="button" className={className} onClick={item.onClick}>
+      <button type="button" className={className} onClick={item.onClick} {...tourAttr}>
         {label}
       </button>
     );
@@ -133,13 +135,14 @@ function DesktopMenuRow({ item }) {
         target={item.external ? '_blank' : undefined}
         rel={item.external ? 'noopener noreferrer' : undefined}
         title={item.viewOnly ? `${item.label} (opens in new tab, view only)` : item.label}
+        {...tourAttr}
       >
         {label}
       </a>
     );
   }
   return (
-    <Link to={item.to} className={className} title={item.label}>
+    <Link to={item.to} className={className} title={item.label} {...tourAttr}>
       {label}
     </Link>
   );

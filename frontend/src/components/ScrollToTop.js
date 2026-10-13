@@ -4,6 +4,25 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 /** Persists across navigations so Back can restore where you were. */
 const scrollPositions = new Map();
 
+const RESTORE_CLASS = 'lx-scroll-restoring';
+
+export function peekSavedScrollY(pathAndSearch) {
+  const key = String(pathAndSearch || '').split('#')[0];
+  const y = scrollPositions.get(key);
+  return typeof y === 'number' ? y : 0;
+}
+
+/** Copy a remembered Y onto another path (e.g. /schedule → /schedule?day=…). */
+export function aliasSavedScrollY(fromPathAndSearch, toPathAndSearch) {
+  const fromKey = String(fromPathAndSearch || '').split('#')[0];
+  const toKey = String(toPathAndSearch || '').split('#')[0];
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  const y = scrollPositions.get(fromKey);
+  if (typeof y !== 'number' || y <= 0) return;
+  if (typeof scrollPositions.get(toKey) === 'number' && scrollPositions.get(toKey) > 0) return;
+  scrollPositions.set(toKey, y);
+}
+
 function locationKey(location) {
   return `${location.pathname}${location.search || ''}`;
 }
@@ -21,7 +40,7 @@ function writeScrollY(y) {
 
 /**
  * Scroll to #service-123 (or any hash target) once it exists in the DOM.
- * This is reliable on Android after remount — pixel Y often cannot stick.
+ * Prefer calling this after list data has rendered (e.g. storefront load).
  */
 export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}) {
   if (!hash || hash === '#') return () => {};
@@ -50,9 +69,56 @@ export function scrollToHashTarget(hash, { attempts = 50, intervalMs = 50 } = {}
 }
 
 /**
- * Scroll to top only on a fresh PUSH to a pathname (no restore hash).
- * Back to a service list uses #service-id and scrolls that row into view.
- * Search-only changes (?cat=) never jump.
+ * Restore scroll once after Back. Keep it light — padding / intervals / opacity
+ * fights caused visible glitching on desktop when schedule remounts.
+ */
+export function pinScrollPosition(saved) {
+  if (typeof saved !== 'number' || saved <= 0) return () => {};
+
+  const html = document.documentElement;
+  html.classList.add(RESTORE_CLASS);
+  writeScrollY(saved);
+
+  let cancelled = false;
+  let raf1 = 0;
+  let raf2 = 0;
+  let t1 = 0;
+  let t2 = 0;
+
+  const hold = () => {
+    if (cancelled) return;
+    writeScrollY(saved);
+  };
+
+  raf1 = window.requestAnimationFrame(() => {
+    hold();
+    raf2 = window.requestAnimationFrame(() => {
+      hold();
+      html.classList.remove(RESTORE_CLASS);
+    });
+  });
+  // One late settle after the destination paints (no looping pad fight).
+  t1 = window.setTimeout(hold, 50);
+  t2 = window.setTimeout(hold, 150);
+
+  return () => {
+    cancelled = true;
+    if (raf1) window.cancelAnimationFrame(raf1);
+    if (raf2) window.cancelAnimationFrame(raf2);
+    if (t1) window.clearTimeout(t1);
+    if (t2) window.clearTimeout(t2);
+    html.classList.remove(RESTORE_CLASS);
+  };
+}
+
+/** @deprecated Prefer pinScrollPosition. */
+export function restoreScrollY(saved) {
+  return pinScrollPosition(saved);
+}
+
+/**
+ * Scroll to top only on a fresh PUSH to a pathname.
+ * Back restores remembered Y before paint (no visible top→down jump).
  */
 export default function ScrollToTop() {
   const location = useLocation();
@@ -60,8 +126,16 @@ export default function ScrollToTop() {
   const prevLocationRef = useRef(location);
 
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useEffect(() => {
     const key = locationKey(location);
     const onScroll = () => {
+      // Ignore transient positions while we are pinning a restore.
+      if (document.documentElement.classList.contains(RESTORE_CLASS)) return;
       scrollPositions.set(key, readScrollY());
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -77,11 +151,20 @@ export default function ScrollToTop() {
     const pathnameChanged = prev.pathname !== location.pathname;
 
     if (prevKey !== nextKey) {
-      scrollPositions.set(prevKey, readScrollY());
+      const y = readScrollY();
+      // After route change the window is often already at 0 — don't wipe a good saved Y.
+      const prior = scrollPositions.get(prevKey);
+      if (
+        !document.documentElement.classList.contains(RESTORE_CLASS) &&
+        (y > 0 || typeof prior !== 'number')
+      ) {
+        scrollPositions.set(prevKey, y);
+      }
     }
     prevLocationRef.current = location;
 
-    // Same pathname — keep scroll (?cat=). If hash appeared, aim at it.
+    // Same pathname — keep scroll (?day= / ?cat=). Hash added in-place → pin the row.
+    // Do not re-pin on query-only changes (schedule day picks) — that glitches on desktop.
     if (!pathnameChanged) {
       if (location.hash.startsWith('#service-')) {
         return scrollToHashTarget(location.hash);
@@ -89,19 +172,17 @@ export default function ScrollToTop() {
       return undefined;
     }
 
-    // Return to a specific service row after "Show details".
-    if (location.hash.startsWith('#service-')) {
-      return scrollToHashTarget(location.hash);
-    }
-
     const saved = scrollPositions.get(nextKey);
+    const wantsRestore = Boolean(location.state?.lxRestoreScroll);
     const isReturnNav =
       navigationType === 'POP' ||
-      navigationType === 'REPLACE' ||
-      (navigationType === 'PUSH' && typeof saved === 'number' && saved > 0);
+      (navigationType === 'REPLACE' && wantsRestore) ||
+      (navigationType === 'PUSH' && wantsRestore && typeof saved === 'number' && saved > 0);
 
     if (isReturnNav) {
-      // Do not force top on back — leave page where it is / let hash handler work.
+      if (typeof saved === 'number' && saved > 0) {
+        return pinScrollPosition(saved);
+      }
       return undefined;
     }
 

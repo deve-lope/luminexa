@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import analytics_views, dashboard_views, public_views, service_request_views, stripe_views, views
-from . import gig_views, quickbooks_views
+from . import gig_seo_views, gig_views, quickbooks_views
 
 router = DefaultRouter()
 router.register(r'organizations', views.OrganizationViewSet, basename='organization')
@@ -16,6 +16,11 @@ router.register(r'gigs', gig_views.CustomerGigPostViewSet, basename='customer-gi
 router.register(r'gigs-wall', gig_views.ProviderGigWallViewSet, basename='provider-gigs-wall')
 
 urlpatterns = [
+    path(
+        'public/gigs/<int:gig_id>/',
+        gig_seo_views.PublicGigDetailAPIView.as_view(),
+        name='public-gig-detail',
+    ),
     path('gigs/my-quotes/', gig_views.ProviderMyQuotesAPIView.as_view()),
     path(
         'gigs/<int:gig_post_id>/images/',

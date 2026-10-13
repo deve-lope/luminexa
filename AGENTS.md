@@ -29,6 +29,7 @@ Read this first in every coding session. Then follow [`docs/AGENT_PLAYBOOK.md`](
 | Booking capacity (simultaneous workers) | [`.cursor/rules/booking-capacity.mdc`](.cursor/rules/booking-capacity.mdc) + PRODUCT_RULES § Capacity |
 | ZIP / miles search (customer ∩ provider radius) | [`.cursor/rules/location-search.mdc`](.cursor/rules/location-search.mdc) + PRODUCT_RULES § Search |
 | Multi-location / branches | [`.cursor/rules/provider-locations.mdc`](.cursor/rules/provider-locations.mdc) + PRODUCT_RULES § Locations |
+| Snow route dispatch (planned module — build guide) | [`docs/SNOW_ROUTE_DISPATCH.md`](docs/SNOW_ROUTE_DISPATCH.md) |
 | Test plan & high-value cases | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) |
 | Play Store / Android release | [`docs/PLAY_STORE_RELEASE.md`](docs/PLAY_STORE_RELEASE.md) |
 | Capacitor Android / AAB | [`docs/CAPACITOR_ANDROID.md`](docs/CAPACITOR_ANDROID.md) — Studio zip via `frontend/scripts/pack-android-studio.sh` (never android-only) |
@@ -80,6 +81,10 @@ cd frontend && npm start   # SPA :3000
 - `businesses.0017_organizationlocation`
 - `jobs.0025_booking_slot_capacity_fk` (Booking.slot OneToOne → FK)
 - `accounts.0021_authtoken_multi_device` (max 2 simultaneous logins)
+- `jobs.0059_booking_rebook_reminder` (per-job customer rebook nudges)
+- `businesses.0028_organization_referral_per_job_caps` (referral apply: % + $ per invoice)
+- `jobs.0060_provider_job_nudges` (1h / 30m-before / 30m-late provider appointment nudges)
+- `jobs.0061_provider_could_not_make_it` (staff closes past-due missed jobs without customer no-show)
 
 ## Definition of done
 
