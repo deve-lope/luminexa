@@ -26,6 +26,7 @@ import {
   providerSettings,
   providerShare,
   providerSubscribe,
+  providerTraining,
 } from '../utils/providerPaths';
 import { resolveProviderBack } from '../utils/navigationBack';
 import {
@@ -171,6 +172,7 @@ function ProviderShell() {
         logout: requestLogout,
         aboutPath: providerAbout(orgSlug),
         providerServicesPath: providerServices(orgSlug),
+        providerTrainingPath: providerTraining(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
@@ -219,6 +221,12 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/notifications`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Notifications' };
+    }
+    if (location.pathname.startsWith(`${base}/training/`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Training lesson' };
+    }
+    if (location.pathname.startsWith(`${base}/training`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Training' };
     }
     if (location.pathname.startsWith(`${base}/services`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Services catalog' };

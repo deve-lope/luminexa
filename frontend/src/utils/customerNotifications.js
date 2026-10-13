@@ -20,6 +20,7 @@ export const CUSTOMER_BOOKING_BADGE_KINDS = new Set([
 export const CUSTOMER_BOOKING_UPDATE_KINDS = new Set([
   ...CUSTOMER_BOOKING_BADGE_KINDS,
   'payment_confirmed',
+  'rebook_reminder',
 ]);
 
 export function isCustomerBookingUpdateNotification(notification) {

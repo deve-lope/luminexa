@@ -1250,6 +1250,62 @@ def notify_booking_day_before_reminder(booking):
     )
 
 
+def rebook_reminder_link_path(reminder):
+    """Deep link to Book again for the same catalog service."""
+    org = reminder.organization
+    key = org.public_ref or org.slug
+    return f'/customer/provider/{key}/{reminder.service_id}'
+
+
+def notify_rebook_reminder(reminder):
+    """In-app + push: provider-scheduled nudge to book the same service again."""
+    org = reminder.organization
+    service_name = reminder.service.name if reminder.service_id else 'this service'
+    note = (reminder.note or '').strip()
+    message = f'Time to book {service_name} again with {org.name}.'
+    if note:
+        message = f'{message} {note}'
+    return create_customer_notification(
+        customer=reminder.customer,
+        kind=CustomerNotification.Kind.REBOOK_REMINDER,
+        title=f'Book again — {org.name}',
+        message=message[:500],
+        organization=org,
+        booking=reminder.booking,
+        link_path=rebook_reminder_link_path(reminder),
+    )
+
+
+def send_rebook_reminder_email(reminder):
+    """Plain-text email for a due rebook reminder."""
+    org = reminder.organization
+    customer = reminder.customer
+    if not customer or not customer.email:
+        return
+    service_name = reminder.service.name if reminder.service_id else 'this service'
+    note = (reminder.note or '').strip()
+    book_url = f'{_public_app_url()}{rebook_reminder_link_path(reminder)}'
+    lines = [
+        f'Hi {customer.full_name or "there"},',
+        '',
+        f'{org.name} wanted to remind you it may be time to book {service_name} again.',
+    ]
+    if note:
+        lines.extend(['', f'Note from {org.name}:', note])
+    lines.extend([
+        '',
+        'Book again here:',
+        book_url,
+        '',
+        f'View your past jobs: {_public_app_url()}/customer/completed',
+    ])
+    _send_to(
+        customer.email,
+        f'Time to book again — {org.name}',
+        lines,
+    )
+
+
 def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
     """Remind customers ~24 hours before confirmed appointments (email + in-app + push)."""
     from datetime import timedelta
@@ -1622,7 +1678,6 @@ def notify_provider_job_start_overdue(booking):
     )
 
 
-
 def notify_provider_could_not_make_it(booking, *, by_user, reason=''):
     """Customer-facing notice when staff closes a past-due job they missed."""
     reason_text = (reason or '').strip()
@@ -1659,7 +1714,6 @@ def notify_provider_could_not_make_it(booking, *, by_user, reason=''):
         logger.exception(
             'Failed to post could-not-make-it message for booking %s', booking.pk
         )
-
 
 
 def _send_provider_ahead_job_nudges(

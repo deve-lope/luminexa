@@ -111,6 +111,7 @@ export function buildProviderMenuItems({
   logout,
   aboutPath,
   providerServicesPath,
+  providerTrainingPath,
   providerSettingsPath,
   providerAccountPath,
   providerSharePath,
@@ -191,6 +192,14 @@ export function buildProviderMenuItems({
   }
   if (providerServicesPath) {
     items.push({ id: 'services', label: 'Services', to: providerServicesPath });
+  }
+  if (providerTrainingPath) {
+    items.push({
+      id: 'training',
+      label: 'Training',
+      to: providerTrainingPath,
+      dataTour: 'training',
+    });
   }
 
   items.push({ id: 'section-site', divider: true, label: 'Site' });

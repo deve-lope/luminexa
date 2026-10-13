@@ -50,6 +50,18 @@ describe('resolvePublicBack', () => {
 });
 
 describe('resolveProviderBack', () => {
+  test('training lesson returns to training hub', () => {
+    expect(resolveProviderBack('/provider/anu-garden/training/schedule', 'anu-garden')).toEqual({
+      to: '/provider/anu-garden/training',
+    });
+  });
+
+  test('training hub returns to provider home', () => {
+    expect(resolveProviderBack('/provider/anu-garden/training', 'anu-garden')).toEqual({
+      to: '/provider/anu-garden',
+    });
+  });
+
   test('client detail returns to clients list, not home', () => {
     expect(resolveProviderBack('/provider/anu-garden/clients/9', 'anu-garden')).toEqual({
       to: '/provider/anu-garden/clients',

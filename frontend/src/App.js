@@ -52,6 +52,7 @@ import CustomerLayout from './layouts/CustomerLayout';
 import ProviderTodayPage from './pages/provider/ProviderTodayPage';
 import ProviderSharePage from './pages/provider/ProviderSharePage';
 import ProviderServicesPage from './pages/provider/ProviderServicesPage';
+import ProviderTrainingPage from './pages/provider/ProviderTrainingPage';
 import PublicProviderServicesPage from './pages/PublicProviderServicesPage';
 import CustomerServiceDetailPage from './pages/customer/CustomerServiceDetailPage';
 import ProviderSchedulePage from './pages/provider/ProviderSchedulePage';
@@ -250,6 +251,8 @@ function AppRoutes() {
           <Route path="my-page" element={<ProviderSharePage />} />
           <Route path="share" element={<Navigate to="my-page" replace />} />
           <Route path="services" element={<ProviderServicesPage />} />
+          <Route path="training" element={<ProviderTrainingPage />} />
+          <Route path="training/:lessonId" element={<ProviderTrainingPage />} />
           <Route path="analytics" element={<ProviderAnalyticsPage />} />
           <Route path="clients" element={<ProviderClientsPage />} />
           <Route path="clients/:userId" element={<ProviderClientDetailPage />} />

@@ -13,6 +13,7 @@ User = get_user_model()
 from .models import (
     AvailabilitySlot,
     Booking,
+    BookingRebookReminder,
     BookingStatusEvent,
     CustomerNotification,
     CustomerServiceInquiry,
@@ -920,10 +921,18 @@ class JobCostLineSerializer(serializers.ModelSerializer):
         return str(obj.total_cost)
 
 
+class BookingRebookReminderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingRebookReminder
+        fields = ('remind_on', 'note', 'status', 'sent_at', 'created_at')
+        read_only_fields = fields
+
+
 class BookingDetailSerializer(serializers.ModelSerializer):
     """Full booking payload for provider schedule detail views."""
 
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
+    rebook_reminder = BookingRebookReminderSerializer(read_only=True, allow_null=True)
     service_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(source='service.duration_minutes', read_only=True)
@@ -991,6 +1000,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
             'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
@@ -1081,6 +1091,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
+    rebook_reminder = BookingRebookReminderSerializer(read_only=True, allow_null=True)
     service_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(
@@ -1156,6 +1167,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
             'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -1175,6 +1187,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
             'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {

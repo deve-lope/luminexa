@@ -6,6 +6,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import IncompleteReturnVisitModal from '../../components/booking/IncompleteReturnVisitModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import RebookReminderPanel from '../../components/booking/RebookReminderPanel';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import JobCostPanel from '../../components/booking/JobCostPanel';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
@@ -406,6 +407,13 @@ export default function ProviderScheduleDetailPage() {
           )}
         </section>
 
+        {data.status === 'completed' && (
+          <RebookReminderPanel
+            booking={data}
+            onUpdated={(updated) => setData(updated)}
+          />
+        )}
+
         <BookingTasksSection orgSlug={orgSlug} bookingId={data.id} />
 
         {kind === 'booking' && (
@@ -781,8 +789,15 @@ export default function ProviderScheduleDetailPage() {
           onConfirm={async (payload) => {
             setActionBusy(true);
             try {
+              const { rebook_remind_on: rebookOn, rebook_note: rebookNote, ...invoicePayload } = payload;
               if (data.status === 'completed' && !data.invoice) {
-                await jobsAPI.issueBookingInvoice(data.id, payload);
+                await jobsAPI.issueBookingInvoice(data.id, invoicePayload);
+                if (rebookOn) {
+                  await jobsAPI.setBookingRebookReminder(data.id, {
+                    remind_on: rebookOn,
+                    note: rebookNote || '',
+                  });
+                }
                 showToast('Invoice issued.', 'success');
               } else {
                 await jobsAPI.completeBooking(data.id, payload);

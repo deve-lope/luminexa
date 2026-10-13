@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import {
+  APP_TOUR_AUTO_START_DELAY_MS,
   APP_TOUR_START_EVENT,
+  GUIDED_TOUR_START_EVENT,
   buildAppTourSteps,
   markAppTourComplete,
   queryTourTarget,
@@ -11,6 +13,7 @@ import {
 } from '../../utils/appTour';
 
 const PAD = 8;
+const TOUR_OPEN_CLASS = 'lx-tour-open';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -19,6 +22,7 @@ function clamp(n, min, max) {
 /**
  * Skippable spotlight walkthrough for new customers and providers.
  * Auto-starts once after profile onboarding; replay via requestAppTour().
+ * Training “Show me” uses startGuidedTour() and does not mark first-run done.
  */
 export default function AppTour({
   role,
@@ -34,43 +38,82 @@ export default function AppTour({
   const [stepIndex, setStepIndex] = useState(0);
   const [hole, setHole] = useState(null);
   const [cardStyle, setCardStyle] = useState({ top: 'auto', bottom: 24, left: 16, right: 16 });
+  const [overrideSteps, setOverrideSteps] = useState(null);
+  const [persistOnFinish, setPersistOnFinish] = useState(true);
 
-  const steps = useMemo(
+  const defaultSteps = useMemo(
     () => buildAppTourSteps(role, { orgSlug, includeGigs }),
     [role, orgSlug, includeGigs]
   );
+  const steps = overrideSteps?.length ? overrideSteps : defaultSteps;
 
-  const finish = useCallback(() => {
-    markAppTourComplete(role, userId);
-    setActive(false);
-    setStepIndex(0);
-    setHole(null);
-  }, [role, userId]);
+  const finish = useCallback(
+    (options = {}) => {
+      const { navigateTo } = options;
+      if (persistOnFinish) {
+        markAppTourComplete(role, userId);
+      }
+      setActive(false);
+      setStepIndex(0);
+      setHole(null);
+      setOverrideSteps(null);
+      setPersistOnFinish(true);
+      if (navigateTo) {
+        navigate(navigateTo);
+      }
+    },
+    [persistOnFinish, role, userId, navigate]
+  );
 
-  const start = useCallback(() => {
-    if (!enabled || !role || !steps.length) return;
+  const startFirstRun = useCallback(() => {
+    if (!enabled || !role || !defaultSteps.length) return;
+    setOverrideSteps(null);
+    setPersistOnFinish(true);
     setStepIndex(0);
     setActive(true);
-  }, [enabled, role, steps.length]);
+  }, [enabled, role, defaultSteps.length]);
 
   useEffect(() => {
     if (!enabled || !role || !user) return undefined;
     if (!shouldAutoStartAppTour(role, user)) return undefined;
-    const t = window.setTimeout(() => start(), 450);
+    // Let new users see Home first, then open the tour.
+    const t = window.setTimeout(() => startFirstRun(), APP_TOUR_AUTO_START_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [enabled, role, user, start]);
+  }, [enabled, role, user, startFirstRun]);
 
   useEffect(() => {
     const onStart = (event) => {
       const detail = event?.detail || {};
       if (detail.role && detail.role !== role) return;
-      start();
+      startFirstRun();
     };
     window.addEventListener(APP_TOUR_START_EVENT, onStart);
     return () => window.removeEventListener(APP_TOUR_START_EVENT, onStart);
-  }, [role, start]);
+  }, [role, startFirstRun]);
+
+  useEffect(() => {
+    const onGuided = (event) => {
+      const detail = event?.detail || {};
+      if (detail.role && detail.role !== role) return;
+      const guidedSteps = detail.steps;
+      if (!enabled || !Array.isArray(guidedSteps) || guidedSteps.length === 0) return;
+      setOverrideSteps(guidedSteps);
+      setPersistOnFinish(false);
+      setStepIndex(0);
+      setActive(true);
+    };
+    window.addEventListener(GUIDED_TOUR_START_EVENT, onGuided);
+    return () => window.removeEventListener(GUIDED_TOUR_START_EVENT, onGuided);
+  }, [role, enabled]);
 
   useModalBodyLock(active);
+
+  // Keep bottom tabs visible so spotlights can point at Book / Home / etc.
+  useEffect(() => {
+    if (!active) return undefined;
+    document.documentElement.classList.add(TOUR_OPEN_CLASS);
+    return () => document.documentElement.classList.remove(TOUR_OPEN_CLASS);
+  }, [active]);
 
   const step = steps[stepIndex] || null;
 
@@ -138,14 +181,16 @@ export default function AppTour({
   useLayoutEffect(() => {
     if (!active) return undefined;
     measure();
-    // Remeasure after route paint / layout settle.
+    // Remeasure after route paint / layout settle (tabs + Find search bar).
     const t1 = window.setTimeout(measure, 80);
     const t2 = window.setTimeout(measure, 280);
+    const t3 = window.setTimeout(measure, 600);
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
+      window.clearTimeout(t3);
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
@@ -178,6 +223,11 @@ export default function AppTour({
     setStepIndex((i) => i - 1);
   };
 
+  const runCta = () => {
+    if (!step.cta?.path) return;
+    finish({ navigateTo: step.cta.path });
+  };
+
   return createPortal(
     <div
       className="fixed inset-0 z-[120]"
@@ -208,7 +258,7 @@ export default function AppTour({
         type="button"
         className="absolute inset-0 cursor-default"
         aria-label="Dismiss tour backdrop"
-        onClick={finish}
+        onClick={() => finish()}
         tabIndex={-1}
       />
 
@@ -225,7 +275,7 @@ export default function AppTour({
           </p>
           <button
             type="button"
-            onClick={finish}
+            onClick={() => finish()}
             className="shrink-0 text-sm font-semibold text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
           >
             Skip
@@ -236,7 +286,7 @@ export default function AppTour({
         </h2>
         <p className="mt-1.5 text-sm leading-snug text-slate-600">{step.body}</p>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {stepIndex > 0 ? (
             <button
               type="button"
@@ -246,12 +296,21 @@ export default function AppTour({
               Back
             </button>
           ) : (
-            <span className="flex-1" />
+            <span className="min-w-0 flex-1" />
           )}
+          {step.cta?.path && step.cta?.label ? (
+            <button
+              type="button"
+              onClick={runCta}
+              className="min-h-[44px] flex-1 rounded-xl border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-800 hover:bg-teal-100"
+            >
+              {step.cta.label}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={goNext}
-            className="min-h-[44px] flex-[1.4] rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 hover:bg-teal-700"
+            className="min-h-[44px] min-w-[5.5rem] flex-[1.4] rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 hover:bg-teal-700"
           >
             {isLast ? 'Done' : 'Next'}
           </button>

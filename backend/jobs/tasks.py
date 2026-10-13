@@ -67,6 +67,14 @@ def send_rate_service_reminders():
 
 
 @shared_task
+def send_due_rebook_reminders():
+    """Send provider-scheduled rebook nudges that are due today."""
+    from .rebook_reminder_services import send_due_rebook_reminders as _send
+
+    return _send()
+
+
+@shared_task
 def send_subscription_ending_reminders():
     """Remind providers 30 / 7 / 2 days before trial or promo Pro access ends."""
     from .subscription_reminder_services import send_subscription_ending_reminders as _send

@@ -130,6 +130,8 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   if (path === `${base}/requests`) return { to: base };
   if (path === `${base}/jobs`) return { to: base };
   if (path === `${base}/services`) return { to: base };
+  if (path === `${base}/training`) return { to: base };
+  if (path.startsWith(`${base}/training/`)) return { to: `${base}/training` };
   if (path === `${base}/settings`) return { to: base };
   if (path === `${base}/account`) return { to: base };
   if (path === `${base}/billing`) return { to: `${base}/account` };

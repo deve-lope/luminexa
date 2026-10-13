@@ -268,6 +268,7 @@ class CustomerNotification(models.Model):
         GIG_COUNTER_DECLINED = 'gig_counter_declined', 'Provider declined your counter-offer'
         PROVIDER_EN_ROUTE = 'provider_en_route', 'Provider is on the way'
         PROVIDER_NEARBY = 'provider_nearby', 'Provider is nearby'
+        REBOOK_REMINDER = 'rebook_reminder', 'Remind to book again'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1560,3 +1561,62 @@ class Task(models.Model):
 
     class Meta:
         ordering = ['-is_done', '-priority', 'due_at', 'created_at']
+
+
+class BookingRebookReminder(models.Model):
+    """One-shot provider-scheduled nudge for the customer to book the same service again."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        SENT = 'sent', 'Sent'
+        CANCELLED = 'cancelled', 'Cancelled'
+        SKIPPED = 'skipped', 'Skipped'
+
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminder',
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    remind_on = models.DateField(
+        help_text='Calendar day (org timezone) to send the rebook nudge.',
+    )
+    note = models.CharField(max_length=200, blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rebook_reminders_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['remind_on', 'id']
+        indexes = [
+            models.Index(fields=['status', 'remind_on']),
+        ]
+
+    def __str__(self):
+        return f'Rebook reminder {self.pk} booking={self.booking_id} on {self.remind_on}'

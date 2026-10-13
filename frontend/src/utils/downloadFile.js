@@ -20,10 +20,22 @@ function downloadBlobInBrowser(blob, filename) {
   const a = document.createElement('a');
   a.href = objectUrl;
   a.download = filename;
+  a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(objectUrl);
+  // Delay revoke so Android/WebKit can start the download first.
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function ensureBlob(data, mimeType) {
+  if (data instanceof Blob) {
+    if (mimeType && (!data.type || data.type === 'application/octet-stream')) {
+      return new Blob([data], { type: mimeType });
+    }
+    return data;
+  }
+  return new Blob([data], { type: mimeType || 'application/octet-stream' });
 }
 
 function blobToBase64(blob) {
@@ -56,9 +68,20 @@ function apiPath(url) {
   return url.startsWith('/') ? url : `/${url}`;
 }
 
+async function readBlobText(blob) {
+  if (!blob) return '';
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+    reader.readAsText(blob);
+  });
+}
+
 async function parseBlobError(blob) {
   try {
-    const text = await blob.text();
+    const text = await readBlobText(blob);
     const parsed = JSON.parse(text);
     return parsed.detail || parsed.message || 'Download failed';
   } catch {
@@ -96,29 +119,30 @@ export async function fetchPdfBlob(url) {
 }
 
 /**
- * Android DownloadManager (needs MainActivity listener in the Play Store app build).
+ * Android DownloadManager (needs MainActivity DownloadListener).
+ * Prefer a real <a download> click — hidden iframes often never fire onDownloadStart,
+ * so the OS never shows a “download complete” notification.
  * Session cookies are forwarded by the native WebView download handler.
  */
-function triggerAndroidSystemDownload(absoluteUrl) {
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.tabIndex = -1;
-  iframe.style.cssText =
-    'position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none';
-  iframe.src = absoluteUrl;
-  document.body.appendChild(iframe);
-  window.setTimeout(() => iframe.remove(), 120_000);
+function triggerAndroidSystemDownload(absoluteUrl, filename = '') {
+  const a = document.createElement('a');
+  a.href = absoluteUrl;
+  if (filename) a.setAttribute('download', sanitizeFilename(filename));
+  a.rel = 'noopener';
+  a.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none';
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => a.remove(), 2_000);
 }
 
-/** Write PDF to device storage — no share sheet, no viewer. */
-async function savePdfToDevice(blob, filename) {
+/** Write a file to device Documents — no share sheet, no viewer. */
+async function saveBlobToDevice(blob, filename, folder = 'Luminexa/exports') {
   if (!Capacitor.isPluginAvailable('Filesystem')) return false;
 
   try {
     const { Filesystem, Directory } = await import('@capacitor/filesystem');
     const safeName = sanitizeFilename(filename);
     const base64 = await blobToBase64(blob);
-    const folder = 'Luminexa/invoices';
     const path = `${folder}/${safeName}`;
 
     if (Capacitor.getPlatform() === 'android') {
@@ -148,6 +172,102 @@ async function savePdfToDevice(blob, filename) {
   }
 }
 
+async function savePdfToDevice(blob, filename) {
+  return saveBlobToDevice(blob, filename, 'Luminexa/invoices');
+}
+
+/** Turn axios blob error bodies into a readable message. */
+export async function parseDownloadError(err, fallback = 'Download failed') {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  if (data instanceof Blob) {
+    const fromBlob = await parseBlobError(data);
+    if (fromBlob && fromBlob !== 'Download failed') return fromBlob;
+  } else if (typeof data?.detail === 'string') {
+    return data.detail;
+  }
+  if (status === 401) return 'Sign in again to download.';
+  if (status === 403) return 'You do not have permission to download this export.';
+  if (err?.message) return err.message;
+  return fallback;
+}
+
+/**
+ * Save/download an in-memory Blob (CSV, ZIP, Excel, JSON).
+ * Avoids bare blob+a.click in Capacitor WebViews (those crash the app).
+ */
+export async function downloadBlob({ blob, filename, mimeType } = {}) {
+  if (!blob) throw new Error('Nothing to download.');
+  const safeName = sanitizeFilename(filename);
+  const file = ensureBlob(blob, mimeType);
+
+  if (!isNativeApp()) {
+    downloadBlobInBrowser(file, safeName);
+    return { method: 'browser' };
+  }
+
+  if (await saveBlobToDevice(file, safeName, 'Luminexa/exports')) {
+    return { method: 'saved' };
+  }
+
+  // Last resort — still append to body (safer than floating <a>).
+  try {
+    downloadBlobInBrowser(file, safeName);
+    return { method: 'browser-fallback' };
+  } catch {
+    throw new Error('Could not save the file. Update Luminexa, then try again.');
+  }
+}
+
+/**
+ * Analytics / business exports.
+ * Same strategy as invoices: authenticated fetch + save to device first.
+ * Android DownloadManager (with OS notification) is only a fallback — a bare
+ * iframe “download started” toast was lying when the system never received the file.
+ * @param {{ url: string, filename: string, fetchBlob?: () => Promise<Blob> }} opts
+ */
+export async function downloadExportFile({ url, filename, fetchBlob } = {}) {
+  const safeName = sanitizeFilename(filename);
+  const absoluteUrl = resolveAbsoluteUrl(url);
+
+  if (typeof fetchBlob !== 'function') {
+    throw new Error('Download is not available.');
+  }
+
+  const blob = await fetchBlob();
+
+  if (!isNativeApp()) {
+    downloadBlobInBrowser(blob, safeName);
+    return { method: 'browser' };
+  }
+
+  if (await saveBlobToDevice(blob, safeName, 'Luminexa/exports')) {
+    return { method: 'saved' };
+  }
+
+  if (Capacitor.getPlatform() === 'android' && absoluteUrl) {
+    triggerAndroidSystemDownload(absoluteUrl, safeName);
+    return { method: 'android-download' };
+  }
+
+  try {
+    downloadBlobInBrowser(blob, safeName);
+    return { method: 'browser-fallback' };
+  } catch {
+    throw new Error('Could not save the file. Update Luminexa, then try again.');
+  }
+}
+
+export function exportDownloadSuccessMessage(method) {
+  if (method === 'saved') {
+    return 'Saved on this phone — Files → Documents → Luminexa → exports.';
+  }
+  if (method === 'android-download') {
+    return 'Downloading… check your notification shade when it finishes.';
+  }
+  return 'Download started.';
+}
+
 /**
  * Download invoice PDF.
  * - Laptop / browser: normal file download
@@ -171,7 +291,7 @@ export async function downloadFromUrl({ url, filename = 'download.pdf' }) {
         return { method: 'saved' };
       }
     }
-    triggerAndroidSystemDownload(absoluteUrl);
+    triggerAndroidSystemDownload(absoluteUrl, safeName);
     return { method: 'android-download' };
   }
 

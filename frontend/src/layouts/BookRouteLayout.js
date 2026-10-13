@@ -43,6 +43,7 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
       buildProviderMenuItems({
         logout: requestLogout,
         providerServicesPath: `/provider/${orgSlug}/services`,
+        providerTrainingPath: `/provider/${orgSlug}/training`,
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),

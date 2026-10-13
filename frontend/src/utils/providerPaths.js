@@ -44,6 +44,14 @@ export function providerServices(orgSlug) {
   return `/provider/${orgSlug}/services`;
 }
 
+export function providerTraining(orgSlug) {
+  return `/provider/${orgSlug}/training`;
+}
+
+export function providerTrainingLesson(orgSlug, lessonId) {
+  return `/provider/${orgSlug}/training/${lessonId}`;
+}
+
 export function providerRequests(orgSlug, filter) {
   const base = `/provider/${orgSlug}/requests`;
   if (filter && ['all', 'pending', 'active', 'done', 'archive'].includes(filter)) {

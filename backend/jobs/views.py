@@ -1837,10 +1837,56 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
 
         from .notifications import notify_booking_completed
+        from .rebook_reminder_services import apply_rebook_fields_from_request
+
         notify_booking_completed(booking)
+        apply_rebook_fields_from_request(
+            booking, request.data, staff_user=request.user,
+        )
         booking = (
             Booking.objects.select_related(
                 'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                'rebook_reminder',
+            )
+            .prefetch_related('status_events__actor')
+            .get(pk=booking.pk)
+        )
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post', 'delete'], url_path='rebook-reminder')
+    def rebook_reminder(self, request, pk=None):
+        """Create/replace (POST) or cancel (DELETE) a pending rebook reminder."""
+        from .rebook_reminder_services import (
+            cancel_rebook_reminder,
+            upsert_rebook_reminder,
+        )
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        if request.method == 'DELETE':
+            reminder = cancel_rebook_reminder(booking)
+            if reminder is None:
+                return Response({'detail': 'No rebook reminder set.'}, status=status.HTTP_404_NOT_FOUND)
+            booking = (
+                Booking.objects.select_related(
+                    'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                    'rebook_reminder',
+                )
+                .prefetch_related('status_events__actor')
+                .get(pk=booking.pk)
+            )
+            return Response(BookingSerializer(booking, context={'request': request}).data)
+
+        upsert_rebook_reminder(
+            booking,
+            remind_on=request.data.get('rebook_remind_on') or request.data.get('remind_on'),
+            note=request.data.get('rebook_note') or request.data.get('note') or '',
+            staff_user=request.user,
+        )
+        booking = (
+            Booking.objects.select_related(
+                'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                'rebook_reminder',
             )
             .prefetch_related('status_events__actor')
             .get(pk=booking.pk)
@@ -2001,7 +2047,6 @@ class BookingViewSet(viewsets.ModelViewSet):
         from .notifications import notify_booking_cancelled
         notify_booking_cancelled(booking, by_user=request.user)
         return Response(BookingSerializer(booking, context={'request': request}).data)
-
 
     @action(detail=True, methods=['post'], url_path='could-not-make-it')
     def could_not_make_it(self, request, pk=None):

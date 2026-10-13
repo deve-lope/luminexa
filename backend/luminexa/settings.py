@@ -242,6 +242,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_rate_service_reminders',
         'schedule': 3600.0,
     },
+    'rebook-reminders-hourly': {
+        'task': 'jobs.tasks.send_due_rebook_reminders',
+        'schedule': 3600.0,
+    },
     'subscription-ending-reminders-hourly': {
         'task': 'jobs.tasks.send_subscription_ending_reminders',
         'schedule': 3600.0,

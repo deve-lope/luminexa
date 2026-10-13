@@ -18,6 +18,7 @@ export default function ServiceSearchBar({
 
   return (
     <div
+      data-tour="find-search"
       className={
         sticky
           ? 'lx-sticky-below-header -mx-1 bg-luminexa-canvas/80 pb-3 pt-1 backdrop-blur-md'

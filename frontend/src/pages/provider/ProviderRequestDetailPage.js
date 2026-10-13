@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import BookingStatusTimeline from '../../components/booking/BookingStatusTimeline';
 import AddToCalendarModal from '../../components/booking/AddToCalendarModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import RebookReminderPanel from '../../components/booking/RebookReminderPanel';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -1046,6 +1047,13 @@ export default function ProviderRequestDetailPage() {
             Open booking to issue invoice
           </button>
         </section>
+      )}
+
+      {kind === 'booking' && status === 'completed' && data && (
+        <RebookReminderPanel
+          booking={data}
+          onUpdated={(updated) => setData(updated)}
+        />
       )}
 
       {kind === 'booking' && (status === 'confirmed' || status === 'completed') && (

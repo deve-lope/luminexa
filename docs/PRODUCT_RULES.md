@@ -210,10 +210,11 @@ After **≥1 week** of use in the Capacitor Play / iOS shell, show a soft “Enj
 5. Install = latest Play Store listing (`storeLinks.js`); never browser PWA.
 5b. App rating = native only after ≥1 week; Play / App Store listing only (not webview).
 5c. On-my-way = optional, app-only, km text + 5 km nearby push; not a status.
+5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or “I couldn’t make it”.
 6. Safety: in-app Report (reason + text) + chat Block; admin reviews reports; no auto-pause in v1.
 7. Customer CSV import on Clients: silent User+membership create (no invite email); max 500 rows.
-5d. Provider job nudges: 1h reminder; 30m before on-my-way prompt; 30m after start → start or “I couldn’t make it”.
 8. Referral rewards (optional per org): coupon credit only after referred customer **completes** a job; lifetime earnings cap + per-referral amount; per-job apply caps (% and $).
+9. Rebook reminders: per **completed** catalog job; one-shot date; in-app + push + email; skip if already rebooked.
 
 ---
 
@@ -229,7 +230,6 @@ For **confirmed** bookings, Celery Beat (`jobs.tasks.send_provider_job_nudges`, 
 
 Deep link: schedule booking detail. Reschedule clears the three sent-at sentinels so nudges can fire for the new time.
 
-
 ### Past-due confirmed jobs (provider missed)
 
 After **scheduled start**, staff cannot use generic Cancel on a still-`confirmed` booking. They must choose:
@@ -244,6 +244,24 @@ After **scheduled start**, staff cannot use generic Cancel on a still-`confirmed
 - Do not use customer no-show when the provider missed the job.
 - Do not require on-my-way before Start (nudge is optional).
 - Do not spam — one notification per stage per booking (sentinel fields).
+
+---
+
+## Rebook reminders (per completed job)
+
+### What it means
+
+When completing a catalog booking (or later from the completed job detail), the provider may schedule a **one-shot** “book again” reminder for a future calendar date (e.g. tire change → next Apr 1, snow cleaning → next Oct 1).
+
+On that date (org timezone), Luminexa sends **in-app + push + email** with a deep link to book the same service again. Model: `BookingRebookReminder` · sweep: Celery Beat `jobs.tasks.send_due_rebook_reminders`.
+
+If the customer already booked the same org+service again after the source job, the reminder is **skipped** (not sent). Gig/custom jobs (`job_title` set) cannot schedule rebook reminders.
+
+### What NOT to simplify away
+
+- Do not invent service-level default cadence in place of per-job scheduling (v1 is per completed job only).
+- Do not drop email/push — channels match appointment reminders.
+- Do not send when the customer already rebooked the same service.
 
 ---
 

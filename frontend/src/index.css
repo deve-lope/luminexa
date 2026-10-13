@@ -397,6 +397,11 @@ html.lx-modal-open .lx-bottom-tabs {
   display: none;
 }
 
+/* App tour spotlights tab bar targets — keep tabs measurable and visible. */
+html.lx-modal-open.lx-tour-open .lx-bottom-tabs {
+  display: block;
+}
+
 .lx-sticky-above-tabs {
   position: sticky;
   bottom: calc(var(--lx-bottom-tabs-height) + 0.75rem);
