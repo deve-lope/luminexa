@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
+import { getCustomerServiceBookingUrl } from '../../utils/bookingLink';
 import { publicServicesCatalog, serviceDetail } from '../../utils/customerPaths';
 import { withReturnTo } from '../../utils/navigationBack';
 import { providerServices } from '../../utils/providerPaths';
+import ShareSheet from '../../components/ShareSheet';
 import ServiceGalleryEditor from '../../components/services/ServiceGalleryEditor';
 import ServiceRatingSummary from '../../components/services/ServiceRatingSummary';
 import ServiceThumb from '../../components/services/ServiceThumb';
@@ -938,7 +940,16 @@ function BulkAddServicesForm({
   );
 }
 
-function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug }) {
+function ServiceTile({
+  service,
+  detailsOpen,
+  onDetails,
+  onHide,
+  onShow,
+  orgSlug,
+  orgName,
+}) {
+  const [shareOpen, setShareOpen] = useState(false);
   const meta = formatServiceMeta(service, undefined, { forceShowPrice: true });
   const hidden = service.is_active === false;
   const needsDetails = serviceNeedsDetails(service);
@@ -948,6 +959,10 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
   const description = (service.description || '').trim();
   const priceLabel = meta ? meta.split(' · ')[0] : null;
   const categoryName = (service.category_name || '').trim();
+  const shareUrl = getCustomerServiceBookingUrl(orgSlug, service.id);
+  const businessName = (orgName || '').trim() || 'us';
+  const shareTitle = service.name || 'Luminexa';
+  const shareText = `Book ${service.name || 'this service'} with ${businessName} on Luminexa`;
 
   return (
     <article
@@ -1063,6 +1078,15 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
             Preview
           </Link>
         )}
+        {orgSlug && !hidden && shareUrl && (
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="inline-flex min-h-[40px] items-center rounded-xl border border-teal-200 bg-white px-3.5 text-sm font-semibold text-teal-900 transition hover:border-teal-400 hover:bg-teal-50"
+          >
+            Share
+          </button>
+        )}
         {hidden ? (
           <button
             type="button"
@@ -1081,6 +1105,13 @@ function ServiceTile({ service, detailsOpen, onDetails, onHide, onShow, orgSlug 
           </button>
         )}
       </div>
+      <ShareSheet
+        open={shareOpen}
+        url={shareUrl}
+        title={shareTitle}
+        text={shareText}
+        onClose={() => setShareOpen(false)}
+      />
     </article>
   );
 }
@@ -1702,6 +1733,7 @@ export default function ProviderServicesPage({ embedded = false }) {
                     <ServiceTile
                       service={svc}
                       orgSlug={orgSlug}
+                      orgName={activeOrg?.organization_name}
                       detailsOpen={expandedServiceId === svc.id && showServiceForm}
                       onDetails={toggleServiceDetails}
                       onHide={(s) => toggleServicePublic(s, false)}
@@ -1755,6 +1787,7 @@ export default function ProviderServicesPage({ embedded = false }) {
                       <ServiceTile
                         service={svc}
                         orgSlug={orgSlug}
+                        orgName={activeOrg?.organization_name}
                         detailsOpen={expandedServiceId === svc.id && showServiceForm}
                         onDetails={toggleServiceDetails}
                         onHide={() => {}}

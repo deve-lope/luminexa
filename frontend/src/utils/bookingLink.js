@@ -43,6 +43,12 @@ export function getCustomerBookingUrl(slug) {
   return `${getPublicAppUrl()}/book/${encodeURIComponent(slug)}`;
 }
 
+/** Deep link so a customer can pick a time and book one catalog service. */
+export function getCustomerServiceBookingUrl(slug, serviceId) {
+  if (!slug || serviceId == null || serviceId === '') return '';
+  return `${getPublicAppUrl()}/book/${encodeURIComponent(slug)}/${encodeURIComponent(serviceId)}`;
+}
+
 export function getProviderBookingUrl(slug) {
   if (!slug) return '';
   return `${getPublicAppUrl()}/provider/${encodeURIComponent(slug)}/schedule`;

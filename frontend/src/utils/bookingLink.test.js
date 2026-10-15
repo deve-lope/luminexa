@@ -1,4 +1,8 @@
-import { getCustomerBookingUrl, getPublicAppUrl } from './bookingLink';
+import {
+  getCustomerBookingUrl,
+  getCustomerServiceBookingUrl,
+  getPublicAppUrl,
+} from './bookingLink';
 
 function setLocationOrigin(origin) {
   Object.defineProperty(window, 'location', {
@@ -20,6 +24,9 @@ describe('getPublicAppUrl', () => {
     expect(getPublicAppUrl()).toBe('https://app.luminex-a.com');
     expect(getCustomerBookingUrl('anu-garden')).toBe(
       'https://app.luminex-a.com/book/anu-garden'
+    );
+    expect(getCustomerServiceBookingUrl('anu-garden', 42)).toBe(
+      'https://app.luminex-a.com/book/anu-garden/42'
     );
   });
 

@@ -1,4 +1,9 @@
-import { shareHref, SHARE_TARGETS, isIOSUserAgent } from './shareLink';
+import {
+  shareHref,
+  SHARE_TARGETS,
+  isIOSUserAgent,
+  openShareHref,
+} from './shareLink';
 
 describe('shareHref', () => {
   const payload = {
@@ -11,13 +16,6 @@ describe('shareHref', () => {
     const href = shareHref('whatsapp', payload);
     expect(href.startsWith('https://wa.me/?text=')).toBe(true);
     expect(decodeURIComponent(href)).toContain('Oil change on Friday');
-    expect(decodeURIComponent(href)).toContain(payload.url);
-  });
-
-  test('email uses subject and body', () => {
-    const href = shareHref('email', payload);
-    expect(href.startsWith('mailto:')).toBe(true);
-    expect(href).toContain('subject=Acme%20Auto');
     expect(decodeURIComponent(href)).toContain(payload.url);
   });
 
@@ -38,9 +36,8 @@ describe('shareHref', () => {
     expect(shareHref('whatsapp', withPhone)).toContain('https://wa.me/15551234567?text=');
   });
 
-  test('Email pre-fills the customer address when provided', () => {
-    const href = shareHref('email', { ...payload, email: 'pat@example.com' });
-    expect(href.startsWith('mailto:pat%40example.com?')).toBe(true);
+  test('email target is not offered', () => {
+    expect(shareHref('email', payload)).toBe('');
   });
 });
 
@@ -55,8 +52,33 @@ describe('isIOSUserAgent', () => {
 });
 
 describe('SHARE_TARGETS', () => {
-  test('includes WhatsApp, Messages, email, and Facebook', () => {
+  test('includes WhatsApp, Messages, and Facebook but not email', () => {
     const ids = SHARE_TARGETS.map((t) => t.id);
-    expect(ids).toEqual(expect.arrayContaining(['whatsapp', 'messages', 'email', 'facebook']));
+    expect(ids).toEqual(expect.arrayContaining(['whatsapp', 'messages', 'facebook']));
+    expect(ids).not.toContain('email');
+  });
+});
+
+describe('openShareHref', () => {
+  test('does not window.open mailto links', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    try {
+      openShareHref('mailto:?subject=Hi&body=Link');
+    } catch {
+      // assign may throw in jsdom
+    }
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  test('opens https targets in a new tab', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    openShareHref('https://wa.me/?text=hi');
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://wa.me/?text=hi',
+      '_blank',
+      'noopener,noreferrer'
+    );
+    openSpy.mockRestore();
   });
 });

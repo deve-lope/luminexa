@@ -5,6 +5,7 @@ import {
   canNativeShare,
   copyText,
   isIOSUserAgent,
+  isProtocolShareHref,
   SHARE_TARGETS,
   shareHref,
   tryNativeShare,
@@ -26,14 +27,6 @@ function Icon({ id }) {
       </svg>
     );
   }
-  if (id === 'email') {
-    return (
-      <svg className={common} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16v12H4z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7l8 6 8-6" />
-      </svg>
-    );
-  }
   if (id === 'facebook') {
     return (
       <svg className={common} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -51,7 +44,6 @@ function Icon({ id }) {
 const TINT = {
   whatsapp: 'bg-emerald-50 text-emerald-700',
   messages: 'bg-sky-50 text-sky-800',
-  email: 'bg-amber-50 text-amber-800',
   facebook: 'bg-indigo-50 text-indigo-800',
   telegram: 'bg-cyan-50 text-cyan-800',
 };
@@ -70,14 +62,13 @@ export default function ShareSheet({
 
   if (!open || !url) return null;
 
-  const iOS = isIOSUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const iOS = isIOSUserAgent(ua);
   const payload = { title, text, url, phone, email };
 
-  const openTarget = (id) => {
-    const href = shareHref(id, payload, { iOS });
-    if (!href) return;
-    window.open(href, id === 'email' || id === 'messages' ? '_self' : '_blank', 'noopener,noreferrer');
-    onClose?.();
+  // Close after navigation starts — sync unmount can cancel sms: handlers.
+  const closeSoon = () => {
+    window.setTimeout(() => onClose?.(), 0);
   };
 
   const onMore = async () => {
@@ -107,31 +98,35 @@ export default function ShareSheet({
           Share
         </h2>
         <p className="mt-1 truncate text-sm text-slate-500">{url}</p>
-        {(phone || email) && (
-          <p className="mt-1 text-xs text-slate-500">
-            {phone ? `Messages / WhatsApp → ${phone}` : null}
-            {phone && email ? ' · ' : null}
-            {email ? `Email → ${email}` : null}
-          </p>
+        {phone && (
+          <p className="mt-1 text-xs text-slate-500">Messages / WhatsApp → {phone}</p>
         )}
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {SHARE_TARGETS.map((target) => (
-            <button
-              key={target.id}
-              type="button"
-              onClick={() => openTarget(target.id)}
-              className="flex flex-col items-center gap-2 rounded-2xl p-3 text-center transition hover:bg-slate-50"
-            >
-              <span
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-                  TINT[target.id] || 'bg-slate-100 text-slate-700'
-                }`}
+          {SHARE_TARGETS.map((target) => {
+            const href = shareHref(target.id, payload, { iOS });
+            if (!href) return null;
+            const protocol = isProtocolShareHref(href);
+            return (
+              <a
+                key={target.id}
+                href={href}
+                {...(protocol
+                  ? {}
+                  : { target: '_blank', rel: 'noopener noreferrer' })}
+                onClick={closeSoon}
+                className="flex flex-col items-center gap-2 rounded-2xl p-3 text-center transition hover:bg-slate-50"
               >
-                <Icon id={target.id} />
-              </span>
-              <span className="text-xs font-semibold text-slate-700">{target.label}</span>
-            </button>
-          ))}
+                <span
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                    TINT[target.id] || 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  <Icon id={target.id} />
+                </span>
+                <span className="text-xs font-semibold text-slate-700">{target.label}</span>
+              </a>
+            );
+          })}
         </div>
         <div className="mt-4 flex flex-col gap-2">
           {canNativeShare() && (

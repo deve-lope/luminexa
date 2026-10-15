@@ -20,24 +20,21 @@ export function normalizeSharePhone(phone) {
 export const SHARE_TARGETS = [
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'messages', label: 'Messages' },
-  { id: 'email', label: 'Email' },
   { id: 'facebook', label: 'Facebook' },
   { id: 'telegram', label: 'Telegram' },
 ];
 
 /**
  * Deep links for the share sheet. SMS uses iOS `&body=` vs Android `?body=`.
- * Optional phone/email pre-fill Messages, WhatsApp, and Email to the customer.
+ * Optional phone pre-fill for Messages and WhatsApp.
  */
-export function shareHref(id, { title, text, url, phone, email }, { iOS = false } = {}) {
+export function shareHref(id, { title, text, url, phone }, { iOS = false } = {}) {
   const message = shareMessage({ text, url });
   const encodedMessage = encodeURIComponent(message);
   const encodedUrl = encodeURIComponent(url || '');
-  const encodedTitle = encodeURIComponent(title || 'Luminexa');
   const encodedText = encodeURIComponent(text || '');
   const phoneNorm = normalizeSharePhone(phone);
   const phoneDigits = phoneNorm.replace(/\D/g, '');
-  const emailTo = (email || '').trim();
   switch (id) {
     case 'whatsapp':
       return phoneDigits
@@ -48,10 +45,6 @@ export function shareHref(id, { title, text, url, phone, email }, { iOS = false 
       return iOS
         ? `sms:${dest}&body=${encodedMessage}`
         : `sms:${dest}?body=${encodedMessage}`;
-    }
-    case 'email': {
-      const to = emailTo ? encodeURIComponent(emailTo) : '';
-      return `mailto:${to}?subject=${encodedTitle}&body=${encodedMessage}`;
     }
     case 'facebook':
       return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
@@ -64,6 +57,26 @@ export function shareHref(id, { title, text, url, phone, email }, { iOS = false 
 
 export function isIOSUserAgent(ua = '') {
   return /iPad|iPhone|iPod/i.test(ua);
+}
+
+/** True for mailto:/sms: — must be real <a> clicks, not window.open. */
+export function isProtocolShareHref(href) {
+  return /^(mailto:|sms:)/i.test(href || '');
+}
+
+/**
+ * Open a share target when a real <a> is not available.
+ * Prefer rendering <a href> in the share sheet — Chrome often ignores
+ * synthetic clicks on dynamically created mailto: links.
+ */
+export function openShareHref(href) {
+  if (!href || typeof document === 'undefined') return;
+  if (isProtocolShareHref(href)) {
+    // Same-tab assign keeps the user gesture; synthetic <a>.click() is flaky.
+    window.location.assign(href);
+    return;
+  }
+  window.open(href, '_blank', 'noopener,noreferrer');
 }
 
 export async function copyText(value) {
