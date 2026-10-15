@@ -119,8 +119,8 @@ class EmailVerificationTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(missing.status_code, 200, missing.data)
-        self.assertEqual(missing.data['auth_method'], 'none')
-        self.assertEqual(missing.data['code'], 'no_login')
+        # Same password step as real accounts — do not reveal unknown emails.
+        self.assertEqual(missing.data['auth_method'], 'password')
         self.assertEqual(len(mail.outbox), 1)  # still no OTP for unknown email
 
         login_ok = self.client.post(

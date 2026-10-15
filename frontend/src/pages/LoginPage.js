@@ -104,8 +104,11 @@ export default function LoginPage() {
       if (err.response?.status === 403 && data?.code === 'email_not_verified') {
         setUnverifiedEmail(data.email || email);
         setError(data.detail || 'Please verify your email before signing in.');
-      } else {
+      } else if (err.response?.status === 429) {
         setError(parseLoginError(err));
+      } else {
+        // Never reveal whether the email or password was wrong.
+        setError('Invalid email or password.');
       }
     } finally {
       setSubmitting(false);

@@ -83,8 +83,11 @@ cd frontend && npm start   # SPA :3000
 - `accounts.0021_authtoken_multi_device` (max 2 simultaneous logins)
 - `jobs.0059_booking_rebook_reminder` (per-job customer rebook nudges)
 - `businesses.0028_organization_referral_per_job_caps` (referral apply: % + $ per invoice)
+- `businesses.0029_snow_route_foundation` (provider_mode, snow settings, Role.CREW, invite role)
 - `jobs.0060_provider_job_nudges` (1h / 30m-before / 30m-late provider appointment nudges)
 - `jobs.0061_provider_could_not_make_it` (staff closes past-due missed jobs without customer no-show)
+- `jobs.0062_snow_route_foundation` (ServiceRegion for snow dispatch)
+- `jobs.0063_snow_dispatch_models` (properties, runs, routes, stops, photos, storm alerts)
 
 ## Definition of done
 

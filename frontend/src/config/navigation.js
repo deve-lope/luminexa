@@ -2,9 +2,33 @@ import { authPathWithNext } from '../utils/postLoginRoute';
 
 export function buildProviderTabs(
   orgSlug,
-  { requestsBadgeCount = 0, messagesBadgeCount = 0, includeGigs = true } = {},
+  {
+    requestsBadgeCount = 0,
+    messagesBadgeCount = 0,
+    includeGigs = true,
+    role = 'owner',
+    snowDispatch = false,
+  } = {},
 ) {
   const base = `/provider/${orgSlug}`;
+  if (role === 'crew') {
+    return [{ id: 'my-run', label: 'My run', to: `${base}/my-run`, end: true }];
+  }
+  if (snowDispatch) {
+    const tabs = [
+      { id: 'today', label: 'Today', to: base, end: true },
+      { id: 'runs', label: 'Runs', to: `${base}/runs` },
+      { id: 'properties', label: 'Properties', to: `${base}/properties` },
+      { id: 'crew', label: 'Crew', to: `${base}/crew` },
+    ];
+    tabs.push({
+      id: 'messages',
+      label: 'Messages',
+      to: `${base}/messages`,
+      badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
+    });
+    return tabs;
+  }
   const tabs = [
     { id: 'today', label: 'Home', to: base, end: true },
     { id: 'schedule', label: 'Schedule', to: `${base}/schedule` },
@@ -25,6 +49,15 @@ export function buildProviderTabs(
     badgeCount: messagesBadgeCount > 0 ? messagesBadgeCount : undefined,
   });
   return tabs;
+}
+
+/** Menu for crew members — no pricing, clients, or billing. */
+export function buildCrewMenuItems({ logout, providerAccountPath }) {
+  return [
+    { id: 'section-account', divider: true, label: 'Account' },
+    { id: 'account', label: 'Account', to: providerAccountPath, iconId: 'account' },
+    { id: 'logout', label: 'Log out', onClick: logout, iconId: 'logout' },
+  ];
 }
 
 export function buildCustomerTabs({

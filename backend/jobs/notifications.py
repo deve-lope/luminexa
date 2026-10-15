@@ -1321,6 +1321,10 @@ def send_booking_reminders_for_window(*, hours_ahead=24, window_hours=1):
         reminder_sent_at__isnull=True,
         start_at__gte=window_start,
         start_at__lt=window_end,
+    ).exclude(
+        dispatch_stops__isnull=False,
+    ).exclude(
+        source=Booking.Source.DISPATCH_RUN,
     ).select_related('organization', 'service', 'customer')
     for booking in bookings:
         send_booking_email('booking_reminder', booking)
@@ -1739,7 +1743,11 @@ def _send_provider_ahead_job_nudges(
         filters['en_route_at__isnull'] = True
 
     sent = 0
-    bookings = Booking.objects.filter(**filters).select_related(
+    bookings = Booking.objects.filter(**filters).exclude(
+        dispatch_stops__isnull=False,
+    ).exclude(
+        source=Booking.Source.DISPATCH_RUN,
+    ).select_related(
         'organization', 'service', 'customer',
     )
     for booking in bookings:
@@ -1784,6 +1792,10 @@ def send_provider_job_nudges(*, now=None):
         provider_start_overdue_sent_at__isnull=True,
         start_at__lte=overdue_cutoff,
         start_at__gte=catch_up_floor,
+    ).exclude(
+        dispatch_stops__isnull=False,
+    ).exclude(
+        source=Booking.Source.DISPATCH_RUN,
     ).select_related('organization', 'service', 'customer')
     for booking in overdue:
         notify_provider_job_start_overdue(booking)

@@ -179,6 +179,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'referral_max_earnings_per_referrer',
             'referral_max_credit_percent_per_job',
             'referral_max_credit_amount_per_job',
+            'provider_mode',
+            'route_vertical',
+            'snow_threshold_cm',
+            'snow_plow_speed_kmh',
+            'snow_road_factor',
+            'snow_duration_matrix',
+            'snow_late_start_alert_enabled',
+            'snow_late_start_alert_minutes',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:
@@ -911,15 +919,29 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         org = self.get_object()
         m = membership_for(request.user, org)
         if not m or m.role != OrganizationMembership.Role.OWNER:
-            raise PermissionDenied('Only the owner can invite staff.')
+            raise PermissionDenied('Only the owner can invite staff or crew.')
         require_provider_subscription(org)
         email = (request.data.get('email') or '').strip().lower()
         if not email:
             raise ValidationError({'email': 'Required.'})
+        role = (request.data.get('role') or OrganizationMembership.Role.STAFF).strip().lower()
+        if role not in (
+            OrganizationMembership.Role.STAFF,
+            OrganizationMembership.Role.CREW,
+        ):
+            raise ValidationError({'role': 'Must be staff or crew.'})
+        if role == OrganizationMembership.Role.CREW:
+            from .permissions import require_snow_org
+            require_snow_org(org)
+
         existing = OrganizationMembership.objects.filter(
             organization=org,
             user__email__iexact=email,
-            role__in=(OrganizationMembership.Role.OWNER, OrganizationMembership.Role.STAFF),
+            role__in=(
+                OrganizationMembership.Role.OWNER,
+                OrganizationMembership.Role.STAFF,
+                OrganizationMembership.Role.CREW,
+            ),
         ).exists()
         if existing:
             raise ValidationError({'email': 'This person is already on your team.'})
@@ -928,34 +950,53 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             email=email,
             accepted_at__isnull=True,
         ).exists()
-        if (
-            not pending_for_email
-            and OrganizationMembership.staff_seats_used(org)
-            >= OrganizationMembership.MAX_STAFF_PER_ORGANIZATION
-        ):
-            raise ValidationError({
-                'detail': (
-                    f'Your plan allows up to {OrganizationMembership.MAX_STAFF_PER_ORGANIZATION} '
-                    'staff members. Remove someone or contact support to add more.'
-                ),
-                'code': 'staff_limit_reached',
-            })
+        if role == OrganizationMembership.Role.STAFF:
+            if (
+                not pending_for_email
+                and OrganizationMembership.staff_seats_used(org)
+                >= OrganizationMembership.MAX_STAFF_PER_ORGANIZATION
+            ):
+                raise ValidationError({
+                    'detail': (
+                        f'Your plan allows up to {OrganizationMembership.MAX_STAFF_PER_ORGANIZATION} '
+                        'staff members. Remove someone or contact support to add more.'
+                    ),
+                    'code': 'staff_limit_reached',
+                })
+        else:
+            if (
+                not pending_for_email
+                and OrganizationMembership.crew_seats_used(org)
+                >= OrganizationMembership.crew_seats_allowed(org)
+            ):
+                raise ValidationError({
+                    'detail': (
+                        f'Your plan includes {OrganizationMembership.crew_seats_allowed(org)} '
+                        'crew seats. Remove a crew member or add seats to invite more.'
+                    ),
+                    'code': 'crew_limit_reached',
+                })
         invite, created = StaffInvitation.objects.get_or_create(
             organization=org,
             email=email,
-            defaults={'invited_by': request.user},
+            defaults={'invited_by': request.user, 'role': role},
         )
         if not created and invite.accepted_at:
             raise ValidationError({'email': 'Invitation already accepted.'})
+        if not created and invite.role != role:
+            invite.role = role
+            invite.invited_by = request.user
+            invite.save(update_fields=['role', 'invited_by'])
         accept_url = (
             f'{settings.PUBLIC_APP_URL.rstrip("/")}/accept-staff-invite'
             f'?token={invite.token}'
         )
+        role_label = 'crew' if role == OrganizationMembership.Role.CREW else 'staff'
         try:
             send_mail(
                 subject=f'Join {org.name} on Luminexa',
                 message=(
-                    f'You have been invited to join {org.name} as staff.\n\n'
+                    f'You have been invited to join {org.name} as {role_label}.\n\n'
                     f'Sign in or create an account, then open:\n{accept_url}'
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -964,7 +1005,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             )
         except Exception:
             pass
-        return Response({'detail': 'Invitation sent.', 'email': email})
+        return Response({'detail': 'Invitation sent.', 'email': email, 'role': role})
 
     @action(detail=True, methods=['get'], url_path='staff-invitations')
     def staff_invitations(self, request, slug=None):
@@ -976,7 +1017,12 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             organization=org, accepted_at__isnull=True,
         ).order_by('-created_at')
         data = [
-            {'id': i.id, 'email': i.email, 'created_at': i.created_at}
+            {
+                'id': i.id,
+                'email': i.email,
+                'role': i.role,
+                'created_at': i.created_at,
+            }
             for i in invites
         ]
         return Response(data)

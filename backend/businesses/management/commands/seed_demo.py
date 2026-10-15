@@ -22,9 +22,17 @@ DEFAULT_BUSINESS_TYPES = (
     (
         'yard-outdoors',
         'Yard & outdoors',
-        'Mowing, leaf cleanup, snow, hedges, and garden care',
+        'Mowing, leaf cleanup, hedges, and garden care',
         '🌿',
         20,
+        'mobile',
+    ),
+    (
+        'snow-cleaning',
+        'Snow cleaning',
+        'Driveway, walkway, and seasonal snow clearing',
+        '❄️',
+        25,
         'mobile',
     ),
     (

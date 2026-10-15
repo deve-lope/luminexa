@@ -369,8 +369,8 @@ export const jobsAPI = {
   bookingIcalUrl: (id) => `/api/v1/bookings/${id}/ical/`,
   downloadBookingIcal: (id) =>
     api.get(`/api/v1/bookings/${id}/ical/`, { responseType: 'blob' }),
-  inviteStaff: (orgSlug, email) =>
-    api.post(`/api/v1/organizations/${orgSlug}/invite-staff/`, { email }),
+  inviteStaff: (orgSlug, email, role = 'staff') =>
+    api.post(`/api/v1/organizations/${orgSlug}/invite-staff/`, { email, role }),
   listStaffInvitations: (orgSlug) =>
     api.get(`/api/v1/organizations/${orgSlug}/staff-invitations/`),
   acceptStaffInvite: (token) => api.post('/api/v1/accept-staff-invite/', { token }),
@@ -508,6 +508,81 @@ export const jobsAPI = {
   openGigQuoteConversation: (gigId, quoteId) =>
     api.post(`/api/v1/gigs/${gigId}/quotes/${quoteId}/conversation/`),
   listMyGigQuotes: (params) => api.get('/api/v1/gigs/my-quotes/', { params }),
+
+  // Snow route dispatch (owner / crew under …/dispatch/)
+  dispatchBase: (orgSlug) => `/api/v1/organizations/${orgSlug}/dispatch`,
+  getDispatchSettings: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/settings/`),
+  patchDispatchSettings: (orgSlug, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/dispatch/settings/`, data),
+  listDispatchRegions: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/regions/`),
+  createDispatchRegion: (orgSlug, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/regions/`, data),
+  patchDispatchRegion: (orgSlug, regionId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/dispatch/regions/${regionId}/`, data),
+  deleteDispatchRegion: (orgSlug, regionId) =>
+    api.delete(`/api/v1/organizations/${orgSlug}/dispatch/regions/${regionId}/`),
+  listDispatchProperties: (orgSlug, params) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/properties/`, { params }),
+  getDispatchProperty: (orgSlug, propertyId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/properties/${propertyId}/`),
+  createDispatchProperty: (orgSlug, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/properties/`, data),
+  patchDispatchProperty: (orgSlug, propertyId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/dispatch/properties/${propertyId}/`, data),
+  deleteDispatchProperty: (orgSlug, propertyId) =>
+    api.delete(`/api/v1/organizations/${orgSlug}/dispatch/properties/${propertyId}/`),
+  importDispatchProperties: (orgSlug, formData) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/properties/import/`, formData, {
+      timeout: 120000,
+    }),
+  getDispatchCrew: (orgSlug) => api.get(`/api/v1/organizations/${orgSlug}/dispatch/crew/`),
+  inviteDispatchCrew: (orgSlug, email) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/crew/`, { email }),
+  removeDispatchCrew: (orgSlug, membershipId) =>
+    api.delete(`/api/v1/organizations/${orgSlug}/dispatch/crew/${membershipId}/`),
+  listDispatchRuns: (orgSlug, params) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/runs/`, { params }),
+  createDispatchRun: (orgSlug, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/runs/`, data),
+  getDispatchRun: (orgSlug, runId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/`),
+  patchDispatchRun: (orgSlug, runId, data) =>
+    api.patch(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/`, data),
+  getDispatchRunCandidates: (orgSlug, runId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/candidates/`),
+  optimizeDispatchRun: (orgSlug, runId, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/optimize/`, data || {}, {
+      timeout: 30000,
+    }),
+  commitDispatchRun: (orgSlug, runId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/commit/`),
+  cancelDispatchRun: (orgSlug, runId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/cancel/`),
+  getDispatchRunLive: (orgSlug, runId) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/runs/${runId}/live/`),
+  getDispatchWeatherWeek: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/weather/week/`),
+  listDispatchPhotos: (orgSlug, params) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/photos/`, { params }),
+  deleteDispatchPhotos: (orgSlug, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/photos/delete/`, data),
+  listCrewMyRoutes: (orgSlug) =>
+    api.get(`/api/v1/organizations/${orgSlug}/dispatch/my-routes/`),
+  startCrewRoute: (orgSlug, routeId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/routes/${routeId}/start/`),
+  pingCrewRouteLocation: (orgSlug, routeId, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/routes/${routeId}/location/`, data),
+  markDispatchStopDone: (orgSlug, stopId) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/stops/${stopId}/done/`),
+  markDispatchStopSkip: (orgSlug, stopId, data) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/stops/${stopId}/skip/`, data),
+  uploadDispatchStopPhoto: (orgSlug, stopId, formData) =>
+    api.post(`/api/v1/organizations/${orgSlug}/dispatch/stops/${stopId}/photos/`, formData, {
+      timeout: 60000,
+    }),
+  getPublicSnowStop: (token) => api.get(`/api/v1/public/snow-stops/${token}/`),
 };
 
 export default api;

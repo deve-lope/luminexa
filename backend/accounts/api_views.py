@@ -118,17 +118,13 @@ class LoginStartAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         user = User.objects.filter(email__iexact=email).first()
-        # Always HTTP 200 — avoid 404 account enumeration. Unknown emails get
-        # auth_method=none so the SPA can offer register without confirming existence via status code.
+        # Always HTTP 200. Unknown / inactive emails get the same password step as
+        # providers so we do not reveal whether the email exists.
         if not user or not user.is_active:
             return Response({
-                'auth_method': 'none',
+                'auth_method': 'password',
                 'email': email,
-                'detail': (
-                    'We could not start sign-in for this email. '
-                    'Create an account below, or try a different address.'
-                ),
-                'code': 'no_login',
+                'detail': 'Enter your password.',
             })
         if user_uses_password_login(user):
             detail = (

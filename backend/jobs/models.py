@@ -216,6 +216,10 @@ class ProviderNotification(models.Model):
         JOB_STARTING_SOON = 'job_starting_soon', 'Job starting in 1 hour'
         JOB_EN_ROUTE_NUDGE = 'job_en_route_nudge', 'Share location / on the way?'
         JOB_START_OVERDUE = 'job_start_overdue', 'Did the job start?'
+        SNOW_STORM_ALERT = 'snow_storm_alert', 'Snow storm forecast'
+        SNOW_RUN_SCHEDULED = 'snow_run_scheduled', 'Snow run scheduled'
+        SNOW_RUN_1H = 'snow_run_1h', 'Snow run in 1 hour'
+        SNOW_CREW_LATE = 'snow_crew_late', 'Crew late to start'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -269,6 +273,9 @@ class CustomerNotification(models.Model):
         PROVIDER_EN_ROUTE = 'provider_en_route', 'Provider is on the way'
         PROVIDER_NEARBY = 'provider_nearby', 'Provider is nearby'
         REBOOK_REMINDER = 'rebook_reminder', 'Remind to book again'
+        SNOW_RUN_SCHEDULED = 'snow_run_scheduled', 'Snow clearing scheduled'
+        SNOW_ETA_SOON = 'snow_eta_soon', 'Crew arriving soon'
+        SNOW_STOP_DONE = 'snow_stop_done', 'Snow clearing done'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -567,6 +574,7 @@ class Booking(models.Model):
     class Source(models.TextChoices):
         PROVIDER_DIRECT = 'provider_direct', 'Booked by provider'
         CUSTOMER_REQUEST = 'customer_request', 'Customer request'
+        DISPATCH_RUN = 'dispatch_run', 'Snow / route dispatch'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='bookings'
@@ -1620,3 +1628,397 @@ class BookingRebookReminder(models.Model):
 
     def __str__(self):
         return f'Rebook reminder {self.pk} booking={self.booking_id} on {self.remind_on}'
+
+
+class ServiceRegion(models.Model):
+    """Geographic grouping for snow/property-route dispatch (e.g. Kanata, Vanier)."""
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='service_regions',
+    )
+    name = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True)
+    depot_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Optional depot pin; falls back to org primary service pin.',
+    )
+    depot_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'name'],
+                name='uniq_service_region_name_per_org',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.organization.slug}: {self.name}'
+
+
+class ServiceProperty(models.Model):
+    """Customer property under a region for snow / property-route dispatch."""
+
+    class HouseType(models.TextChoices):
+        DETACHED = 'detached', 'Detached'
+        TOWNHOUSE = 'townhouse', 'Townhouse'
+        DUPLEX = 'duplex', 'Duplex'
+        SHARED_DRIVEWAY = 'shared_driveway', 'Shared driveway'
+        COMMERCIAL = 'commercial', 'Commercial'
+        OTHER = 'other', 'Other'
+
+    class WorkType(models.TextChoices):
+        ROADSIDE = 'roadside', 'Roadside'
+        DRIVEWAY = 'driveway', 'Driveway'
+        FRONT = 'front', 'Front'
+        FULL = 'full', 'Full'
+
+    class Frequency(models.TextChoices):
+        SEASONAL = 'seasonal', 'Seasonal'
+        MONTHLY = 'monthly', 'Monthly'
+        ONE_TIME = 'one_time', 'One-time'
+
+    class PaymentStatus(models.TextChoices):
+        UNPAID = 'unpaid', 'Unpaid'
+        PAID = 'paid', 'Paid'
+
+    class PaymentMethod(models.TextChoices):
+        NONE = '', '—'
+        CASH = 'cash', 'Cash'
+        CARD = 'card', 'Card'
+        ETRANSFER = 'etransfer', 'E-transfer'
+        OTHER = 'other', 'Other'
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='service_properties'
+    )
+    region = models.ForeignKey(
+        ServiceRegion, on_delete=models.PROTECT, related_name='properties'
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='service_properties',
+    )
+    service_address_line1 = models.CharField(max_length=200)
+    service_address_line2 = models.CharField(max_length=200, blank=True, default='')
+    service_city = models.CharField(max_length=120, blank=True, default='')
+    service_region = models.CharField(max_length=80, blank=True, default='')
+    service_postal = models.CharField(max_length=20, blank=True, default='')
+    service_country = models.CharField(max_length=80, blank=True, default='CA')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    geocoded_at = models.DateTimeField(null=True, blank=True)
+    house_type = models.CharField(
+        max_length=32, choices=HouseType.choices, default=HouseType.DETACHED
+    )
+    work_type = models.CharField(
+        max_length=32, choices=WorkType.choices, default=WorkType.DRIVEWAY
+    )
+    service_minutes_override = models.PositiveIntegerField(null=True, blank=True)
+    frequency = models.CharField(
+        max_length=20, choices=Frequency.choices, default=Frequency.SEASONAL
+    )
+    contract_start = models.DateField(null=True, blank=True)
+    contract_end = models.DateField(null=True, blank=True)
+    payment_status = models.CharField(
+        max_length=16, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
+    )
+    payment_method = models.CharField(
+        max_length=16, choices=PaymentMethod.choices, blank=True, default=''
+    )
+    paid_at = models.DateField(null=True, blank=True)
+    contract_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    notes = models.CharField(max_length=300, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['service_address_line1', 'id']
+        indexes = [
+            models.Index(fields=['organization', 'region', 'is_active']),
+            models.Index(fields=['organization', 'frequency']),
+        ]
+
+    def __str__(self):
+        return f'{self.organization.slug}: {self.service_address_line1}'
+
+    def contract_status(self, today=None):
+        """Derived: upcoming | live | expiring | expired (org-local today)."""
+        from datetime import timedelta
+        from django.utils import timezone as dj_tz
+
+        if self.frequency == self.Frequency.ONE_TIME:
+            return 'live'
+        if today is None:
+            today = dj_tz.localdate()
+        start, end = self.contract_start, self.contract_end
+        if start and start > today:
+            return 'upcoming'
+        if end and end < today:
+            return 'expired'
+        if end and end <= today + timedelta(days=7):
+            return 'expiring'
+        return 'live'
+
+    def resolve_service_minutes(self) -> int:
+        from .snow_defaults import service_minutes_from_matrix
+
+        if self.service_minutes_override:
+            return max(1, min(240, int(self.service_minutes_override)))
+        return service_minutes_from_matrix(
+            self.organization.snow_duration_matrix,
+            work_type=self.work_type,
+            house_type=self.house_type,
+        )
+
+
+class DispatchRun(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Draft'
+        SCHEDULED = 'scheduled', 'Scheduled'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='dispatch_runs'
+    )
+    region = models.ForeignKey(
+        ServiceRegion, on_delete=models.PROTECT, related_name='dispatch_runs'
+    )
+    run_date = models.DateField()
+    scheduled_start = models.DateTimeField()
+    forecast_snow_cm = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatch_runs_created',
+    )
+    solver_meta = models.JSONField(default=dict, blank=True)
+    committed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-run_date', '-id']
+        indexes = [models.Index(fields=['organization', 'status', 'run_date'])]
+
+    def __str__(self):
+        return f'Run {self.pk} {self.organization.slug} {self.run_date}'
+
+
+class DispatchRoute(models.Model):
+    class Status(models.TextChoices):
+        NOT_STARTED = 'not_started', 'Not started'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        DONE = 'done', 'Done'
+
+    run = models.ForeignKey(
+        DispatchRun, on_delete=models.CASCADE, related_name='routes'
+    )
+    crew_membership = models.ForeignKey(
+        'businesses.OrganizationMembership',
+        on_delete=models.PROTECT,
+        related_name='dispatch_routes',
+    )
+    vehicle_index = models.PositiveSmallIntegerField(default=0)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.NOT_STARTED
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    last_latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    last_longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    last_ping_at = models.DateTimeField(null=True, blank=True)
+    crew_scheduled_sent_at = models.DateTimeField(null=True, blank=True)
+    crew_1h_sent_at = models.DateTimeField(null=True, blank=True)
+    late_start_alert_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['vehicle_index', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['run', 'crew_membership'],
+                name='uniq_dispatch_route_crew_per_run',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Route {self.pk} run={self.run_id} v{self.vehicle_index}'
+
+
+class DispatchRunStop(models.Model):
+    class Kind(models.TextChoices):
+        SEASONAL = 'seasonal', 'Seasonal'
+        MONTHLY = 'monthly', 'Monthly'
+        ONE_TIME = 'one_time', 'One-time'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        DONE = 'done', 'Done'
+        SKIPPED = 'skipped', 'Skipped'
+
+    run = models.ForeignKey(
+        DispatchRun, on_delete=models.CASCADE, related_name='stops'
+    )
+    route = models.ForeignKey(
+        DispatchRoute,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stops',
+    )
+    sequence = models.PositiveIntegerField(default=0)
+    property = models.ForeignKey(
+        ServiceProperty,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='run_stops',
+    )
+    booking = models.ForeignKey(
+        'Booking',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatch_stops',
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='dispatch_stops',
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    work_type = models.CharField(max_length=32, blank=True, default='')
+    house_type = models.CharField(max_length=32, blank=True, default='')
+    service_minutes = models.PositiveIntegerField(default=15)
+    address_line1 = models.CharField(max_length=200, blank=True, default='')
+    address_line2 = models.CharField(max_length=200, blank=True, default='')
+    city = models.CharField(max_length=120, blank=True, default='')
+    region = models.CharField(max_length=80, blank=True, default='')
+    postal = models.CharField(max_length=20, blank=True, default='')
+    country = models.CharField(max_length=80, blank=True, default='CA')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    notes = models.CharField(max_length=300, blank=True, default='')
+    eta_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    done_at = models.DateTimeField(null=True, blank=True)
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatch_stops_done',
+    )
+    skip_reason = models.CharField(max_length=200, blank=True, default='')
+    customer_view_token = models.CharField(
+        max_length=64, unique=True, db_index=True, blank=True, default=''
+    )
+    customer_scheduled_sent_at = models.DateTimeField(null=True, blank=True)
+    customer_soon_sent_at = models.DateTimeField(null=True, blank=True)
+    customer_done_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['sequence', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['run', 'property'],
+                condition=models.Q(property__isnull=False),
+                name='uniq_dispatch_stop_property_per_run',
+            ),
+            models.UniqueConstraint(
+                fields=['run', 'booking'],
+                condition=models.Q(booking__isnull=False),
+                name='uniq_dispatch_stop_booking_per_run',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.customer_view_token:
+            self.customer_view_token = secrets.token_urlsafe(24)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Stop {self.pk} run={self.run_id} #{self.sequence}'
+
+
+class DispatchStopPhoto(models.Model):
+    MAX_PER_STOP = 2
+    MAX_BYTES = 2 * 1024 * 1024
+    ORG_QUOTA = 200
+    RETENTION_DAYS = 3
+
+    stop = models.ForeignKey(
+        DispatchRunStop, on_delete=models.CASCADE, related_name='photos'
+    )
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='dispatch_photos'
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatch_photos_uploaded',
+    )
+    relative_path = models.CharField(max_length=500)
+    size_bytes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Photo {self.pk} stop={self.stop_id}'
+
+
+class StormAlert(models.Model):
+    """One storm alert per org per forecast date (master notified)."""
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='storm_alerts'
+    )
+    alert_date = models.DateField()
+    forecast_snow_cm = models.DecimalField(max_digits=5, decimal_places=1)
+    notified_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'alert_date'],
+                name='uniq_storm_alert_org_date',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Storm {self.organization.slug} {self.alert_date}'

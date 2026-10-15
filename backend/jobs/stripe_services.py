@@ -517,25 +517,32 @@ def create_subscription_checkout(
     plan: str,
     success_path: str,
     cancel_path: str,
+    extra_crew_seats: int = 0,
 ) -> dict:
-    """Provider pays Luminexa for Pro subscription."""
+    """Provider pays Luminexa for Pro or Snow subscription."""
     require_stripe()
     price_map = {
         'pro_monthly': getattr(settings, 'STRIPE_PRICE_PRO_MONTHLY', '') or '',
         'pro_yearly': getattr(settings, 'STRIPE_PRICE_PRO_YEARLY', '') or '',
+        'snow_monthly': getattr(settings, 'STRIPE_PRICE_SNOW_MONTHLY', '') or '',
     }
     price_id = price_map.get(plan)
     if not price_id:
         raise ValidationError({
-            'plan': 'Subscription price is not configured. Set STRIPE_PRICE_PRO_MONTHLY / YEARLY.',
+            'plan': (
+                'Subscription price is not configured. '
+                'Set STRIPE_PRICE_PRO_MONTHLY / YEARLY or STRIPE_PRICE_SNOW_MONTHLY.'
+            ),
             'code': 'stripe_price_missing',
         })
 
     org = ensure_stripe_customer(org, owner_email=owner_email, owner_name=owner_name)
+    extra_crew = max(0, int(extra_crew_seats or 0)) if plan == 'snow_monthly' else 0
     subscription_data = {
         'metadata': {
             'organization_id': str(org.id),
             'plan': plan,
+            'extra_crew_seats': str(extra_crew),
         },
     }
     trial_days = int(getattr(settings, 'STRIPE_TRIAL_DAYS', 0) or 0)
@@ -546,16 +553,22 @@ def create_subscription_checkout(
             'end_behavior': {'missing_payment_method': 'cancel'},
         }
 
+    line_items = [{'price': price_id, 'quantity': 1}]
+    extra_price = getattr(settings, 'STRIPE_PRICE_SNOW_EXTRA_CREW', '') or ''
+    if plan == 'snow_monthly' and extra_crew > 0 and extra_price:
+        line_items.append({'price': extra_price, 'quantity': extra_crew})
+
     session_kwargs = {
         'mode': 'subscription',
         'customer': org.stripe_customer_id,
-        'line_items': [{'price': price_id, 'quantity': 1}],
+        'line_items': line_items,
         'success_url': _app_url(success_path) + '?sub=1&session_id={CHECKOUT_SESSION_ID}',
         'cancel_url': _app_url(cancel_path) + '?sub=0',
         'metadata': {
             'kind': 'provider_subscription',
             'organization_id': str(org.id),
             'plan': plan,
+            'extra_crew_seats': str(extra_crew),
         },
         'subscription_data': subscription_data,
     }
@@ -597,12 +610,20 @@ def apply_subscription_from_stripe(*, org: Organization, subscription) -> Organi
     org.subscription_status = status
     plan = (subscription.get('metadata') or {}).get('plan') or org.subscription_plan or 'pro_monthly'
     if status in ('active', 'trialing'):
-        org.subscription_plan = plan if plan.startswith('pro') else 'pro_monthly'
+        if plan == 'snow_monthly' or (plan or '').startswith('snow'):
+            org.subscription_plan = 'snow_monthly'
+        elif (plan or '').startswith('pro'):
+            org.subscription_plan = plan
+        else:
+            org.subscription_plan = 'pro_monthly'
         org.subscription_source = 'stripe'
+        # Sync extra crew seats from subscription items / metadata
+        org.snow_extra_crew_seats = _extra_crew_seats_from_subscription(subscription)
     elif status in ('canceled', 'unpaid', 'incomplete_expired'):
         if status == 'canceled':
             org.subscription_plan = 'free'
             org.subscription_source = 'none'
+            org.snow_extra_crew_seats = 0
     period_end = subscription.get('current_period_end')
     if period_end:
         org.subscription_current_period_end = timezone.datetime.fromtimestamp(
@@ -614,9 +635,28 @@ def apply_subscription_from_stripe(*, org: Organization, subscription) -> Organi
         'subscription_plan',
         'subscription_source',
         'subscription_current_period_end',
+        'snow_extra_crew_seats',
         'updated_at',
     ])
     return org
+
+
+def _extra_crew_seats_from_subscription(subscription) -> int:
+    meta = subscription.get('metadata') or {}
+    try:
+        from_meta = int(meta.get('extra_crew_seats') or 0)
+    except (TypeError, ValueError):
+        from_meta = 0
+    extra_price = getattr(settings, 'STRIPE_PRICE_SNOW_EXTRA_CREW', '') or ''
+    if not extra_price:
+        return max(0, from_meta)
+    items = (subscription.get('items') or {}).get('data') or []
+    for item in items:
+        price = item.get('price') or {}
+        price_id = price.get('id') if isinstance(price, dict) else price
+        if price_id == extra_price:
+            return max(0, int(item.get('quantity') or 0))
+    return max(0, from_meta)
 
 
 def sync_subscription_checkout_session(*, org: Organization, session_id: str) -> Organization:
@@ -686,7 +726,16 @@ def billing_summary(org: Organization) -> dict:
             'prices_configured': {
                 'pro_monthly': bool(getattr(settings, 'STRIPE_PRICE_PRO_MONTHLY', '')),
                 'pro_yearly': bool(getattr(settings, 'STRIPE_PRICE_PRO_YEARLY', '')),
+                'snow_monthly': bool(getattr(settings, 'STRIPE_PRICE_SNOW_MONTHLY', '')),
+                'snow_extra_crew': bool(getattr(settings, 'STRIPE_PRICE_SNOW_EXTRA_CREW', '')),
             },
+            'snow_extra_crew_seats': int(getattr(org, 'snow_extra_crew_seats', 0) or 0),
+            'crew_seats_allowed': (
+                3 + int(getattr(org, 'snow_extra_crew_seats', 0) or 0)
+                if (org.subscription_plan or '') == 'snow_monthly'
+                or getattr(org, 'provider_mode', '') == 'property_routes'
+                else None
+            ),
         },
     }
 

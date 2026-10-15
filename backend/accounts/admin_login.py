@@ -17,6 +17,12 @@ from .admin_lockout import (
 class AdminAuthenticationForm(AuthenticationForm):
     """Password step for /account/login/ with daily failure lockout."""
 
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        'invalid_login': 'Invalid email or password.',
+        'inactive': 'Invalid email or password.',
+    }
+
     def clean(self):
         raw = self.data.get(self.add_prefix('username'), self.data.get('username', ''))
         email = normalize_email(raw)
@@ -31,7 +37,11 @@ class AdminAuthenticationForm(AuthenticationForm):
             record_admin_login_failure(email=email, ip=ip, request=self.request)
             if admin_login_is_locked(email=email, ip=ip):
                 raise ValidationError(lockout_message(), code='admin_lockout') from None
-            raise
+            # Never leak whether the email or password was wrong.
+            raise ValidationError(
+                self.error_messages['invalid_login'],
+                code='invalid_login',
+            ) from None
 
 
 class AdminLoginView(LoginView):

@@ -1,6 +1,6 @@
 # Snow route dispatch — build guide for agents
 
-**Status:** approved scope, not built yet. This file is the **source of truth** for the snow module. It supersedes the earlier chat plan (`snow_route_dispatch_*.plan.md`) wherever they disagree.
+**Status:** M0–M7 implemented (foundation through weather/photos). Configure `STRIPE_PRICE_SNOW_MONTHLY` / `STRIPE_PRICE_SNOW_EXTRA_CREW` and `OPEN_METEO_API_KEY` before charging snow orgs. This file is the **source of truth** for the snow module.
 
 Read first: [`AGENTS.md`](../AGENTS.md), [`docs/AGENT_PLAYBOOK.md`](AGENT_PLAYBOOK.md), [`docs/PRODUCT_RULES.md`](PRODUCT_RULES.md). Everything here is **additive**. Appointment providers must not notice any change.
 

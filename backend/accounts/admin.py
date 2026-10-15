@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
+from businesses.models import OrganizationMembership
+
 from .models import (
     AdminLoginFailureDay,
     ChatBlock,
@@ -8,6 +10,21 @@ from .models import (
     SafetyReport,
     User,
 )
+
+
+class UserOrganizationMembershipInline(admin.TabularInline):
+    """Organizations this user belongs to (owner / staff / crew / customer)."""
+
+    model = OrganizationMembership
+    fk_name = 'user'
+    extra = 0
+    fields = ('organization', 'role', 'customer_status', 'created_at')
+    readonly_fields = ('created_at',)
+    autocomplete_fields = ('organization',)
+    show_change_link = True
+    ordering = ('role', 'id')
+    verbose_name = 'organization'
+    verbose_name_plural = 'Organizations (memberships)'
 
 
 @admin.register(AdminLoginFailureDay)
@@ -135,6 +152,7 @@ class UserAdmin(BaseUserAdmin):
     list_filter = ('is_staff', 'is_superuser', 'is_active')
     search_fields = ('email', 'full_name')
     readonly_fields = ('last_login', 'date_joined')
+    inlines = [UserOrganizationMembershipInline]
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),

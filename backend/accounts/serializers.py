@@ -95,6 +95,14 @@ class RegisterBusinessSerializer(serializers.Serializer):
         allow_empty=False,
         min_length=1,
     )
+    # Route optimization opt-in at signup (docs/SNOW_ROUTE_DISPATCH.md §4.1).
+    need_route_optimization = serializers.BooleanField(required=False, default=False)
+    route_vertical = serializers.ChoiceField(
+        choices=[('', 'None'), ('snow', 'Snow cleaning')],
+        required=False,
+        allow_blank=True,
+        default='',
+    )
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
@@ -169,8 +177,21 @@ class RegisterBusinessSerializer(serializers.Serializer):
         service_state = (validated_data.pop('service_state', '') or '').strip()
         service_address = (validated_data.pop('service_address', '') or '').strip()
         address_country = (validated_data.pop('address_country', '') or '').strip()
+        need_route = bool(validated_data.pop('need_route_optimization', False))
+        route_vertical = (validated_data.pop('route_vertical', '') or '').strip()
         phone = validated_data.pop('phone', '') or ''
         password = validated_data.pop('password')
+
+        provider_mode = Organization.ProviderMode.APPOINTMENT
+        if need_route:
+            if route_vertical and route_vertical != Organization.RouteVertical.SNOW:
+                raise serializers.ValidationError({
+                    'route_vertical': 'Only snow cleaning is available right now.',
+                })
+            provider_mode = Organization.ProviderMode.PROPERTY_ROUTES
+            route_vertical = Organization.RouteVertical.SNOW
+        else:
+            route_vertical = ''
 
         user = User.objects.create_user(
             email=validated_data['email'],
@@ -193,6 +214,8 @@ class RegisterBusinessSerializer(serializers.Serializer):
             service_postal_code=service_postal_code,
             service_state=service_state,
             service_address=service_address,
+            provider_mode=provider_mode,
+            route_vertical=route_vertical,
         )
         types = BusinessType.objects.filter(slug__in=type_slugs, is_active=True)
         org.business_types.set(types)
@@ -205,6 +228,9 @@ class RegisterBusinessSerializer(serializers.Serializer):
             user=user,
             role=OrganizationMembership.Role.OWNER,
         )
+        if provider_mode == Organization.ProviderMode.PROPERTY_ROUTES:
+            from jobs.snow_seed import seed_snow_organization
+            seed_snow_organization(org)
         return user, org
 
 
@@ -239,16 +265,15 @@ class LoginSerializer(serializers.Serializer):
             email=attrs['email'],
             password=attrs['password'],
         )
-        if not user:
-            raise serializers.ValidationError('Invalid email or password.')
-        if not user.is_active:
-            raise serializers.ValidationError('This account is disabled.')
+        # Same message for unknown email, wrong password, inactive, or wrong
+        # auth method — never reveal which field failed.
+        invalid = 'Invalid email or password.'
+        if not user or not user.is_active:
+            raise serializers.ValidationError(invalid)
         from .otp import user_uses_password_login
 
         if not user_uses_password_login(user):
-            raise serializers.ValidationError(
-                'Customers sign in with an email code, not a password.'
-            )
+            raise serializers.ValidationError(invalid)
         attrs['user'] = user
         return attrs
 

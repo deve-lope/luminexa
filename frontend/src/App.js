@@ -49,7 +49,15 @@ import ServicesBrowseWrapper from './pages/ServicesBrowseWrapper';
 import ServicesTypePage from './pages/ServicesTypePage';
 import ProviderLayout from './layouts/ProviderLayout';
 import CustomerLayout from './layouts/CustomerLayout';
-import ProviderTodayPage from './pages/provider/ProviderTodayPage';
+import ProviderHomeIndex from './pages/provider/ProviderHomeIndex';
+import CrewRunPage from './pages/provider/routes/CrewRunPage';
+import RunsPage from './pages/provider/routes/RunsPage';
+import PropertiesPage from './pages/provider/routes/PropertiesPage';
+import CrewPage from './pages/provider/routes/CrewPage';
+import RunWizardPage from './pages/provider/routes/RunWizardPage';
+import RunLivePage from './pages/provider/routes/RunLivePage';
+import PhotosPage from './pages/provider/routes/PhotosPage';
+import SnowStopStatusPage from './pages/public/SnowStopStatusPage';
 import ProviderSharePage from './pages/provider/ProviderSharePage';
 import ProviderServicesPage from './pages/provider/ProviderServicesPage';
 import ProviderTrainingPage from './pages/provider/ProviderTrainingPage';
@@ -169,6 +177,7 @@ function AppRoutes() {
         <Route path="/check-email" element={<CheckEmailPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/accept-staff-invite" element={<AcceptStaffInvitePage />} />
+        <Route path="/snow/:token" element={<SnowStopStatusPage />} />
         <Route
           path="/customer/setup"
           element={
@@ -225,7 +234,15 @@ function AppRoutes() {
             </PrivateRoute>
           }
         >
-          <Route index element={<ProviderTodayPage />} />
+          <Route index element={<ProviderHomeIndex />} />
+          <Route path="my-run" element={<CrewRunPage />} />
+          <Route path="runs" element={<RunsPage />} />
+          <Route path="runs/new" element={<RunWizardPage />} />
+          <Route path="runs/:runId/live" element={<RunLivePage />} />
+          <Route path="runs/:runId" element={<RunWizardPage />} />
+          <Route path="properties" element={<PropertiesPage />} />
+          <Route path="crew" element={<CrewPage />} />
+          <Route path="photos" element={<PhotosPage />} />
           <Route path="tasks" element={<ProviderTasksPage />} />
           <Route path="tasks/new" element={<ProviderAddTaskPage />} />
           <Route path="schedule" element={<ProviderSchedulePage />} />

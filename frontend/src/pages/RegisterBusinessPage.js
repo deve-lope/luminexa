@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BusinessTypeSelector from '../components/business/BusinessTypeSelector';
 import AddressFields from '../components/location/AddressFields';
@@ -24,6 +24,8 @@ export default function RegisterBusinessPage() {
   const [businessName, setBusinessName] = useState('');
   const [bookingPolicy, setBookingPolicy] = useState('approval');
   const [concurrentCapacity, setConcurrentCapacity] = useState(1);
+  const [needRouteOptimization, setNeedRouteOptimization] = useState(false);
+  const [routeVertical, setRouteVertical] = useState('snow');
   const [selectedSlugs, setSelectedSlugs] = useState([]);
   const [serviceCity, setServiceCity] = useState('');
   const [servicePostalCode, setServicePostalCode] = useState('');
@@ -31,6 +33,7 @@ export default function RegisterBusinessPage() {
   const [serviceAddress, setServiceAddress] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const errorRef = useRef(null);
 
   useEffect(() => {
     businessesAPI
@@ -38,6 +41,11 @@ export default function RegisterBusinessPage() {
       .then((res) => setTypes(Array.isArray(res.data) ? res.data : []))
       .catch(() => setError('Could not load business types.'));
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
 
   const needsOfficeAddress = useMemo(
     () =>
@@ -84,6 +92,8 @@ export default function RegisterBusinessPage() {
         booking_policy: bookingPolicy,
         concurrent_capacity: Math.max(1, Math.min(50, Number(concurrentCapacity) || 1)),
         business_type_slugs: selectedSlugs,
+        need_route_optimization: needRouteOptimization,
+        route_vertical: needRouteOptimization ? routeVertical : '',
       };
       if (phone.trim()) payload.phone = phone.trim();
       if (needsOfficeAddress) {
@@ -177,15 +187,6 @@ export default function RegisterBusinessPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <p
-                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              )}
-
               <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
                   Business
@@ -261,6 +262,61 @@ export default function RegisterBusinessPage() {
                     className="lx-input mt-3 max-w-[10rem]"
                   />
                 </div>
+              </section>
+
+              <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  Route optimization
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                  Need custom route optimization for property work (for example snow clearing)?
+                  You can change this later in Settings.
+                </p>
+                <fieldset className="mt-4 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="need-route-signup"
+                      checked={!needRouteOptimization}
+                      onChange={() => setNeedRouteOptimization(false)}
+                    />
+                    No — appointment booking only
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="need-route-signup"
+                      checked={needRouteOptimization}
+                      onChange={() => setNeedRouteOptimization(true)}
+                    />
+                    Yes — optimize routes for crews
+                  </label>
+                </fieldset>
+                {needRouteOptimization && (
+                  <div className="mt-4 space-y-3">
+                    <label
+                      htmlFor="register-route-vertical"
+                      className="mb-1.5 block text-sm font-medium text-slate-700"
+                    >
+                      Route type
+                    </label>
+                    <select
+                      id="register-route-vertical"
+                      value={routeVertical}
+                      onChange={(e) => setRouteVertical(e.target.value)}
+                      className="lx-input max-w-xs"
+                    >
+                      <option value="snow">Snow cleaning</option>
+                    </select>
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-950 sm:text-sm">
+                      Route optimization is a separate plan:{' '}
+                      <span className="font-semibold">$40 CAD/month</span> for 1 master + 3 crew
+                      seats, then <span className="font-semibold">+$15/month</span> per extra crew.
+                      It includes Pro features and covers optimized routes, crew tracking, and snow
+                      dispatch tools.
+                    </p>
+                  </div>
+                )}
               </section>
 
               <section className="rounded-2xl border border-luminexa-line bg-white p-5 shadow-lx-soft sm:p-6">
@@ -367,6 +423,16 @@ export default function RegisterBusinessPage() {
                   </div>
                 </div>
               </section>
+
+              {error && (
+                <p
+                  ref={errorRef}
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
 
               <button
                 type="submit"

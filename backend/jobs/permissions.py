@@ -16,8 +16,42 @@ def is_org_member(user, organization: Organization) -> bool:
 
 
 def is_org_staff(user, organization: Organization) -> bool:
+    """Owner or office staff — not crew (crew fails closed on existing staff gates)."""
     m = membership_for(user, organization)
     return bool(m and m.can_manage_schedule)
+
+
+def is_org_crew(user, organization: Organization) -> bool:
+    m = membership_for(user, organization)
+    return bool(m and m.role == OrganizationMembership.Role.CREW)
+
+
+def is_provider_member(user, organization: Organization) -> bool:
+    """Owner, staff, or crew of this organization."""
+    m = membership_for(user, organization)
+    return bool(
+        m
+        and m.role
+        in (
+            OrganizationMembership.Role.OWNER,
+            OrganizationMembership.Role.STAFF,
+            OrganizationMembership.Role.CREW,
+        )
+    )
+
+
+def require_snow_org(organization: Organization) -> None:
+    """Require property_routes + snow vertical (dispatch module)."""
+    mode = getattr(organization, 'provider_mode', None) or Organization.ProviderMode.APPOINTMENT
+    vertical = getattr(organization, 'route_vertical', None) or ''
+    if (
+        mode != Organization.ProviderMode.PROPERTY_ROUTES
+        or vertical != Organization.RouteVertical.SNOW
+    ):
+        raise PermissionDenied({
+            'detail': 'Route optimization (snow) is not enabled for this business.',
+            'code': 'snow_not_enabled',
+        })
 
 
 def _promo_grant_still_valid(organization: Organization) -> bool:

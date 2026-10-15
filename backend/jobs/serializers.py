@@ -142,9 +142,20 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'referral_max_earnings_per_referrer',
             'referral_max_credit_percent_per_job',
             'referral_max_credit_amount_per_job',
+            'provider_mode',
+            'route_vertical',
+            'snow_threshold_cm',
+            'snow_plow_speed_kmh',
+            'snow_road_factor',
+            'snow_duration_matrix',
+            'snow_late_start_alert_enabled',
+            'snow_late_start_alert_minutes',
+            'snow_extra_crew_seats',
             'created_at', 'updated_at',
         )
-        read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id', 'public_ref', 'created_at', 'updated_at', 'snow_extra_crew_seats',
+        )
 
     def validate_cancel_cutoff_hours(self, value):
         if value is None:
@@ -247,6 +258,69 @@ class OrganizationSerializer(serializers.ModelSerializer):
                         'Set the max dollar amount of referral credit one job can use.'
                     ),
                 })
+
+        mode = attrs.get(
+            'provider_mode',
+            getattr(self.instance, 'provider_mode', Organization.ProviderMode.APPOINTMENT)
+            if self.instance else Organization.ProviderMode.APPOINTMENT,
+        )
+        vertical = attrs.get(
+            'route_vertical',
+            getattr(self.instance, 'route_vertical', '') if self.instance else '',
+        )
+        if mode == Organization.ProviderMode.PROPERTY_ROUTES:
+            if not vertical:
+                attrs['route_vertical'] = Organization.RouteVertical.SNOW
+                vertical = Organization.RouteVertical.SNOW
+            if vertical != Organization.RouteVertical.SNOW:
+                raise serializers.ValidationError({
+                    'route_vertical': 'Only snow cleaning is available for route optimization right now.',
+                })
+        elif mode == Organization.ProviderMode.APPOINTMENT:
+            # Keep route_vertical/data; UI hides snow. Clear vertical only when explicitly sent empty.
+            pass
+
+        if 'snow_duration_matrix' in attrs:
+            from .snow_defaults import validate_duration_matrix
+            try:
+                attrs['snow_duration_matrix'] = validate_duration_matrix(
+                    attrs['snow_duration_matrix']
+                )
+            except ValueError as exc:
+                raise serializers.ValidationError({'snow_duration_matrix': str(exc)}) from exc
+
+        if 'snow_threshold_cm' in attrs and attrs['snow_threshold_cm'] is not None:
+            thr = Decimal(str(attrs['snow_threshold_cm']))
+            if thr < 0 or thr > Decimal('100.0'):
+                raise serializers.ValidationError({
+                    'snow_threshold_cm': 'Use 0–100 cm.',
+                })
+            attrs['snow_threshold_cm'] = thr.quantize(Decimal('0.1'))
+
+        if 'snow_plow_speed_kmh' in attrs and attrs['snow_plow_speed_kmh'] is not None:
+            speed = int(attrs['snow_plow_speed_kmh'])
+            if speed < 5 or speed > 80:
+                raise serializers.ValidationError({
+                    'snow_plow_speed_kmh': 'Use 5–80 km/h.',
+                })
+            attrs['snow_plow_speed_kmh'] = speed
+
+        if 'snow_road_factor' in attrs and attrs['snow_road_factor'] is not None:
+            factor = Decimal(str(attrs['snow_road_factor']))
+            if factor < Decimal('1.00') or factor > Decimal('3.00'):
+                raise serializers.ValidationError({
+                    'snow_road_factor': 'Use 1.00–3.00.',
+                })
+            attrs['snow_road_factor'] = factor.quantize(Decimal('0.01'))
+
+        if 'snow_late_start_alert_minutes' in attrs and attrs['snow_late_start_alert_minutes'] is not None:
+            mins = int(attrs['snow_late_start_alert_minutes'])
+            if mins < 5 or mins > 180:
+                raise serializers.ValidationError({
+                    'snow_late_start_alert_minutes': 'Use 5–180 minutes.',
+                })
+            attrs['snow_late_start_alert_minutes'] = mins
+
         return attrs
 
     def validate_logo(self, value):
@@ -314,6 +388,10 @@ class OrganizationSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
+        was_snow = (
+            instance.provider_mode == Organization.ProviderMode.PROPERTY_ROUTES
+            and instance.route_vertical == Organization.RouteVertical.SNOW
+        )
         instance = super().update(instance, validated_data)
         self._maybe_geocode(instance, validated_data)
         location_keys = (
@@ -349,6 +427,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
                     longitude=instance.service_longitude,
                     radius_miles=instance.service_radius_miles or 25,
                 )
+        now_snow = (
+            instance.provider_mode == Organization.ProviderMode.PROPERTY_ROUTES
+            and instance.route_vertical == Organization.RouteVertical.SNOW
+        )
+        if now_snow and not was_snow:
+            from .snow_seed import seed_snow_organization
+            seed_snow_organization(instance)
+            instance.refresh_from_db()
         return instance
 
 

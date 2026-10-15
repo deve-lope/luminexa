@@ -129,6 +129,8 @@ STORAGES = {
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Proof photos and other non-public uploads (authenticated views only).
+PRIVATE_MEDIA_ROOT = BASE_DIR / 'private_media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -254,6 +256,18 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_provider_job_nudges',
         'schedule': 300.0,
     },
+    'dispatch-nudges-every-5-min': {
+        'task': 'jobs.tasks.send_dispatch_nudges',
+        'schedule': 300.0,
+    },
+    'storm-alerts-every-8-hours': {
+        'task': 'jobs.tasks.evaluate_storm_alerts',
+        'schedule': 28800.0,
+    },
+    'purge-dispatch-photos-daily': {
+        'task': 'jobs.tasks.purge_dispatch_photos',
+        'schedule': 86400.0,
+    },
     'purge-stale-quotes-daily': {
         'task': 'jobs.tasks.purge_stale_quotes',
         'schedule': 86400.0,
@@ -271,9 +285,13 @@ STRIPE_PLATFORM_FEE_PERCENT = config('STRIPE_PLATFORM_FEE_PERCENT', default=0.5,
 # Stripe Price IDs for provider SaaS plans (create in Stripe Dashboard).
 STRIPE_PRICE_PRO_MONTHLY = config('STRIPE_PRICE_PRO_MONTHLY', default='')
 STRIPE_PRICE_PRO_YEARLY = config('STRIPE_PRICE_PRO_YEARLY', default='')
+STRIPE_PRICE_SNOW_MONTHLY = config('STRIPE_PRICE_SNOW_MONTHLY', default='')
+STRIPE_PRICE_SNOW_EXTRA_CREW = config('STRIPE_PRICE_SNOW_EXTRA_CREW', default='')
 # Free trial for provider Pro subscriptions (days). 0 = no trial from the API.
 STRIPE_TRIAL_DAYS = config('STRIPE_TRIAL_DAYS', default=30, cast=int)
 STRIPE_ENABLED = bool(STRIPE_SECRET_KEY)
+# Open-Meteo: free host for beta; set key (API Standard) before charging snow orgs.
+OPEN_METEO_API_KEY = config('OPEN_METEO_API_KEY', default='')
 
 # ── QuickBooks Online (optional accounting sync) ───────────────────────────
 QUICKBOOKS_CLIENT_ID = config('QUICKBOOKS_CLIENT_ID', default='')

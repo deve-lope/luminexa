@@ -7,6 +7,7 @@ import ProviderReferralSettings from '../../components/provider/ProviderReferral
 import ProviderServiceAreaSettings from '../../components/provider/ProviderServiceAreaSettings';
 import ProviderSetupProgressCard from '../../components/provider/ProviderSetupProgressCard';
 import ProviderWebsiteSettings from '../../components/provider/ProviderWebsiteSettings';
+import RouteOptimizationSettings from '../../components/provider/RouteOptimizationSettings';
 import SettingsSectionOverlay from '../../components/provider/SettingsSectionOverlay';
 import FlexiQuickOpenSlots from '../../components/scheduling/FlexiQuickOpenSlots';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,6 +64,12 @@ const SETTINGS_SECTIONS = [
     id: 'website',
     title: 'Your website',
     hint: 'Optional link to your own site',
+  },
+  {
+    id: 'routes',
+    title: 'Route optimization',
+    hint: 'Snow / property routes for crews',
+    ownerOnly: true,
   },
 ];
 
@@ -299,7 +306,7 @@ export default function ProviderSettingsPage() {
       )}
 
       <ul className="space-y-2">
-        {SETTINGS_SECTIONS.map((section) => {
+        {SETTINGS_SECTIONS.filter((section) => !section.ownerOnly || isOwner).map((section) => {
           const setupDone = setupStatusBySection[section.id];
           const needsSetup = setupDone === false;
           return (
@@ -530,6 +537,17 @@ export default function ProviderSettingsPage() {
 
         {openSection === 'website' && (
           <ProviderWebsiteSettings orgSlug={orgSlug} isOwner={isOwner} embedded />
+        )}
+        {openSection === 'routes' && isOwner && (
+          <RouteOptimizationSettings
+            orgSlug={orgSlug}
+            orgDetails={orgDetails}
+            onUpdated={(data) => {
+              setOrgDetails(data);
+              setMessage('Route optimization settings saved.');
+              setError(null);
+            }}
+          />
         )}
       </SettingsSectionOverlay>
     </div>

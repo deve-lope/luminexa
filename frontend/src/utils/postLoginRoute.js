@@ -1,4 +1,3 @@
-import { getDjangoAdminUrl } from './djangoAdmin';
 import { firstProviderHome } from './providerPaths';
 import { getOnboardingPath, needsOnboarding } from './profileSetup';
 
@@ -22,11 +21,20 @@ export function authPathWithNext(basePath, nextPath) {
 
 export function isProviderMember(memberships) {
   if (!Array.isArray(memberships) || memberships.length === 0) return false;
-  return memberships.some((m) => m.role === 'owner' || m.role === 'staff');
+  return memberships.some(
+    (m) => m.role === 'owner' || m.role === 'staff' || m.role === 'crew'
+  );
+}
+
+export function isCrewOnlyMember(memberships, orgSlug) {
+  if (!Array.isArray(memberships) || !orgSlug) return false;
+  const m = memberships.find((x) => x.organization_slug === orgSlug);
+  return Boolean(m && m.role === 'crew');
 }
 
 export function getPostLoginRoute(user, memberships) {
-  if (user?.can_access_django_admin) return getDjangoAdminUrl();
+  // Do not send staff to Django admin from the SPA — Authenticator 2FA is
+  // only for /admin/. App login stays password/email-code like everyone else.
   const onboarding = getOnboardingPath(user, memberships);
   if (onboarding) return onboarding;
   if (isProviderMember(memberships)) return firstProviderHome(memberships);

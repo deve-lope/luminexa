@@ -14,6 +14,12 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
     subscription_plan = serializers.CharField(
         source='organization.subscription_plan', read_only=True,
     )
+    provider_mode = serializers.CharField(
+        source='organization.provider_mode', read_only=True,
+    )
+    route_vertical = serializers.CharField(
+        source='organization.route_vertical', read_only=True,
+    )
     subscription_active = serializers.SerializerMethodField()
 
     class Meta:
@@ -28,6 +34,8 @@ class OrganizationMembershipReadSerializer(serializers.ModelSerializer):
             'customer_status',
             'subscription_status',
             'subscription_plan',
+            'provider_mode',
+            'route_vertical',
             'subscription_active',
             'created_at',
         )

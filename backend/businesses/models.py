@@ -263,6 +263,63 @@ class Organization(models.Model):
         validators=[MinValueValidator(Decimal('0.00'))],
         help_text='Max referral credit dollars applied on a single invoice.',
     )
+    # ── Provider mode (appointment vs property-route / snow) ───────────────
+    class ProviderMode(models.TextChoices):
+        APPOINTMENT = 'appointment', 'Appointment booking'
+        PROPERTY_ROUTES = 'property_routes', 'Property routes (dispatch)'
+
+    class RouteVertical(models.TextChoices):
+        NONE = '', 'None'
+        SNOW = 'snow', 'Snow cleaning'
+
+    provider_mode = models.CharField(
+        max_length=32,
+        choices=ProviderMode.choices,
+        default=ProviderMode.APPOINTMENT,
+        help_text='appointment = normal booking calendar; property_routes = snow/route dispatch.',
+    )
+    route_vertical = models.CharField(
+        max_length=32,
+        choices=RouteVertical.choices,
+        blank=True,
+        default='',
+        help_text='When provider_mode is property_routes: snow (only option in v1).',
+    )
+    snow_threshold_cm = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=Decimal('2.0'),
+        validators=[MinValueValidator(Decimal('0.0'))],
+        help_text='Snowfall (cm) at/above which the dispatcher is alerted.',
+    )
+    snow_plow_speed_kmh = models.PositiveIntegerField(
+        default=30,
+        help_text='Assumed plow travel speed (km/h) for haversine route estimates.',
+    )
+    snow_road_factor = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.30'),
+        validators=[MinValueValidator(Decimal('1.00'))],
+        help_text='Straight-line × this ≈ road distance for travel-time estimates.',
+    )
+    snow_duration_matrix = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Minutes by work_type × house_type for snow stop durations.',
+    )
+    snow_late_start_alert_enabled = models.BooleanField(
+        default=False,
+        help_text='Notify master when a crew has not started by scheduled_start + N minutes.',
+    )
+    snow_late_start_alert_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text='Minutes after scheduled start before late-start alert (if enabled).',
+    )
+    snow_extra_crew_seats = models.PositiveIntegerField(
+        default=0,
+        help_text='Extra crew seats beyond the 3 included in the snow plan (Stripe quantity).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -376,6 +433,7 @@ class OrganizationMembership(models.Model):
     class Role(models.TextChoices):
         OWNER = 'owner', 'Owner'
         STAFF = 'staff', 'Staff'
+        CREW = 'crew', 'Crew'
         CUSTOMER = 'customer', 'Customer'
 
     class CustomerStatus(models.TextChoices):
@@ -385,6 +443,8 @@ class OrganizationMembership(models.Model):
 
     # Base Pro plan seat limit (owner is separate). Higher tiers can raise this later.
     MAX_STAFF_PER_ORGANIZATION = 3
+    # Snow plan: 3 crew seats included; extras via Organization.snow_extra_crew_seats.
+    BASE_CREW_SEATS = 3
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='memberships'
@@ -442,9 +502,33 @@ class OrganizationMembership(models.Model):
 
     @classmethod
     def staff_seats_used(cls, organization) -> int:
-        """Accepted staff plus pending invites (owner does not consume a seat)."""
-        pending = organization.staff_invitations.filter(accepted_at__isnull=True).count()
+        """Accepted staff plus pending staff invites (owner/crew do not consume a seat)."""
+        pending = organization.staff_invitations.filter(
+            accepted_at__isnull=True,
+            role=cls.Role.STAFF,
+        ).count()
         return cls.staff_count(organization) + pending
+
+    @classmethod
+    def crew_count(cls, organization) -> int:
+        return cls.objects.filter(
+            organization=organization,
+            role=cls.Role.CREW,
+        ).count()
+
+    @classmethod
+    def crew_seats_allowed(cls, organization) -> int:
+        extra = int(getattr(organization, 'snow_extra_crew_seats', 0) or 0)
+        return cls.BASE_CREW_SEATS + max(0, extra)
+
+    @classmethod
+    def crew_seats_used(cls, organization) -> int:
+        """Accepted crew plus pending crew invites (master/owner never uses a seat)."""
+        pending = organization.staff_invitations.filter(
+            accepted_at__isnull=True,
+            role=cls.Role.CREW,
+        ).count()
+        return cls.crew_count(organization) + pending
 
     def __str__(self):
         return f'{self.user_id} @ {self.organization.slug} ({self.role})'
@@ -469,12 +553,21 @@ class PostalGeocode(models.Model):
 
 
 class StaffInvitation(models.Model):
-    """Pending staff invite by email; accepted when user signs in with token."""
+    """Pending staff or crew invite by email; accepted when user signs in with token."""
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='staff_invitations'
     )
     email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=(
+            (OrganizationMembership.Role.STAFF, 'Staff'),
+            (OrganizationMembership.Role.CREW, 'Crew'),
+        ),
+        default=OrganizationMembership.Role.STAFF,
+        help_text='Membership role granted on accept (staff or crew).',
+    )
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     invited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

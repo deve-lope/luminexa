@@ -77,8 +77,14 @@ class SubscriptionCheckoutAPIView(APIView):
     def post(self, request, slug):
         org = _org_for_owner(request.user, slug)
         plan = (request.data.get('plan') or 'pro_monthly').strip()
-        if plan not in ('pro_monthly', 'pro_yearly'):
-            raise ValidationError({'plan': 'Choose pro_monthly or pro_yearly.'})
+        if plan not in ('pro_monthly', 'pro_yearly', 'snow_monthly'):
+            raise ValidationError({'plan': 'Choose pro_monthly, pro_yearly, or snow_monthly.'})
+        extra_crew = 0
+        if plan == 'snow_monthly':
+            try:
+                extra_crew = max(0, int(request.data.get('extra_crew_seats') or 0))
+            except (TypeError, ValueError):
+                extra_crew = 0
         result = stripe_services.create_subscription_checkout(
             org=org,
             owner_email=request.user.email or '',
@@ -86,6 +92,7 @@ class SubscriptionCheckoutAPIView(APIView):
             plan=plan,
             success_path=request.data.get('success_path') or f'/provider/{org.slug}/billing',
             cancel_path=request.data.get('cancel_path') or f'/provider/{org.slug}/billing',
+            extra_crew_seats=extra_crew,
         )
         return Response(result)
 

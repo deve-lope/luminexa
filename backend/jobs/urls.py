@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import analytics_views, dashboard_views, public_views, service_request_views, stripe_views, views
+from . import analytics_views, dashboard_views, dispatch_views, public_views, service_request_views, stripe_views, views
 from . import gig_seo_views, gig_views, quickbooks_views
 
 router = DefaultRouter()
@@ -191,6 +191,87 @@ urlpatterns = [
         stripe_views.CustomerUnpaidInvoiceAPIView.as_view(),
     ),
     path('webhooks/stripe/', stripe_views.stripe_webhook),
+    path(
+        'public/snow-stops/<str:token>/',
+        dispatch_views.PublicSnowStopAPIView.as_view(),
+        name='public-snow-stop',
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/settings/',
+        dispatch_views.DispatchSettingsAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/regions/',
+        dispatch_views.DispatchRegionsAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/regions/<int:region_id>/',
+        dispatch_views.DispatchRegionDetailAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/properties/',
+        dispatch_views.DispatchPropertiesAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/properties/<int:property_id>/',
+        dispatch_views.DispatchPropertyDetailAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/crew/',
+        dispatch_views.DispatchCrewAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/crew/<int:membership_id>/',
+        dispatch_views.DispatchCrewRemoveAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/runs/',
+        dispatch_views.DispatchRunsAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/runs/<int:run_id>/',
+        dispatch_views.DispatchRunDetailAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/runs/<int:run_id>/<str:action>/',
+        dispatch_views.DispatchRunActionAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/photos/delete/',
+        dispatch_views.DispatchPhotosAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/my-routes/',
+        dispatch_views.DispatchMyRoutesAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/routes/<int:route_id>/start/',
+        dispatch_views.DispatchRouteStartAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/routes/<int:route_id>/location/',
+        dispatch_views.DispatchRouteLocationAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/stops/<int:stop_id>/done/',
+        dispatch_views.DispatchStopDoneAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/stops/<int:stop_id>/skip/',
+        dispatch_views.DispatchStopSkipAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/stops/<int:stop_id>/photos/',
+        dispatch_views.DispatchStopPhotosAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/photos/',
+        dispatch_views.DispatchPhotosAPIView.as_view(),
+    ),
+    path(
+        'organizations/<slug:slug>/dispatch/weather/week/',
+        dispatch_views.DispatchWeatherWeekAPIView.as_view(),
+    ),
     path(
         'public/bookings/<str:token>/',
         public_views.PublicCustomerBookingAPIView.as_view(),

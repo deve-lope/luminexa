@@ -14,6 +14,7 @@ cd backend && .venv/bin/python manage.py test
 # Focused suites (run these for related work)
 .venv/bin/python manage.py test jobs.tests.test_bookings
 .venv/bin/python manage.py test businesses.tests.test_location_radius
+.venv/bin/python manage.py test jobs.tests.test_snow_foundation
 ```
 
 Use the focused suite that matches the change. Full suite before claiming done on cross-cutting booking/search work.
@@ -29,6 +30,7 @@ Use the focused suite that matches the change. Full suite before claiming done o
 | Concurrent sessions | `accounts.tests.test_email_auth.ConcurrentSessionTests` | Web + phone stay signed in; third login signs out oldest; logout on one device keeps the other; same-client re-login reuses token |
 | Rebook reminders | `jobs.tests.test_rebook_reminders` | Per-job schedule on complete; due sweep sends in-app+email; skip if already rebooked; cancel; past date / gig rejected |
 | Provider job nudges | `jobs.tests.test_provider_job_nudges` | 1h reminder; 30m en-route nudge (skip if already sharing); 30m overdue start/cancel; idempotent; skip once in progress |
+| Snow foundation (M0) | `jobs.tests.test_snow_foundation` | Opt-in seeds region/matrix/services; crew invite≠staff; crew 403 on clients; staff cap unchanged; signup snow opt-in |
 
 ## Browse categories vs catalog services
 

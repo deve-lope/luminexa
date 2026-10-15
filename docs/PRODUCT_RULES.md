@@ -325,6 +325,32 @@ Providers can **Import CSV** on Clients (`full_name`, `email`, `phone`, optional
 
 ---
 
+## Snow dispatch (property routes) — foundation
+
+Full build guide: [`docs/SNOW_ROUTE_DISPATCH.md`](SNOW_ROUTE_DISPATCH.md). **Additive only** — appointment orgs must not change.
+
+### Mode
+
+- `Organization.provider_mode`: `appointment` (default) | `property_routes`
+- `route_vertical`: `''` | `snow` (only option in v1)
+- Signup asks “Need route / custom optimization?”; Yes → dropdown with Snow cleaning. Settings → Route optimization can opt existing orgs in/out. Switching back to appointment **hides** snow UI but **keeps** seeded data.
+- Enabling snow seeds: duration matrix, region “Main”, catalog services Roadside / Driveway / Front / Full.
+
+### Roles
+
+- `OrganizationMembership.Role.CREW` is **not** staff. Existing `is_org_staff` / `role__in=(owner, staff)` checks **fail closed** for crew.
+- Helpers: `is_org_crew`, `is_provider_member` (owner/staff/crew), `require_snow_org`.
+- Crew see only their run UI (no prices, clients, invoices, or other crews). Invites reuse `StaffInvitation` with `role=staff|crew`.
+- Staff seat pool (max 3) is unchanged and separate from crew seats (3 included + extras later).
+
+### Do not “simplify”
+
+- Do not widen `is_org_staff` to include crew.
+- Do not create Bookings for seasonal stops (later milestones — see guide §3).
+- Do not touch dual-radius search or `concurrent_capacity`.
+
+---
+
 ## Sessions — max two devices per account
 
 ### What it means

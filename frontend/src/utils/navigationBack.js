@@ -139,6 +139,17 @@ export function resolveProviderBack(pathname, orgSlug, search = '') {
   if (path === `${base}/analytics`) return { to: base };
   if (path === `${base}/subscribe`) return { to: `${base}/account` };
   if (path === `${base}/clients`) return { to: base };
+  if (path === `${base}/runs`) return { to: base };
+  if (path === `${base}/runs/new`) return { to: `${base}/runs` };
+  if (/^\/provider\/[^/]+\/runs\/[^/]+\/live$/.test(path)) {
+    return { to: `${base}/runs` };
+  }
+  if (/^\/provider\/[^/]+\/runs\/[^/]+$/.test(path)) {
+    return { to: `${base}/runs` };
+  }
+  if (path === `${base}/properties`) return { to: base };
+  if (path === `${base}/crew`) return { to: base };
+  if (path === `${base}/photos`) return { to: base };
 
   if (path.startsWith(`${base}/schedule/`)) {
     const day = readRememberedScheduleDay(orgSlug);

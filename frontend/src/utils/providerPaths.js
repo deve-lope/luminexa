@@ -122,6 +122,46 @@ export function providerAddTask(orgSlug, jobId) {
 }
 
 export function firstProviderHome(memberships) {
-  const org = (memberships || []).find((m) => m.role === 'owner' || m.role === 'staff');
-  return org ? providerHome(org.organization_slug) : '/provider';
+  const org = (memberships || []).find(
+    (m) => m.role === 'owner' || m.role === 'staff' || m.role === 'crew'
+  );
+  if (!org) return '/provider';
+  if (org.role === 'crew') return providerCrewRun(org.organization_slug);
+  return providerHome(org.organization_slug);
+}
+
+export function providerCrewRun(orgSlug) {
+  return `/provider/${orgSlug}/my-run`;
+}
+
+export function providerDispatchRuns(orgSlug) {
+  return `/provider/${orgSlug}/runs`;
+}
+
+export function providerDispatchRunNew(orgSlug) {
+  return `/provider/${orgSlug}/runs/new`;
+}
+
+export function providerDispatchRunLive(orgSlug, runId) {
+  return `/provider/${orgSlug}/runs/${runId}/live`;
+}
+
+export function providerDispatchRunWizard(orgSlug, runId) {
+  return `/provider/${orgSlug}/runs/${runId}`;
+}
+
+export function providerDispatchProperties(orgSlug) {
+  return `/provider/${orgSlug}/properties`;
+}
+
+export function providerDispatchCrew(orgSlug) {
+  return `/provider/${orgSlug}/crew`;
+}
+
+export function providerDispatchPhotos(orgSlug) {
+  return `/provider/${orgSlug}/photos`;
+}
+
+export function publicSnowStop(token) {
+  return `/snow/${token}`;
 }

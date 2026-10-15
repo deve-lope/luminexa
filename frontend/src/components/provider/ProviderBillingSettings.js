@@ -62,7 +62,7 @@ function connectLabel(connect) {
  * Owner-only actions; staff can view status.
  */
 export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }) {
-  const { refreshSession } = useAuth();
+  const { refreshSession, memberships } = useAuth();
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -203,6 +203,14 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
   const canStartYearly =
     (!sub.status || sub.status === 'none' || sub.status === 'canceled' || sub.source === 'promo') &&
     sub.prices_configured?.pro_yearly;
+  const snowMode = (memberships || []).some(
+    (m) => m.organization_slug === orgSlug && m.provider_mode === 'property_routes'
+  );
+  const onSnowPlan = sub.plan === 'snow_monthly';
+  const canStartSnow =
+    snowMode &&
+    (!sub.status || sub.status === 'none' || sub.status === 'canceled' || sub.source === 'promo') &&
+    sub.prices_configured?.snow_monthly;
   const endDate = formatSubscriptionPeriodEnd(sub.current_period_end);
   const remaining = formatSubscriptionRemainingLabel(sub.current_period_end);
   const planLabel =
@@ -295,6 +303,52 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
         </p>
       )}
 
+      {snowMode && (
+        <section className="lx-card space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                Snow dispatch
+              </p>
+              <h2 className="mt-1 text-lg font-bold text-slate-900">Luminexa Snow</h2>
+              <p className="mt-0.5 text-sm text-slate-600">
+                $40 CAD / month · 1 master + 3 crew seats · includes all Pro features
+              </p>
+            </div>
+            <StatusPill tone={onSnowPlan && sub.active ? 'teal' : subTone(sub.status, sub.active)}>
+              {onSnowPlan ? 'Snow plan' : statusCopy(sub.status, sub.source)}
+            </StatusPill>
+          </div>
+          <p className="text-sm text-slate-600">
+            Route optimization, crew mobile runs, and storm alerts. Extra crew seats are $15/mo each
+            (manage quantity in Stripe after subscribing).
+          </p>
+          {!storeShell && isOwner && configured && canStartSnow && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                redirectTo(() =>
+                  jobsAPI.startSubscription(orgSlug, {
+                    plan: 'snow_monthly',
+                    success_path: subscribeSuccessPath,
+                    cancel_path: subscribeSuccessPath,
+                  })
+                )
+              }
+              className="lx-btn-primary min-h-[48px] w-full sm:w-auto sm:px-6"
+            >
+              {busy ? 'Opening Stripe…' : onSnowPlan ? 'Restart Snow on Stripe' : 'Subscribe to Snow'}
+            </button>
+          )}
+          {storeShell && (
+            <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-100">
+              Snow billing and seat purchases are web-only ({BILLING_WEB_HOST}).
+            </p>
+          )}
+        </section>
+      )}
+
       {/* 1. Luminexa Pro */}
       <section className="lx-card space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -302,8 +356,12 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
               Your plan
             </p>
-            <h2 className="mt-1 text-lg font-bold text-slate-900">Luminexa Pro</h2>
-            <p className="mt-0.5 text-sm text-slate-600">{planLabel} · $9.99 CAD / month</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-900">
+              {onSnowPlan ? 'Luminexa Snow (active)' : 'Luminexa Pro'}
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {onSnowPlan ? planLabel : `${planLabel} · $9.99 CAD / month`}
+            </p>
           </div>
           <StatusPill tone={subTone(sub.status, sub.active)}>
             {statusCopy(sub.status, sub.source)}
@@ -326,7 +384,7 @@ export default function ProviderBillingSettings({ orgSlug, isOwner, returnPath }
           </p>
         ) : (
           <>
-            {isOwner && configured && (
+            {isOwner && configured && !snowMode && (
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 {canStartMonthly && (
                   <button

@@ -7,8 +7,9 @@ import { IconBell } from '../components/icons/NavIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ProviderOrgProvider, useProviderOrg } from '../contexts/ProviderOrgContext';
-import { buildProviderMenuItems, buildProviderTabs } from '../config/navigation';
+import { buildCrewMenuItems, buildProviderMenuItems, buildProviderTabs } from '../config/navigation';
 import { isProviderMember } from '../utils/postLoginRoute';
+import { isSnowOwnerNav } from '../utils/snowDispatch';
 import { getDjangoAdminUrl } from '../utils/djangoAdmin';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { jobsAPI } from '../utils/api';
@@ -19,6 +20,7 @@ import {
   providerAbout,
   providerAnalytics,
   providerClients,
+  providerCrewRun,
   providerJobs,
   providerGigs,
   providerNotifications,
@@ -27,6 +29,7 @@ import {
   providerShare,
   providerSubscribe,
   providerTraining,
+  providerDispatchPhotos,
 } from '../utils/providerPaths';
 import { resolveProviderBack } from '../utils/navigationBack';
 import {
@@ -155,6 +158,12 @@ function ProviderShell() {
   }, [loadMessagesCount, location.pathname]);
 
   const androidApp = isAndroidApp();
+  const membership =
+    (memberships || []).find((m) => m.organization_slug === orgSlug) ||
+    activeOrg;
+  const membershipRole = membership?.role || 'owner';
+  const isCrew = membershipRole === 'crew';
+  const snowDispatch = isSnowOwnerNav(membership);
 
   const tabs = useMemo(
     () =>
@@ -162,40 +171,80 @@ function ProviderShell() {
         // Unseen pending work + unread booking-update alerts (Messages-style).
         requestsBadgeCount: Math.max(alertCount, bookingNotifCount),
         messagesBadgeCount: messagesCount,
-        includeGigs: !androidApp,
+        includeGigs: !androidApp && !snowDispatch,
+        role: membershipRole,
+        snowDispatch,
       }),
-    [orgSlug, alertCount, bookingNotifCount, messagesCount, androidApp]
+    [
+      orgSlug,
+      alertCount,
+      bookingNotifCount,
+      messagesCount,
+      androidApp,
+      membershipRole,
+      snowDispatch,
+    ]
   );
-  const menuItems = useMemo(
-    () =>
-      buildProviderMenuItems({
+  const menuItems = useMemo(() => {
+    if (isCrew) {
+      return buildCrewMenuItems({
         logout: requestLogout,
-        aboutPath: providerAbout(orgSlug),
-        providerServicesPath: providerServices(orgSlug),
-        providerTrainingPath: providerTraining(orgSlug),
-        providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
-        providerSharePath: providerShare(orgSlug),
-        providerAnalyticsPath: providerAnalytics(orgSlug),
-        providerClientsPath: providerClients(orgSlug),
-        providerJobsPath: providerJobs(orgSlug),
-        providerGigsPath: providerGigs(orgSlug),
-        // Always list Gig wall under Business (after Jobs). Primary tabs still
-        // include it for the mobile bottom bar; DesktopNav hides the duplicate.
-        includeGigs: true,
-        providerNotificationsPath: providerNotifications(orgSlug),
-        notificationsBadgeCount: notificationCount,
-        isStaff: user?.can_access_django_admin,
-        adminUrl: getDjangoAdminUrl(),
-      }),
-    [requestLogout, orgSlug, user?.can_access_django_admin, notificationCount]
-  );
+      });
+    }
+    const items = buildProviderMenuItems({
+      logout: requestLogout,
+      aboutPath: providerAbout(orgSlug),
+      providerServicesPath: providerServices(orgSlug),
+      providerTrainingPath: providerTraining(orgSlug),
+      providerSettingsPath: providerSettings(orgSlug),
+      providerAccountPath: providerAccount(orgSlug),
+      providerSharePath: providerShare(orgSlug),
+      providerAnalyticsPath: providerAnalytics(orgSlug),
+      providerClientsPath: providerClients(orgSlug),
+      providerJobsPath: snowDispatch ? null : providerJobs(orgSlug),
+      providerGigsPath: providerGigs(orgSlug),
+      // Always list Gig wall under Business (after Jobs). Primary tabs still
+      // include it for the mobile bottom bar; DesktopNav hides the duplicate.
+      includeGigs: !snowDispatch,
+      providerNotificationsPath: providerNotifications(orgSlug),
+      notificationsBadgeCount: notificationCount,
+      isStaff: user?.can_access_django_admin,
+      adminUrl: getDjangoAdminUrl(),
+    });
+    if (snowDispatch) {
+      items.splice(2, 0, {
+        id: 'dispatch-photos',
+        label: 'Proof photos',
+        to: providerDispatchPhotos(orgSlug),
+        iconId: 'jobs',
+      });
+    }
+    return items;
+  }, [
+    isCrew,
+    requestLogout,
+    orgSlug,
+    user?.can_access_django_admin,
+    notificationCount,
+    snowDispatch,
+  ]);
 
-  const providerHomePath = `/provider/${orgSlug}`;
+  const providerHomePath = isCrew ? providerCrewRun(orgSlug) : `/provider/${orgSlug}`;
   const isProviderHome = useMemo(() => {
     const path = location.pathname.replace(/\/$/, '') || '/';
-    return path === providerHomePath;
+    return path === providerHomePath.replace(/\/$/, '');
   }, [location.pathname, providerHomePath]);
+
+  const crewNeedsRedirect = useMemo(() => {
+    if (!isCrew || !orgSlug) return false;
+    const path = location.pathname.replace(/\/$/, '') || '/';
+    const allowed =
+      path === providerHomePath.replace(/\/$/, '') ||
+      path === `/provider/${orgSlug}/account` ||
+      path.endsWith('/my-run');
+    return !allowed;
+  }, [isCrew, orgSlug, location.pathname, providerHomePath]);
 
   const backNav = useMemo(
     () => resolveProviderBack(location.pathname, orgSlug, location.search),
@@ -285,11 +334,32 @@ function ProviderShell() {
     if (location.pathname.includes('/tasks')) {
       return { eyebrow: activeOrg?.organization_name, title: 'Tasks' };
     }
+    if (location.pathname.startsWith(`${base}/runs`)) {
+      if (location.pathname.includes('/live')) {
+        return { eyebrow: activeOrg?.organization_name, title: 'Live run' };
+      }
+      if (location.pathname.endsWith('/new') || /\/runs\/[^/]+$/.test(location.pathname)) {
+        return { eyebrow: activeOrg?.organization_name, title: 'Plan run' };
+      }
+      return { eyebrow: activeOrg?.organization_name, title: 'Runs' };
+    }
+    if (location.pathname.startsWith(`${base}/properties`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Properties' };
+    }
+    if (location.pathname.startsWith(`${base}/crew`) && !location.pathname.includes('/my-run')) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Crew' };
+    }
+    if (location.pathname.startsWith(`${base}/photos`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Proof photos' };
+    }
+    if (location.pathname.endsWith('/my-run')) {
+      return { eyebrow: activeOrg?.organization_name, title: 'My run' };
+    }
     return {
       eyebrow: activeOrg?.organization_name,
-      title: 'Today',
+      title: snowDispatch ? 'Today' : 'Today',
     };
-  }, [location.pathname, activeOrg, orgSlug]);
+  }, [location.pathname, activeOrg, orgSlug, snowDispatch]);
 
   const headerActions = useMemo(
     () => (
@@ -318,13 +388,25 @@ function ProviderShell() {
     if (path) return <Navigate to={path} replace />;
   }
 
-  const membership =
-    (memberships || []).find((m) => m.organization_slug === orgSlug) || activeOrg;
+  if (crewNeedsRedirect) {
+    return <Navigate to={providerHomePath} replace />;
+  }
+
   if (
     membership &&
     !orgHasActiveSubscription(membership) &&
     !isProviderSubscriptionExemptPath(location.pathname, orgSlug)
   ) {
+    if (membership.role === 'crew') {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-100 px-6 text-center">
+          <p className="text-slate-800 font-medium">Subscription paused</p>
+          <p className="max-w-sm text-sm text-slate-600">
+            Ask your manager to renew Luminexa so you can see assigned runs again.
+          </p>
+        </div>
+      );
+    }
     return <Navigate to={providerSubscribe(orgSlug)} replace />;
   }
 
@@ -371,7 +453,10 @@ export default function ProviderLayout() {
   const { isAuthenticated, loading, memberships } = useAuth();
 
   const providerOrgs = useMemo(
-    () => (memberships || []).filter((m) => m.role === 'owner' || m.role === 'staff'),
+    () =>
+      (memberships || []).filter(
+        (m) => m.role === 'owner' || m.role === 'staff' || m.role === 'crew'
+      ),
     [memberships]
   );
 

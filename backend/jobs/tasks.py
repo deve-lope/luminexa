@@ -91,6 +91,50 @@ def send_provider_job_nudges():
 
 
 @shared_task
+def send_dispatch_nudges():
+    """Snow run: crew 1h, late-start, customer ~30m ETA."""
+    from .dispatch_notifications import send_dispatch_nudges as _send
+
+    return _send()
+
+
+@shared_task
+def evaluate_storm_alerts():
+    """Alert snow orgs when forecast ≥ threshold (does not auto-start runs)."""
+    from .dispatch_notifications import evaluate_storm_alerts as _eval
+
+    return _eval()
+
+
+@shared_task
+def purge_dispatch_photos():
+    """Delete proof photos older than 3 days (files + rows)."""
+    import os
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.utils import timezone
+
+    from .models import DispatchStopPhoto
+
+    cutoff = timezone.now() - timedelta(days=DispatchStopPhoto.RETENTION_DAYS)
+    root = getattr(settings, 'PRIVATE_MEDIA_ROOT', None) or os.path.join(
+        str(settings.BASE_DIR), 'private_media'
+    )
+    deleted = 0
+    for photo in DispatchStopPhoto.objects.filter(created_at__lt=cutoff):
+        path = os.path.join(str(root), photo.relative_path)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        photo.delete()
+        deleted += 1
+    return deleted
+
+
+@shared_task
 def purge_stale_quotes():
     """Delete quote requests and unconfirmed quote bookings older than one year."""
     from .quote_cleanup_services import purge_stale_quotes as _purge

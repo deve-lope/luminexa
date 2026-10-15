@@ -52,6 +52,21 @@ function IconCleaning({ className }) {
   );
 }
 
+function IconSnow({ className }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3.5v17" />
+      <path d="M3.5 12h17" />
+      <path d="m6.2 6.2 11.6 11.6" />
+      <path d="M17.8 6.2 6.2 17.8" />
+      <path d="m12 6.2 1.4-1.4M12 6.2l-1.4-1.4" />
+      <path d="m12 17.8 1.4 1.4M12 17.8l-1.4 1.4" />
+      <path d="m6.2 12-1.4 1.4M6.2 12l-1.4-1.4" />
+      <path d="m17.8 12 1.4 1.4M17.8 12l1.4-1.4" />
+    </Svg>
+  );
+}
+
 function IconHandyman({ className }) {
   return (
     <Svg className={className}>
@@ -144,6 +159,7 @@ function IconOther({ className }) {
 const ICONS = {
   'auto-vehicles': IconAuto,
   'yard-outdoors': IconYard,
+  'snow-cleaning': IconSnow,
   'home-cleaning': IconCleaning,
   'handyman-repairs': IconHandyman,
   electrical: IconElectrical,
@@ -166,6 +182,9 @@ const ALIASES = {
   'yard-and-outdoor-work': 'yard-outdoors',
   'outdoor-work': 'yard-outdoors',
   'yard-work': 'yard-outdoors',
+  snow: 'snow-cleaning',
+  'snow-removal': 'snow-cleaning',
+  'snow-clearing': 'snow-cleaning',
   cleaning: 'home-cleaning',
   'house-cleaning': 'home-cleaning',
   handyman: 'handyman-repairs',
