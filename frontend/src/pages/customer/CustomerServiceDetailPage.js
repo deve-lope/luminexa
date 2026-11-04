@@ -13,6 +13,8 @@ import {
 } from '../../utils/customerPaths';
 import { providerRouteKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
+import SeoHead from '../../components/SeoHead';
+import { absUrl } from '../../seo/site';
 
 function ReviewDimensionBreakdown({ review }) {
   const dims = [
@@ -115,8 +117,31 @@ export default function CustomerServiceDetailPage() {
 
   const meta = formatServiceMeta(service);
 
+  const isPublicBook = location.pathname.startsWith('/book/');
+
   return (
     <div className="space-y-6">
+      <SeoHead
+        title={`${service.name} — ${service.organization_name} | Luminexa`}
+        description={
+          service.description ||
+          `Book ${service.name} from ${service.organization_name} on Luminexa.`
+        }
+        canonical={absUrl(`/book/${customerKey}/services/${service.id}`)}
+        noindex={!isPublicBook}
+        jsonLd={
+          isPublicBook
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'Service',
+                name: service.name,
+                description: service.description || undefined,
+                provider: { '@type': 'LocalBusiness', name: service.organization_name },
+                url: absUrl(`/book/${customerKey}/services/${service.id}`),
+              }
+            : undefined
+        }
+      />
       <header>
         <Link
           to={providerPath}

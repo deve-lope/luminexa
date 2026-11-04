@@ -4,6 +4,7 @@ import AuthFormShell from '../components/auth/AuthFormShell';
 import AddressCountrySelect from '../components/location/AddressCountrySelect';
 import { countryFromNavigator, defaultAddressCountry } from '../constants/addressCountries';
 import { userAPI } from '../utils/api';
+import SeoHead from '../components/SeoHead';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -46,6 +47,13 @@ export default function RegisterPage() {
   };
 
   return (
+    <>
+    <SeoHead
+      title="Create a customer account | Luminexa"
+      description="Create a free Luminexa account to book local services with prices and real time slots."
+      canonical="/register"
+      noindex
+    />
     <AuthFormShell
       title="Create account"
       subtitle="Email is required. We’ll send a one-time code so you can sign in — no password needed."
@@ -129,5 +137,6 @@ export default function RegisterPage() {
         </button>
       </form>
     </AuthFormShell>
+    </>
   );
 }

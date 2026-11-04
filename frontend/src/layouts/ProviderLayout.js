@@ -20,6 +20,7 @@ import {
   providerShare,
 } from '../utils/providerPaths';
 import { resolveProviderBack } from '../utils/navigationBack';
+import SeoHead from '../components/SeoHead';
 
 function ProviderShell() {
   const { user, memberships, logout } = useAuth();
@@ -135,6 +136,8 @@ function ProviderShell() {
   }
 
   return (
+    <>
+    <SeoHead title="Luminexa" canonical="/provider" noindex />
     <AppShell
       brand="Luminexa"
       eyebrow={eyebrow}
@@ -149,6 +152,7 @@ function ProviderShell() {
     >
       <Outlet />
     </AppShell>
+    </>
   );
 }
 

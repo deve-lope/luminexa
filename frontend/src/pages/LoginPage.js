@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { applyPostLoginNavigation } from '../utils/postLoginRoute';
 import parseApiError from '../utils/parseApiError';
 import { userAPI } from '../utils/api';
+import SeoHead from '../components/SeoHead';
 
 function parseLoginError(err) {
   return parseApiError(err, 'Could not sign in. Try again.');
@@ -172,6 +173,13 @@ export default function LoginPage() {
           : (e) => e.preventDefault();
 
   return (
+    <>
+    <SeoHead
+      title="Sign in | Luminexa"
+      description="Sign in to Luminexa to book local services or manage your business."
+      canonical="/login"
+      noindex
+    />
     <AuthFormShell
       title="Sign in"
       subtitle={subtitle}
@@ -339,5 +347,6 @@ export default function LoginPage() {
         )}
       </motion.form>
     </AuthFormShell>
+    </>
   );
 }

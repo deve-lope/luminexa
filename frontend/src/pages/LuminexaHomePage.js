@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import SeoHead from '../components/SeoHead';
+import { HOME_DESCRIPTION, HOME_TITLE, ORG_JSON_LD, WEBSITE_JSON_LD } from '../seo/site';
 
 const NEED_PROMPTS = [
   {
@@ -170,8 +172,12 @@ function Hero({ embedded = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
-          alt=""
+          src="/images/home-hero.jpg"
+          alt="Neighbourhood homes and yards where Luminexa customers book local services"
+          width={1920}
+          height={1080}
+          fetchPriority="high"
+          decoding="async"
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-br from-teal-950/90 via-teal-900/72 to-teal-800/50" />
@@ -400,7 +406,11 @@ function SplitShowcase() {
         >
           <img
             src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1600&q=80"
-            alt="Local service professional at work"
+            alt="House cleaner working in a bright living room"
+            width={1600}
+            height={1067}
+            loading="lazy"
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-teal-950/50 to-transparent md:bg-gradient-to-r md:from-transparent md:to-teal-950/10" />
@@ -469,7 +479,11 @@ function SplitShowcase() {
         >
           <img
             src="https://images.unsplash.com/photo-1599082267768-4815b2ea6bd2?auto=format&fit=crop&w=1600&q=80"
-            alt="Mechanic changing a car tire"
+            alt="Mobile mechanic changing a car tire at a driveway"
+            width={1600}
+            height={1067}
+            loading="lazy"
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-teal-950/45 to-transparent md:bg-gradient-to-l md:from-transparent md:to-teal-950/10" />
@@ -541,6 +555,18 @@ function SiteFooter() {
           <Link to="/services" className="hover:text-teal-700">
             Find help
           </Link>
+          <a href="/ottawa/" className="hover:text-teal-700">
+            Ottawa
+          </a>
+          <a href="/toronto/" className="hover:text-teal-700">
+            Toronto
+          </a>
+          <a href="/pricing/" className="hover:text-teal-700">
+            Pricing
+          </a>
+          <a href="/privacy/" className="hover:text-teal-700">
+            Privacy
+          </a>
           <Link to="/register/business" className="hover:text-teal-700">
             Offer services
           </Link>
@@ -565,6 +591,14 @@ export default function LuminexaHomePage({ embedded = false }) {
 
   return (
     <div className="bg-luminexa-canvas text-slate-900">
+      {!embedded && (
+        <SeoHead
+          title={HOME_TITLE}
+          description={HOME_DESCRIPTION}
+          canonical="/"
+          jsonLd={[ORG_JSON_LD, WEBSITE_JSON_LD]}
+        />
+      )}
       {!embedded && <SiteHeader />}
       <Hero embedded={embedded} findPath={findPath} />
       <NeedPrompts findPath={findPath} />

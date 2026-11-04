@@ -10,6 +10,7 @@ import { DEFAULT_RADIUS_MILES } from '../constants/locationSearch';
 import { businessesAPI } from '../utils/api';
 import { bookService } from '../utils/customerPaths';
 import { isPostalSearchReady, normalizePostalInput } from '../utils/postalInput';
+import SeoHead from '../components/SeoHead';
 
 export default function ServicesBrowsePage({ embedded = false }) {
   const navigate = useNavigate();
@@ -235,10 +236,26 @@ export default function ServicesBrowsePage({ embedded = false }) {
     </div>
   );
 
-  if (embedded) return content;
+  const seo = (
+    <SeoHead
+      title="Find local services | Luminexa"
+      description="Browse nearby providers on Luminexa — see prices and open times for snow removal, cleaning, auto, and more."
+      canonical="/services"
+    />
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {seo}
+        {content}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
+      {seo}
       <header className="border-b border-slate-200 bg-white px-4 py-4 shadow-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
           <Link to="/" className="text-lg font-semibold text-slate-900">
