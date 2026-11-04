@@ -30,6 +30,15 @@ docker-data/
 .idea/
 .DS_Store
 
+# Generated crawlable SEO HTML (frontend/scripts/write-city-seo.js)
+frontend/public/ottawa/
+frontend/public/toronto/
+frontend/public/alternatives/
+frontend/public/pricing/
+frontend/public/privacy/
+frontend/public/sitemap.xml
+frontend/public/llms.txt
+
 # Logs
 *.log
 

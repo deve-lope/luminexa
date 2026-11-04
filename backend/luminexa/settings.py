@@ -53,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'luminexa.security.SecurityWatchMiddleware',
 ]
 
 ROOT_URLCONF = 'luminexa.urls'
@@ -135,6 +136,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'login': '20/minute',
+        'register': '10/hour',
         'password_reset': '10/hour',
         'booking_create': '60/hour',
         'service_inquiry': '30/hour',
@@ -142,6 +144,8 @@ REST_FRAMEWORK = {
         'map_search': '60/minute',
         'business_type_write': '10/hour',
     },
+    # Nginx overwrites X-Forwarded-For with the visitor IP (Cloudflare connecting IP).
+    'NUM_PROXIES': 1,
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -181,6 +185,37 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default='True').lower() == 'true'
+
+# Owner operational + security alerts (empty disables). Uses EMAIL_* above.
+OWNER_ALERT_EMAIL = config('OWNER_ALERT_EMAIL', default='').strip()
+SECURITY_FAILED_LOGIN_THRESHOLD = config('SECURITY_FAILED_LOGIN_THRESHOLD', default=8, cast=int)
+SECURITY_FAILED_LOGIN_WINDOW = config('SECURITY_FAILED_LOGIN_WINDOW', default=600, cast=int)
+SECURITY_AUTH_BURST_THRESHOLD = config('SECURITY_AUTH_BURST_THRESHOLD', default=12, cast=int)
+SECURITY_AUTH_BURST_WINDOW = config('SECURITY_AUTH_BURST_WINDOW', default=300, cast=int)
+SECURITY_SIGNUP_BURST_THRESHOLD = config('SECURITY_SIGNUP_BURST_THRESHOLD', default=4, cast=int)
+SECURITY_SIGNUP_BURST_WINDOW = config('SECURITY_SIGNUP_BURST_WINDOW', default=1800, cast=int)
+SECURITY_RATELIMIT_ALERT_THRESHOLD = config('SECURITY_RATELIMIT_ALERT_THRESHOLD', default=3, cast=int)
+SECURITY_RATELIMIT_ALERT_WINDOW = config('SECURITY_RATELIMIT_ALERT_WINDOW', default=600, cast=int)
+SECURITY_PROBE_THRESHOLD = config('SECURITY_PROBE_THRESHOLD', default=3, cast=int)
+SECURITY_PROBE_WINDOW = config('SECURITY_PROBE_WINDOW', default=600, cast=int)
+SECURITY_5XX_SPIKE_THRESHOLD = config('SECURITY_5XX_SPIKE_THRESHOLD', default=8, cast=int)
+SECURITY_5XX_SPIKE_WINDOW = config('SECURITY_5XX_SPIKE_WINDOW', default=300, cast=int)
+
+_cache_url = config('CACHE_URL', default='').strip()
+if _cache_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _cache_url,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'luminexa-default',
+        }
+    }
 
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)

@@ -22,6 +22,8 @@ import {
 import { providerHome, providerSchedule } from '../utils/providerPaths';
 import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
 import { isShopService } from '../utils/serviceDisplay';
+import SeoHead from '../components/SeoHead';
+import { absUrl } from '../seo/site';
 
 /**
  * Public booking profile at /book/:slug
@@ -195,14 +197,49 @@ export default function BookingStorefrontPage() {
 
   return (
     <div className={shellClass}>
+      <SeoHead
+        title={`${organization.name} | Book on Luminexa`}
+        description={
+          organization.tagline ||
+          organization.description ||
+          `Book ${organization.name} on Luminexa — see services, prices, and open times.`
+        }
+        canonical={absUrl(`/book/${customerKey}`)}
+        noindex={!isGuest}
+        jsonLd={
+          isGuest
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'LocalBusiness',
+                name: organization.name,
+                description: organization.tagline || undefined,
+                url: absUrl(`/book/${customerKey}`),
+                image: organization.logo_url || organization.banner_url || undefined,
+                address: organization.service_city
+                  ? {
+                      '@type': 'PostalAddress',
+                      addressLocality: organization.service_city,
+                      addressRegion: organization.service_state || undefined,
+                      postalCode: organization.service_postal_code || undefined,
+                      addressCountry: 'CA',
+                    }
+                  : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="relative -mx-4 h-44 overflow-hidden bg-gradient-to-br from-luminexa-accent/30 to-slate-200 sm:mx-0 sm:rounded-t-xl">
         {organization.banner_url && (
-          <img src={organization.banner_url} alt="" className="h-full w-full object-cover" />
+          <img
+            src={organization.banner_url}
+            alt={`${organization.name} cover photo`}
+            className="h-full w-full object-cover"
+          />
         )}
         {organization.logo_url && (
           <img
             src={organization.logo_url}
-            alt=""
+            alt={`${organization.name} logo`}
             className="absolute bottom-3 left-4 h-16 w-16 rounded-xl border-2 border-white bg-white object-cover shadow-md"
           />
         )}

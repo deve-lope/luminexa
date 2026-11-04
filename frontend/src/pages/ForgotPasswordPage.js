@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AuthFormShell from '../components/auth/AuthFormShell';
 import { userAPI } from '../utils/api';
+import SeoHead from '../components/SeoHead';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -25,6 +26,13 @@ export default function ForgotPasswordPage() {
   };
 
   return (
+    <>
+    <SeoHead
+      title="Reset password | Luminexa"
+      description="Reset your Luminexa business account password."
+      canonical="/forgot-password"
+      noindex
+    />
     <AuthFormShell
       title="Reset password"
       subtitle="Enter the email on your business account and we’ll send a link to choose a new password. Customer accounts use email codes instead — use Sign in."
@@ -69,5 +77,6 @@ export default function ForgotPasswordPage() {
         </button>
       </form>
     </AuthFormShell>
+    </>
   );
 }

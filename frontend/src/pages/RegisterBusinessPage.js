@@ -5,6 +5,7 @@ import AddressFields from '../components/location/AddressFields';
 import { businessesAPI, userAPI } from '../utils/api';
 import { BOOKING_POLICIES } from '../constants/bookingPolicies';
 import BackButton from '../components/navigation/BackButton';
+import SeoHead from '../components/SeoHead';
 import PasswordInput from '../components/ui/PasswordInput';
 
 const BENEFITS = [
@@ -113,6 +114,11 @@ export default function RegisterBusinessPage() {
 
   return (
     <div className="min-h-[100dvh] bg-luminexa-canvas bg-lx-mesh text-slate-900 lg:h-[100dvh] lg:overflow-hidden">
+      <SeoHead
+        title="Offer local services on Luminexa"
+        description="Publish your services, prices, and calendar so nearby customers can book you on Luminexa."
+        canonical="/register/business"
+      />
       <div className="mx-auto grid min-h-[100dvh] max-w-6xl lg:h-full lg:grid-cols-12">
         <aside className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 px-6 py-8 text-white lg:col-span-5 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:px-10 lg:py-12">
           <div className="pointer-events-none absolute -right-16 top-20 h-56 w-56 rounded-full bg-teal-400/25 blur-3xl" />

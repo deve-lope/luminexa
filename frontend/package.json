@@ -14,8 +14,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "prestart": "node scripts/write-city-seo.js",
+    "prebuild": "node scripts/write-city-seo.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:seo": "node scripts/write-city-seo.js && node scripts/check-seo.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

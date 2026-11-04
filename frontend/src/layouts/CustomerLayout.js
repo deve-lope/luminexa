@@ -7,6 +7,7 @@ import { isProviderMember } from '../utils/postLoginRoute';
 import { getOnboardingPath, needsOnboarding } from '../utils/profileSetup';
 import { firstProviderHome } from '../utils/providerPaths';
 import { resolveCustomerBack } from '../utils/navigationBack';
+import SeoHead from '../components/SeoHead';
 
 export default function CustomerLayout({ children }) {
   const { isAuthenticated, loading, user, memberships, logout } = useAuth();
@@ -110,6 +111,8 @@ export default function CustomerLayout({ children }) {
   }
 
   return (
+    <>
+    <SeoHead title="Luminexa" canonical="/customer" noindex />
     <AppShell
       brand="Luminexa"
       eyebrow={eyebrow}
@@ -123,5 +126,6 @@ export default function CustomerLayout({ children }) {
     >
       {children ?? <Outlet />}
     </AppShell>
+    </>
   );
 }

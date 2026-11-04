@@ -9,7 +9,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
+from luminexa.throttles import (
+    LoginThrottle,
+    PasswordResetThrottle,
+    RegisterBusinessThrottle,
+    RegisterThrottle,
+)
+
+from .owner_alerts import record_auth_burst, record_failed_login, record_signup, send_new_account_alert
 
 from .auth_cookies import clear_auth_cookie, set_auth_cookie
 from .emails import send_email_verification, send_login_otp_email, send_password_reset_email
@@ -60,12 +67,14 @@ def _send_customer_otp(email: str, *, full_name: str = '') -> None:
 
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [LoginThrottle]
+    throttle_classes = [RegisterThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        send_new_account_alert(user, account_type='customer')
+        record_signup(request)
         _send_customer_otp(user.email, full_name=user.full_name)
         return Response(
             {
@@ -85,6 +94,8 @@ class RegisterBusinessAPIView(APIView):
         serializer = RegisterBusinessSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user, org = serializer.save()
+        send_new_account_alert(user, account_type='business_owner', organization=org)
+        record_signup(request)
         send_email_verification(user)
         return _registration_pending_response(user, organization=org)
 
@@ -96,6 +107,7 @@ class LoginStartAPIView(APIView):
     throttle_classes = [LoginThrottle]
 
     def post(self, request):
+        record_auth_burst(request, kind='login-burst')
         serializer = LoginStartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
@@ -129,18 +141,22 @@ class LoginOtpVerifyAPIView(APIView):
     throttle_classes = [LoginThrottle]
 
     def post(self, request):
+        record_auth_burst(request, kind='login-burst')
         serializer = LoginOtpVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = normalize_email(serializer.validated_data['email'])
         code = serializer.validated_data['code']
         user = User.objects.filter(email__iexact=email).first()
         if not user or not user.is_active:
+            record_failed_login(request)
             raise ValidationError({'detail': 'Invalid or expired code.'})
         if user_uses_password_login(user):
+            record_failed_login(request)
             raise ValidationError(
                 {'detail': 'This account uses a password. Sign in with your password instead.'}
             )
         if not verify_login_code(email, code):
+            record_failed_login(request)
             raise ValidationError({'detail': 'Invalid or expired code.'})
         if not user.email_verified:
             user.email_verified = True
@@ -153,8 +169,13 @@ class LoginAPIView(APIView):
     throttle_classes = [LoginThrottle]
 
     def post(self, request):
+        record_auth_burst(request, kind='login-burst')
         serializer = LoginSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError:
+            record_failed_login(request)
+            raise
         user = serializer.validated_data['user']
         if not user.email_verified:
             return Response(

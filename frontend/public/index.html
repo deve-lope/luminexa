@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-CA">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#7C3AED" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
+    <meta name="theme-color" content="#0D9488" />
     <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- iOS PWA -->
@@ -15,9 +17,25 @@
     <meta name="apple-mobile-web-app-title" content="Luminexa" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-    <!-- SEO -->
-    <meta name="description" content="Luminexa — Book local services. Effortlessly." />
-    <title>Luminexa</title>
+    <!-- SEO: homepage defaults. Per-route tags are updated by SeoHead after JS loads.
+         City / pricing / alternatives / privacy URLs are separate static HTML files. -->
+    <title>Luminexa | Book local services</title>
+    <meta name="description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
+    <link rel="canonical" href="https://app.luminex-a.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Luminexa" />
+    <meta property="og:locale" content="en_CA" />
+    <meta property="og:title" content="Luminexa | Book local services" />
+    <meta property="og:description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
+    <meta property="og:url" content="https://app.luminex-a.com/" />
+    <meta property="og:image" content="https://app.luminex-a.com/images/home-hero.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Luminexa | Book local services" />
+    <meta name="twitter:description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
+    <meta name="twitter:image" content="https://app.luminex-a.com/images/home-hero.jpg" />
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Luminexa","url":"https://app.luminex-a.com/","description":"Book local services with prices and real time slots.","areaServed":[{"@type":"City","name":"Ottawa"},{"@type":"City","name":"Toronto"}],"sameAs":["https://play.google.com/store/apps/details?id=com.luminexa.app"]},{"@type":"WebSite","name":"Luminexa","url":"https://app.luminex-a.com/","inLanguage":"en-CA","publisher":{"@type":"Organization","name":"Luminexa"}}]}
+    </script>
     <script>
       // Kill stale service workers before the app bootstraps (fixes blank/broken home).
       if ('serviceWorker' in navigator) {
@@ -33,7 +51,13 @@
     </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      Luminexa is a local service booking app.
+      You need JavaScript to use the app.
+      <a href="/ottawa/">Ottawa services</a> ·
+      <a href="/toronto/">Toronto services</a> ·
+      <a href="/pricing/">Pricing</a>
+    </noscript>
     <div id="root"></div>
   </body>
 </html>

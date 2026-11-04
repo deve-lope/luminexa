@@ -18,4 +18,6 @@ cp env/docker.dev.example .env.docker.dev
 
 Edit secrets in `.env.docker.prod` before any real deployment.
 
+`OWNER_ALERT_EMAIL` is optional. When set, Django emails that address (via the same `EMAIL_*` SMTP/Brevo/Mailpit settings) on each new account and on throttled security events. Leave it blank to disable.
+
 Templates live in `env/*.example` (safe to commit). Real env files are gitignored.

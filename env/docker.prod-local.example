@@ -27,6 +27,12 @@ EMAIL_PORT=1025
 EMAIL_USE_TLS=False
 DEFAULT_FROM_EMAIL=noreply@luminexa.local
 
+# Owner alerts — new accounts + throttled security mail. Leave empty to disable.
+# Uses the EMAIL_* settings above (Mailpit locally, SMTP/Brevo/SendGrid in production).
+OWNER_ALERT_EMAIL=
+# Optional Redis cache so rate limits and alert throttling are shared across workers:
+# CACHE_URL=redis://redis:6379/1
+
 # ── Going live: send real email ────────────────────────────────────────────
 # Replace the Mailpit block above with ONE real provider below, then set
 # PUBLIC_APP_URL to your real domain so links in emails point to the live app.
