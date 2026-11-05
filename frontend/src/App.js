@@ -53,6 +53,7 @@ import {
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ScrollToTop from './components/ScrollToTop';
+import WebAnalytics from './components/WebAnalytics';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -211,6 +212,7 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <ScrollToTop />
+        <WebAnalytics />
         <ToastProvider>
           <AuthProvider>
             <AppRoutes />

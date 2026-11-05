@@ -88,6 +88,10 @@ services:
       args:
         REACT_APP_API_URL: ""
         REACT_APP_PUBLIC_URL: http://localhost:3000
+        # CRA bakes these in at build. Empty = no analytics scripts.
+        # Pass from the host: docker compose --env-file .env.docker.prod up -d --build frontend
+        REACT_APP_GA_MEASUREMENT_ID: ${REACT_APP_GA_MEASUREMENT_ID:-}
+        REACT_APP_CF_BEACON_TOKEN: ${REACT_APP_CF_BEACON_TOKEN:-}
     container_name: luminexa-frontend
     ports:
       - "0.0.0.0:3000:80"

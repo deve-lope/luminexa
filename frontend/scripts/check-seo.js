@@ -50,6 +50,12 @@ for (const loc of locs) {
   if (titles.has(title)) fail(`duplicate title "${title}" (${titles.get(title)} and ${loc})`);
   titles.set(title, loc);
   if (!html.includes('application/ld+json')) fail(`missing JSON-LD in ${filePath}`);
+  if (!process.env.REACT_APP_GA_MEASUREMENT_ID && /googletagmanager\.com/.test(html)) {
+    fail(`GA snippet in ${filePath} without REACT_APP_GA_MEASUREMENT_ID`);
+  }
+  if (!process.env.REACT_APP_CF_BEACON_TOKEN && /cloudflareinsights\.com/.test(html)) {
+    fail(`Cloudflare beacon in ${filePath} without REACT_APP_CF_BEACON_TOKEN`);
+  }
 }
 
 const robots = fs.readFileSync(path.join(publicDir, 'robots.txt'), 'utf8');

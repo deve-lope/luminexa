@@ -30,6 +30,14 @@ DEFAULT_FROM_EMAIL=noreply@luminexa.local
 # Owner alerts — new accounts + throttled security mail. Leave empty to disable.
 # Uses the EMAIL_* settings above (Mailpit locally, SMTP/Brevo/SendGrid in production).
 OWNER_ALERT_EMAIL=
+
+# Optional page-visit analytics (frontend image build). Leave empty to disable.
+# Fastest no-rebuild option: Cloudflare Dashboard → Analytics → Web Analytics
+# → add app.luminex-a.com with automatic JS injection (no token needed here).
+# To bake a beacon/GA into the image instead:
+#   docker compose --env-file .env.docker.prod up -d --build frontend
+# REACT_APP_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+# REACT_APP_CF_BEACON_TOKEN=
 # Optional Redis cache so rate limits and alert throttling are shared across workers:
 # CACHE_URL=redis://redis:6379/1
 
