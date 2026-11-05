@@ -99,6 +99,24 @@ function absoluteAsset(url) {
   return `${base}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
+function analyticsSnippets() {
+  const parts = [];
+  const ga = String(process.env.REACT_APP_GA_MEASUREMENT_ID || '').trim();
+  const cf = String(process.env.REACT_APP_CF_BEACON_TOKEN || '').trim();
+  if (/^G-[A-Z0-9]+$/i.test(ga)) {
+    parts.push(
+      `<script async src="https://www.googletagmanager.com/gtag/js?id=${esc(ga)}"></script>`,
+      `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${esc(ga)}',{anonymize_ip:true});</script>`
+    );
+  }
+  if (/^[A-Za-z0-9_-]{8,128}$/.test(cf)) {
+    parts.push(
+      `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${cf}"}'></script>`
+    );
+  }
+  return parts.length ? `  ${parts.join('\n  ')}\n` : '';
+}
+
 function pageHtml({
   title,
   description,
@@ -207,7 +225,7 @@ function pageHtml({
       <p>Luminexa is a booking marketplace. A provider is shown only if you are inside both your search radius and their service area.</p>
     </div>
   </footer>
-</body>
+${analyticsSnippets()}</body>
 </html>
 `;
 }
@@ -869,7 +887,7 @@ function writePrivacy() {
     <p><strong>Business profile information.</strong> Business name, service descriptions, photos you upload, service area, booking policy, and related settings.</p>
     <p><strong>Location information.</strong> When you search for services, we may use a postal / ZIP code and/or approximate coordinates plus a search radius. Providers set service locations and radii so customers nearby can find them.</p>
     <p><strong>Bookings and messages.</strong> Service requests, booking times, addresses for service visits, notes, invoices, and in-app messages related to a job.</p>
-    <p><strong>Device and technical data.</strong> Basic logs such as IP address, browser type, and pages requested, used for security, debugging, and reliable delivery of the service.</p>
+    <p><strong>Device and technical data.</strong> Basic logs such as IP address, browser type, and pages requested, used for security, debugging, and reliable delivery of the service. Cloudflare sits in front of the site and may record request path, country, referrer, and browser. If traffic analytics is enabled, Cloudflare Web Analytics and/or Google Analytics record pages viewed so we can operate and improve Luminexa. We do not use this for ads.</p>
     <h2>How we use information</h2>
     <ul class="cats">
       <li>Create and manage accounts (customers, business owners, staff)</li>

@@ -79,6 +79,10 @@ export default function PrivacyPolicyPage() {
           <p>
             <strong>Device and technical data.</strong> Basic logs such as IP address, browser type,
             and pages requested, used for security, debugging, and reliable delivery of the service.
+            Cloudflare sits in front of the site and may record request path, country, referrer, and
+            browser. If traffic analytics is enabled, Cloudflare Web Analytics and/or Google Analytics
+            record pages viewed so we can operate and improve Luminexa. We do not use this for ads,
+            and Cloudflare Web Analytics does not set advertising cookies.
             If you install the Android app from Google Play, the OS may store the app, a device
             push token, and cached files used to run Luminexa.
           </p>

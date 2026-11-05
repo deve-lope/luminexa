@@ -12,3 +12,7 @@ PUBLIC_APP_URL=http://localhost:3001
 
 # Owner alerts (empty = disabled). Uses Django EMAIL_* if you set them.
 OWNER_ALERT_EMAIL=
+
+# Optional page-visit analytics (empty = disabled).
+# REACT_APP_GA_MEASUREMENT_ID=
+# REACT_APP_CF_BEACON_TOKEN=
