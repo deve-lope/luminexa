@@ -124,6 +124,9 @@ services:
     ports:
       - "0.0.0.0:3000:80"
       - "[::]:3000:80"
+    volumes:
+      # Shared with ops-dashboard for website traffic charts.
+      - luminexa_nginx_logs:/var/log/nginx
     depends_on:
       - web
     restart: unless-stopped
@@ -131,3 +134,4 @@ services:
 volumes:
   luminexa_pg_data:
   luminexa_media:
+  luminexa_nginx_logs:

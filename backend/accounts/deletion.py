@@ -15,7 +15,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from .auth_sessions import delete_all_auth_tokens
-from .models import LoginCode, ProviderDeletionFeedback, User
+from .models import DevicePushToken, LoginCode, ProviderDeletionFeedback, User
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +173,9 @@ def anonymize_user(user: User) -> bool:
     user.set_unusable_password()
     user.save()
 
-    # Invalidate credentials and any pending sign-in codes for the old address.
+    # Invalidate credentials, push endpoints, and pending sign-in codes.
     delete_all_auth_tokens(user)
+    DevicePushToken.objects.filter(user=user).delete()
     if original_email:
         LoginCode.objects.filter(email__iexact=original_email).delete()
 
