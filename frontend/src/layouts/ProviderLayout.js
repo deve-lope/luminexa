@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import OrgSwitcher from '../components/provider/OrgSwitcher';
+import MarketingDemoChrome from '../components/marketing/MarketingDemoChrome';
 import AppTour from '../components/tour/AppTour';
 import { IconBell } from '../components/icons/NavIcons';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +27,7 @@ import {
   providerSettings,
   providerShare,
   providerSubscribe,
+  providerTraining,
 } from '../utils/providerPaths';
 import { resolveProviderBack } from '../utils/navigationBack';
 import {
@@ -171,6 +173,7 @@ function ProviderShell() {
         logout: requestLogout,
         aboutPath: providerAbout(orgSlug),
         providerServicesPath: providerServices(orgSlug),
+        providerTrainingPath: providerTraining(orgSlug),
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
@@ -219,6 +222,12 @@ function ProviderShell() {
     }
     if (location.pathname.startsWith(`${base}/notifications`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Notifications' };
+    }
+    if (location.pathname.startsWith(`${base}/training/`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Training lesson' };
+    }
+    if (location.pathname.startsWith(`${base}/training`)) {
+      return { eyebrow: activeOrg?.organization_name, title: 'Training' };
     }
     if (location.pathname.startsWith(`${base}/services`)) {
       return { eyebrow: activeOrg?.organization_name, title: 'Services catalog' };
@@ -325,8 +334,11 @@ function ProviderShell() {
   const onSetupOrSubscribe =
     location.pathname.includes('/setup') || location.pathname.includes('/subscribe');
 
+  const isMarketingDemo = Boolean(user?.is_marketing_demo);
+
   return (
     <>
+      {isMarketingDemo ? <MarketingDemoChrome /> : null}
       <AppShell
         brand="Luminexa"
         eyebrow={eyebrow}
@@ -361,7 +373,6 @@ function ProviderShell() {
 export default function ProviderLayout() {
   const { orgSlug: urlSlug } = useParams();
   const { isAuthenticated, loading, memberships } = useAuth();
-  const navigate = useNavigate();
 
   const providerOrgs = useMemo(
     () => (memberships || []).filter((m) => m.role === 'owner' || m.role === 'staff'),
@@ -377,13 +388,11 @@ export default function ProviderLayout() {
   }
 
   if (!isAuthenticated) {
-    navigate('/login', { replace: true });
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   if (!isProviderMember(memberships)) {
-    navigate('/customer', { replace: true });
-    return null;
+    return <Navigate to="/customer" replace />;
   }
 
   if (!providerOrgs.length) {

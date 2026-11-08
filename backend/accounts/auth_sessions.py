@@ -9,7 +9,11 @@ from .models import AuthToken, User
 from .serializers import UserSerializer
 
 
-def max_concurrent_sessions() -> int:
+def max_concurrent_sessions(user=None) -> int:
+    from .otp import is_marketing_demo_user
+
+    if user is not None and is_marketing_demo_user(user):
+        return max(1, int(getattr(settings, 'MARKETING_DEMO_MAX_SESSIONS', 100)))
     return max(1, int(getattr(settings, 'AUTH_MAX_CONCURRENT_SESSIONS', 2)))
 
 
@@ -29,7 +33,7 @@ def prune_extra_auth_tokens(user, *, keep: AuthToken) -> None:
         .exclude(pk=keep.pk)
         .order_by('created', 'pk')
     )
-    overflow = extras.count() + 1 - max_concurrent_sessions()
+    overflow = extras.count() + 1 - max_concurrent_sessions(user)
     if overflow > 0:
         ids = list(extras.values_list('pk', flat=True)[:overflow])
         AuthToken.objects.filter(pk__in=ids).delete()

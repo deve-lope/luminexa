@@ -49,6 +49,9 @@ def refresh_recurring_tasks(organization, *, now=None) -> int:
         task.is_done = False
         task.done_at = None
         task.due_at = next_due
-        task.save(update_fields=['is_done', 'done_at', 'due_at', 'updated_at'])
+        task.due_reminder_sent_at = None
+        task.save(update_fields=[
+            'is_done', 'done_at', 'due_at', 'due_reminder_sent_at', 'updated_at',
+        ])
         updated += 1
     return updated

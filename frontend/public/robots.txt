@@ -2,6 +2,11 @@ User-agent: *
 Allow: /
 Allow: /ottawa/
 Allow: /toronto/
+Allow: /ottawa/gigs/
+Allow: /toronto/gigs/
+Allow: /alternatives/
+Allow: /for-new-providers/
+Allow: /pricing/
 Allow: /sitemap.xml
 Allow: /llms.txt
 
@@ -12,6 +17,7 @@ Disallow: /account/
 Disallow: /login
 Disallow: /customer/
 Disallow: /provider/
+Disallow: /demo/
 Disallow: /reset-password
 Disallow: /forgot-password
 Disallow: /check-email

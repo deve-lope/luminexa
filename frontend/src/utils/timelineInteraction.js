@@ -1,7 +1,64 @@
+import { defaultDayBounds } from './dayTimeline';
 import { formatTime } from './datetime';
 
 export const MIN_RANGE_MS = 15 * 60 * 1000;
 export const SNAP_MS = 15 * 60 * 1000;
+
+/** HH:mm for a local timestamp (for <select> values). */
+export function msToTimeValue(ms) {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export function timeValueToMs(dayKey, timeStr) {
+  const [h, m] = String(timeStr || '00:00').split(':').map(Number);
+  const d = new Date(`${dayKey}T00:00:00`);
+  d.setHours(h || 0, m || 0, 0, 0);
+  return d.getTime();
+}
+
+/** 15-minute From/Until options spanning the day working bounds. */
+export function buildDayTimeOptions(dayKey, weeklyBlocks) {
+  if (!dayKey) return [];
+  const bounds = defaultDayBounds(dayKey, weeklyBlocks);
+  const opts = [];
+  for (let ms = snapMs(bounds.startMs); ms <= bounds.endMs; ms += SNAP_MS) {
+    opts.push({
+      value: msToTimeValue(ms),
+      label: formatTime(new Date(ms).toISOString()),
+      ms,
+    });
+  }
+  return opts;
+}
+
+/**
+ * Default range when staff picks Open / Unavailable / Book — no dragging required.
+ */
+export function suggestDefaultDraftRange({
+  dayKey,
+  weeklyBlocks,
+  durationMinutes = 60,
+}) {
+  if (!dayKey) return null;
+  const bounds = defaultDayBounds(dayKey, weeklyBlocks);
+  const windows = bounds.workingWindows || [];
+  const durationMs = Math.max(MIN_RANGE_MS, Number(durationMinutes || 60) * 60 * 1000);
+  const now = Date.now();
+  const windowStart = windows[0]?.startMs ?? new Date(`${dayKey}T09:00:00`).getTime();
+  const dayEnd = new Date(`${dayKey}T23:59:59`).getTime();
+
+  let startMs;
+  if (now > dayEnd) {
+    startMs = snapMs(windowStart);
+  } else {
+    startMs = snapMs(Math.max(now + SNAP_MS, windowStart));
+  }
+  if (startMs + durationMs > bounds.endMs) {
+    startMs = snapMs(Math.max(bounds.startMs, bounds.endMs - durationMs));
+  }
+  return normalizeRange(startMs, startMs + durationMs, bounds);
+}
 
 export function snapMs(ms, snap = SNAP_MS) {
   return Math.round(ms / snap) * snap;
@@ -84,7 +141,8 @@ export function validateDraftRange(startMs, endMs, { addMode, slots, unavailable
   if (rangeOverlapsBooked(startMs, endMs, { slots })) {
     return 'A confirmed booking is in this time — choose another range.';
   }
-  const ignoreOpen = addMode === 'unavailable';
+  // Staff can book over open slots (fills them). Unavailable mode removes open slots on save.
+  const ignoreOpen = addMode === 'unavailable' || addMode === 'book';
   const ignorePending = addMode === 'unavailable';
   if (
     rangeOverlapsExisting(startMs, endMs, {
@@ -96,6 +154,9 @@ export function validateDraftRange(startMs, endMs, { addMode, slots, unavailable
   ) {
     if (addMode === 'unavailable') {
       return 'Overlaps another unavailable block — choose a different range.';
+    }
+    if (addMode === 'book') {
+      return 'That time is blocked or has a pending request — pick another.';
     }
     return 'Overlaps existing time — choose a free area.';
   }
@@ -172,7 +233,7 @@ export const ADD_MODE_META = {
   },
   book: {
     label: 'Book customer',
-    description: 'Book an appointment for a customer',
+    description: 'Book an existing client or a new caller',
     color: 'bg-violet-600',
     border: 'border-violet-700',
     ring: 'ring-violet-400',

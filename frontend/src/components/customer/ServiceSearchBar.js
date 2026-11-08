@@ -5,9 +5,20 @@ export default function ServiceSearchBar({
   onChange,
   placeholder = 'What do you need?',
   sticky = true,
+  /** Called when the user presses Search / Enter on the keyboard. */
+  onSubmit,
 }) {
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    // Close the phone keyboard so the results underneath are visible.
+    e.currentTarget.blur();
+    onSubmit?.(value);
+  };
+
   return (
     <div
+      data-tour="find-search"
       className={
         sticky
           ? 'lx-sticky-below-header -mx-1 bg-luminexa-canvas/80 pb-3 pt-1 backdrop-blur-md'
@@ -27,8 +38,10 @@ export default function ServiceSearchBar({
         <input
           id="service-search"
           type="search"
+          enterKeyHint="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="lx-input pl-11"
         />

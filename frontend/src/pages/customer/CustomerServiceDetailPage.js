@@ -16,6 +16,7 @@ import {
   customerQuotes,
 } from '../../utils/customerPaths';
 import { providerRouteKey } from '../../utils/providerRouteKey';
+import { IconChevronLeft } from '../../components/icons/NavIcons';
 import ServiceVisitFacts from '../../components/services/ServiceVisitFacts';
 import { serviceRequiresQuote } from '../../utils/serviceDisplay';
 
@@ -150,20 +151,28 @@ export default function CustomerServiceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="flex items-start gap-3">
         <Link
           to={providerBackPath}
           replace
-          className="text-sm font-medium text-luminexa-accent"
+          aria-label={`Back to ${service.organization_name}`}
+          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-800 transition hover:border-teal-300 hover:bg-teal-100"
         >
-          ← {service.organization_name}
+          <IconChevronLeft className="h-5 w-5" />
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900">{service.name}</h1>
-        {service.category_name && (
-          <p className="mt-1 text-sm text-slate-500">{service.category_name}</p>
-        )}
-        <ServiceVisitFacts service={service} forceShowPrice={isOwnerView} />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-2xl">
+            {service.name}
+          </h1>
+          {service.rating_summary?.count > 0 && (
+            <div className="mt-1">
+              <ServiceRatingSummary summary={service.rating_summary} compact />
+            </div>
+          )}
+        </div>
       </header>
+
+      <ServiceVisitFacts service={service} forceShowPrice={isOwnerView} variant="card" />
 
       <ServicePictureCarousel images={pictures} alt={service.name} />
 

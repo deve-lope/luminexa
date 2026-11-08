@@ -514,15 +514,36 @@ class PublicCustomerBookingAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    def get(self, request, token):
+    def _booking_for_token(self, token):
         token = (token or '').strip()
         if not token:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        booking = (
+            return None
+        return (
             Booking.objects.select_related('organization', 'service', 'customer')
             .filter(customer_view_token=token)
             .first()
         )
+
+    def get(self, request, token):
+        booking = self._booking_for_token(token)
         if not booking:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PublicCustomerBookingSerializer(booking).data)
+
+    def post(self, request, token):
+        """Customer confirms a provider-direct invite (and job address when mobile)."""
+        from .booking_services import customer_confirm_provider_booking
+        from .notifications import notify_customer_provider_booking_confirmed
+
+        booking = self._booking_for_token(token)
+        if not booking:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            booking = customer_confirm_provider_booking(
+                booking,
+                service_address=(request.data.get('service_address') or ''),
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        notify_customer_provider_booking_confirmed(booking)
         return Response(PublicCustomerBookingSerializer(booking).data)

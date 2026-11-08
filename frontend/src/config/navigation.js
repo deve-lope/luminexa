@@ -92,11 +92,16 @@ export function mergeTabsIntoMenuItems(tabs, menuItems) {
 
 export function buildPublicBookMenuItems(nextPath) {
   return [
+    { id: 'pricing', label: 'Pricing', to: '/pricing' },
     { id: 'signin', label: 'Sign in', to: authPathWithNext('/login', nextPath) },
-    { id: 'register', label: 'Create account', to: authPathWithNext('/register', nextPath) },
+    {
+      id: 'register',
+      label: 'Customer account',
+      to: authPathWithNext('/register', nextPath),
+    },
     {
       id: 'business',
-      label: 'For your business',
+      label: 'Register business',
       to: authPathWithNext('/register/business', nextPath),
     },
   ];
@@ -106,6 +111,7 @@ export function buildProviderMenuItems({
   logout,
   aboutPath,
   providerServicesPath,
+  providerTrainingPath,
   providerSettingsPath,
   providerAccountPath,
   providerSharePath,
@@ -186,6 +192,14 @@ export function buildProviderMenuItems({
   }
   if (providerServicesPath) {
     items.push({ id: 'services', label: 'Services', to: providerServicesPath });
+  }
+  if (providerTrainingPath) {
+    items.push({
+      id: 'training',
+      label: 'Training',
+      to: providerTrainingPath,
+      dataTour: 'training',
+    });
   }
 
   items.push({ id: 'section-site', divider: true, label: 'Site' });

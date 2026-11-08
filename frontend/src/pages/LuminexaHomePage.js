@@ -2,36 +2,40 @@ import React, { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
 import HomeJourneyScrollZone from '../components/marketing/HomeJourneyScrollZone';
+import InstagramLink from '../components/marketing/InstagramLink';
+import PricingPlans from '../components/marketing/PricingPlans';
+import SiteHeader from '../components/marketing/SiteHeader';
 import { citySeo } from '../seo/citySeo';
+import { PLAY_STORE_URL, getAppStoreUrl } from '../utils/storeLinks';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
 const NEED_PROMPTS = [
   {
     q: 'Driveway buried in snow?',
-    a: 'Find snow removal crews nearby — driveway, walkway, and seasonal clearing with open times.',
+    a: 'Book snow removal when a provider has open times — driveway, walkway, and seasonal clearing.',
     hint: 'Snow removal',
   },
   {
     q: 'Car looking tired?',
-    a: 'Book mobile or local car detailing — interior, exterior, and a visit at home or work.',
+    a: 'Book car detailing with clear prices or a quote — interior, exterior, at home or work.',
     hint: 'Car detailing',
   },
   {
     q: 'Wanna change your tires?',
-    a: 'Find mobile tire techs and auto helpers nearby — see prices, then book a slot.',
+    a: 'Request auto help, see pricing options, then pick a slot that works.',
     hint: 'Auto & tires',
   },
   {
     q: 'Need the house cleaned?',
-    a: 'Browse cleaners with clear rates, chat about the job, and lock in a time.',
+    a: 'See rates or request a quote, chat about the job, and lock in a time.',
     hint: 'Home cleaning',
   },
 ];
 
 const PLATFORM_POINTS = [
   {
-    title: 'Find people who do the work',
-    text: 'Browse local providers and gig-friendly businesses by what you actually need — not endless directories.',
+    title: 'Start from the job',
+    text: 'Snow, detailing, cleaning, repairs — pick what you need and browse providers who list that service.',
   },
   {
     title: 'See prices before you book',
@@ -39,7 +43,7 @@ const PLATFORM_POINTS = [
   },
   {
     title: 'Book real open times',
-    text: 'Providers publish availability. You pick a slot that works — confirmed on both sides.',
+    text: 'Providers publish availability. You pick a slot — confirmed on both sides.',
   },
   {
     title: 'Stay in the loop',
@@ -55,8 +59,8 @@ const HOW_STEPS = [
   },
   {
     n: '02',
-    title: 'Compare locals',
-    text: 'Check who’s nearby, what they charge, and when they’re free.',
+    title: 'Compare options',
+    text: 'Check services, prices or quotes, and open times from providers on Luminexa.',
   },
   {
     n: '03',
@@ -86,81 +90,6 @@ const staggerChild = {
   },
 };
 
-function SiteHeader({ appBackTo = null }) {
-  const [solid, setSolid] = React.useState(false);
-
-  React.useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 48);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const navLinkClass = `inline-flex min-h-[44px] items-center px-3 text-sm font-medium transition ${
-    solid ? 'text-slate-700 hover:text-teal-700' : 'text-white/90 hover:text-white'
-  }`;
-
-  return (
-    <header
-      className={`fixed inset-x-0 top-0 z-40 pt-safe transition duration-300 ${
-        solid
-          ? 'border-b border-teal-900/10 bg-white/90 shadow-sm backdrop-blur-xl'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
-        <Link
-          to={appBackTo ? '.' : '/'}
-          className={`text-xl font-extrabold tracking-tight transition ${
-            solid ? 'text-slate-900' : 'text-white'
-          }`}
-        >
-          Luminexa
-        </Link>
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <a
-            href="#needs"
-            className={`hidden min-h-[44px] items-center px-3 text-sm font-medium transition sm:inline-flex ${
-              solid ? 'text-slate-600 hover:text-teal-700' : 'text-white/80 hover:text-white'
-            }`}
-          >
-            What we help with
-          </a>
-          <a
-            href="#how"
-            className={`hidden min-h-[44px] items-center px-3 text-sm font-medium transition md:inline-flex ${
-              solid ? 'text-slate-600 hover:text-teal-700' : 'text-white/80 hover:text-white'
-            }`}
-          >
-            How it works
-          </a>
-          {appBackTo ? (
-            <Link to={appBackTo} className={navLinkClass}>
-              Back to app
-            </Link>
-          ) : (
-            <>
-              <Link to="/login" className={navLinkClass}>
-                Sign in
-              </Link>
-              <Link
-                to="/register/business"
-                className={`inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-semibold shadow-lg transition ${
-                  solid
-                    ? 'bg-luminexa-accent text-white shadow-teal-600/20 hover:bg-luminexa-accent-dark'
-                    : 'bg-white text-teal-800 shadow-teal-950/20 hover:bg-teal-50'
-                }`}
-              >
-                Offer services
-              </Link>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
-  );
-}
-
 function Hero({ inAppShell = false, findPath = '/services' }) {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({
@@ -182,10 +111,11 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=2400&q=80"
+          src="/images/home-hero.jpg"
           alt=""
           className="h-full w-full object-cover"
         />
+        {/* Original darker treatment — photo still visible, text readable, no card */}
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/35 to-black/20" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
       </motion.div>
@@ -210,7 +140,7 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
           transition={{ duration: 0.65, delay: 0.12 }}
           className="mt-4 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-[4rem]"
         >
-          When you need it done, book local help.
+          Book local services. Run your gigs simply.
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -218,8 +148,8 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
           transition={{ duration: 0.6, delay: 0.22 }}
           className="mt-5 max-w-xl text-base leading-relaxed text-teal-50/85 sm:text-lg"
         >
-          Find people nearby for tires, lawns, cleaning, repairs, and more — with clear prices and
-          real booking times.
+          Clear prices and open times for customers. Schedule, messages, and invoices for providers
+          — Luminexa Pro $9.99 CAD/month after a free trial.
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -231,15 +161,37 @@ function Hero({ inAppShell = false, findPath = '/services' }) {
             to={findPath}
             className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 shadow-xl shadow-teal-950/30 transition hover:bg-teal-300"
           >
-            Find help near you
+            Find help
           </Link>
-          <a
-            href="#needs"
-            className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/30 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10"
-          >
-            What do you need done?
-          </a>
+          {!inAppShell ? (
+            <Link
+              to="/demo"
+              className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-amber-400 px-8 text-sm font-bold text-amber-950 shadow-xl shadow-teal-950/20 transition hover:bg-amber-300"
+            >
+              Demo
+            </Link>
+          ) : (
+            <a
+              href="#needs"
+              className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/30 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10"
+            >
+              What do you need done?
+            </a>
+          )}
         </motion.div>
+        {!inAppShell && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.42 }}
+            className="mt-4 text-sm text-teal-100/80"
+          >
+            Service provider?{' '}
+            <Link to="/for-new-providers" className="font-semibold text-white underline-offset-2 hover:underline">
+              See Pro &amp; pricing
+            </Link>
+          </motion.p>
+        )}
       </motion.div>
     </section>
   );
@@ -270,8 +222,8 @@ function NeedPrompts({ findPath = '/services', inZone = false }) {
               inZone ? 'max-w-3xl text-base sm:text-lg md:text-xl' : 'max-w-xl text-base sm:text-lg'
             }`}
           >
-            Start with the job. Luminexa helps you find local people who do gig-style and small
-            business work — then book them with prices and schedules you can trust.
+            Start with the job. Browse providers who list that service, see prices or request a
+            quote, then book an open time.
           </p>
         </motion.div>
 
@@ -332,8 +284,9 @@ function HowItWorks() {
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
             From “I need help” to a booked visit.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-teal-100/75 sm:text-lg">
-            Built for everyday service work — customers book faster, providers stay organized.
+          <p className="mt-4 text-base leading-relaxed text-teal-100/80 sm:text-lg">
+            Built for everyday service work — customers book without phone tag; providers run
+            schedule and invoices in one place.
           </p>
         </motion.div>
 
@@ -366,19 +319,27 @@ function PlatformBand({ findPath = '/services' }) {
             Why Luminexa
           </p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            Easy to find people. Proper bookings. Clear prices.
+            Clear prices. Real open times. Simple tools.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Whether it’s a one-off gig or a local business on your block, Luminexa keeps the
-            messy parts of hiring help — chasing quotes, missing calls, unclear timing — out of
-            the way.
+            Luminexa is a booking and business app for local services. Customers book with less
+            phone tag. Providers publish services, open a calendar, message clients, and invoice —
+            without expensive field-service software.
           </p>
-          <Link
-            to={findPath}
-            className="mt-8 inline-flex min-h-[48px] items-center rounded-full bg-luminexa-accent px-6 text-sm font-semibold text-white shadow-sm shadow-teal-600/25 transition hover:bg-luminexa-accent-dark"
-          >
-            Explore services nearby
-          </Link>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              to={findPath}
+              className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-luminexa-accent px-6 text-sm font-semibold text-white shadow-sm shadow-teal-600/25 transition hover:bg-luminexa-accent-dark"
+            >
+              Browse services
+            </Link>
+            <Link
+              to="/for-new-providers"
+              className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-teal-700/20 bg-white px-6 text-sm font-semibold text-teal-800 shadow-sm transition hover:border-teal-600 hover:bg-teal-50"
+            >
+              For new providers
+            </Link>
+          </div>
         </motion.div>
 
         <motion.ul
@@ -440,16 +401,16 @@ function SplitShowcase() {
             For customers
           </p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            Hire help like you mean it.
+            Hire help without the phone tag.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Skip the group-chat scramble. See who’s available, what they charge, and book a time
-            that actually works — then message them about the details.
+            See what a provider charges (or request a quote), pick an open time, and message about
+            the details — free for customers.
           </p>
           <ul className="mt-6 space-y-3 text-sm text-slate-700 sm:text-base">
             <li className="flex gap-3">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" />
-              Open schedules from real local providers
+              Browse services and open schedules
             </li>
             <li className="flex gap-3">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" />
@@ -475,15 +436,30 @@ function SplitShowcase() {
             Run your gigs like a business.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Publish services and prices, open your calendar, take requests, complete jobs, and
-            issue invoices — built for lawn crews, cleaners, mobile techs, and local trades.
+            Publish services and prices, open your calendar, take requests, message clients, and
+            issue invoices — for snow crews, cleaners, detailers, and local trades. Luminexa Pro is
+            $9.99 CAD/month after a free trial.
           </p>
-          <Link
-            to="/register/business"
-            className="mt-8 inline-flex min-h-[48px] w-fit items-center rounded-full border border-teal-700/20 bg-white px-6 text-sm font-semibold text-teal-800 shadow-sm transition hover:border-teal-600 hover:bg-teal-50"
-          >
-            Start offering services
-          </Link>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              to="/demo"
+              className="inline-flex min-h-[48px] w-fit items-center rounded-full bg-amber-500 px-6 text-sm font-bold text-amber-950 shadow-sm transition hover:bg-amber-400"
+            >
+              Demo
+            </Link>
+            <Link
+              to="/register/business"
+              className="inline-flex min-h-[48px] w-fit items-center rounded-full bg-luminexa-accent px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-luminexa-accent-dark"
+            >
+              Start free trial
+            </Link>
+            <Link
+              to="/for-new-providers"
+              className="inline-flex min-h-[48px] w-fit items-center rounded-full border border-teal-700/20 bg-white px-6 text-sm font-semibold text-teal-800 shadow-sm transition hover:border-teal-600 hover:bg-teal-50"
+            >
+              Why it’s good value
+            </Link>
+          </div>
         </motion.div>
 
         <motion.div
@@ -526,29 +502,39 @@ function FinalCta({ inAppShell = false, findPath = '/services' }) {
           Ready when you are
         </p>
         <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl">
-          Need something done? Find someone local.
+          Book help — or run your service business.
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-teal-50/80">
-          Book help for the jobs that pile up — tires, lawns, cleaning, repairs — with schedules
-          and prices that make sense.
+        <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-teal-50/85">
+          Customers book free. Providers use Luminexa Pro for schedule, messages, and invoices at
+          $9.99 CAD/month after a free trial.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             to={findPath}
             className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 transition hover:bg-teal-300 sm:w-auto"
           >
-            Find help near you
+            Find help
           </Link>
           {!inAppShell && (
             <Link
-              to="/register"
-              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border border-white/25 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto"
+              to="/demo"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full bg-amber-400 px-8 text-sm font-bold text-amber-950 transition hover:bg-amber-300 sm:w-auto"
             >
-              Create a customer account
+              Demo
             </Link>
           )}
         </div>
       </motion.div>
+    </section>
+  );
+}
+
+function HomePricing({ findPath = '/services' }) {
+  return (
+    <section id="pricing" className="scroll-mt-24 border-t border-teal-900/10 bg-luminexa-canvas py-16 md:py-20">
+      <div className="mx-auto max-w-6xl px-4 md:px-8">
+        <PricingPlans findPath={findPath} showHeading showFees={false} />
+      </div>
     </section>
   );
 }
@@ -560,8 +546,11 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
         <div>
           <p className="text-lg font-extrabold tracking-tight text-slate-900">Luminexa</p>
           <p className="mt-1 text-sm text-slate-500">
-            Local services, booked the simple way.
+            Booking and business tools for local services.
           </p>
+          <div className="mt-4">
+            <InstagramLink />
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm font-medium text-slate-600">
           <Link to={findPath} className="hover:text-teal-700">
@@ -569,6 +558,21 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           </Link>
           {!inApp && (
             <>
+              <Link to="/for-customers" className="hover:text-teal-700">
+                For customers
+              </Link>
+              <Link to="/for-new-providers" className="hover:text-teal-700">
+                For providers
+              </Link>
+              <Link to="/pricing" className="hover:text-teal-700">
+                Pricing
+              </Link>
+              <Link to="/alternatives" className="hover:text-teal-700">
+                Alternatives
+              </Link>
+              <Link to="/demo" className="hover:text-teal-700">
+                Demo
+              </Link>
               <Link to="/register/business" className="hover:text-teal-700">
                 Offer services
               </Link>
@@ -580,6 +584,12 @@ function SiteFooter({ findPath = '/services', inApp = false }) {
           <Link to="/privacy" className="hover:text-teal-700">
             Privacy
           </Link>
+          <a href={PLAY_STORE_URL} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            Google Play
+          </a>
+          <a href={getAppStoreUrl()} className="hover:text-teal-700" target="_blank" rel="noopener noreferrer">
+            App Store
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">
@@ -615,15 +625,16 @@ export default function LuminexaHomePage({ inAppShell = false }) {
     <div className="bg-luminexa-canvas text-slate-900">
       {!inAppShell && (
         <SeoHead
-          title="Luminexa | Book local services"
-          description="Book local services — snow removal, car detailing, cleaning, repairs, and more — with prices and real time slots."
+          title="Luminexa | Book local services & run your gigs"
+          description="Book local services with prices and open times. Providers get schedule, messages, and invoices on Luminexa Pro for $9.99 CAD/month after a free trial."
           canonical={`${citySeo.siteUrl}/`}
           jsonLd={{
             '@context': 'https://schema.org',
             '@type': 'Organization',
             name: citySeo.brand,
             url: citySeo.siteUrl,
-            description: 'Book local services with prices and real time slots.',
+            description:
+              'Booking and business app for local services. Customers book free; providers use Luminexa Pro for $9.99 CAD/month after a free trial.',
             areaServed: citySeo.cities.map((c) => ({ '@type': 'City', name: c.city })),
             sameAs: citySeo.sameAs,
           }}
@@ -643,6 +654,7 @@ export default function LuminexaHomePage({ inAppShell = false }) {
       <PlatformBand findPath={findPath} />
       <SplitShowcase />
       <FinalCta inAppShell={inAppShell} findPath={findPath} />
+      <HomePricing findPath={findPath} />
       {!inAppShell && <SiteFooter />}
       {inAppShell && (
         <div className="lg:hidden">

@@ -23,6 +23,7 @@ from .booking_services import (
     complete_booking,
     mark_booking_incomplete,
     mark_booking_no_show,
+    mark_provider_could_not_make_it,
     reschedule_booking,
     schedule_return_visit,
     customer_can_view_calendar,
@@ -176,6 +177,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'referral_rewards_enabled',
             'referral_reward_amount',
             'referral_max_earnings_per_referrer',
+            'referral_max_credit_percent_per_job',
+            'referral_max_credit_amount_per_job',
         }
         extra = set(serializer.validated_data) - allowed
         if extra:
@@ -1292,7 +1295,38 @@ class BookingViewSet(viewsets.ModelViewSet):
             qs = qs.filter(organization__slug=slug)
         status_filter = self.request.query_params.get('status')
         if status_filter:
-            qs = qs.filter(status=status_filter)
+            statuses = [s.strip() for s in status_filter.split(',') if s.strip()]
+            if len(statuses) == 1:
+                qs = qs.filter(status=statuses[0])
+            elif statuses:
+                qs = qs.filter(status__in=statuses)
+        # Optional window (provider schedule day cards).
+        from django.utils.dateparse import parse_datetime, parse_date
+        from datetime import datetime, time as dt_time
+        from django.utils import timezone as dj_tz
+
+        start_param = self.request.query_params.get('from') or self.request.query_params.get('start')
+        end_param = self.request.query_params.get('until') or self.request.query_params.get('end')
+        if start_param:
+            start_dt = parse_datetime(start_param)
+            if start_dt is None:
+                d = parse_date(start_param)
+                if d:
+                    start_dt = datetime.combine(d, dt_time.min)
+            if start_dt is not None:
+                if dj_tz.is_naive(start_dt):
+                    start_dt = dj_tz.make_aware(start_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__gte=start_dt)
+        if end_param:
+            end_dt = parse_datetime(end_param)
+            if end_dt is None:
+                d = parse_date(end_param)
+                if d:
+                    end_dt = datetime.combine(d, dt_time.max)
+            if end_dt is not None:
+                if dj_tz.is_naive(end_dt):
+                    end_dt = dj_tz.make_aware(end_dt, dj_tz.get_current_timezone())
+                qs = qs.filter(start_at__lte=end_dt)
         if self.action in ('retrieve', 'list'):
             qs = qs.prefetch_related('status_events__actor', 'return_visits', 'cost_lines')
         return qs.distinct().order_by('-start_at')
@@ -1307,25 +1341,40 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        if request.data.get('customer') is not None:
+        # Provider booking: existing customer id and/or new-caller email fields.
+        if (
+            request.data.get('customer') is not None
+            or (request.data.get('email') or '').strip()
+            or (request.data.get('full_name') or '').strip()
+        ):
             return self._provider_book(request)
         return self._customer_request(request)
 
     def _provider_book(self, request):
+        from .booking_services import resolve_customer_for_provider_book
+
         ser = ProviderBookSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
         org = data['organization']
         require_staff_ops(request.user, org)
+        customer = resolve_customer_for_provider_book(
+            org=org,
+            customer=data.get('customer'),
+            email=data.get('email') or '',
+            full_name=data.get('full_name') or '',
+            phone=data.get('phone') or '',
+        )
         booking = provider_book_customer(
             org=org,
             service=data['service'],
-            customer=data['customer'],
+            customer=customer,
             start_at=data['start_at'],
             end_at=data['end_at'],
             staff_user=request.user,
             slot=data.get('slot_id'),
             notes=data.get('customer_notes') or '',
+            service_address=data.get('service_address') or '',
         )
         from .notifications import notify_customer_provider_direct
 
@@ -1690,6 +1739,64 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='on-my-way')
+    def on_my_way(self, request, pk=None):
+        from .en_route_services import start_en_route
+        from .notifications import notify_provider_en_route, notify_provider_nearby
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        lat = request.data.get('lat', None)
+        lng = request.data.get('lng', None)
+        booking, nearby = start_en_route(
+            booking,
+            staff_user=request.user,
+            lat=lat,
+            lng=lng,
+        )
+        log_booking_event(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.ON_THE_WAY,
+            note='Provider started on-my-way sharing',
+        )
+        notify_provider_en_route(booking)
+        if nearby:
+            notify_provider_nearby(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='on-my-way/location')
+    def on_my_way_location(self, request, pk=None):
+        from .en_route_services import update_en_route_location
+        from .notifications import notify_provider_nearby
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        booking, nearby = update_en_route_location(
+            booking,
+            staff_user=request.user,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
+        )
+        if nearby:
+            notify_provider_nearby(booking)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='on-my-way/stop')
+    def on_my_way_stop(self, request, pk=None):
+        from .en_route_services import stop_en_route
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        booking = stop_en_route(booking, staff_user=request.user)
+        log_booking_event(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.EN_ROUTE_STOPPED,
+            note='Provider stopped on-my-way sharing',
+        )
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         from .invoice_services import default_invoice_amount, issue_or_update_invoice
@@ -1730,10 +1837,56 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
 
         from .notifications import notify_booking_completed
+        from .rebook_reminder_services import apply_rebook_fields_from_request
+
         notify_booking_completed(booking)
+        apply_rebook_fields_from_request(
+            booking, request.data, staff_user=request.user,
+        )
         booking = (
             Booking.objects.select_related(
                 'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                'rebook_reminder',
+            )
+            .prefetch_related('status_events__actor')
+            .get(pk=booking.pk)
+        )
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post', 'delete'], url_path='rebook-reminder')
+    def rebook_reminder(self, request, pk=None):
+        """Create/replace (POST) or cancel (DELETE) a pending rebook reminder."""
+        from .rebook_reminder_services import (
+            cancel_rebook_reminder,
+            upsert_rebook_reminder,
+        )
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        if request.method == 'DELETE':
+            reminder = cancel_rebook_reminder(booking)
+            if reminder is None:
+                return Response({'detail': 'No rebook reminder set.'}, status=status.HTTP_404_NOT_FOUND)
+            booking = (
+                Booking.objects.select_related(
+                    'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                    'rebook_reminder',
+                )
+                .prefetch_related('status_events__actor')
+                .get(pk=booking.pk)
+            )
+            return Response(BookingSerializer(booking, context={'request': request}).data)
+
+        upsert_rebook_reminder(
+            booking,
+            remind_on=request.data.get('rebook_remind_on') or request.data.get('remind_on'),
+            note=request.data.get('rebook_note') or request.data.get('note') or '',
+            staff_user=request.user,
+        )
+        booking = (
+            Booking.objects.select_related(
+                'invoice', 'service', 'organization', 'customer', 'availability_slot',
+                'rebook_reminder',
             )
             .prefetch_related('status_events__actor')
             .get(pk=booking.pk)
@@ -1893,6 +2046,32 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
         from .notifications import notify_booking_cancelled
         notify_booking_cancelled(booking, by_user=request.user)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='could-not-make-it')
+    def could_not_make_it(self, request, pk=None):
+        """Staff closes a past-due confirmed job they missed (not a customer no-show)."""
+        from .booking_services import parse_optional_action_reason
+
+        booking = self.get_object()
+        require_staff_ops(request.user, booking.organization)
+        reason = parse_optional_action_reason(request.data)
+        old = booking.status
+        mark_provider_could_not_make_it(
+            booking, staff_user=request.user, reason=reason,
+        )
+        log_booking_status_change(
+            booking,
+            actor=request.user,
+            action=BookingStatusEvent.Action.PROVIDER_COULD_NOT_MAKE_IT,
+            old_status=old,
+            new_status=booking.status,
+            note=reason[:500] if reason else 'Provider could not make this appointment',
+        )
+        from .notifications import notify_provider_could_not_make_it
+        notify_provider_could_not_make_it(
+            booking, by_user=request.user, reason=reason,
+        )
         return Response(BookingSerializer(booking, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])

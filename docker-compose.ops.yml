@@ -1,0 +1,43 @@
+# Standalone Luminexa ops analytics (NOT the customer/provider SPA).
+# Requires the main stack DB to already be running:
+#   docker compose up -d db
+# Then:
+#   docker compose -f docker-compose.ops.yml up -d --build
+#
+# Open: http://127.0.0.1:3050/
+# Login: OPS_DASHBOARD_USER / OPS_DASHBOARD_PASSWORD (defaults below)
+
+name: luminexa-ops
+
+services:
+  ops-dashboard:
+    build:
+      context: ./ops-dashboard
+      dockerfile: Dockerfile
+    container_name: luminexa-ops
+    ports:
+      # All interfaces so Tailscale (100.x) / LAN can reach it.
+      # Still not on the public SPA; protect with Basic auth + firewall/Tailscale ACL.
+      - "3050:3050"
+    env_file:
+      - .env.docker.prod
+    environment:
+      OPS_DASHBOARD_USER: ops
+      OPS_DASHBOARD_PASSWORD: luminexa-ops-local
+      # Hide activity older than this in the ops UI only (does not delete DB rows).
+      OPS_DASHBOARD_HISTORY_SINCE: "2026-11-03T22:50:00+00:00"
+      NGINX_ACCESS_LOG: /var/log/nginx/luminexa.access.log
+    volumes:
+      - nginx_logs:/var/log/nginx:ro
+    networks:
+      - luminexa_default
+    restart: unless-stopped
+
+networks:
+  luminexa_default:
+    external: true
+
+volumes:
+  nginx_logs:
+    external: true
+    name: luminexa_luminexa_nginx_logs

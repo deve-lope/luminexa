@@ -6,6 +6,7 @@ import { formatTime, formatWhen } from '../../utils/datetime';
 import RescheduleBookingModal from '../../components/booking/RescheduleBookingModal';
 import IncompleteReturnVisitModal from '../../components/booking/IncompleteReturnVisitModal';
 import CompleteBookingInvoiceModal from '../../components/booking/CompleteBookingInvoiceModal';
+import RebookReminderPanel from '../../components/booking/RebookReminderPanel';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import JobCostPanel from '../../components/booking/JobCostPanel';
 import ServiceAddressBlock from '../../components/booking/ServiceAddressBlock';
@@ -25,7 +26,10 @@ import { formatLocalDateKey } from '../../utils/dateRange';
 import parseApiError from '../../utils/parseApiError';
 import { useToast } from '../../contexts/ToastContext';
 import { bookingStatusLabel } from '../../utils/customerBookings';
-import { canStartOrCompleteJob, jobActionAvailableAt } from '../../utils/jobActions';
+import { canStartOrCompleteJob } from '../../utils/jobActions';
+import { isNativeApp } from '../../native/capacitorNative';
+import { requestGeolocationCoordinates } from '../../utils/geolocationSupport';
+import { EN_ROUTE_PING_MS, formatDistanceKm } from '../../utils/enRouteDistance';
 
 function DetailRow({ label, children }) {
   if (!children) return null;
@@ -51,7 +55,9 @@ export default function ProviderScheduleDetailPage() {
   const [returnVisitMode, setReturnVisitMode] = useState('full');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [enRouteBusy, setEnRouteBusy] = useState(false);
   const { showToast } = useToast();
+  const nativeApp = isNativeApp();
 
   const runNoShow = async () => {
     setActionBusy(true);
@@ -67,13 +73,35 @@ export default function ProviderScheduleDetailPage() {
     }
   };
 
+  const runCouldNotMakeIt = async (reason = '') => {
+    setActionBusy(true);
+    try {
+      const payload = reason ? { reason } : {};
+      await jobsAPI.markBookingCouldNotMakeIt(id, payload);
+      showToast('Marked as could not make it. Customer notified.', 'success');
+      navigate(
+        providerSchedule(orgSlug, {
+          day: data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null,
+        }),
+      );
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const runCancel = async (reason = '') => {
     setActionBusy(true);
     try {
       const payload = reason ? { reason } : {};
       await jobsAPI.cancelBooking(id, payload);
       showToast('Booking cancelled.', 'success');
-      navigate(providerSchedule(orgSlug));
+      navigate(
+        providerSchedule(orgSlug, {
+          day: data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null,
+        }),
+      );
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -85,7 +113,10 @@ export default function ProviderScheduleDetailPage() {
     setActionBusy(true);
     try {
       await jobsAPI.acceptBooking(id);
-      showToast('Request approved.', 'success');
+      const isTimeChange =
+        data?.prior_start_at ||
+        (data?.quote_amount != null && data?.status === 'requested');
+      showToast(isTimeChange ? 'Time change accepted.' : 'Request approved.', 'success');
       setConfirmAction(null);
       load();
     } catch (e) {
@@ -101,7 +132,8 @@ export default function ProviderScheduleDetailPage() {
       await jobsAPI.declineBooking(id);
       showToast('Request declined.', 'success');
       setConfirmAction(null);
-      navigate(providerSchedule(orgSlug));
+      const day = data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null;
+      navigate(providerSchedule(orgSlug, { day }));
     } catch (e) {
       setError(parseApiError(e));
     } finally {
@@ -175,6 +207,65 @@ export default function ProviderScheduleDetailPage() {
     };
   }, [kind, id, orgSlug]);
 
+  const pingEnRouteLocation = useCallback(async (bookingId) => {
+    if (!nativeApp || !bookingId) return;
+    try {
+      const coords = await requestGeolocationCoordinates();
+      const res = await jobsAPI.updateOnMyWayLocation(bookingId, {
+        lat: coords.latitude,
+        lng: coords.longitude,
+      });
+      setData(res.data);
+    } catch (e) {
+      // Throttle / permission errors are non-fatal while sharing stays active.
+      const msg = parseApiError(e, '');
+      if (msg && !/every 5 minutes|limited/i.test(msg)) {
+        showToast(msg, 'error');
+      }
+    }
+  }, [nativeApp, showToast]);
+
+  useEffect(() => {
+    if (!nativeApp || kind !== 'booking' || !data?.en_route_active || !data?.id) {
+      return undefined;
+    }
+    const bookingId = data.id;
+    const timer = setInterval(() => {
+      pingEnRouteLocation(bookingId);
+    }, EN_ROUTE_PING_MS);
+    return () => clearInterval(timer);
+  }, [nativeApp, kind, data?.en_route_active, data?.id, pingEnRouteLocation]);
+
+  const startOnMyWay = async () => {
+    setEnRouteBusy(true);
+    try {
+      const coords = await requestGeolocationCoordinates();
+      const res = await jobsAPI.startOnMyWay(data.id, {
+        lat: coords.latitude,
+        lng: coords.longitude,
+      });
+      setData(res.data);
+      showToast('Customer notified — you’re on the way.', 'success');
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setEnRouteBusy(false);
+    }
+  };
+
+  const stopOnMyWay = async () => {
+    setEnRouteBusy(true);
+    try {
+      const res = await jobsAPI.stopOnMyWay(data.id);
+      setData(res.data);
+      showToast('Stopped sharing location.', 'success');
+    } catch (e) {
+      setError(parseApiError(e));
+    } finally {
+      setEnRouteBusy(false);
+    }
+  };
+
   const currency = useMemo(
     () => moneyFormatter(data?.currency || data?.invoice?.currency || 'CAD'),
     [data?.currency, data?.invoice?.currency],
@@ -197,7 +288,14 @@ export default function ProviderScheduleDetailPage() {
   }
 
   const canJobAction = canStartOrCompleteJob(data);
-  const jobActionFrom = jobActionAvailableAt(data);
+  const isPastScheduledStart =
+    Boolean(data?.start_at) && new Date(data.start_at).getTime() <= Date.now();
+  const showCouldNotMakeIt =
+    data?.status === 'confirmed' && isPastScheduledStart;
+  // After scheduled start, confirmed jobs use “I couldn’t make it” (not Cancel).
+  const showCancelBooking =
+    data?.status === 'in_progress' ||
+    (data?.status === 'confirmed' && !isPastScheduledStart);
 
   if (kind === 'booking') {
     return (
@@ -309,6 +407,13 @@ export default function ProviderScheduleDetailPage() {
           )}
         </section>
 
+        {data.status === 'completed' && (
+          <RebookReminderPanel
+            booking={data}
+            onUpdated={(updated) => setData(updated)}
+          />
+        )}
+
         <BookingTasksSection orgSlug={orgSlug} bookingId={data.id} />
 
         {kind === 'booking' && (
@@ -338,7 +443,13 @@ export default function ProviderScheduleDetailPage() {
               ? 'Customer comes to your shop for this service.'
               : 'You go to the customer for this service.'
           }
-          emptyLabel="No address on file for this booking."
+          emptyLabel={
+            data.awaiting_customer_acceptance && data.source === 'provider_direct'
+              ? isShopService(data)
+                ? 'Waiting for the customer to confirm the invite.'
+                : 'Customer will add their address when they confirm the invite email.'
+              : 'No address on file for this booking.'
+          }
         />
 
         {data.customer_notes && (
@@ -355,29 +466,49 @@ export default function ProviderScheduleDetailPage() {
           </div>
         </section>
 
-        <section className="lx-card">
-          <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Send this link so they can view the appointment in the browser or the Luminexa app.
-          </p>
-          <div className="mt-3">
-            <LinkShareBar
-              url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
-              title={data.organization_name || 'Your Luminexa booking'}
-              text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}`}
-              showInput={false}
-              copyLabel="Copy link"
-              compact
-            />
-          </div>
-        </section>
-
         {data.awaiting_customer_acceptance && (
           <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
-            Waiting for the customer to accept the new time
-            {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
-            You can propose a different time, or cancel the booking.
+            {data.source === 'provider_direct' && !data.prior_start_at ? (
+              <>
+                Waiting for the customer to confirm via their invite email
+                {!isShopService(data) ? ' (they add the job address there)' : ''}.
+                You can change the time or cancel if needed — or share the job link at the bottom by text.
+              </>
+            ) : (
+              <>
+                Waiting for the customer to accept the new time
+                {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+                You can propose a different time, or cancel the booking.
+              </>
+            )}
           </p>
+        )}
+
+        {data.status === 'requested' &&
+          !data.awaiting_customer_acceptance &&
+          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) &&
+          data.quote_amount != null && (
+          <div className="grid grid-cols-1 gap-2">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Customer requested a new time
+              {data.prior_start_at ? ` (was ${formatWhen(data.prior_start_at)})` : ''}.
+              Accept to keep the agreed price, or open the request to update the quote.
+            </p>
+            <button
+              type="button"
+              disabled={actionBusy}
+              onClick={() => setConfirmAction('approve')}
+              className="lx-btn-primary min-h-[48px] disabled:opacity-60"
+            >
+              Accept change
+            </button>
+            <Link
+              to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
+              className="flex min-h-[48px] items-center justify-center rounded-xl border border-violet-200 font-medium text-violet-800"
+            >
+              Update quote
+            </Link>
+          </div>
         )}
 
         {data.status === 'requested' &&
@@ -390,7 +521,7 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setConfirmAction('approve')}
               className="lx-btn-primary min-h-[48px] disabled:opacity-60"
             >
-              Approve
+              {data.prior_start_at ? 'Accept change' : 'Approve'}
             </button>
             <button
               type="button"
@@ -398,7 +529,7 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
             >
-              Reschedule
+              {data.prior_start_at ? 'Change time' : 'Reschedule'}
             </button>
             <button
               type="button"
@@ -421,7 +552,9 @@ export default function ProviderScheduleDetailPage() {
               onClick={() => setRescheduleOpen(true)}
               className="min-h-[48px] rounded-xl border border-violet-200 font-medium text-violet-800 disabled:opacity-60"
             >
-              Change time again
+              {data.source === 'provider_direct' && !data.prior_start_at
+                ? 'Change time'
+                : 'Change time again'}
             </button>
             <button
               type="button"
@@ -435,7 +568,8 @@ export default function ProviderScheduleDetailPage() {
         )}
 
         {(data.status === 'requested' || data.status === 'quoted') &&
-          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) && (
+          (data.requires_quote || data.booking_policy === 'quote' || serviceRequiresQuote(data.service_pricing_type)) &&
+          !(data.status === 'requested' && !data.awaiting_customer_acceptance && data.quote_amount != null) && (
           <Link
             to={providerRequestDetail(orgSlug, kind || 'booking', data.id)}
             className="lx-btn-primary flex min-h-[48px] items-center justify-center"
@@ -457,11 +591,37 @@ export default function ProviderScheduleDetailPage() {
 
         {(data.status === 'confirmed' || data.status === 'in_progress') && (
           <div className="flex flex-col gap-2">
-            {!canJobAction && jobActionFrom && (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                Start job and mark complete are available from {formatWhen(jobActionFrom.toISOString())}{' '}
-                (6 hours before the appointment).
-              </p>
+            {nativeApp && data.status === 'confirmed' && canJobAction && (
+              data.en_route_active ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                  <p className="text-sm font-semibold text-sky-900">
+                    Sharing location with customer
+                    {formatDistanceKm(data.en_route_distance_km)
+                      ? ` · about ${formatDistanceKm(data.en_route_distance_km)} away`
+                      : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-sky-800/80">
+                    Updates about every 5 minutes while this screen is open.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={enRouteBusy || actionBusy}
+                    onClick={stopOnMyWay}
+                    className="mt-3 min-h-[44px] w-full rounded-xl border border-sky-300 bg-white font-medium text-sky-900 disabled:opacity-60"
+                  >
+                    Stop sharing
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={enRouteBusy || actionBusy}
+                  onClick={startOnMyWay}
+                  className="min-h-[48px] w-full rounded-xl border border-sky-300 bg-sky-50 font-medium text-sky-900 disabled:opacity-60"
+                >
+                  I’m on my way
+                </button>
+              )
             )}
             {data.status === 'confirmed' && canJobAction && (
               <button
@@ -514,17 +674,29 @@ export default function ProviderScheduleDetailPage() {
                 onClick={() => setConfirmAction('noshow')}
                 className="min-h-[48px] w-full rounded-xl border border-amber-200 font-medium text-amber-800 disabled:opacity-60"
               >
-                Mark no-show
+                Mark customer no-show
               </button>
             )}
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => setConfirmAction('cancel')}
-              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-            >
-              Cancel booking
-            </button>
+            {showCouldNotMakeIt && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('could-not-make-it')}
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+              >
+                I couldn’t make it
+              </button>
+            )}
+            {showCancelBooking && (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => setConfirmAction('cancel')}
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+              >
+                Cancel booking
+              </button>
+            )}
           </div>
         )}
 
@@ -540,6 +712,33 @@ export default function ProviderScheduleDetailPage() {
           >
             Schedule return visit
           </button>
+        )}
+
+        {(data.customer_view_url || data.customer_view_token) && (
+          <section className="lx-card">
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Share with customer</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {data.awaiting_customer_acceptance
+                ? 'Text or message this link if they didn’t get the email — they can confirm (and add the address) from it.'
+                : 'Send this link so they can view the appointment in the browser or the Luminexa app.'}
+              {data.customer_phone ? ` Customer phone: ${data.customer_phone}.` : ''}
+            </p>
+            <div className="mt-3">
+              <LinkShareBar
+                url={data.customer_view_url || getCustomerAppointmentUrl(data.customer_view_token)}
+                title={data.organization_name || 'Your Luminexa booking'}
+                text={`${data.service_name || 'Your appointment'} with ${data.organization_name || 'your provider'}${
+                  data.start_at ? ` — ${formatWhen(data.start_at)}` : ''
+                }. Open here:`}
+                phone={data.customer_phone}
+                email={data.customer_email}
+                showInput={false}
+                copyLabel="Copy link"
+                shareLabel="Share"
+                compact
+              />
+            </div>
+          </section>
         )}
 
         <RescheduleBookingModal
@@ -590,8 +789,15 @@ export default function ProviderScheduleDetailPage() {
           onConfirm={async (payload) => {
             setActionBusy(true);
             try {
+              const { rebook_remind_on: rebookOn, rebook_note: rebookNote, ...invoicePayload } = payload;
               if (data.status === 'completed' && !data.invoice) {
-                await jobsAPI.issueBookingInvoice(data.id, payload);
+                await jobsAPI.issueBookingInvoice(data.id, invoicePayload);
+                if (rebookOn) {
+                  await jobsAPI.setBookingRebookReminder(data.id, {
+                    remind_on: rebookOn,
+                    note: rebookNote || '',
+                  });
+                }
                 showToast('Invoice issued.', 'success');
               } else {
                 await jobsAPI.completeBooking(data.id, payload);
@@ -609,9 +815,19 @@ export default function ProviderScheduleDetailPage() {
 
         <ConfirmDialog
           open={confirmAction === 'approve'}
-          title="Approve this request?"
-          message="The customer will be notified that their booking is confirmed."
-          confirmLabel="Approve"
+          title={
+            data?.prior_start_at || data?.quote_amount != null
+              ? 'Accept this time change?'
+              : 'Approve this request?'
+          }
+          message={
+            data?.prior_start_at || data?.quote_amount != null
+              ? 'The booking will be confirmed at the new time. The customer will be notified.'
+              : 'The customer will be notified that their booking is confirmed.'
+          }
+          confirmLabel={
+            data?.prior_start_at || data?.quote_amount != null ? 'Accept change' : 'Approve'
+          }
           cancelLabel="Back"
           tone="success"
           busy={actionBusy}
@@ -631,12 +847,24 @@ export default function ProviderScheduleDetailPage() {
         <ConfirmDialog
           open={confirmAction === 'noshow'}
           title="Mark customer as no-show?"
-          message="This cancels the booking and frees the slot. Use this when the customer didn't show up."
-          confirmLabel="Mark no-show"
+          message="Use this when the customer didn’t show up. This cancels the booking and frees the slot."
+          confirmLabel="Mark customer no-show"
           cancelLabel="Back"
           tone="default"
           busy={actionBusy}
           onConfirm={runNoShow}
+          onClose={() => setConfirmAction(null)}
+        />
+        <ConfirmDialog
+          open={confirmAction === 'could-not-make-it'}
+          title="You couldn’t make this appointment?"
+          message="Use this when your business missed the job. The customer is notified that you couldn’t make it (not marked as their no-show). This can’t be undone."
+          confirmLabel="I couldn’t make it"
+          cancelLabel="Keep booking"
+          busy={actionBusy}
+          noteLabel="Note for customer (optional)"
+          notePlaceholder="e.g. Emergency — sorry we missed this appointment"
+          onConfirm={runCouldNotMakeIt}
           onClose={() => setConfirmAction(null)}
         />
         <ConfirmDialog
@@ -740,6 +968,7 @@ export default function ProviderScheduleDetailPage() {
   }
 
   if (kind === 'block') {
+    const day = data?.start_at ? formatLocalDateKey(new Date(data.start_at)) : null;
     return (
       <div className="space-y-5 pb-8">
         <header className="rounded-2xl bg-slate-600 p-5 text-white shadow-lg">
@@ -753,7 +982,42 @@ export default function ProviderScheduleDetailPage() {
             <DetailRow label="To">{formatWhen(data.end_at)}</DetailRow>
             <DetailRow label="Note">{data.note || '—'}</DetailRow>
           </dl>
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => setConfirmAction('delete-block')}
+            className="mt-5 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-red-50 text-sm font-semibold text-red-700 ring-1 ring-red-200 active:bg-red-100 disabled:opacity-50"
+          >
+            Remove block (make available again)
+          </button>
         </section>
+        <ConfirmDialog
+          open={confirmAction === 'delete-block'}
+          title="Remove unavailable time?"
+          message="This block will be deleted. That time can be opened or booked again."
+          confirmLabel="Remove block"
+          cancelLabel="Keep"
+          tone="danger"
+          busy={actionBusy}
+          onConfirm={async () => {
+            setActionBusy(true);
+            setError(null);
+            try {
+              await jobsAPI.deleteUnavailableBlock(id);
+              showToast('Unavailable block removed.', 'success');
+              setConfirmAction(null);
+              navigate(providerSchedule(orgSlug, { day }));
+            } catch (e) {
+              setError(parseApiError(e));
+            } finally {
+              setActionBusy(false);
+            }
+          }}
+          onClose={() => {
+            if (actionBusy) return;
+            setConfirmAction(null);
+          }}
+        />
       </div>
     );
   }

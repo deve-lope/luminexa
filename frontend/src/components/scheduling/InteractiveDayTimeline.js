@@ -1,179 +1,71 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
-import { providerRequestDetail, providerScheduleDetail } from '../../utils/providerPaths';
-import { buildDayTimeline, TIMELINE_COLORS, TIMELINE_LABELS } from '../../utils/dayTimeline';
+import { withReturnTo } from '../../utils/navigationBack';
 import {
-  ADD_MODE_META,
-  eventClientX,
-  formatMsRange,
-  msToPercent,
-  normalizeRange,
-  pointerToMs,
-  pickTimelineDisplayMarkers,
-  validateDraftRange,
-} from '../../utils/timelineInteraction';
-import { formatTime } from '../../utils/datetime';
+  providerRequestDetail,
+  providerSchedule,
+  providerScheduleDetail,
+} from '../../utils/providerPaths';
+import { buildDayTimeline, TIMELINE_COLORS, TIMELINE_LABELS } from '../../utils/dayTimeline';
+import { formatMsRange, pickTimelineDisplayMarkers } from '../../utils/timelineInteraction';
+import { slotLocalDayKey } from '../../utils/slotCalendar';
 
-function bookingNavPath(seg, orgSlug) {
+function bookingNavPath(seg, orgSlug, dayKey) {
   if (!orgSlug) return null;
   if (seg.type !== 'booked' && seg.type !== 'pending') return null;
   const slot = seg.slot;
   if (!slot?.booking_id) return null;
-  // Confirmed / in-progress style jobs → schedule booking detail ("jobs" view).
-  // Quote / request-style pending → requests detail when status suggests it.
   const status = (slot.booking_status || '').toLowerCase();
-  if (status === 'requested' || status === 'quoted') {
-    return providerRequestDetail(orgSlug, 'booking', slot.booking_id);
-  }
-  return providerScheduleDetail(orgSlug, 'booking', slot.booking_id);
+  const path =
+    status === 'requested' || status === 'quoted'
+      ? providerRequestDetail(orgSlug, 'booking', slot.booking_id)
+      : providerScheduleDetail(orgSlug, 'booking', slot.booking_id);
+  return withReturnTo(path, providerSchedule(orgSlug, { day: dayKey }));
 }
 
+/** Read-only day bar: tap jobs / unavailable for details. No drag-to-draw. */
 export default function InteractiveDayTimeline({
   dayKey,
   slots,
   unavailable,
   weeklyBlocks,
-  addMode,
-  draftRange,
-  onDraftRangeChange,
-  onClearDraft,
+  onDeleteUnavailable,
+  deletingUnavailableId = null,
 }) {
-  const navigate = useNavigate();
   const { orgSlug } = useProviderOrg();
-  const trackRef = useRef(null);
-  const [hoverMs, setHoverMs] = useState(null);
-  const [dragging, setDragging] = useState(false);
-  const [rangeError, setRangeError] = useState(null);
   const [selection, setSelection] = useState(null);
-  const dragAnchorRef = useRef(null);
-  const resizeEdgeRef = useRef(null);
 
   const timeline = useMemo(
     () => buildDayTimeline(dayKey, { slots, unavailable, weeklyBlocks }),
-    [dayKey, slots, unavailable, weeklyBlocks]
+    [dayKey, slots, unavailable, weeklyBlocks],
   );
-  const { segments, bounds, markers: rawMarkers } = timeline;
+  const { segments, markers: rawMarkers } = timeline;
   const displayMarkers = useMemo(
     () => pickTimelineDisplayMarkers(rawMarkers),
-    [rawMarkers]
+    [rawMarkers],
   );
-  const { startMs: boundStart, endMs: boundEnd } = bounds;
-
-  const modeMeta = addMode ? ADD_MODE_META[addMode] : null;
 
   useEffect(() => {
     setSelection(null);
   }, [dayKey]);
 
-  const updateFromPointer = useCallback(
-    (clientX, anchorMs, edge) => {
-      const rect = trackRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      let pointerMs = pointerToMs(clientX, rect, boundStart, boundEnd);
-      let start = anchorMs;
-      let end = pointerMs;
-      if (edge === 'start') {
-        start = pointerMs;
-        end = draftRange?.endMs ?? anchorMs;
-      } else if (edge === 'end') {
-        start = draftRange?.startMs ?? anchorMs;
-        end = pointerMs;
-      }
-      const normalized = normalizeRange(start, end, bounds);
-      if (!normalized) return;
-      const err = validateDraftRange(normalized.startMs, normalized.endMs, {
-        addMode,
-        slots,
-        unavailable,
-      });
-      if (err) {
-        setRangeError(err);
-        return;
-      }
-      setRangeError(null);
-      onDraftRangeChange(normalized);
-    },
-    [addMode, boundStart, boundEnd, bounds, draftRange, onDraftRangeChange, slots, unavailable]
-  );
-
-  useEffect(() => {
-    if (!dragging) return undefined;
-
-    const onMove = (e) => {
-      if (e.cancelable) e.preventDefault();
-      updateFromPointer(eventClientX(e), dragAnchorRef.current, resizeEdgeRef.current);
-    };
-    const onUp = () => {
-      setDragging(false);
-      resizeEdgeRef.current = null;
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
-    window.addEventListener('touchcancel', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
-      window.removeEventListener('touchcancel', onUp);
-    };
-  }, [dragging, updateFromPointer]);
-
-  const handleTrackPointerDown = (e) => {
-    if (!addMode) return;
-    if (e.type === 'touchstart') e.preventDefault();
-    if (e.type === 'mousedown' && e.button !== 0) return;
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const ms = pointerToMs(eventClientX(e), rect, boundStart, boundEnd);
-    dragAnchorRef.current = ms;
-    resizeEdgeRef.current = null;
-    setDragging(true);
-    const normalized = normalizeRange(ms, ms + 60 * 60 * 1000, bounds);
-    if (!normalized) return;
-    const err = validateDraftRange(normalized.startMs, normalized.endMs, {
-      addMode,
-      slots,
-      unavailable,
-    });
-    if (err) {
-      setRangeError(err);
-      return;
-    }
-    setRangeError(null);
-    onDraftRangeChange(normalized);
-  };
-
-  const handleResizePointerDown = (e, edge) => {
-    if (!addMode || !draftRange) return;
-    e.stopPropagation();
-    if (e.type === 'touchstart') e.preventDefault();
-    dragAnchorRef.current = edge === 'start' ? draftRange.endMs : draftRange.startMs;
-    resizeEdgeRef.current = edge;
-    setDragging(true);
-  };
-
-  const handleTrackPointerMove = (e) => {
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setHoverMs(pointerToMs(eventClientX(e), rect, boundStart, boundEnd));
-  };
-
   const handleSegmentClick = (seg) => {
-    if (addMode) return;
     if (seg.type === 'off_hours' || seg.type === 'idle') {
       setSelection(null);
       return;
     }
     if (seg.type === 'booked' || seg.type === 'pending') {
-      const path = bookingNavPath(seg, orgSlug);
-      if (path) {
-        setSelection(null);
-        navigate(path);
-      }
+      const slot = seg.slot;
+      setSelection({
+        kind: 'booking',
+        startMs: seg.startMs,
+        endMs: seg.endMs,
+        path: bookingNavPath(seg, orgSlug, dayKey),
+        customerName: (slot?.customer_name || '').trim() || 'Customer',
+        serviceName: (slot?.service_name || '').trim() || 'Service',
+        address: (slot?.service_address || '').trim(),
+      });
       return;
     }
     if (seg.type === 'unavailable') {
@@ -182,6 +74,7 @@ export default function InteractiveDayTimeline({
         startMs: seg.startMs,
         endMs: seg.endMs,
         note: seg.block?.note || '',
+        blockId: seg.block?.id || null,
       });
       return;
     }
@@ -194,112 +87,40 @@ export default function InteractiveDayTimeline({
     }
   };
 
-  const draftLeft = draftRange ? msToPercent(draftRange.startMs, boundStart, boundEnd) : 0;
-  const draftWidth = draftRange
-    ? msToPercent(draftRange.endMs, boundStart, boundEnd) - draftLeft
-    : 0;
-  const hoverLeft = hoverMs != null ? msToPercent(hoverMs, boundStart, boundEnd) : null;
-
-  const tooltipMs = dragging && draftRange
-    ? draftRange.endMs
-    : hoverMs;
-  const tooltipLeft = dragging && draftRange
-    ? draftLeft + draftWidth / 2
-    : hoverLeft;
+  const dayUnavailable = useMemo(
+    () =>
+      (unavailable || [])
+        .filter((u) => slotLocalDayKey(u.start_at) === dayKey)
+        .sort((a, b) => new Date(a.start_at) - new Date(b.start_at)),
+    [unavailable, dayKey],
+  );
 
   return (
     <div className="space-y-2">
       <div
-        ref={trackRef}
-        className={`relative touch-none select-none rounded-lg border-2 bg-slate-100 shadow-inner transition ${
-          addMode ? 'cursor-crosshair border-luminexa-accent/50' : 'border-slate-200'
-        }`}
+        className="relative select-none rounded-lg border-2 border-slate-200 bg-slate-100 shadow-inner"
         style={{ height: '3.25rem' }}
-        onMouseDown={handleTrackPointerDown}
-        onMouseMove={handleTrackPointerMove}
-        onTouchStart={handleTrackPointerDown}
-        onTouchMove={handleTrackPointerMove}
-        onMouseLeave={() => {
-          if (!dragging) setHoverMs(null);
-        }}
       >
         <div className="absolute inset-0 flex overflow-hidden rounded-[10px]">
           {segments.map((seg, i) => {
             const interactive =
-              !addMode &&
-              (seg.type === 'open' ||
-                seg.type === 'unavailable' ||
-                seg.type === 'booked' ||
-                seg.type === 'pending');
+              seg.type === 'open' ||
+              seg.type === 'unavailable' ||
+              seg.type === 'booked' ||
+              seg.type === 'pending';
             return (
               <div
                 key={`${seg.startMs}-${i}`}
                 style={{ width: `${seg.widthPct}%` }}
                 className={`h-full shrink-0 border-r border-white/20 last:border-r-0 ${TIMELINE_COLORS[seg.type]} ${
-                  addMode ? 'pointer-events-none' : interactive ? 'cursor-pointer' : ''
+                  interactive ? 'cursor-pointer' : ''
                 }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSegmentClick(seg);
-                }}
-                onMouseEnter={() => {
-                  if (!addMode) setHoverMs((seg.startMs + seg.endMs) / 2);
-                }}
-                title={
-                  !addMode
-                    ? `${TIMELINE_LABELS[seg.type]} · ${formatMsRange(seg.startMs, seg.endMs)}`
-                    : undefined
-                }
+                onClick={() => handleSegmentClick(seg)}
+                title={`${TIMELINE_LABELS[seg.type]} · ${formatMsRange(seg.startMs, seg.endMs)}`}
               />
             );
           })}
         </div>
-
-        {draftRange && modeMeta && (
-          <div
-            className={`absolute top-1 bottom-1 z-20 rounded-md border-2 shadow-lg ${modeMeta.color} ${modeMeta.border} opacity-90`}
-            style={{ left: `${draftLeft}%`, width: `${Math.max(draftWidth, 1.5)}%` }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              aria-label="Adjust start time"
-              className={`absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize rounded-l-md sm:w-2 ${modeMeta.ring} opacity-80 hover:opacity-100`}
-              onMouseDown={(e) => handleResizePointerDown(e, 'start')}
-              onTouchStart={(e) => handleResizePointerDown(e, 'start')}
-            />
-            <button
-              type="button"
-              aria-label="Adjust end time"
-              className={`absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize rounded-r-md sm:w-2 ${modeMeta.ring} opacity-80 hover:opacity-100`}
-              onMouseDown={(e) => handleResizePointerDown(e, 'end')}
-              onTouchStart={(e) => handleResizePointerDown(e, 'end')}
-            />
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center truncate px-2 text-[10px] font-bold text-white drop-shadow">
-              {formatMsRange(draftRange.startMs, draftRange.endMs)}
-            </span>
-          </div>
-        )}
-
-        {tooltipMs != null && tooltipLeft != null && (
-          <div
-            className="pointer-events-none absolute top-0 z-30 -translate-x-1/2 -translate-y-full pb-1"
-            style={{ left: `${tooltipLeft}%` }}
-          >
-            <span className="whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-lg">
-              {dragging && draftRange
-                ? formatMsRange(draftRange.startMs, draftRange.endMs)
-                : formatTime(new Date(tooltipMs).toISOString())}
-            </span>
-          </div>
-        )}
-
-        {hoverMs != null && !dragging && addMode && (
-          <div
-            className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-luminexa-accent"
-            style={{ left: `${hoverLeft}%` }}
-          />
-        )}
       </div>
 
       <div className="relative mt-0.5 h-4 overflow-hidden">
@@ -329,30 +150,8 @@ export default function InteractiveDayTimeline({
             </span>
           ))}
         </div>
-        {addMode ? (
-          <span className="font-medium text-luminexa-accent">
-            Drag to draw · pull edges to resize
-          </span>
-        ) : (
-          <span className="text-slate-400">Tap a colored block for details</span>
-        )}
+        <span className="text-slate-400">Tap a block for details</span>
       </div>
-
-      {rangeError && addMode && (
-        <p className="text-xs text-amber-700">{rangeError}</p>
-      )}
-      {draftRange && addMode && (
-        <button
-          type="button"
-          onClick={() => {
-            setRangeError(null);
-            onClearDraft();
-          }}
-          className="text-xs font-medium text-slate-500 underline"
-        >
-          Clear selection on timeline
-        </button>
-      )}
 
       {selection?.kind === 'open' && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3">
@@ -374,6 +173,44 @@ export default function InteractiveDayTimeline({
               Close
             </button>
           </div>
+        </div>
+      )}
+
+      {selection?.kind === 'booking' && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/90 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-violet-950">
+                {selection.customerName}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-violet-900">{selection.serviceName}</p>
+              <p className="mt-1 text-xs text-violet-800">
+                {formatMsRange(selection.startMs, selection.endMs)}
+              </p>
+              {selection.address ? (
+                <p className="mt-1 line-clamp-2 text-xs text-violet-800/90">{selection.address}</p>
+              ) : (
+                <p className="mt-1 text-xs text-violet-700/70">
+                  Address from customer when they confirm
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="shrink-0 text-xs font-medium text-violet-800 underline"
+            >
+              Close
+            </button>
+          </div>
+          {selection.path && (
+            <Link
+              to={selection.path}
+              className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-violet-700 text-sm font-semibold text-white active:bg-violet-800"
+            >
+              Show more
+            </Link>
+          )}
         </div>
       )}
 
@@ -399,6 +236,61 @@ export default function InteractiveDayTimeline({
               Close
             </button>
           </div>
+          {selection.blockId && onDeleteUnavailable && (
+            <button
+              type="button"
+              disabled={deletingUnavailableId === selection.blockId}
+              onClick={async () => {
+                await onDeleteUnavailable(selection.blockId);
+                setSelection(null);
+              }}
+              className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-red-700 ring-1 ring-red-200 active:bg-red-50 disabled:opacity-50"
+            >
+              {deletingUnavailableId === selection.blockId
+                ? 'Removing…'
+                : 'Remove block (make available again)'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {dayUnavailable.length > 0 && (
+        <div className="space-y-2 border-t border-slate-100 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Unavailable today · {dayUnavailable.length}
+          </p>
+          <ul className="space-y-2">
+            {dayUnavailable.map((block) => (
+              <li
+                key={block.id}
+                className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-900">
+                    {formatMsRange(
+                      new Date(block.start_at).getTime(),
+                      new Date(block.end_at).getTime(),
+                    )}
+                  </p>
+                  {block.note ? (
+                    <p className="mt-0.5 text-xs text-slate-600">{block.note}</p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-slate-400">Blocked time</p>
+                  )}
+                </div>
+                {onDeleteUnavailable && (
+                  <button
+                    type="button"
+                    disabled={deletingUnavailableId === block.id}
+                    onClick={() => onDeleteUnavailable(block.id)}
+                    className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-red-700 ring-1 ring-red-200 active:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletingUnavailableId === block.id ? '…' : 'Delete'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -86,8 +86,9 @@ class Service(models.Model):
     quote_questions = models.JSONField(
         default=list,
         blank=True,
-        help_text='Template questions for quote-priced services (list of strings). '
-                  'Customers answer these when requesting; providers can edit on the quote.',
+        help_text='Template questions for quote-priced services: strings or '
+                  '{question, type: text|choice, options?}. '
+                  'Customers answer when requesting; providers can also ask mid-request.',
     )
     allow_request = models.BooleanField(
         default=True,
@@ -205,12 +206,16 @@ class ProviderNotification(models.Model):
         QUOTE_ANSWERS_RECEIVED = 'quote_answers_received', 'Quote answers received'
         CUSTOMER_REPORTED_NO_SHOW = 'customer_reported_no_show', 'Customer reported no-show'
         INCOMPLETE_JOB_TASKS = 'incomplete_job_tasks', 'Incomplete job tasks'
+        TASK_DUE = 'task_due', 'Task due soon'
         SUBSCRIPTION_ENDING = 'subscription_ending', 'Subscription ending'
         NEW_GIG_IN_AREA = 'new_gig_in_area', 'New gig in your area'
         GIG_QUOTE_ACCEPTED = 'gig_quote_accepted', 'Gig quote accepted'
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on gig'
         GIG_QUOTE_COUNTERED = 'gig_quote_countered', 'Customer countered your gig bid'
         GIG_QUOTE_REJECTED = 'gig_quote_rejected', 'Customer rejected your gig bid'
+        JOB_STARTING_SOON = 'job_starting_soon', 'Job starting in 1 hour'
+        JOB_EN_ROUTE_NUDGE = 'job_en_route_nudge', 'Share location / on the way?'
+        JOB_START_OVERDUE = 'job_start_overdue', 'Did the job start?'
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name='provider_notifications'
@@ -261,6 +266,9 @@ class CustomerNotification(models.Model):
         NEW_GIG_COMMENT = 'new_gig_comment', 'New comment on your gig'
         GIG_EXPIRED = 'gig_expired', 'Gig post expired'
         GIG_COUNTER_DECLINED = 'gig_counter_declined', 'Provider declined your counter-offer'
+        PROVIDER_EN_ROUTE = 'provider_en_route', 'Provider is on the way'
+        PROVIDER_NEARBY = 'provider_nearby', 'Provider is nearby'
+        REBOOK_REMINDER = 'rebook_reminder', 'Remind to book again'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -618,6 +626,44 @@ class Booking(models.Model):
         default='',
         help_text='Where the service will take place (customer-provided).',
     )
+    service_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded job location (set when provider starts on-my-way).',
+    )
+    service_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Geocoded job location (set when provider starts on-my-way).',
+    )
+    en_route_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the provider started optional “I’m on my way” sharing.',
+    )
+    en_route_lat = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    en_route_lng = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    en_route_updated_at = models.DateTimeField(null=True, blank=True)
+    en_route_distance_km = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Last computed distance from provider GPS to job location (km).',
+    )
+    en_route_nearby_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer was notified that the provider is within 5 km.',
+    )
     reminder_sent_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -627,6 +673,21 @@ class Booking(models.Model):
         null=True,
         blank=True,
         help_text='When staff were reminded about incomplete tasks ~48h before the job.',
+    )
+    provider_1h_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were reminded ~1 hour before the job.',
+    )
+    provider_en_route_nudge_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were nudged ~30 minutes before to share location / go on the way.',
+    )
+    provider_start_overdue_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were asked if the job started after start time + 30 minutes.',
     )
     quote_amount = models.DecimalField(
         max_digits=10,
@@ -1075,8 +1136,11 @@ class BookingStatusEvent(models.Model):
         RESCHEDULED = 'rescheduled', 'Rescheduled'
         NO_SHOW = 'no_show', 'No-show'
         CUSTOMER_NO_SHOW_REPORTED = 'customer_no_show_reported', 'Customer reported no-show'
+        PROVIDER_COULD_NOT_MAKE_IT = 'provider_could_not_make_it', 'Provider could not make it'
         INCOMPLETE = 'incomplete', 'Marked incomplete'
         RETURN_SCHEDULED = 'return_scheduled', 'Return visit scheduled'
+        ON_THE_WAY = 'on_the_way', 'On the way'
+        EN_ROUTE_STOPPED = 'en_route_stopped', 'Stopped sharing location'
 
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='status_events')
     actor = models.ForeignKey(
@@ -1473,6 +1537,11 @@ class Task(models.Model):
         choices=Priority.choices, default=Priority.NORMAL
     )
     due_at = models.DateTimeField(null=True, blank=True)
+    due_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When staff were reminded ~24h before this task’s due time.',
+    )
     recurrence = models.CharField(
         max_length=10,
         choices=Recurrence.choices,
@@ -1492,3 +1561,62 @@ class Task(models.Model):
 
     class Meta:
         ordering = ['-is_done', '-priority', 'due_at', 'created_at']
+
+
+class BookingRebookReminder(models.Model):
+    """One-shot provider-scheduled nudge for the customer to book the same service again."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        SENT = 'sent', 'Sent'
+        CANCELLED = 'cancelled', 'Cancelled'
+        SKIPPED = 'skipped', 'Skipped'
+
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminder',
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.CASCADE,
+        related_name='rebook_reminders',
+    )
+    remind_on = models.DateField(
+        help_text='Calendar day (org timezone) to send the rebook nudge.',
+    )
+    note = models.CharField(max_length=200, blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rebook_reminders_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['remind_on', 'id']
+        indexes = [
+            models.Index(fields=['status', 'remind_on']),
+        ]
+
+    def __str__(self):
+        return f'Rebook reminder {self.pk} booking={self.booking_id} on {self.remind_on}'

@@ -22,6 +22,12 @@ export default function LandingRoute() {
     if (path) return <Navigate to={path} replace />;
   }
 
+  // Marketing demo stays on the public homepage when opening Luminexa (/).
+  // Otherwise a leftover demo cookie sends every visit into the provider shell.
+  if (isAuthenticated && user?.is_marketing_demo) {
+    return <AboutPage />;
+  }
+
   if (isAuthenticated && isProviderMember(memberships)) {
     return <Navigate to={firstProviderHome(memberships)} replace />;
   }

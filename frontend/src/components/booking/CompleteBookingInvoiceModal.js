@@ -4,6 +4,7 @@ import { useModalBodyLock } from '../../hooks/useModalBodyLock';
 import { formatServicePrice } from '../../utils/serviceDisplay';
 import { costLinesToBillItems } from '../../utils/jobBillItems';
 import { jobsAPI } from '../../utils/api';
+import RebookReminderFields from './RebookReminderFields';
 
 function money(n, currency = 'CAD') {
   try {
@@ -80,6 +81,13 @@ export default function CompleteBookingInvoiceModal({
   const [error, setError] = useState(null);
   const [taxPreview, setTaxPreview] = useState(null);
   const [taxLoading, setTaxLoading] = useState(false);
+  const [rebookEnabled, setRebookEnabled] = useState(false);
+  const [rebookRemindOn, setRebookRemindOn] = useState('');
+  const [rebookNote, setRebookNote] = useState('');
+
+  const canScheduleRebook = Boolean(
+    booking?.service && !(booking?.job_title || '').trim() && booking?.service_name !== 'Custom job',
+  );
 
   useModalBodyLock(open && Boolean(booking));
 
@@ -93,6 +101,9 @@ export default function CompleteBookingInvoiceModal({
       setMarkPaid(false);
       setError(null);
       setTaxPreview(null);
+      setRebookEnabled(false);
+      setRebookRemindOn('');
+      setRebookNote('');
     }
   }, [open, defaultServiceFee, booking?.id]);
 
@@ -222,13 +233,22 @@ export default function CompleteBookingInvoiceModal({
       setError('Enter a valid service fee (0 or more).');
       return;
     }
+    if (canScheduleRebook && rebookEnabled && !rebookRemindOn) {
+      setError('Choose a rebook reminder date, or turn the reminder off.');
+      return;
+    }
     setError(null);
-    onConfirm?.({
+    const payload = {
       service_fee: parsed.toFixed(2),
       line_items: lineItems,
       notes: notes.trim(),
       mark_paid: markPaid,
-    });
+    };
+    if (canScheduleRebook && rebookEnabled && rebookRemindOn) {
+      payload.rebook_remind_on = rebookRemindOn;
+      payload.rebook_note = rebookNote.trim();
+    }
+    onConfirm?.(payload);
   };
 
   const jurisdictionHint = liveTax.region
@@ -497,6 +517,17 @@ export default function CompleteBookingInvoiceModal({
             />
             Mark as paid (cash / e-transfer already received)
           </label>
+
+          {canScheduleRebook && (
+            <RebookReminderFields
+              enabled={rebookEnabled}
+              onEnabledChange={setRebookEnabled}
+              remindOn={rebookRemindOn}
+              onRemindOnChange={setRebookRemindOn}
+              note={rebookNote}
+              onNoteChange={setRebookNote}
+            />
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

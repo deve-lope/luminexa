@@ -14,9 +14,8 @@ import {
   canUseBrowserGeolocation,
   formatPlaceLabel,
   isCoordinateLabel,
-  shareLocationButtonLabel,
 } from '../../utils/geolocationSupport';
-import LocationEnablePrompt from '../../components/customer/LocationEnablePrompt';
+import { IconMapPin, IconToday } from '../../components/icons/NavIcons';
 import { isPostalSearchReady, normalizePostalInput } from '../../utils/postalInput';
 
 export default function CustomerFindPage() {
@@ -36,8 +35,19 @@ export default function CustomerFindPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const gpsAvailable = canUseBrowserGeolocation();
-  // Open city/ZIP entry by default so typing is obvious on laptops and phones.
-  const [locationExpanded, setLocationExpanded] = useState(true);
+  // Once a place is set we show a one-line summary; “Change” re-opens the editor.
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const resultsRef = useRef(null);
+
+  // Phones: jump past the filters to the results after a search / location is set.
+  const scrollToResults = useCallback((delay = 0) => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 1023px)').matches) return;
+    window.setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, delay);
+  }, []);
 
   const {
     location: nearMe,
@@ -202,9 +212,12 @@ export default function CustomerFindPage() {
           country: country || '',
           radiusMiles: r != null ? r : radiusMiles,
         });
+        // Location is set — fold the editor away and show the results.
+        setEditingLocation(false);
+        scrollToResults(250);
       }
     },
-    [applyLocation, radiusMiles]
+    [applyLocation, radiusMiles, scrollToResults]
   );
 
   const handleRadiusChange = useCallback(
@@ -229,7 +242,7 @@ export default function CustomerFindPage() {
     setLocationLng(null);
     setLocationLabel('');
     setRadiusMiles(DEFAULT_RADIUS_MILES);
-    setLocationExpanded(false);
+    setEditingLocation(false);
     clearLocation();
   }, [clearLocation]);
 
@@ -241,9 +254,10 @@ export default function CustomerFindPage() {
       setLocationLabel(next.label || '');
       if (next.postal) setPostal(normalizePostalInput(next.postal));
       if (next.radiusMiles) setRadiusMiles(next.radiusMiles);
-      setLocationExpanded(true);
+      setEditingLocation(false);
+      scrollToResults(250);
     });
-  }, [requestNearMe]);
+  }, [requestNearMe, scrollToResults]);
 
   const handleMapLocationSearch = useCallback(
     ({ postal: nextPostal, lat, lng, radiusMiles: r, label, neighbourhood, city }) => {
@@ -312,11 +326,14 @@ export default function CustomerFindPage() {
     setDateTo(value);
   }, [dateFrom]);
 
-  const nearLabelShort = locationLabel
-    ? locationLabel.length > 42
-      ? `${locationLabel.slice(0, 40)}…`
-      : locationLabel
-    : '';
+  const dateSummary =
+    dateMode === 'single' && dateFrom
+      ? dateFrom
+      : dateMode === 'range' && (dateFrom || dateTo)
+        ? `${dateFrom || '…'} → ${dateTo || '…'}`
+        : 'Any date';
+  const showDateEditor = dateOpen || dateMode !== 'any';
+  const showLocationEditor = !hasCoords || editingLocation;
 
   return (
     <div className="space-y-6">
@@ -366,91 +383,21 @@ export default function CustomerFindPage() {
           <ServiceSearchBar
             value={query}
             onChange={setQuery}
+            onSubmit={(v) => {
+              if (v.trim().length >= 2 || hasLocation) scrollToResults(60);
+            }}
             placeholder="Search car wash, plumbing, pet grooming…"
           />
 
-          {/* Near-me chip row */}
-          <div className="flex flex-col gap-2">
-            {hasCoords ? (
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm text-teal-900 self-start">
-                <svg className="h-3.5 w-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
-                </svg>
-                <span className="truncate font-medium">
-                  Near {nearLabelShort || 'your area'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setLocationExpanded((v) => !v)}
-                  className="shrink-0 font-semibold text-teal-800 underline-offset-2 hover:underline"
-                >
-                  {locationExpanded ? 'Hide' : 'Change'}
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                {!locationExpanded && (
-                  <button
-                    type="button"
-                    onClick={() => setLocationExpanded(true)}
-                    className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-900 hover:bg-teal-100 sm:flex-1"
-                  >
-                    <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
-                    </svg>
-                    Enter city or postal code
-                  </button>
-                )}
-                {locationExpanded && (
-                  <button
-                    type="button"
-                    onClick={() => setLocationExpanded(false)}
-                    className="inline-flex min-h-[40px] items-center self-start rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Hide location
-                  </button>
-                )}
-                {gpsAvailable && (
-                  <button
-                    type="button"
-                    onClick={handleUseMyLocation}
-                    disabled={locating}
-                    className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3" />
-                      <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-                    </svg>
-                    {shareLocationButtonLabel({ locating })}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {!gpsAvailable && !hasCoords && !locationExpanded && (
-            <p className="text-sm text-slate-600">
-              This device has no GPS — tap “Enter city or postal code” to search nearby.
-            </p>
-          )}
-
-          {nearMeError && !locationExpanded && (
-            <LocationEnablePrompt
-              error={nearMeError}
-              errorKind={nearMeErrorKind}
-              locating={locating}
-              onRetry={handleUseMyLocation}
-              onEnterAddress={() => setLocationExpanded(true)}
-            />
-          )}
-
-          {locationExpanded && (
+          {showLocationEditor ? (
             <LocationSearchBar
               key={hasCoords ? `${locationLat},${locationLng}` : 'empty'}
               radiusMiles={radiusMiles}
               onLocationChange={handleLocationChange}
               onRadiusChange={handleRadiusChange}
               onClear={handleLocationClear}
+              onUseMyLocation={handleUseMyLocation}
+              onDone={hasCoords ? () => setEditingLocation(false) : null}
               locating={locating}
               locationError={nearMeError}
               locationErrorKind={nearMeErrorKind}
@@ -459,72 +406,115 @@ export default function CustomerFindPage() {
               externalLabel={locationLabel}
               services={services}
             />
+          ) : (
+            <section className="lx-card flex items-center gap-3 !py-3" aria-label="Search area">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-700 ring-1 ring-teal-100">
+                <IconMapPin className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="lx-eyebrow">Searching near</p>
+                <p className="truncate font-semibold tracking-tight text-slate-900">
+                  {locationLabel || 'Your area'}
+                </p>
+                <p className="text-xs text-slate-500">within {radiusMiles} mi</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLocation(true)}
+                className="lx-btn-secondary min-h-[40px] shrink-0 px-4"
+              >
+                Change
+              </button>
+            </section>
           )}
 
-          <section className="lx-card">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">When do you need it?</h2>
-                <p className="text-sm text-slate-500">Any date is selected by default.</p>
-              </div>
-              {hasDateFilter && (
-                <button
-                  type="button"
-                  onClick={() => updateDateMode('any')}
-                  className="min-h-[40px] self-start text-sm font-medium text-luminexa-accent sm:self-auto"
-                >
-                  Clear date
-                </button>
-              )}
-            </div>
+          <section className="lx-card !py-3">
+            {!showDateEditor ? (
+              <button
+                type="button"
+                onClick={() => setDateOpen(true)}
+                className="flex w-full items-center gap-3 text-left"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+                  <IconToday className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="lx-eyebrow block">When</span>
+                  <span className="block font-semibold tracking-tight text-slate-900">
+                    {dateSummary}
+                  </span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-teal-700">Change</span>
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="lx-eyebrow">When do you need it?</h2>
+                    <p className="mt-0.5 text-sm text-slate-500">Any date is selected by default.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateDateMode('any');
+                      setDateOpen(false);
+                    }}
+                    className="min-h-[40px] shrink-0 text-sm font-semibold text-luminexa-accent"
+                  >
+                    {hasDateFilter ? 'Clear' : 'Close'}
+                  </button>
+                </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100/80 p-1 text-sm">
-              {[
-                ['any', 'Any'],
-                ['single', 'Single date'],
-                ['range', 'Range'],
-              ].map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => updateDateMode(mode)}
-                  className={`min-h-[44px] rounded-lg px-2 font-semibold transition ${
-                    dateMode === mode ? 'lx-toggle-active' : 'lx-toggle-idle bg-transparent'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100/80 p-1 text-sm">
+                  {[
+                    ['any', 'Any'],
+                    ['single', 'Single date'],
+                    ['range', 'Range'],
+                  ].map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => updateDateMode(mode)}
+                      className={`min-h-[44px] rounded-lg px-2 font-semibold transition ${
+                        dateMode === mode ? 'lx-toggle-active' : 'lx-toggle-idle bg-transparent'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-            {dateMode !== 'any' && (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-medium text-slate-600">
-                  {dateMode === 'single' ? 'Date' : 'Start date'}
-                  <input
-                    type="date"
-                    min={minDate}
-                    value={dateFrom}
-                    onChange={(e) => updateDateFrom(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-                  />
-                </label>
-                {dateMode === 'range' && (
-                  <label className="block text-xs font-medium text-slate-600">
-                    End date
-                    <input
-                      type="date"
-                      min={dateFrom || minDate}
-                      value={dateTo}
-                      onChange={(e) => updateDateTo(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-luminexa-accent focus:ring-1 focus:ring-luminexa-accent"
-                    />
-                  </label>
+                {dateMode !== 'any' && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block text-xs font-medium text-slate-600">
+                      {dateMode === 'single' ? 'Date' : 'Start date'}
+                      <input
+                        type="date"
+                        min={minDate}
+                        value={dateFrom}
+                        onChange={(e) => updateDateFrom(e.target.value)}
+                        className="lx-input mt-1 !py-2.5 text-sm"
+                      />
+                    </label>
+                    {dateMode === 'range' && (
+                      <label className="block text-xs font-medium text-slate-600">
+                        End date
+                        <input
+                          type="date"
+                          min={dateFrom || minDate}
+                          value={dateTo}
+                          onChange={(e) => updateDateTo(e.target.value)}
+                          className="lx-input mt-1 !py-2.5 text-sm"
+                        />
+                      </label>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </section>
 
+          <div ref={resultsRef} className="scroll-mt-32 space-y-6">
           {!shouldSearch ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/80 p-8 text-center">
               <svg className="mx-auto h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -620,6 +610,8 @@ export default function CustomerFindPage() {
               )}
             </>
           )}
+
+          </div>
 
           <p className="text-center text-sm text-slate-500">
             <Link to="/services" className="font-medium text-luminexa-accent">

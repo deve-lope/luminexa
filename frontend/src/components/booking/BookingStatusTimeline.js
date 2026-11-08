@@ -10,6 +10,7 @@ const ACTION_LABELS = {
   completed: 'Marked complete',
   rescheduled: 'Rescheduled',
   no_show: 'Marked no-show',
+  provider_could_not_make_it: 'Provider could not make it',
   incomplete: 'Marked incomplete — return visit needed',
   return_scheduled: 'Return visit scheduled',
 };

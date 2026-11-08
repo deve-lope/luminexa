@@ -77,6 +77,12 @@ export function AuthProvider({ children }) {
     [applyAuthPayload]
   );
 
+  const enterMarketingDemo = useCallback(async () => {
+    const { data } = await userAPI.marketingDemoLogin();
+    const session = await applyAuthPayload(data);
+    return { ...session, orgSlug: data?.org_slug || null };
+  }, [applyAuthPayload]);
+
   const logout = useCallback(async () => {
     try {
       await clearPushTokenOnLogout();
@@ -105,11 +111,22 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user),
       login,
       loginWithOtp,
+      enterMarketingDemo,
       logout,
       refreshSession: loadSession,
       setUserFromProfile,
     }),
-    [user, memberships, loading, login, loginWithOtp, logout, loadSession, setUserFromProfile]
+    [
+      user,
+      memberships,
+      loading,
+      login,
+      loginWithOtp,
+      enterMarketingDemo,
+      logout,
+      loadSession,
+      setUserFromProfile,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -26,21 +26,43 @@ export function workingWindowsForDay(dayKey, weeklyBlocks) {
   });
 }
 
-export function defaultDayBounds(dayKey, weeklyBlocks) {
+export function defaultDayBounds(dayKey, weeklyBlocks, { slots = [], unavailable = [] } = {}) {
   const windows = workingWindowsForDay(dayKey, weeklyBlocks);
+  let startMs;
+  let endMs;
+  let workingWindows;
   if (windows?.length) {
-    const startMs = Math.min(...windows.map((w) => w.startMs));
-    const endMs = Math.max(...windows.map((w) => w.endMs));
+    startMs = Math.min(...windows.map((w) => w.startMs));
+    endMs = Math.max(...windows.map((w) => w.endMs));
     const pad = 30 * 60 * 1000;
-    return { startMs: startMs - pad, endMs: endMs + pad, workingWindows: windows };
+    startMs -= pad;
+    endMs += pad;
+    workingWindows = windows;
+  } else {
+    const start = new Date(`${dayKey}T07:00:00`);
+    const end = new Date(`${dayKey}T19:00:00`);
+    startMs = start.getTime();
+    endMs = end.getTime();
+    workingWindows = [{ startMs, endMs }];
   }
-  const start = new Date(`${dayKey}T07:00:00`);
-  const end = new Date(`${dayKey}T19:00:00`);
-  return {
-    startMs: start.getTime(),
-    endMs: end.getTime(),
-    workingWindows: [{ startMs: start.getTime(), endMs: end.getTime() }],
-  };
+
+  // Always include booked / blocked windows so the bar matches the list below.
+  for (const s of slots) {
+    if (slotLocalDayKey(s.start_at) !== dayKey) continue;
+    const st = new Date(s.start_at).getTime();
+    const en = new Date(s.end_at).getTime();
+    if (!Number.isNaN(st)) startMs = Math.min(startMs, st);
+    if (!Number.isNaN(en)) endMs = Math.max(endMs, en);
+  }
+  for (const u of unavailable) {
+    if (slotLocalDayKey(u.start_at) !== dayKey) continue;
+    const st = new Date(u.start_at).getTime();
+    const en = new Date(u.end_at).getTime();
+    if (!Number.isNaN(st)) startMs = Math.min(startMs, st);
+    if (!Number.isNaN(en)) endMs = Math.max(endMs, en);
+  }
+
+  return { startMs, endMs, workingWindows };
 }
 
 function inWindow(ms, startMs, endMs) {
@@ -52,26 +74,33 @@ function overlaps(a0, a1, b0, b1) {
 }
 
 function typeAt(ms, { slots, unavailable, workingWindows }) {
+  // Priority: jobs > blocked time > open inventory.
+  // Recurring sync can leave open slots under an unavailable window — those must
+  // still paint gray so the bar matches the list below the timeline.
+  let sawPartialOpen = false;
+  let sawOpen = false;
   for (const s of slots) {
     const st = new Date(s.start_at).getTime();
     const en = new Date(s.end_at).getTime();
-    if (inWindow(ms, st, en)) {
-      if (s.status === 'booked') return 'booked';
-      if (s.status === 'pending') return 'pending';
-      // Partially filled capacity slots stay "open" for more bookings, but show as
-      // pending on the timeline so staff can see someone is already booked.
-      if (s.status === 'open') {
-        const occupied = Number(s.occupied_count) || 0;
-        if (occupied > 0) return 'pending';
-        return 'open';
-      }
+    if (!inWindow(ms, st, en)) continue;
+    if (s.status === 'booked') return 'booked';
+    if (s.status === 'pending') return 'pending';
+    if (s.status === 'open') {
+      const occupied = Number(s.occupied_count) || 0;
+      if (occupied > 0) sawPartialOpen = true;
+      else sawOpen = true;
     }
   }
+
   for (const u of unavailable) {
     const st = new Date(u.start_at).getTime();
     const en = new Date(u.end_at).getTime();
     if (inWindow(ms, st, en)) return 'unavailable';
   }
+
+  if (sawPartialOpen) return 'pending';
+  if (sawOpen) return 'open';
+
   const inWorking = (workingWindows || []).some((w) => inWindow(ms, w.startMs, w.endMs));
   if (inWorking) {
     // Weekly open hours should read green on the provider timeline for times that
@@ -88,10 +117,12 @@ function typeAt(ms, { slots, unavailable, workingWindows }) {
  * @returns {{ segments: Array, bounds: { startMs, endMs }, markers: Array }}
  */
 export function buildDayTimeline(dayKey, { slots = [], unavailable = [], weeklyBlocks = [] }) {
-  const { startMs, endMs, workingWindows } = defaultDayBounds(dayKey, weeklyBlocks);
-
   const daySlots = slots.filter((s) => slotLocalDayKey(s.start_at) === dayKey);
   const dayUnavailable = unavailable.filter((u) => slotLocalDayKey(u.start_at) === dayKey);
+  const { startMs, endMs, workingWindows } = defaultDayBounds(dayKey, weeklyBlocks, {
+    slots: daySlots,
+    unavailable: dayUnavailable,
+  });
 
   const points = new Set([startMs, endMs]);
   for (const s of daySlots) {

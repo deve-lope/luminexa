@@ -42,16 +42,8 @@ export default function ProviderStorefrontPreview({
   const renderPreviewActions = (svc) => {
     const needsQuote = serviceRequiresQuote(svc);
     return (
-      <button
-        type="button"
-        disabled
-        className={
-          needsQuote
-            ? 'rounded-lg bg-luminexa-accent px-3 py-2 text-sm font-medium text-white opacity-70'
-            : 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 opacity-70'
-        }
-      >
-        {needsQuote ? 'Request quote' : 'Book only this'}
+      <button type="button" disabled className="lx-btn-primary px-4">
+        {needsQuote ? 'Request quote' : 'Book now'}
       </button>
     );
   };

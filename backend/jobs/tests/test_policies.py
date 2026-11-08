@@ -269,7 +269,8 @@ class BookingPolicyTests(TestCase):
         booking_id = create.data['id']
 
         self.client.force_authenticate(user=self.owner)
-        blocked = self.client.post(
+        # Unanswered questions must not block sending a priced quote.
+        early_quote = self.client.post(
             f'/api/v1/bookings/{booking_id}/send-quote/',
             {
                 'amount': '85.50',
@@ -278,7 +279,9 @@ class BookingPolicyTests(TestCase):
             format='json',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(blocked.status_code, 400, blocked.data)
+        self.assertEqual(early_quote.status_code, 200, early_quote.data)
+        self.assertEqual(early_quote.data['status'], Booking.Status.QUOTED)
+        self.assertTrue(early_quote.data['awaiting_quote_details'])
 
         asked = self.client.post(
             f'/api/v1/bookings/{booking_id}/ask-quote-questions/',
@@ -290,8 +293,9 @@ class BookingPolicyTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(asked.status_code, 200, asked.data)
-        self.assertEqual(asked.data['status'], Booking.Status.REQUESTED)
-        self.assertIsNone(asked.data['quote_amount'])
+        # Asking questions must not clear the quote or demote status.
+        self.assertEqual(asked.data['status'], Booking.Status.QUOTED)
+        self.assertEqual(str(asked.data['quote_amount']), '85.50')
         self.assertTrue(asked.data['awaiting_quote_details'])
         self.assertTrue(
             CustomerNotification.objects.filter(
@@ -344,6 +348,95 @@ class BookingPolicyTests(TestCase):
         )
         self.assertEqual(accepted.status_code, 200, accepted.data)
         self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
+
+        # Provider can ask more questions after confirm without changing status/price.
+        self.client.force_authenticate(user=self.owner)
+        later = self.client.post(
+            f'/api/v1/bookings/{booking_id}/ask-quote-questions/',
+            {'questions': ['Gate code?']},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(later.status_code, 200, later.data)
+        self.assertEqual(later.data['status'], Booking.Status.CONFIRMED)
+        self.assertEqual(str(later.data['quote_amount']), '95.00')
+        self.assertTrue(later.data['awaiting_quote_details'])
+
+        self.client.force_authenticate(user=self.customer)
+        gate_id = later.data['quote_questions'][0]['id']
+        answered_later = self.client.post(
+            f'/api/v1/bookings/{booking_id}/answer-quote-questions/',
+            {'answers': [{'id': gate_id, 'answer': '1234'}]},
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(answered_later.status_code, 200, answered_later.data)
+        self.assertEqual(answered_later.data['status'], Booking.Status.CONFIRMED)
+        self.assertFalse(answered_later.data['awaiting_quote_details'])
+
+    def test_ask_choice_and_text_questions(self):
+        """Providers can mix free-text and multiple-choice clarifying questions."""
+        org, service, slot = self._org(Organization.BookingPolicy.QUOTE)
+        self.client.force_authenticate(user=self.customer)
+        create = self.client.post(
+            '/api/v1/bookings/',
+            {
+                'slot_id': slot.id,
+                'service': service.id,
+                'service_address': '123 Main St, Ottawa, ON K1A 0B1',
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        booking_id = create.data['id']
+
+        self.client.force_authenticate(user=self.owner)
+        asked = self.client.post(
+            f'/api/v1/bookings/{booking_id}/ask-quote-questions/',
+            {
+                'questions': [
+                    {'question': 'How many rooms?', 'type': 'choice', 'options': ['1', '2', '3+']},
+                    {'question': 'Anything else?', 'type': 'text'},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(asked.status_code, 200, asked.data)
+        qs = asked.data['quote_questions']
+        self.assertEqual(qs[0]['type'], 'choice')
+        self.assertEqual(qs[0]['options'], ['1', '2', '3+'])
+        self.assertEqual(qs[1]['type'], 'text')
+
+        self.client.force_authenticate(user=self.customer)
+        bad = self.client.post(
+            f'/api/v1/bookings/{booking_id}/answer-quote-questions/',
+            {
+                'answers': [
+                    {'id': qs[0]['id'], 'answer': 'not-an-option'},
+                    {'id': qs[1]['id'], 'answer': 'Need stairs access'},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(bad.status_code, 400, bad.data)
+
+        ok = self.client.post(
+            f'/api/v1/bookings/{booking_id}/answer-quote-questions/',
+            {
+                'answers': [
+                    {'id': qs[0]['id'], 'answer': '2'},
+                    {'id': qs[1]['id'], 'answer': 'Need stairs access'},
+                ],
+            },
+            format='json',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(ok.status_code, 200, ok.data)
+        self.assertEqual(ok.data['quote_questions'][0]['answer'], '2')
+        self.assertEqual(ok.data['quote_questions'][1]['answer'], 'Need stairs access')
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)

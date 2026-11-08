@@ -25,6 +25,17 @@ export function isProviderMember(memberships) {
   return memberships.some((m) => m.role === 'owner' || m.role === 'staff');
 }
 
+/** Sticky marketing-demo cookie — explore Pro UI, but keep public marketplace browse. */
+export function isMarketingDemoUser(user) {
+  return Boolean(user?.is_marketing_demo);
+}
+
+/** Real provider accounts (not the public marketing demo). */
+export function isLiveProviderMember(user, memberships) {
+  if (isMarketingDemoUser(user)) return false;
+  return isProviderMember(memberships);
+}
+
 export function getPostLoginRoute(user, memberships) {
   if (user?.can_access_django_admin) return getDjangoAdminUrl();
   const onboarding = getOnboardingPath(user, memberships);
@@ -45,18 +56,18 @@ export function resolvePathAfterAuth(nextPath, user, memberships) {
     return nextPath;
   }
   if (nextPath.startsWith('/book/')) {
-    if (isProviderMember(memberships)) return firstProviderHome(memberships);
+    if (isLiveProviderMember(user, memberships)) return firstProviderHome(memberships);
     return nextPath;
   }
-  if (nextPath.startsWith('/customer') && !isProviderMember(memberships)) return nextPath;
-  if (nextPath.startsWith('/customer') && isProviderMember(memberships)) {
+  if (nextPath.startsWith('/customer') && !isLiveProviderMember(user, memberships)) return nextPath;
+  if (nextPath.startsWith('/customer') && isLiveProviderMember(user, memberships)) {
     return firstProviderHome(memberships);
   }
   if (nextPath === '/services' || nextPath.startsWith('/services/') || nextPath.startsWith('/services?')) {
-    if (isProviderMember(memberships)) return firstProviderHome(memberships);
+    if (isLiveProviderMember(user, memberships)) return firstProviderHome(memberships);
     return nextPath;
   }
-  if (nextPath === '/provider' && isProviderMember(memberships)) {
+  if (nextPath === '/provider' && isLiveProviderMember(user, memberships)) {
     return firstProviderHome(memberships);
   }
   return nextPath;

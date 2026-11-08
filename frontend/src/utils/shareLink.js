@@ -6,6 +6,17 @@ export function shareMessage({ text, url }) {
   return [text, url].filter(Boolean).join('\n');
 }
 
+/** Digits for WhatsApp / SMS. Keeps a leading + for SMS schemes. */
+export function normalizeSharePhone(phone) {
+  if (!phone) return '';
+  const raw = String(phone).trim();
+  if (!raw) return '';
+  const hasPlus = raw.startsWith('+');
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return hasPlus ? `+${digits}` : digits;
+}
+
 export const SHARE_TARGETS = [
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'messages', label: 'Messages' },
@@ -16,20 +27,32 @@ export const SHARE_TARGETS = [
 
 /**
  * Deep links for the share sheet. SMS uses iOS `&body=` vs Android `?body=`.
+ * Optional phone/email pre-fill Messages, WhatsApp, and Email to the customer.
  */
-export function shareHref(id, { title, text, url }, { iOS = false } = {}) {
+export function shareHref(id, { title, text, url, phone, email }, { iOS = false } = {}) {
   const message = shareMessage({ text, url });
   const encodedMessage = encodeURIComponent(message);
   const encodedUrl = encodeURIComponent(url || '');
   const encodedTitle = encodeURIComponent(title || 'Luminexa');
   const encodedText = encodeURIComponent(text || '');
+  const phoneNorm = normalizeSharePhone(phone);
+  const phoneDigits = phoneNorm.replace(/\D/g, '');
+  const emailTo = (email || '').trim();
   switch (id) {
     case 'whatsapp':
-      return `https://wa.me/?text=${encodedMessage}`;
-    case 'messages':
-      return iOS ? `sms:&body=${encodedMessage}` : `sms:?body=${encodedMessage}`;
-    case 'email':
-      return `mailto:?subject=${encodedTitle}&body=${encodedMessage}`;
+      return phoneDigits
+        ? `https://wa.me/${phoneDigits}?text=${encodedMessage}`
+        : `https://wa.me/?text=${encodedMessage}`;
+    case 'messages': {
+      const dest = phoneNorm || '';
+      return iOS
+        ? `sms:${dest}&body=${encodedMessage}`
+        : `sms:${dest}?body=${encodedMessage}`;
+    }
+    case 'email': {
+      const to = emailTo ? encodeURIComponent(emailTo) : '';
+      return `mailto:${to}?subject=${encodedTitle}&body=${encodedMessage}`;
+    }
     case 'facebook':
       return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
     case 'telegram':

@@ -82,6 +82,10 @@ self.addEventListener('fetch', (event) => {
     seoPath === '/toronto' ||
     seoPath.startsWith('/ottawa/') ||
     seoPath.startsWith('/toronto/') ||
+    seoPath === '/alternatives' ||
+    seoPath.startsWith('/alternatives/') ||
+    seoPath === '/pricing' ||
+    seoPath.startsWith('/pricing/') ||
     seoPath === '/robots.txt' ||
     seoPath === '/sitemap.xml' ||
     seoPath === '/llms.txt'

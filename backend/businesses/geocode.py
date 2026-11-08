@@ -1011,3 +1011,26 @@ def resolve_coordinates(
         },
     )
     return lat, lng
+
+
+def geocode_freeform_address(address: str) -> tuple[float, float] | None:
+    """Geocode a full street address string (for booking job locations)."""
+    query = (address or '').strip()
+    if len(query) < 5:
+        return None
+    if not getattr(settings, 'GEOCODE_ENABLED', True):
+        return None
+    coords = _nominatim_geocode(query)
+    if coords:
+        return coords
+    # Photon fallback when Nominatim misses (common for some Canadian streets).
+    for country in ('', 'Canada', 'United States'):
+        results = _photon_search(query, limit=1, country=country)
+        if not results:
+            continue
+        hit = results[0]
+        try:
+            return float(hit['latitude']), float(hit['longitude'])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None

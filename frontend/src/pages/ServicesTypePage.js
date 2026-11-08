@@ -2,14 +2,14 @@ import React from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import GuestPageShell from '../components/layout/GuestPageShell';
 import { useAuth } from '../contexts/AuthContext';
-import { isProviderMember } from '../utils/postLoginRoute';
+import { isLiveProviderMember, isMarketingDemoUser } from '../utils/postLoginRoute';
 import { firstProviderHome } from '../utils/providerPaths';
 import CustomerProvidersByTypePage from './customer/CustomerProvidersByTypePage';
 
 /** Logged-out category browse — same provider list as /customer/find/:typeSlug. */
 export default function ServicesTypePage() {
   const { typeSlug } = useParams();
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, memberships, user } = useAuth();
 
   if (loading) {
     return (
@@ -19,10 +19,11 @@ export default function ServicesTypePage() {
     );
   }
 
-  if (isAuthenticated) {
-    if (isProviderMember(memberships)) {
-      return <Navigate to={firstProviderHome(memberships)} replace />;
-    }
+  if (isAuthenticated && isLiveProviderMember(user, memberships)) {
+    return <Navigate to={firstProviderHome(memberships)} replace />;
+  }
+
+  if (isAuthenticated && !isMarketingDemoUser(user)) {
     return <Navigate to={`/customer/find/${typeSlug}`} replace />;
   }
 

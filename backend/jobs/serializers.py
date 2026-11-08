@@ -13,6 +13,7 @@ User = get_user_model()
 from .models import (
     AvailabilitySlot,
     Booking,
+    BookingRebookReminder,
     BookingStatusEvent,
     CustomerNotification,
     CustomerServiceInquiry,
@@ -139,6 +140,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'referral_rewards_enabled',
             'referral_reward_amount',
             'referral_max_earnings_per_referrer',
+            'referral_max_credit_percent_per_job',
+            'referral_max_credit_amount_per_job',
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'public_ref', 'created_at', 'updated_at')
@@ -179,6 +182,24 @@ class OrganizationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Keep the earnings cap at $100,000 or less.')
         return amount.quantize(Decimal('0.01'))
 
+    def validate_referral_max_credit_percent_per_job(self, value):
+        if value is None:
+            return Decimal('100.00')
+        amount = Decimal(str(value))
+        if amount < 0 or amount > Decimal('100.00'):
+            raise serializers.ValidationError('Use 0–100 percent of the job total.')
+        return amount.quantize(Decimal('0.01'))
+
+    def validate_referral_max_credit_amount_per_job(self, value):
+        if value is None:
+            return Decimal('0.00')
+        amount = Decimal(str(value))
+        if amount < 0:
+            raise serializers.ValidationError('Per-job credit cap cannot be negative.')
+        if amount > Decimal('100000.00'):
+            raise serializers.ValidationError('Keep the per-job credit cap at $100,000 or less.')
+        return amount.quantize(Decimal('0.01'))
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         enabled = attrs.get(
@@ -193,6 +214,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'referral_max_earnings_per_referrer',
             getattr(self.instance, 'referral_max_earnings_per_referrer', None) if self.instance else None,
         )
+        job_pct = attrs.get(
+            'referral_max_credit_percent_per_job',
+            getattr(self.instance, 'referral_max_credit_percent_per_job', None) if self.instance else None,
+        )
+        job_amt = attrs.get(
+            'referral_max_credit_amount_per_job',
+            getattr(self.instance, 'referral_max_credit_amount_per_job', None) if self.instance else None,
+        )
         if enabled:
             if reward is not None and Decimal(str(reward)) <= 0:
                 raise serializers.ValidationError({
@@ -205,6 +234,18 @@ class OrganizationSerializer(serializers.ModelSerializer):
             if reward is not None and cap is not None and Decimal(str(reward)) > Decimal(str(cap)):
                 raise serializers.ValidationError({
                     'referral_reward_amount': 'Per-referral reward cannot exceed the lifetime cap.',
+                })
+            if job_pct is not None and Decimal(str(job_pct)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_max_credit_percent_per_job': (
+                        'Set the max percent of a job that referral credit can cover.'
+                    ),
+                })
+            if job_amt is not None and Decimal(str(job_amt)) <= 0:
+                raise serializers.ValidationError({
+                    'referral_max_credit_amount_per_job': (
+                        'Set the max dollar amount of referral credit one job can use.'
+                    ),
                 })
         return attrs
 
@@ -880,10 +921,18 @@ class JobCostLineSerializer(serializers.ModelSerializer):
         return str(obj.total_cost)
 
 
+class BookingRebookReminderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingRebookReminder
+        fields = ('remind_on', 'note', 'status', 'sent_at', 'created_at')
+        read_only_fields = fields
+
+
 class BookingDetailSerializer(serializers.ModelSerializer):
     """Full booking payload for provider schedule detail views."""
 
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
+    rebook_reminder = BookingRebookReminderSerializer(read_only=True, allow_null=True)
     service_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(source='service.duration_minutes', read_only=True)
@@ -924,6 +973,12 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     customer_confirmed_attendance_at = serializers.DateTimeField(read_only=True)
     customer_reported_no_show_at = serializers.DateTimeField(read_only=True)
     needs_attendance_prompt = serializers.SerializerMethodField()
+    en_route_active = serializers.SerializerMethodField()
+    en_route_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    en_route_distance_km = serializers.DecimalField(
+        max_digits=8, decimal_places=2, read_only=True, allow_null=True,
+    )
+    en_route_updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = Booking
@@ -944,12 +999,17 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'created_at', 'updated_at',
         )
         read_only_fields = fields
 
     def get_service_name(self, obj):
         return booking_display_service_name(obj)
+
+    def get_en_route_active(self, obj):
+        return bool(obj.en_route_at)
 
     def get_customer_view_url(self, obj):
         return obj.customer_view_url()
@@ -1031,6 +1091,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     status_events = BookingStatusEventSerializer(many=True, read_only=True)
+    rebook_reminder = BookingRebookReminderSerializer(read_only=True, allow_null=True)
     service_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(read_only=True)
     service_duration_minutes = serializers.IntegerField(
@@ -1078,6 +1139,12 @@ class BookingSerializer(serializers.ModelSerializer):
     customer_view_url = serializers.SerializerMethodField()
     customer_view_token = serializers.CharField(read_only=True)
     needs_attendance_prompt = serializers.SerializerMethodField()
+    en_route_active = serializers.SerializerMethodField()
+    en_route_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    en_route_distance_km = serializers.DecimalField(
+        max_digits=8, decimal_places=2, read_only=True, allow_null=True,
+    )
+    en_route_updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = Booking
@@ -1099,6 +1166,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -1117,6 +1186,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_view_token', 'customer_view_url',
             'customer_confirmed_attendance_at', 'customer_reported_no_show_at',
             'needs_attendance_prompt',
+            'en_route_active', 'en_route_at', 'en_route_distance_km', 'en_route_updated_at',
+            'rebook_reminder',
             'status_events', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -1165,6 +1236,9 @@ class BookingSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated or obj.customer_id != user.id:
             return False
         return booking_needs_attendance_prompt(obj)
+
+    def get_en_route_active(self, obj):
+        return bool(obj.en_route_at)
 
     def get_currency(self, obj):
         return _organization_currency(obj.organization)
@@ -1389,27 +1463,79 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
     organization_public_ref = serializers.CharField(
         source='organization.public_ref', read_only=True,
     )
+    organization_slug = serializers.SlugField(source='organization.slug', read_only=True)
+    organization_tagline = serializers.CharField(source='organization.tagline', read_only=True)
+    organization_logo_url = serializers.SerializerMethodField()
+    organization_location = serializers.SerializerMethodField()
+    organization_profile_public = serializers.BooleanField(
+        source='organization.profile_public', read_only=True,
+    )
     fulfillment_kind = serializers.CharField(source='service.fulfillment_kind', read_only=True)
+    service_duration_minutes = serializers.IntegerField(
+        source='service.duration_minutes', read_only=True, allow_null=True,
+    )
+    reference = serializers.SerializerMethodField()
     job_location = serializers.SerializerMethodField()
     job_location_label = serializers.SerializerMethodField()
     customer_first_name = serializers.SerializerMethodField()
+    needs_customer_confirm = serializers.SerializerMethodField()
+    needs_job_address = serializers.SerializerMethodField()
+    saved_service_address = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = (
-            'id', 'status', 'start_at', 'end_at',
-            'service_name', 'organization_name', 'organization_public_ref',
+            'id', 'reference', 'status', 'start_at', 'end_at', 'source',
+            'awaiting_customer_acceptance',
+            'service_name', 'service_duration_minutes',
+            'organization_name', 'organization_public_ref', 'organization_slug',
+            'organization_tagline', 'organization_logo_url', 'organization_location',
+            'organization_profile_public',
             'fulfillment_kind', 'job_location', 'job_location_label',
-            'customer_first_name',
+            'customer_first_name', 'needs_customer_confirm', 'needs_job_address',
+            'saved_service_address',
         )
         read_only_fields = fields
 
     def get_service_name(self, obj):
         return booking_display_service_name(obj)
 
+    def get_reference(self, obj):
+        return f'BK-{obj.pk:05d}'
+
+    def get_organization_logo_url(self, obj):
+        return _absolute_media_url(self.context.get('request'), obj.organization.logo)
+
+    def get_organization_location(self, obj):
+        from businesses.utils import organization_location_short
+
+        return organization_location_short(obj.organization) or ''
+
     def get_customer_first_name(self, obj):
         name = (getattr(obj.customer, 'full_name', None) or '').strip()
         return name.split()[0] if name else ''
+
+    def get_needs_customer_confirm(self, obj):
+        return (
+            obj.source == Booking.Source.PROVIDER_DIRECT
+            and obj.status == Booking.Status.REQUESTED
+            and bool(obj.awaiting_customer_acceptance)
+        )
+
+    def get_needs_job_address(self, obj):
+        if not self.get_needs_customer_confirm(obj):
+            return False
+        kind = getattr(obj.service, 'fulfillment_kind', None) if obj.service_id else None
+        return kind == Service.FulfillmentKind.MOBILE
+
+    def get_saved_service_address(self, obj):
+        """Customer's profile default when valid — for invite confirm pre-fill only."""
+        if not self.get_needs_customer_confirm(obj):
+            return ''
+        from .service_address import is_valid_structured_service_address
+
+        raw = (getattr(obj.customer, 'default_service_address', None) or '').strip()
+        return raw if is_valid_structured_service_address(raw) else ''
 
     def get_job_location(self, obj):
         addr = (obj.service_address or '').strip()
@@ -1431,7 +1557,15 @@ class PublicCustomerBookingSerializer(serializers.ModelSerializer):
 class ProviderBookSerializer(serializers.Serializer):
     organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.all())
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all())
-    customer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    customer = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    # Phone-book / walk-in: create or link by email when customer id is omitted.
+    email = serializers.EmailField(required=False, allow_blank=True)
+    full_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
     slot_id = serializers.PrimaryKeyRelatedField(
         queryset=AvailabilitySlot.objects.all(),
         required=False,
@@ -1462,6 +1596,10 @@ class ProviderBookSerializer(serializers.Serializer):
             raise serializers.ValidationError({'service': 'Service is required.'})
         if org and service and service.organization_id != org.id:
             raise serializers.ValidationError({'service': 'Service must belong to the organization.'})
+        if not attrs.get('customer') and not (attrs.get('email') or '').strip():
+            raise serializers.ValidationError({
+                'customer': 'Pick an existing customer or enter a new customer email.',
+            })
         return attrs
 
 
@@ -1557,6 +1695,9 @@ class TaskSerializer(serializers.ModelSerializer):
                 validated_data['done_at'] = timezone.now()
             elif not validated_data['is_done']:
                 validated_data['done_at'] = None
+        if 'due_at' in validated_data and validated_data['due_at'] != instance.due_at:
+            # New deadline → allow another 24h due reminder.
+            validated_data['due_reminder_sent_at'] = None
         return super().update(instance, validated_data)
 
 

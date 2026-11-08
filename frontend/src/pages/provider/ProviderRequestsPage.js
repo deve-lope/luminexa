@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import InvoicePanel from '../../components/booking/InvoicePanel';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
 import { jobsAPI } from '../../utils/api';
@@ -9,6 +9,13 @@ import { requestFilterLabel, requestStatusLabel, requestStatusTone } from '../..
 import parseApiError from '../../utils/parseApiError';
 
 const FILTERS = ['all', 'pending', 'active', 'done', 'archive'];
+
+function isPendingItem(item) {
+  if (item.kind === 'inquiry') {
+    return item.status === 'pending' || item.status === 'quote_accepted';
+  }
+  return item.status === 'requested' || item.status === 'quoted';
+}
 
 function StatusBadge({ kind, status }) {
   return (
@@ -22,10 +29,25 @@ function StatusBadge({ kind, status }) {
 
 export default function ProviderRequestsPage() {
   const { orgSlug, activeOrg } = useProviderOrg();
-  const [filter, setFilter] = useState('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterParam = searchParams.get('filter');
+  const filter = FILTERS.includes(filterParam) ? filterParam : 'all';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const scrolledRef = useRef(false);
+
+  const setFilter = useCallback(
+    (key) => {
+      scrolledRef.current = false;
+      if (key === 'all') {
+        setSearchParams({}, { replace: true });
+      } else {
+        setSearchParams({ filter: key }, { replace: true });
+      }
+    },
+    [setSearchParams],
+  );
 
   const load = useCallback(async () => {
     if (!orgSlug) return;
@@ -45,10 +67,25 @@ export default function ProviderRequestsPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (loading || filter !== 'pending' || !items.length || scrolledRef.current) return;
+    const first = document.querySelector('[data-lx-attention]');
+    if (!first) return;
+    scrolledRef.current = true;
+    requestAnimationFrame(() => {
+      first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [loading, filter, items]);
+
   const providerName = activeOrg?.organization_name;
 
   return (
     <div className="space-y-4 pb-8">
+      {filter === 'pending' && !!items.length && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Showing requests waiting for your response — highlighted below.
+        </div>
+      )}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map((key) => (
           <button
@@ -104,8 +141,19 @@ export default function ProviderRequestsPage() {
 
       {!loading && !!items.length && (
         <ul className="space-y-3">
-          {items.map((item) => (
-            <li key={`${item.kind}-${item.id}`} className="lx-card space-y-3 p-4">
+          {items.map((item) => {
+            const needsAttention = isPendingItem(item);
+            const highlight = filter === 'pending' || (filter === 'all' && needsAttention);
+            return (
+            <li
+              key={`${item.kind}-${item.id}`}
+              data-lx-attention={needsAttention ? '1' : undefined}
+              className={`lx-card space-y-3 p-4 ${
+                highlight
+                  ? 'border-amber-300 bg-amber-50/40 ring-2 ring-amber-300/80'
+                  : ''
+              }`}
+            >
               <Link
                 to={providerRequestDetail(orgSlug, item.kind, item.id)}
                 className="flex items-start gap-3 transition"
@@ -167,7 +215,8 @@ export default function ProviderRequestsPage() {
                 </p>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>

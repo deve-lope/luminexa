@@ -5,6 +5,7 @@ from django.urls import include, path, re_path
 from two_factor.urls import urlpatterns as tf_urls
 
 from accounts.admin_login import AdminLoginView
+from jobs.gig_seo_views import PublicGigHTMLView, SitemapXmlView
 from luminexa.media_views import serve_media
 
 
@@ -22,6 +23,12 @@ _tf_patterns = [
 
 
 urlpatterns = [
+    path('sitemap.xml', SitemapXmlView.as_view(), name='sitemap-xml'),
+    path(
+        '<str:city>/gigs/<slug:category>/<slug:slug_id>/',
+        PublicGigHTMLView.as_view(),
+        name='public-gig-html',
+    ),
     path('', api_root_redirect),
     path('', include((_tf_patterns, _tf_app))),
     path('admin/', admin.site.urls),

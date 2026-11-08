@@ -5,6 +5,7 @@ from .models import (
     CustomerServiceInquiry,
     AvailabilitySlot,
     Booking,
+    BookingRebookReminder,
     GigComment,
     GigPost,
     GigPostImage,
@@ -51,6 +52,15 @@ class BookingAdmin(admin.ModelAdmin):
     )
     list_filter = ('status', 'source', 'organization')
     raw_id_fields = ('parent_booking', 'customer', 'availability_slot')
+
+
+@admin.register(BookingRebookReminder)
+class BookingRebookReminderAdmin(admin.ModelAdmin):
+    list_display = (
+        'booking', 'organization', 'customer', 'service', 'remind_on', 'status', 'sent_at',
+    )
+    list_filter = ('status', 'remind_on', 'organization')
+    raw_id_fields = ('booking', 'customer', 'service', 'created_by')
 
 
 @admin.register(Invoice)

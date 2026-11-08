@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Skeleton from '../../components/Skeleton';
 import { useProviderOrg } from '../../contexts/ProviderOrgContext';
+import { useToast } from '../../contexts/ToastContext';
 import { jobsAPI } from '../../utils/api';
+import {
+  downloadExportFile,
+  exportDownloadSuccessMessage,
+  parseDownloadError,
+} from '../../utils/downloadFile';
 import { parseApiError } from '../../utils/taskDisplay';
 
 const PERIODS = [
@@ -108,6 +114,7 @@ function SimpleBars({ series, valueKey, formatValue, emptyLabel }) {
 
 export default function ProviderAnalyticsPage() {
   const { orgSlug } = useProviderOrg();
+  const { showToast } = useToast();
   const [period, setPeriod] = useState('month');
   const [data, setData] = useState(null);
   const [fetching, setFetching] = useState(false);
@@ -135,16 +142,18 @@ export default function ProviderAnalyticsPage() {
     setExportBusy(true);
     setError(null);
     try {
-      const res = await jobsAPI.downloadProviderBooksExport(orgSlug, period);
-      const blob = new Blob([res.data], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `luminexa-books-${orgSlug}-${period}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const filename = `luminexa-books-${orgSlug}-${period}.csv`;
+      const result = await downloadExportFile({
+        url: jobsAPI.getProviderBooksExportUrl(orgSlug, period),
+        filename,
+        fetchBlob: async () => {
+          const res = await jobsAPI.downloadProviderBooksExport(orgSlug, period);
+          return res.data;
+        },
+      });
+      showToast(exportDownloadSuccessMessage(result.method), 'success');
     } catch (e) {
-      setError(parseApiError(e) || 'Could not download export.');
+      setError((await parseDownloadError(e, 'Could not download export.')) || 'Could not download export.');
     } finally {
       setExportBusy(false);
     }
@@ -154,25 +163,22 @@ export default function ProviderAnalyticsPage() {
     setDataExportBusy(true);
     setError(null);
     try {
-      const res = await jobsAPI.downloadOrganizationDataExport(orgSlug, format);
-      const contentType = format === 'json' 
-        ? 'application/json' 
-        : format === 'csv' 
-        ? 'application/zip' 
-        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      const blob = new Blob([res.data], { type: contentType });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const ext = format === 'csv' ? 'zip' : format === 'excel' ? 'xlsx' : 'json';
-      a.download = `${orgSlug}-export-${new Date().toISOString().split('T')[0]}.${ext}`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const filename = `${orgSlug}-export-${new Date().toISOString().split('T')[0]}.${ext}`;
+      const result = await downloadExportFile({
+        url: jobsAPI.getOrganizationDataExportUrl(orgSlug, format),
+        filename,
+        fetchBlob: async () => {
+          const res = await jobsAPI.downloadOrganizationDataExport(orgSlug, format);
+          return res.data;
+        },
+      });
+      showToast(exportDownloadSuccessMessage(result.method), 'success');
     } catch (e) {
-      const errMsg = parseApiError(e);
+      const errMsg = await parseDownloadError(e, 'Could not download export.');
       if (errMsg?.includes('Pro subscription')) {
         setError('Pro subscription required to export business data.');
-      } else if (errMsg?.includes('owner')) {
+      } else if (errMsg?.toLowerCase().includes('owner')) {
         setError('Only the organization owner can export business data.');
       } else {
         setError(errMsg || 'Could not download export.');

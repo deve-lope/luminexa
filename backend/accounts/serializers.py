@@ -14,6 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
     has_booking_contact = serializers.BooleanField(read_only=True)
     needs_onboarding = serializers.SerializerMethodField()
     can_access_django_admin = serializers.SerializerMethodField()
+    is_marketing_demo = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -21,10 +22,12 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'public_ref', 'email', 'full_name', 'phone', 'default_service_address',
             'address_country', 'email_verified', 'can_access_django_admin',
             'has_booking_contact', 'onboarding_completed_at', 'needs_onboarding',
+            'is_marketing_demo',
         )
         read_only_fields = (
             'id', 'public_ref', 'email', 'email_verified', 'can_access_django_admin',
             'has_booking_contact', 'onboarding_completed_at', 'needs_onboarding',
+            'is_marketing_demo',
         )
 
     def get_needs_onboarding(self, obj):
@@ -32,6 +35,10 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_access_django_admin(self, obj):
         return bool(obj.is_staff or obj.is_superuser)
+
+    def get_is_marketing_demo(self, obj):
+        from .otp import is_marketing_demo_user
+        return is_marketing_demo_user(obj)
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -234,6 +241,14 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
+        from .otp import is_marketing_demo_user, marketing_demo_email, normalize_email, user_uses_password_login
+
+        email = normalize_email(attrs.get('email', ''))
+        if email and email == marketing_demo_email():
+            raise serializers.ValidationError(
+                'Use Try demo on the site — this account is not for password sign-in.'
+            )
+
         user = authenticate(
             request=self.context.get('request'),
             email=attrs['email'],
@@ -243,8 +258,10 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid email or password.')
         if not user.is_active:
             raise serializers.ValidationError('This account is disabled.')
-        from .otp import user_uses_password_login
-
+        if is_marketing_demo_user(user):
+            raise serializers.ValidationError(
+                'Use Try demo on the site — this account is not for password sign-in.'
+            )
         if not user_uses_password_login(user):
             raise serializers.ValidationError(
                 'Customers sign in with an email code, not a password.'

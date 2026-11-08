@@ -23,6 +23,11 @@ def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float
     return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometres."""
+    return haversine_miles(lat1, lon1, lat2, lon2) * 1.609344
+
+
 def parse_radius_miles(value) -> float:
     try:
         miles = float(value)

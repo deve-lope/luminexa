@@ -31,6 +31,17 @@ describe('shareHref', () => {
     expect(shareHref('messages', payload, { iOS: true })).toContain('sms:&body=');
     expect(shareHref('messages', payload, { iOS: false })).toContain('sms:?body=');
   });
+
+  test('Messages and WhatsApp pre-fill the customer phone when provided', () => {
+    const withPhone = { ...payload, phone: '+1 (555) 123-4567' };
+    expect(shareHref('messages', withPhone, { iOS: false })).toContain('sms:+15551234567?body=');
+    expect(shareHref('whatsapp', withPhone)).toContain('https://wa.me/15551234567?text=');
+  });
+
+  test('Email pre-fills the customer address when provided', () => {
+    const href = shareHref('email', { ...payload, email: 'pat@example.com' });
+    expect(href.startsWith('mailto:pat%40example.com?')).toBe(true);
+  });
 });
 
 describe('isIOSUserAgent', () => {

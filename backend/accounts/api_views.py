@@ -8,7 +8,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from luminexa.throttles import LoginThrottle, PasswordResetThrottle, RegisterBusinessThrottle
+from luminexa.throttles import (
+    LoginThrottle,
+    MarketingDemoThrottle,
+    PasswordResetThrottle,
+    RegisterBusinessThrottle,
+)
 
 from .auth_cookies import clear_auth_cookie
 from .auth_sessions import (
@@ -32,8 +37,10 @@ from .safety import (
     remove_chat_block,
 )
 from .otp import (
+    is_marketing_demo_user,
     is_play_store_demo_user,
     issue_login_code,
+    marketing_demo_email,
     normalize_email,
     user_uses_password_login,
     verify_login_code,
@@ -130,6 +137,16 @@ class LoginStartAPIView(APIView):
                 ),
                 'code': 'no_login',
             })
+        if is_marketing_demo_user(user):
+            return Response(
+                {
+                    'auth_method': 'none',
+                    'email': email,
+                    'detail': 'Use Try demo on the site — this account is not for password sign-in.',
+                    'code': 'use_marketing_demo',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if user_uses_password_login(user):
             detail = (
                 'Enter your password.'
@@ -165,6 +182,16 @@ class LoginOtpRequestAPIView(APIView):
                 'email': email,
                 'auth_method': 'otp',
             })
+        if is_marketing_demo_user(user):
+            return Response(
+                {
+                    'detail': 'Use Try demo on the site — this account is not for email codes.',
+                    'auth_method': 'none',
+                    'email': email,
+                    'code': 'use_marketing_demo',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if user_uses_password_login(user):
             return Response({
                 'detail': 'This account uses a password.',
@@ -191,6 +218,10 @@ class LoginOtpVerifyAPIView(APIView):
         user = User.objects.filter(email__iexact=email).first()
         if not user or not user.is_active:
             raise ValidationError({'detail': 'Invalid or expired code.'})
+        if is_marketing_demo_user(user):
+            raise ValidationError(
+                {'detail': 'Use Try demo on the site — this account is not for email codes.'}
+            )
         if user_uses_password_login(user):
             raise ValidationError(
                 {'detail': 'This account uses a password. Sign in with your password instead.'}
@@ -223,8 +254,71 @@ class LoginAPIView(APIView):
         return issue_auth_token_response(user, request)
 
 
+class MarketingDemoLoginAPIView(APIView):
+    """Issue a session for the public marketing demo provider (no password in the browser)."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MarketingDemoThrottle]
+
+    def post(self, request):
+        if not getattr(settings, 'MARKETING_DEMO_ENABLED', True):
+            return Response(
+                {'detail': 'Demo is temporarily unavailable.', 'code': 'demo_disabled'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        email = marketing_demo_email()
+        if not email:
+            return Response(
+                {'detail': 'Demo is not configured.', 'code': 'demo_not_configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None or not is_marketing_demo_user(user):
+            return Response(
+                {
+                    'detail': 'Demo is not ready yet. Try again shortly.',
+                    'code': 'demo_not_ready',
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if not user.email_verified:
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
+        if user.onboarding_completed_at is None:
+            from django.utils import timezone as dj_tz
+
+            user.onboarding_completed_at = dj_tz.now()
+            user.save(update_fields=['onboarding_completed_at'])
+
+        from businesses.models import OrganizationMembership
+
+        membership = (
+            OrganizationMembership.objects.filter(
+                user=user,
+                role__in=(
+                    OrganizationMembership.Role.OWNER,
+                    OrganizationMembership.Role.STAFF,
+                ),
+            )
+            .select_related('organization')
+            .first()
+        )
+        if membership is None:
+            return Response(
+                {'detail': 'Demo business is not ready.', 'code': 'demo_not_ready'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        response = issue_auth_token_response(user, request)
+        payload = dict(response.data)
+        payload['org_slug'] = membership.organization.slug
+        payload['is_marketing_demo'] = True
+        response.data = payload
+        return response
+
+
 class LogoutAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         delete_request_auth_token(request)

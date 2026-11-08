@@ -5,23 +5,46 @@ import { formatLocalDateKey, isDateKeyInRange, todayKey } from '../../utils/date
 const WEEKDAYS_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const WEEKDAYS_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function busyCellClass(busyLevel) {
+  if (busyLevel === 'light') {
+    return 'bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-200 active:bg-violet-200';
+  }
+  if (busyLevel === 'medium') {
+    return 'bg-violet-300 text-violet-950 ring-1 ring-inset ring-violet-400 active:bg-violet-400';
+  }
+  if (busyLevel === 'heavy') {
+    // Darker than selected (violet-600 + ring) so 4+ days don’t look “selected”.
+    return 'bg-violet-900 text-white shadow-sm active:bg-violet-950';
+  }
+  return null;
+}
+
 function dayCellClass({
   status,
+  busyLevel,
+  showWorkLoad,
   isSelected,
   isPast,
   isInRange,
   openOnly,
   allowSelectFutureDays,
+  allowFullDays,
 }) {
   if (isPast) return 'bg-slate-100 text-slate-300 cursor-not-allowed';
   if (isSelected) {
     return 'bg-violet-600 text-white shadow-sm ring-2 ring-inset ring-violet-300';
   }
   if (isInRange) return 'bg-violet-100 text-violet-900 ring-1 ring-violet-200';
-  if (status === 'available') {
-    return 'bg-emerald-400 text-white active:bg-emerald-600';
+
+  if (showWorkLoad) {
+    const busy = busyCellClass(busyLevel);
+    if (busy) return busy;
   }
-  if (openOnly) {
+
+  if (status === 'available') {
+    return 'bg-luminexa-accent text-white active:bg-luminexa-accent-dark';
+  }
+  if (openOnly && !(allowFullDays && status === 'full')) {
     return 'bg-slate-50 text-slate-400 cursor-not-allowed';
   }
   if (allowSelectFutureDays) {
@@ -29,6 +52,12 @@ function dayCellClass({
   }
   if (status === 'full') return 'bg-red-100 text-red-900 hover:bg-red-200';
   return 'bg-white text-slate-600 hover:bg-slate-50';
+}
+
+function workCountLabel(count) {
+  if (!count || count < 1) return null;
+  if (count > 9) return '9+';
+  return String(count);
 }
 
 export default function BookingCalendar({
@@ -40,8 +69,10 @@ export default function BookingCalendar({
   onPrevMonth,
   onNextMonth,
   openOnly = false,
+  allowFullDays = false,
   allowSelectFutureDays = false,
   showLegend = true,
+  showWorkLoad = false,
   rangeStart = null,
   rangeEnd = null,
   size = 'full',
@@ -64,18 +95,26 @@ export default function BookingCalendar({
       const isPast = cellDate < todayDate;
       const meta = days?.[key];
       const status = meta?.status || 'none';
+      const workCount = Number(meta?.work_count) || 0;
+      const busyLevel = meta?.busy_level || 'none';
+      const openCount = Number(meta?.open_count) || 0;
       result.push({
         key,
         day: d,
         status,
+        workCount,
+        busyLevel,
+        openCount,
         isPast,
         pad: false,
-        hasOpen: status === 'available',
+        hasOpen: status === 'available' || openCount > 0,
+        isFull: status === 'full',
+        hasWork: showWorkLoad && workCount > 0,
         isToday: key === today,
       });
     }
     return result;
-  }, [year, month, days, today]);
+  }, [year, month, days, today, showWorkLoad]);
 
   const shellClass =
     size === 'compact'
@@ -91,9 +130,16 @@ export default function BookingCalendar({
   const weekText = size === 'compact' ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm';
   const gridGap = size === 'compact' ? 'gap-0.5 sm:gap-1' : 'gap-1 sm:gap-1.5';
 
+  const daySelectable = (cell) => {
+    if (cell.isPast) return false;
+    if (!openOnly) return true;
+    if (cell.hasOpen) return true;
+    if (allowFullDays && cell.isFull) return true;
+    return false;
+  };
+
   const selectDay = (cell) => {
-    if (cell.isPast) return;
-    if (openOnly && !cell.hasOpen) return;
+    if (!daySelectable(cell)) return;
     onSelectDay(cell.key);
   };
 
@@ -103,11 +149,12 @@ export default function BookingCalendar({
   };
 
   return (
-    <div className={shellClass}>
+    <div className={`${shellClass} [overflow-anchor:none]`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
           onMouseDown={keepScrollOnPress}
+          onTouchStart={keepScrollOnPress}
           onClick={onPrevMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -126,6 +173,7 @@ export default function BookingCalendar({
         <button
           type="button"
           onMouseDown={keepScrollOnPress}
+          onTouchStart={keepScrollOnPress}
           onClick={onNextMonth}
           className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-700 active:bg-slate-50 ${
             size === 'compact' ? 'h-8 w-8' : 'h-9 w-9'
@@ -155,33 +203,68 @@ export default function BookingCalendar({
               key={cell.key}
               type="button"
               onClick={() => selectDay(cell)}
-              tabIndex={cell.isPast || (openOnly && !cell.hasOpen) ? -1 : 0}
+              tabIndex={daySelectable(cell) ? 0 : -1}
               aria-pressed={selectedDay === cell.key}
               aria-label={`${cell.day}${cell.isToday ? ', today' : ''}${
                 selectedDay === cell.key ? ', selected' : ''
-              }${cell.hasOpen ? ', has open slots' : ''}`}
-              aria-disabled={cell.isPast || (openOnly && !cell.hasOpen)}
+              }${cell.hasOpen ? ', has open slots' : ''}${
+                cell.hasWork ? `, ${cell.workCount} job${cell.workCount === 1 ? '' : 's'}` : ''
+              }${cell.isFull ? ', fully booked' : ''}`}
+              aria-disabled={!daySelectable(cell)}
               className={`relative flex touch-manipulation select-none items-center justify-center rounded-lg font-semibold leading-none transition ${cellClass} ${dayCellClass(
                 {
                   status: cell.status,
+                  busyLevel: cell.busyLevel,
+                  showWorkLoad,
                   isSelected: selectedDay === cell.key,
                   isPast: cell.isPast,
                   isInRange: isDateKeyInRange(cell.key, rangeStart, rangeEnd),
                   openOnly,
                   allowSelectFutureDays,
+                  allowFullDays,
                 }
               )}`}
               title={
-                cell.hasOpen
-                  ? 'Has open slots for customers'
-                  : allowSelectFutureDays
-                    ? 'Tap to manage this day'
-                    : undefined
+                cell.hasWork
+                  ? `${cell.workCount} job${cell.workCount === 1 ? '' : 's'}${
+                      cell.hasOpen ? ' · also has open slots' : ''
+                    }`
+                  : cell.hasOpen
+                    ? 'Has open slots for customers'
+                    : cell.isFull
+                      ? 'All slots booked'
+                      : allowSelectFutureDays
+                        ? 'Tap to manage this day'
+                        : undefined
               }
             >
               {cell.day}
-              {cell.isToday && selectedDay !== cell.key && (
+              {showWorkLoad && cell.hasWork && !cell.isPast && (
+                <span
+                  className={`absolute right-0.5 top-0.5 min-w-[0.9rem] rounded px-0.5 text-center text-[9px] font-bold leading-tight sm:right-1 sm:top-1 ${
+                    selectedDay === cell.key || cell.busyLevel === 'heavy'
+                      ? 'bg-white/25 text-white'
+                      : 'bg-violet-700/15 text-violet-900'
+                  }`}
+                >
+                  {workCountLabel(cell.workCount)}
+                </span>
+              )}
+              {showWorkLoad &&
+                cell.hasWork &&
+                cell.hasOpen &&
+                selectedDay !== cell.key &&
+                !cell.isPast && (
+                  <span
+                    className="absolute left-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-luminexa-accent ring-1 ring-white sm:left-1 sm:top-1"
+                    aria-hidden
+                  />
+                )}
+              {cell.isToday && selectedDay !== cell.key && !(showWorkLoad && cell.hasWork) && (
                 <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-violet-500" />
+              )}
+              {cell.isToday && selectedDay !== cell.key && showWorkLoad && cell.hasWork && (
+                <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-white/80 ring-1 ring-violet-500/40" />
               )}
             </button>
           )
@@ -194,10 +277,37 @@ export default function BookingCalendar({
             <span className="h-2.5 w-2.5 rounded-sm bg-violet-600" />
             Selected day
           </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" />
-            {openOnly || allowSelectFutureDays ? 'Open slots' : 'Available'}
-          </span>
+          {showWorkLoad ? (
+            <>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-sm bg-luminexa-accent" />
+                Open slots
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-sm bg-violet-100 ring-1 ring-violet-200" />
+                1 job
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-sm bg-violet-300" />
+                2–3 jobs
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-sm bg-violet-900" />
+                4+ jobs
+              </span>
+            </>
+          ) : (
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-sm bg-luminexa-accent" />
+              {openOnly || allowSelectFutureDays ? 'Open slots' : 'Available'}
+            </span>
+          )}
+          {!showWorkLoad && (allowFullDays || !openOnly) && (
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-sm bg-red-100 ring-1 ring-red-200" />
+              Fully booked
+            </span>
+          )}
           {allowSelectFutureDays && (
             <span className="flex items-center gap-1">
               <span className="h-2.5 w-2.5 rounded-sm border border-slate-300 bg-white" />

@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_otp.middleware.OTPMiddleware',
+    'accounts.marketing_demo_guard.MarketingDemoWriteGuardMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -159,6 +160,7 @@ REST_FRAMEWORK = {
         'register_business': '5/hour',
         'map_search': '60/minute',
         'business_type_write': '10/hour',
+        'marketing_demo': '30/hour',
     },
 }
 
@@ -230,6 +232,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_incomplete_job_task_reminders',
         'schedule': 3600.0,
     },
+    'task-due-reminders-hourly': {
+        'task': 'jobs.tasks.send_task_due_reminders',
+        'schedule': 3600.0,
+    },
     'invoice-payment-reminders-hourly': {
         'task': 'jobs.tasks.send_unpaid_invoice_payment_reminders',
         'schedule': 3600.0,
@@ -238,9 +244,17 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'jobs.tasks.send_rate_service_reminders',
         'schedule': 3600.0,
     },
+    'rebook-reminders-hourly': {
+        'task': 'jobs.tasks.send_due_rebook_reminders',
+        'schedule': 3600.0,
+    },
     'subscription-ending-reminders-hourly': {
         'task': 'jobs.tasks.send_subscription_ending_reminders',
         'schedule': 3600.0,
+    },
+    'provider-job-nudges-every-5-min': {
+        'task': 'jobs.tasks.send_provider_job_nudges',
+        'schedule': 300.0,
     },
     'purge-stale-quotes-daily': {
         'task': 'jobs.tasks.purge_stale_quotes',
@@ -287,6 +301,16 @@ PLAY_STORE_DEMO_PROVIDER_EMAIL = config(
 PLAY_STORE_DEMO_CUSTOMER_OTP = config(
     'PLAY_STORE_DEMO_CUSTOMER_OTP', default=''
 ).strip()
+
+# Public marketing demo (for-new-providers → /demo/provider). Separate from Play review.
+MARKETING_DEMO_ENABLED = config('MARKETING_DEMO_ENABLED', default='True').lower() == 'true'
+MARKETING_DEMO_PROVIDER_EMAIL = config(
+    'MARKETING_DEMO_PROVIDER_EMAIL', default='demo.marketing.provider@luminex-a.com'
+).strip().lower()
+MARKETING_DEMO_ORG_SLUG = config('MARKETING_DEMO_ORG_SLUG', default='luminexa-demo').strip()
+# Password used only by ensure_marketing_demo_accounts (never sent to browsers).
+MARKETING_DEMO_PASSWORD = config('MARKETING_DEMO_PASSWORD', default='').strip()
+MARKETING_DEMO_MAX_SESSIONS = config('MARKETING_DEMO_MAX_SESSIONS', default=100, cast=int)
 
 # ── Production HTTPS / browser hardening (only when DEBUG=False) ───────────
 if not DEBUG:

@@ -9,7 +9,13 @@ export default function DesktopNav({
   homeTo,
 }) {
   return (
-    <aside className="lx-sidebar fixed left-0 top-0 z-20 hidden h-full w-60 flex-col lg:flex">
+    <aside
+      className="lx-sidebar fixed left-0 z-20 hidden w-60 flex-col lg:flex"
+      style={{
+        top: 'var(--lx-marketing-chrome-h, 0px)',
+        height: 'calc(100% - var(--lx-marketing-chrome-h, 0px))',
+      }}
+    >
       <div className="shrink-0 border-b border-luminexa-line px-4 py-3.5">
         <Link
           to={homeTo || '/'}
@@ -118,9 +124,11 @@ function DesktopMenuRow({ item }) {
     </>
   );
 
+  const tourAttr = item.dataTour ? { 'data-tour': item.dataTour } : {};
+
   if (item.onClick) {
     return (
-      <button type="button" className={className} onClick={item.onClick}>
+      <button type="button" className={className} onClick={item.onClick} {...tourAttr}>
         {label}
       </button>
     );
@@ -133,13 +141,14 @@ function DesktopMenuRow({ item }) {
         target={item.external ? '_blank' : undefined}
         rel={item.external ? 'noopener noreferrer' : undefined}
         title={item.viewOnly ? `${item.label} (opens in new tab, view only)` : item.label}
+        {...tourAttr}
       >
         {label}
       </a>
     );
   }
   return (
-    <Link to={item.to} className={className} title={item.label}>
+    <Link to={item.to} className={className} title={item.label} {...tourAttr}>
       {label}
     </Link>
   );

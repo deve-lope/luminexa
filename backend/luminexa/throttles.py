@@ -27,3 +27,7 @@ class MapSearchThrottle(ScopedRateThrottle):
 
 class BusinessTypeWriteThrottle(ScopedRateThrottle):
     scope = 'business_type_write'
+
+
+class MarketingDemoThrottle(ScopedRateThrottle):
+    scope = 'marketing_demo'

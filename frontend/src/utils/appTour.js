@@ -1,8 +1,12 @@
 /** First-run app walkthrough — local persistence + role-specific steps. */
 
 export const APP_TOUR_START_EVENT = 'lx-app-tour-start';
-export const APP_TOUR_VERSION = 1;
+/** Replayable Training / “Show me” spotlights (does not mark first-run done). */
+export const GUIDED_TOUR_START_EVENT = 'lx-guided-tour-start';
+export const APP_TOUR_VERSION = 2;
 export const APP_TOUR_ELIGIBLE_KEY = 'lx_app_tour_eligible';
+/** Wait on Home so the first open isn’t covered by the tour immediately. */
+export const APP_TOUR_AUTO_START_DELAY_MS = 10_000;
 
 /** Auto-show only for recently onboarded users (or this browser session after setup). */
 const AUTO_START_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -76,6 +80,19 @@ export function requestAppTour(role, userId) {
 }
 
 /**
+ * Run a short spotlight walkthrough (Training “Show me”).
+ * Does not clear or set first-run completion.
+ * @param {{ role: string, steps: Array<{ id?: string, title: string, body: string, target?: string, path?: string, cta?: { label: string, path: string } }> }} opts
+ */
+export function startGuidedTour({ role, steps } = {}) {
+  if (typeof window === 'undefined') return;
+  if (!role || !Array.isArray(steps) || steps.length === 0) return;
+  window.dispatchEvent(
+    new CustomEvent(GUIDED_TOUR_START_EVENT, { detail: { role, steps } })
+  );
+}
+
+/**
  * @param {'customer' | 'provider'} role
  * @param {{ orgSlug?: string, includeGigs?: boolean }} opts
  */
@@ -99,16 +116,16 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
       {
         id: 'schedule',
         title: 'Schedule',
-        body: 'Manage open times and bookings. Tap a slot to review or adjust it.',
+        body: 'Manage open times and bookings. Tap Schedule in the bar to open your calendar.',
         target: 'tab-schedule',
-        path: `${base}/schedule`,
+        path: base,
       },
       {
         id: 'requests',
         title: 'Requests',
         body: 'New booking requests and customer inquiries land here for you to accept or reply.',
         target: 'tab-requests',
-        path: `${base}/requests`,
+        path: base,
       },
     ];
     if (includeGigs) {
@@ -117,7 +134,7 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
         title: 'Gig wall',
         body: 'Browse open gigs from customers nearby and send bids when you want the work.',
         target: 'tab-gigs',
-        path: `${base}/gigs`,
+        path: base,
       });
     }
     steps.push(
@@ -126,14 +143,15 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
         title: 'Messages',
         body: 'Chat with customers about bookings, quotes, and job details.',
         target: 'tab-messages',
-        path: `${base}/messages`,
+        path: base,
       },
       {
-        id: 'menu',
-        title: 'Menu & settings',
-        body: 'Open the menu for services, business settings, your public page, and account.',
+        id: 'training',
+        title: 'Training',
+        body: 'More help anytime: Menu → Training. Short lessons that point you to each screen.',
         target: 'menu',
         path: base,
+        cta: { label: 'Open Training', path: `${base}/training` },
       }
     );
     return steps;
@@ -156,8 +174,16 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
     {
       id: 'book',
       title: 'Book',
-      body: 'Search by service or location to find providers who can come to you.',
+      body: 'Tap Book in the bar below to find providers near you.',
       target: 'tab-book',
+      // Stay on Home so the spotlight points at the tab to tap, not the Find page.
+      path: '/customer',
+    },
+    {
+      id: 'search',
+      title: 'Search',
+      body: 'Type a service or set your location here to see who can come to you.',
+      target: 'find-search',
       path: '/customer/find',
     },
   ];
@@ -167,7 +193,7 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
       title: 'Gig wall',
       body: 'Post a job when you need something custom, then review bids from providers.',
       target: 'tab-gigs',
-      path: '/customer/gigs',
+      path: '/customer',
     });
   }
   steps.push(
@@ -176,14 +202,14 @@ export function buildAppTourSteps(role, { orgSlug = '', includeGigs = true } = {
       title: 'Bookings',
       body: 'Track upcoming appointments, quotes, and completed jobs in one place.',
       target: 'tab-bookings',
-      path: '/customer/bookings',
+      path: '/customer',
     },
     {
       id: 'messages',
       title: 'Messages',
       body: 'Message your provider about timing, access, or job details.',
       target: 'tab-messages',
-      path: '/customer/messages',
+      path: '/customer',
     },
     {
       id: 'menu',

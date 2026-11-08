@@ -52,6 +52,29 @@ describe('customerBookings filters', () => {
     ).toBe(true);
   });
 
+  test('confirmed job stays upcoming after start while end is still ahead', () => {
+    expect(
+      isFutureUpcomingBooking(
+        { status: 'confirmed', start_at: past, end_at: future },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  test('en route confirmed job stays upcoming even when times are past', () => {
+    expect(
+      isFutureUpcomingBooking(
+        {
+          status: 'confirmed',
+          start_at: past,
+          end_at: past,
+          en_route_active: true,
+        },
+        now,
+      ),
+    ).toBe(true);
+  });
+
   test('dismissed inquiry is not active on quotes tab', () => {
     expect(
       isActiveInquiry({ status: 'quoted', dismissed_at: '2025-01-01T00:00:00Z' }),

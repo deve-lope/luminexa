@@ -6,6 +6,8 @@ export default function LinkShareBar({
   url,
   title,
   text,
+  phone,
+  email,
   showInput = true,
   copyLabel = 'Copy',
   shareLabel = 'Share',
@@ -62,6 +64,8 @@ export default function LinkShareBar({
         url={url}
         title={title}
         text={text}
+        phone={phone}
+        email={email}
         onClose={() => setShareOpen(false)}
         onCopied={markCopied}
       />

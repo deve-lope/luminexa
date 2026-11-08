@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luminexa Ops</title>
+  <meta http-equiv="refresh" content="120" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f3f1ec;
+      --bg-accent: #e7eef0;
+      --panel: #ffffff;
+      --line: #d9dde3;
+      --text: #1c242c;
+      --muted: #5f6b76;
+      --accent: #0f766e;
+      --accent-soft: #d8f0ec;
+      --warn-bg: #fff6e8;
+      --warn-line: #f0d9b0;
+      --shadow: 0 10px 30px rgba(28, 36, 44, 0.06);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 0% -10%, #d9ebe7 0%, transparent 55%),
+        radial-gradient(700px 380px at 100% 0%, #e8e4d8 0%, transparent 50%),
+        var(--bg);
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 1.5rem 1.75rem 1.1rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.78);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    header h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.7rem;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+    header h1 span { color: var(--accent); }
+    header .meta { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.88rem; }
+    header .right { text-align: right; color: var(--muted); font-size: 0.84rem; }
+    main { padding: 1.35rem 1.75rem 3rem; max-width: 1200px; margin: 0 auto; }
+    .banner {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-line);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+      color: #6a5328;
+      font-size: 0.9rem;
+      margin-bottom: 1.15rem;
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1rem 1.05rem;
+      box-shadow: var(--shadow);
+    }
+    .kpi .label {
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 600;
+    }
+    .kpi .value {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.85rem;
+      font-weight: 700;
+      margin-top: 0.15rem;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.03em;
+    }
+    .kpi .sub { color: var(--muted); font-size: 0.8rem; margin-top: 0.15rem; }
+    .kpi.accent { background: linear-gradient(180deg, #f3fffc 0%, #fff 70%); border-color: #b9ddd6; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    section h2 {
+      margin: 0;
+      padding: 0.95rem 1.1rem;
+      font-size: 0.98rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--line);
+      background: #fafbfc;
+    }
+    .note {
+      padding: 0.8rem 1.1rem;
+      color: var(--muted);
+      font-size: 0.86rem;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+    th, td { text-align: left; padding: 0.62rem 1.05rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #fcfcfd;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .mono { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+    .tag {
+      display: inline-block;
+      padding: 0.12rem 0.5rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    @media (min-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+    }
+    .bars { padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 7rem 1fr 2.2rem;
+      gap: 0.55rem;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+    .bar-track { height: 9px; background: #eef1f4; border-radius: 999px; overflow: hidden; }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #14786f, #2aa394);
+      border-radius: 999px;
+    }
+    .empty { padding: 1.1rem; color: var(--muted); }
+    .split-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: baseline;
+    }
+    .split-title .count {
+      font-family: Fraunces, Georgia, serif;
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+    .chart-wrap { padding: 1rem 1.1rem 1.25rem; height: 260px; position: relative; }
+    .chart-wrap.tall { height: 300px; }
+    .flag { font-size: 1.05rem; margin-right: 0.25rem; }
+    .pages-list { color: var(--muted); font-size: 0.8rem; word-break: break-all; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Luminexa <span>Ops</span></h1>
+      <p class="meta">Standalone analytics · outside the customer / provider app</p>
+    </div>
+    <div class="right">
+      <div>Updated {{ generated_at|dt }}</div>
+      <div>Auto-refresh every 2 minutes</div>
+    </div>
+  </header>
+
+  <main>
+    <p class="banner">
+      Activity logs &amp; charts count from <strong>{{ history_since|dt }}</strong> onward (dashboard filter only — app data unchanged).
+    </p>
+
+    <div class="kpis">
+      <div class="kpi accent"><div class="label">Active users</div><div class="value">{{ accounts.users_total }}</div><div class="sub">not deleted</div></div>
+      <div class="kpi accent"><div class="label">Business</div><div class="value">{{ accounts.users_business }}</div><div class="sub">owner / staff</div></div>
+      <div class="kpi accent"><div class="label">Customer</div><div class="value">{{ accounts.users_customer }}</div><div class="sub">customer-only</div></div>
+      <div class="kpi"><div class="label">No role</div><div class="value">{{ accounts.users_no_role }}</div><div class="sub">no org membership</div></div>
+      <div class="kpi"><div class="label">Active businesses</div><div class="value">{{ accounts.orgs_active }}</div><div class="sub">{{ accounts.orgs_total }} total orgs</div></div>
+      <div class="kpi accent"><div class="label">Public page hits</div><div class="value">{{ traffic.hits_public }}</div><div class="sub">{% if traffic.available %}{{ traffic.unique_ips }} IPs · {{ traffic.sessions }} visits{% else %}log not ready{% endif %}</div></div>
+      <div class="kpi"><div class="label">Bot / scan hits</div><div class="value">{{ traffic.bots_scans }}</div><div class="sub">filtered out of public</div></div>
+      <div class="kpi"><div class="label">New bookings</div><div class="value">{{ totals.bookings }}</div><div class="sub">since reset</div></div>
+    </div>
+
+    <section>
+      <h2>Website traffic</h2>
+      {% if not traffic.available %}
+      <div class="note">
+        Waiting for nginx access log at <span class="mono">{{ traffic.log_path }}</span>.
+        Rebuild the frontend container so logging to the shared volume starts.
+      </div>
+      {% else %}
+      <div class="note">
+        Public pages only · bots/probes excluded · visits = same IP with &lt;30 min gap ·
+        duration ≈ last page − first page (single-page visits show “single page”) ·
+        country from Cloudflare when available
+      </div>
+      <div class="grid-2">
+        <div>
+          <h2 style="border-top:0; border-bottom:1px solid var(--line);">Hits &amp; visits by day</h2>
+          <div class="chart-wrap"><canvas id="chartDays"></canvas></div>
+        </div>
+        <div>
+          <h2 style="border-top:0; border-bottom:1px solid var(--line);">Hits by hour (UTC)</h2>
+          <div class="chart-wrap"><canvas id="chartHours"></canvas></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <h2 style="border-top:1px solid var(--line);">Top pages</h2>
+          <div class="chart-wrap tall"><canvas id="chartPages"></canvas></div>
+        </div>
+        <div>
+          <h2 style="border-top:1px solid var(--line);">By country</h2>
+          <div class="chart-wrap tall"><canvas id="chartCountries"></canvas></div>
+        </div>
+      </div>
+
+      <h2 style="border-top:1px solid var(--line);">Visits by IP</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Flag</th>
+            <th>IP</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Pages</th>
+            <th>Path trail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in traffic.visits %}
+          <tr>
+            <td><span class="flag" title="{{ v.country or 'unknown' }}">{{ v.flag }}</span>{% if v.country %}<span class="mono">{{ v.country }}</span>{% endif %}</td>
+            <td class="mono">{{ v.ip }}</td>
+            <td class="mono">{{ v.started_at|dt }}</td>
+            <td>{{ v.duration_label }}</td>
+            <td>{{ v.page_views }}</td>
+            <td class="pages-list">{{ v.pages|join(' → ') }}{% if v.pages_extra %} · +{{ v.pages_extra }} more{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="empty">No visits yet since reset</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2 style="border-top:1px solid var(--line);">Recent page views</h2>
+      <table>
+        <thead><tr><th>When</th><th>Flag</th><th>Path</th><th>IP</th></tr></thead>
+        <tbody>
+          {% for row in traffic.recent %}
+          <tr>
+            <td class="mono">{{ row.ts|dt }}</td>
+            <td><span class="flag">{{ row.flag }}</span>{% if row.country %}<span class="mono">{{ row.country }}</span>{% endif %}</td>
+            <td class="mono">{{ row.path }}</td>
+            <td class="mono">{{ row.ip }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="empty">None yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <script id="traffic-charts" type="application/json">{{ {
+        'days': traffic.chart_days,
+        'hours': traffic.chart_hours,
+        'pages': traffic.chart_pages,
+        'countries': traffic.chart_countries
+      }|tojson }}</script>
+      <script>
+        (function () {
+          const el = document.getElementById('traffic-charts');
+          if (!el || !window.Chart) return;
+          const data = JSON.parse(el.textContent);
+          const grid = '#e6eaee';
+          const tick = '#5f6b76';
+          const teal = '#0f766e';
+          const tealSoft = 'rgba(15, 118, 110, 0.18)';
+          const ink = '#334155';
+          Chart.defaults.font.family = '"IBM Plex Sans", system-ui, sans-serif';
+          Chart.defaults.color = tick;
+          function lineOrBar(id, cfg) {
+            const canvas = document.getElementById(id);
+            if (!canvas) return;
+            new Chart(canvas, cfg);
+          }
+          lineOrBar('chartDays', {
+            type: 'bar',
+            data: {
+              labels: data.days.labels,
+              datasets: [
+                { label: 'Page hits', data: data.days.hits, backgroundColor: teal, borderRadius: 6, maxBarThickness: 28 },
+                { label: 'Visits', data: data.days.sessions, backgroundColor: ink, borderRadius: 6, maxBarThickness: 28 }
+              ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: grid } } } }
+          });
+          lineOrBar('chartHours', {
+            type: 'line',
+            data: {
+              labels: data.hours.labels,
+              datasets: [{
+                label: 'Hits',
+                data: data.hours.hits,
+                borderColor: teal,
+                backgroundColor: tealSoft,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 2
+              }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: grid } } } }
+          });
+          lineOrBar('chartPages', {
+            type: 'bar',
+            data: {
+              labels: data.pages.labels,
+              datasets: [{ label: 'Hits', data: data.pages.hits, backgroundColor: teal, borderRadius: 6 }]
+            },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: grid } }, y: { grid: { display: false } } } }
+          });
+          lineOrBar('chartCountries', {
+            type: 'doughnut',
+            data: {
+              labels: data.countries.labels.length ? data.countries.labels : ['No country yet'],
+              datasets: [{
+                data: data.countries.hits.length ? data.countries.hits : [1],
+                backgroundColor: ['#0f766e', '#14786f', '#2aa394', '#5bb8a8', '#8ecfc3', '#334155', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0']
+              }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } } }
+          });
+        })();
+      </script>
+      {% endif %}
+    </section>
+
+    <div class="grid-2">
+      <section>
+        <h2>Signups · since reset</h2>
+        {% if signups_by_day %}
+        {% set smax = signups_by_day|map(attribute='c')|max %}
+        <div class="bars">
+          {% for row in signups_by_day %}
+          <div class="bar-row">
+            <span class="mono">{{ row.day|day }}</span>
+            <div class="bar-track"><div class="bar-fill" style="width: {{ (row.c / smax * 100) if smax else 0 }}%"></div></div>
+            <span>{{ row.c }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">No signups since the reset.</div>
+        {% endif %}
+      </section>
+
+      <section>
+        <h2>Bookings created · since reset</h2>
+        {% if bookings_by_day %}
+        {% set bmax = bookings_by_day|map(attribute='c')|max %}
+        <div class="bars">
+          {% for row in bookings_by_day %}
+          <div class="bar-row">
+            <span class="mono">{{ row.day|day }}</span>
+            <div class="bar-track"><div class="bar-fill" style="width: {{ (row.c / bmax * 100) if bmax else 0 }}%"></div></div>
+            <span>{{ row.c }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">No bookings since the reset.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <section>
+      <h2>Booking status · since reset</h2>
+      <table>
+        <thead><tr><th>Status</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for row in booking_status %}
+          <tr><td><span class="tag">{{ row.status }}</span></td><td class="mono">{{ row.c }}</td></tr>
+          {% else %}
+          <tr><td colspan="2" class="empty">None</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="grid-2">
+      <section>
+        <h2>
+          <span class="split-title">
+            <span>Business accounts</span>
+            <span class="count">{{ accounts.users_business }}</span>
+          </span>
+        </h2>
+        <table>
+          <thead><tr><th>Joined</th><th>User</th><th>Roles</th></tr></thead>
+          <tbody>
+            {% for u in business_users %}
+            <tr>
+              <td class="mono">{{ u.date_joined|dt }}</td>
+              <td>{{ u.name }}<br><span class="mono">{{ u.email }}</span>{% if not u.email_verified %} · unverified{% endif %}</td>
+              <td>{{ u.roles }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="empty">None</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>
+          <span class="split-title">
+            <span>Customer accounts</span>
+            <span class="count">{{ accounts.users_customer }}</span>
+          </span>
+        </h2>
+        <table>
+          <thead><tr><th>Joined</th><th>User</th><th>Orgs</th></tr></thead>
+          <tbody>
+            {% for u in customer_only %}
+            <tr>
+              <td class="mono">{{ u.date_joined|dt }}</td>
+              <td>{{ u.name }}<br><span class="mono">{{ u.email }}</span>{% if not u.email_verified %} · unverified{% endif %}</td>
+              <td>{{ u.orgs }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="empty">None</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section>
+      <h2>Recent users · since reset</h2>
+      <table>
+        <thead><tr><th>Joined</th><th>Email</th><th>Name</th><th>Roles</th><th>Verified</th></tr></thead>
+        <tbody>
+          {% for u in recent_users %}
+          <tr>
+            <td class="mono">{{ u.date_joined|dt }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.name }}</td>
+            <td>{{ u.roles }}</td>
+            <td>{% if u.email_verified %}yes{% else %}no{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="empty">None since reset</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Recent businesses · since reset</h2>
+      <table>
+        <thead><tr><th>Created</th><th>Name</th><th>Slug</th><th>Plan</th><th>Public</th></tr></thead>
+        <tbody>
+          {% for o in recent_orgs %}
+          <tr>
+            <td class="mono">{{ o.created_at|dt }}</td>
+            <td>{{ o.name }}</td>
+            <td class="mono">{{ o.slug }}</td>
+            <td>{{ o.subscription_plan }}</td>
+            <td>{% if o.profile_public %}yes{% else %}no{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="empty">None since reset</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Recent bookings · since reset</h2>
+      <table>
+        <thead><tr><th>Created</th><th>Status</th><th>Business</th><th>Customer</th><th>Source</th></tr></thead>
+        <tbody>
+          {% for b in recent_bookings %}
+          <tr>
+            <td class="mono">{{ b.created_at|dt }}</td>
+            <td><span class="tag">{{ b.status }}</span></td>
+            <td>{{ b.org_name }}</td>
+            <td class="mono">{{ b.customer_email }}</td>
+            <td>{{ b.source }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="empty">None since reset</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="grid-2">
+      <section>
+        <h2>Push devices · since reset</h2>
+        <table>
+          <thead><tr><th>Updated</th><th>Platform</th><th>User</th></tr></thead>
+          <tbody>
+            {% for t in push_devices %}
+            <tr>
+              <td class="mono">{{ t.updated_at|dt }}</td>
+              <td>{{ t.platform }}</td>
+              <td class="mono">{{ t.email }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="empty">None since reset</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Login codes &amp; admin failures · since reset</h2>
+        <table>
+          <thead><tr><th>When</th><th>Email</th><th>Attempts</th><th>Used</th></tr></thead>
+          <tbody>
+            {% for r in recent_logins %}
+            <tr>
+              <td class="mono">{{ r.created_at|dt }}</td>
+              <td class="mono">{{ r.email }}</td>
+              <td>{{ r.attempt_count }}</td>
+              <td>{% if r.consumed_at %}yes{% else %}no{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="empty">None</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Day</th><th>Key</th><th>Fails</th></tr></thead>
+          <tbody>
+            {% for r in admin_failures %}
+            <tr>
+              <td class="mono">{{ r.day|day }}</td>
+              <td class="mono">{{ r.key }}</td>
+              <td>{{ r.fail_count }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="empty">No admin failures</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

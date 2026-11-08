@@ -43,6 +43,7 @@ function BookOwnerShell({ orgSlug: orgSlugProp, children }) {
       buildProviderMenuItems({
         logout: requestLogout,
         providerServicesPath: `/provider/${orgSlug}/services`,
+        providerTrainingPath: `/provider/${orgSlug}/training`,
         providerSettingsPath: providerSettings(orgSlug),
         providerAccountPath: providerAccount(orgSlug),
         providerSharePath: providerShare(orgSlug),
@@ -113,7 +114,7 @@ function BookGuestShell({ children }) {
  */
 export default function BookRouteLayout() {
   const { slug } = useParams();
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, memberships, user } = useAuth();
   const [searchParams] = useSearchParams();
 
   const staffOfOrg = useMemo(
@@ -129,22 +130,26 @@ export default function BookRouteLayout() {
   const ownerPreviewMode =
     searchParams.get('mode') === 'owner' || searchParams.get('view') === 'provider';
 
-  const isProvider = isProviderMember(memberships);
+  const isLiveProvider = isProviderMember(memberships) && !user?.is_marketing_demo;
 
-  /** Providers never use the customer booking shell on public /book URLs. */
+  /** Providers never use the customer booking shell on public /book URLs.
+   * Marketing demo may browse real /book pages as a guest. */
   const variant = useMemo(() => {
-    if (!isAuthenticated) return 'guest';
-    if (isProvider) {
+    if (!isAuthenticated || user?.is_marketing_demo) return 'guest';
+    if (isLiveProvider) {
       if (staffOfOrg) return 'owner';
       return 'provider_redirect';
     }
     if (ownerPreviewMode && staffOfOrg) return 'owner';
     return 'customer';
-  }, [isAuthenticated, isProvider, ownerPreviewMode, staffOfOrg]);
+  }, [isAuthenticated, isLiveProvider, ownerPreviewMode, staffOfOrg, user?.is_marketing_demo]);
 
   const providerRedirect = useMemo(
-    () => (variant === 'provider_redirect' ? providerBookingRedirectPath(memberships, slug) : null),
-    [variant, memberships, slug]
+    () =>
+      variant === 'provider_redirect'
+        ? providerBookingRedirectPath(memberships, slug, user)
+        : null,
+    [variant, memberships, slug, user]
   );
 
   const outletContext = useMemo(() => ({ variant, orgSlug: slug }), [variant, slug]);

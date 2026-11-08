@@ -83,6 +83,71 @@ def ensure_customer_membership(org, customer, *, approve=False):
     return membership
 
 
+def resolve_customer_for_provider_book(
+    *,
+    org,
+    customer=None,
+    email='',
+    full_name='',
+    phone='',
+):
+    """
+    Existing customer id, or find/create from caller details (phone-book / walk-in).
+    New accounts get an unusable password — they finish via email OTP + profile.
+    """
+    from django.contrib.auth import get_user_model
+
+    from accounts.otp import normalize_email
+
+    User = get_user_model()
+
+    if customer is not None:
+        return customer
+
+    email_norm = normalize_email(email or '')
+    name = (full_name or '').strip()
+    phone_norm = (phone or '').strip()
+    if not email_norm:
+        raise ValidationError({'email': 'Customer email is required.'})
+    if '@' not in email_norm or '.' not in email_norm.split('@')[-1]:
+        raise ValidationError({'email': 'Enter a valid email address.'})
+    if not name:
+        raise ValidationError({'full_name': 'Customer name is required.'})
+
+    existing = User.objects.filter(email__iexact=email_norm).first()
+    if existing:
+        staff_role = OrganizationMembership.objects.filter(
+            organization=org,
+            user=existing,
+            role__in=(
+                OrganizationMembership.Role.OWNER,
+                OrganizationMembership.Role.STAFF,
+            ),
+        ).exists()
+        if staff_role:
+            raise ValidationError({
+                'email': 'This email belongs to staff on this business. Use a customer email.',
+            })
+        updates = []
+        if name and not (existing.full_name or '').strip():
+            existing.full_name = name[:255]
+            updates.append('full_name')
+        if phone_norm and not (existing.phone or '').strip():
+            existing.phone = phone_norm[:32]
+            updates.append('phone')
+        if updates:
+            existing.save(update_fields=updates)
+        return existing
+
+    return User.objects.create_user(
+        email=email_norm,
+        full_name=name[:255],
+        password=None,
+        phone=(phone_norm[:32] if phone_norm else ''),
+        email_verified=False,
+    )
+
+
 def customer_is_blocked(org, customer):
     if not customer or not getattr(customer, 'is_authenticated', False):
         return False
@@ -236,8 +301,14 @@ def _lock_slot(slot):
 def provider_book_customer(
     *, org, service, customer, start_at, end_at, staff_user, slot=None, notes='', service_address='',
 ):
+    """
+    Staff books a customer directly. Always attaches an AvailabilitySlot so the
+    appointment appears on Schedule (month heat + day timeline).
+    """
     if service.organization_id != org.id:
         raise ValidationError({'service': 'Service does not belong to this organization.'})
+    if not start_at or not end_at or start_at >= end_at:
+        raise ValidationError({'end_at': 'End time must be after start time.'})
     ensure_customer_membership(org, customer, approve=True)
     if slot:
         slot = _lock_slot(slot)
@@ -249,6 +320,35 @@ def provider_book_customer(
             raise ValidationError({'slot_id': 'This slot is not available.'})
         if slot.start_at != start_at or slot.end_at != end_at:
             raise ValidationError({'slot_id': 'Slot times must match the booking times.'})
+    else:
+        # Prefer an existing open window at these times; otherwise create one.
+        from .combined_booking import _find_or_create_segment_slot
+
+        slot = _find_or_create_segment_slot(org, service, start_at, end_at)
+        if not slot.is_bookable():
+            raise ValidationError({
+                'start_at': 'That time is already fully booked. Pick another window.',
+            })
+        slot = _lock_slot(slot)
+
+    # Shop address is known. Mobile: use provider-supplied or the customer's saved
+    # default when valid; otherwise the customer adds it on the invite confirm link.
+    from .service_address import (
+        is_valid_structured_service_address,
+        validate_structured_service_address,
+    )
+
+    resolved_address = resolve_booking_service_address(
+        service=service,
+        customer_address=(service_address or '').strip(),
+    )
+    if service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
+        provided = (service_address or '').strip()
+        if provided and is_valid_structured_service_address(provided):
+            resolved_address = validate_structured_service_address(provided)
+        else:
+            default = (getattr(customer, 'default_service_address', None) or '').strip()
+            resolved_address = default if is_valid_structured_service_address(default) else ''
 
     booking = Booking.objects.create(
         organization=org,
@@ -257,16 +357,62 @@ def provider_book_customer(
         availability_slot=slot,
         start_at=start_at,
         end_at=end_at,
-        status=Booking.Status.CONFIRMED,
+        status=Booking.Status.REQUESTED,
         source=Booking.Source.PROVIDER_DIRECT,
         booked_by=staff_user,
         customer_notes=notes or '',
-        service_address=(service_address or '').strip(),
+        service_address=resolved_address,
+        awaiting_customer_acceptance=True,
     )
-    if slot:
-        slot.refresh_status(save=True)
+    slot.refresh_status(save=True)
+    from .combined_booking import _claim_empty_overlapping_slots
     from .message_services import ensure_booking_card
+
+    _claim_empty_overlapping_slots(org, start_at, end_at, keep_slot_ids={slot.id})
     ensure_booking_card(booking=booking, sender=staff_user)
+    return booking
+
+
+@transaction.atomic
+def customer_confirm_provider_booking(booking, *, service_address=''):
+    """
+    Customer accepts a provider-direct invite: sets address (mobile) and confirms.
+    """
+    from .service_address import validate_structured_service_address
+
+    if booking.source != Booking.Source.PROVIDER_DIRECT:
+        raise ValidationError({'status': 'This booking cannot be confirmed this way.'})
+    if booking.status != Booking.Status.REQUESTED or not booking.awaiting_customer_acceptance:
+        raise ValidationError({'status': 'This booking is already confirmed or no longer pending.'})
+
+    service = booking.service
+    address = (service_address or '').strip()
+    if service and service.fulfillment_kind == Service.FulfillmentKind.MOBILE:
+        if not address:
+            address = (booking.service_address or '').strip()
+        if not address:
+            address = (getattr(booking.customer, 'default_service_address', None) or '').strip()
+        address = validate_structured_service_address(address)
+        booking.service_address = address
+        if hasattr(booking.customer, 'default_service_address'):
+            if not (booking.customer.default_service_address or '').strip():
+                booking.customer.default_service_address = address
+                booking.customer.save(update_fields=['default_service_address'])
+    elif service and service.fulfillment_kind == Service.FulfillmentKind.SHOP:
+        booking.service_address = resolve_booking_service_address(
+            service=service,
+            customer_address='',
+        )
+    elif address:
+        booking.service_address = address
+
+    booking.status = Booking.Status.CONFIRMED
+    booking.awaiting_customer_acceptance = False
+    booking.save(update_fields=[
+        'status', 'awaiting_customer_acceptance', 'service_address', 'updated_at',
+    ])
+    if booking.availability_slot_id:
+        _lock_slot(booking.availability_slot).refresh_status(save=True)
     return booking
 
 
@@ -419,13 +565,21 @@ def accept_booking_request(booking, staff_user):
             ),
         })
     if booking_requires_quote(booking.organization, booking.service):
-        raise ValidationError({
-            'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
-            'code': 'quote_required',
-        })
+        # Fresh quote requests have no price yet — must send a quote first.
+        # After a customer reschedules an already-priced job (catalog quote or gig),
+        # quote_amount remains and staff can accept the new time without re-quoting.
+        if booking.quote_amount is None:
+            raise ValidationError({
+                'detail': 'This booking needs a quote. Send a quote instead of approving directly.',
+                'code': 'quote_required',
+            })
     booking.status = Booking.Status.CONFIRMED
     booking.booked_by = staff_user
-    booking.save(update_fields=['status', 'booked_by', 'updated_at'])
+    _clear_provider_time_proposal(booking)
+    booking.save(update_fields=[
+        'status', 'booked_by', 'awaiting_customer_acceptance',
+        'prior_start_at', 'prior_end_at', 'prior_availability_slot', 'updated_at',
+    ])
     # Accepting the service request also approves invitation-only customers.
     if booking.customer_id:
         ensure_customer_membership(booking.organization, booking.customer, approve=True)
@@ -438,7 +592,29 @@ def accept_booking_request(booking, staff_user):
     return booking
 
 
+_QUOTE_Q_TYPES = frozenset({'text', 'choice'})
+
+
+def _normalize_quote_question_options(raw_options):
+    options = []
+    if not isinstance(raw_options, list):
+        return options
+    for opt in raw_options:
+        text = str(opt or '').strip()[:120]
+        if text and text not in options:
+            options.append(text)
+        if len(options) >= 12:
+            break
+    return options
+
+
 def _normalize_quote_questions(raw):
+    """
+    Normalize to [{id, question, answer, type, options?}].
+
+    type: 'text' (default) or 'choice' (single select from options).
+    Plain strings stay free-text for backward compatibility.
+    """
     questions = []
     if not raw:
         return questions
@@ -449,7 +625,12 @@ def _normalize_quote_questions(raw):
             text = item.strip()
             if not text:
                 continue
-            questions.append({'id': f'q{i + 1}', 'question': text[:300], 'answer': ''})
+            questions.append({
+                'id': f'q{i + 1}',
+                'question': text[:300],
+                'answer': '',
+                'type': 'text',
+            })
             continue
         if not isinstance(item, dict):
             continue
@@ -458,29 +639,79 @@ def _normalize_quote_questions(raw):
             continue
         qid = (item.get('id') or f'q{i + 1}')[:40]
         answer = (item.get('answer') or '').strip()[:1000]
-        questions.append({'id': qid, 'question': text[:300], 'answer': answer})
+        qtype = (item.get('type') or 'text').strip().lower()
+        if qtype not in _QUOTE_Q_TYPES:
+            qtype = 'text'
+        entry = {
+            'id': qid,
+            'question': text[:300],
+            'answer': answer,
+            'type': qtype,
+        }
+        if qtype == 'choice':
+            options = _normalize_quote_question_options(item.get('options'))
+            if len(options) < 2:
+                raise ValidationError({
+                    'questions': (
+                        f'“{text[:60]}” is multiple choice — add at least 2 options.'
+                    ),
+                })
+            entry['options'] = options
+            if answer and answer not in options:
+                # Keep blank rather than an invalid prior answer.
+                entry['answer'] = ''
+        questions.append(entry)
     return questions[:20]
 
 
 def _merge_quote_questions(existing, incoming):
-    """Prefer incoming question list; preserve prior answers when possible."""
+    """Prefer incoming question list; preserve prior answers only for the same question text."""
     if incoming is None:
         return list(existing or [])
     normalized = _normalize_quote_questions(incoming)
     prior = list(existing or [])
     by_id = {str(q.get('id')): q for q in prior if q.get('id')}
     by_text = {(q.get('question') or '').strip().lower(): q for q in prior}
+    used_ids = set()
     for q in normalized:
-        if not (q.get('answer') or '').strip():
-            prev = by_id.get(str(q.get('id'))) or by_text.get((q.get('question') or '').strip().lower())
-            if prev and (prev.get('answer') or '').strip():
+        qtext = (q.get('question') or '').strip().lower()
+        prev = by_text.get(qtext) or by_id.get(str(q.get('id')))
+        same_text = bool(
+            prev and (prev.get('question') or '').strip().lower() == qtext
+        )
+        if same_text and prev:
+            if not (q.get('answer') or '').strip() and (prev.get('answer') or '').strip():
                 q['answer'] = prev['answer']
+            if prev.get('id'):
+                q['id'] = prev['id']
+        # Avoid colliding with prior ids when this is a different question.
+        qid = str(q.get('id') or '')
+        if qid and (qid in used_ids or (qid in by_id and not same_text)):
+            n = len(normalized) + len(used_ids) + 1
+            while f'q{n}' in by_id or f'q{n}' in used_ids:
+                n += 1
+            q['id'] = f'q{n}'
+            qid = q['id']
+        if qid:
+            used_ids.add(qid)
     return normalized
 
 
+_QUESTION_ANSWER_STATUSES = frozenset({
+    Booking.Status.REQUESTED,
+    Booking.Status.QUOTED,
+    Booking.Status.CONFIRMED,
+    Booking.Status.IN_PROGRESS,
+})
+
+
 def booking_awaiting_quote_details(booking) -> bool:
-    """True when provider asked questions and customer has not answered them all yet."""
-    if booking.status != Booking.Status.REQUESTED:
+    """
+    True when the customer still has unanswered clarifying questions.
+
+    Unanswered questions never change booking status — they are informational.
+    """
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
         return False
     questions = booking.quote_questions or []
     if not questions:
@@ -507,46 +738,37 @@ def ask_booking_quote_questions(
     message='',
 ):
     """
-    Provider asks clarifying questions before pricing.
+    Provider asks clarifying questions (before or after confirm).
 
-    This is not a quote — status stays/returns to REQUESTED and quote_amount is cleared.
+    Does not change booking status, quote amount, or confirmation — unanswered
+    questions are informational only.
     """
-    if booking.status not in (Booking.Status.REQUESTED, Booking.Status.QUOTED):
-        raise ValidationError({'status': 'Only open requests can receive quote questions.'})
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
+        raise ValidationError({
+            'status': 'Questions can only be asked on open or confirmed bookings.',
+        })
     normalized = _normalize_quote_questions(questions)
     if not normalized:
         raise ValidationError({'questions': 'Add at least one question for the customer.'})
 
     booking.quote_questions = _merge_quote_questions(booking.quote_questions, normalized)
-    # Ensure the asked set still has at least one unanswered question for the customer.
-    if not any(not (q.get('answer') or '').strip() for q in booking.quote_questions):
-        # All questions already answered (re-ask same set) — clear answers for newly listed blanks only
-        pass
-    booking.quote_amount = None
-    booking.quote_message = (message or '').strip()[:4000]
-    booking.quoted_at = None
-    booking.status = Booking.Status.REQUESTED
     booking.booked_by = staff_user
-    booking.save(
-        update_fields=[
-            'quote_questions',
-            'quote_amount',
-            'quote_message',
-            'quoted_at',
-            'status',
-            'booked_by',
-            'updated_at',
-        ]
-    )
+    update_fields = ['quote_questions', 'booked_by', 'updated_at']
+    note = (message or '').strip()[:4000]
+    # Keep an existing priced-quote note unless the provider sends a new message.
+    if note:
+        booking.quote_message = note
+        update_fields.append('quote_message')
+    booking.save(update_fields=update_fields)
     return booking
 
 
 @transaction.atomic
 def answer_booking_quote_questions(booking, *, customer, answers):
-    """Customer submits answers so the provider can send an accurate quote."""
+    """Customer submits answers to clarifying questions (any open booking status)."""
     if booking.customer_id != customer.id:
         raise PermissionDenied('Only the customer can answer these questions.')
-    if booking.status != Booking.Status.REQUESTED:
+    if booking.status not in _QUESTION_ANSWER_STATUSES:
         raise ValidationError({'status': 'These questions are no longer open for answers.'})
     questions = list(booking.quote_questions or [])
     if not questions:
@@ -564,7 +786,16 @@ def answer_booking_quote_questions(booking, *, customer, answers):
     for q in questions:
         qid = str(q.get('id') or '')
         if qid in by_id:
-            q['answer'] = by_id[qid]
+            ans = by_id[qid]
+            if (q.get('type') or 'text') == 'choice':
+                options = q.get('options') or []
+                if ans and ans not in options:
+                    raise ValidationError({
+                        'answers': (
+                            f'Pick one of the listed options for “{q.get("question")}”.'
+                        ),
+                    })
+            q['answer'] = ans
 
     missing = [q['question'] for q in questions if not (q.get('answer') or '').strip()]
     if missing:
@@ -603,18 +834,8 @@ def send_booking_quote(
         reschedule_booking(booking, new_slot=new_slot, by_user=staff_user)
         booking.refresh_from_db()
 
+    # Unanswered clarifying questions do not block a priced quote or confirmation.
     merged = _merge_quote_questions(booking.quote_questions, questions)
-    unanswered = [
-        q for q in merged
-        if (q.get('question') or '').strip() and not (q.get('answer') or '').strip()
-    ]
-    if unanswered:
-        raise ValidationError({
-            'questions': (
-                'Ask the customer to answer questions first (Ask questions), '
-                'then send a priced quote. Unanswered questions cannot go out with a price.'
-            ),
-        })
 
     booking.quote_amount = amount
     booking.quote_message = (message or '').strip()[:4000]
@@ -724,8 +945,22 @@ def cancel_booking(booking, *, by_user):
                         f'{cutoff} hours of the appointment. Contact them if you need help.'
                     ),
                 })
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.CANCELLED
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         release_slot(_lock_slot(booking.availability_slot))
     return booking
@@ -768,8 +1003,22 @@ def start_booking(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can start bookings.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.IN_PROGRESS
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     return booking
 
 
@@ -787,8 +1036,22 @@ def complete_booking(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can complete bookings.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.COMPLETED
-    booking.save(update_fields=['status', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         # Completed jobs free a seat so remaining capacity can be booked again.
         release_slot(_lock_slot(booking.availability_slot))
@@ -853,17 +1116,28 @@ def reschedule_booking(booking, *, new_slot, by_user):
     booking.end_at = new_slot.end_at
     booking.reminder_sent_at = None
     booking.incomplete_tasks_reminder_sent_at = None
+    booking.provider_1h_reminder_sent_at = None
+    booking.provider_en_route_nudge_sent_at = None
+    booking.provider_start_overdue_sent_at = None
     # Customer reschedules always go back to the provider for approval, even if the
     # original booking was already confirmed or the business uses instant booking.
+    # Keep prior_* so the provider sees the old time and can "Accept change".
+    reminder_reset_fields = [
+        'reminder_sent_at',
+        'incomplete_tasks_reminder_sent_at',
+        'provider_1h_reminder_sent_at',
+        'provider_en_route_nudge_sent_at',
+        'provider_start_overdue_sent_at',
+    ]
     if is_customer:
         booking.status = Booking.Status.REQUESTED
         booking.awaiting_customer_acceptance = False
-        booking.prior_start_at = None
-        booking.prior_end_at = None
-        booking.prior_availability_slot = None
+        booking.prior_start_at = prior_start
+        booking.prior_end_at = prior_end
+        booking.prior_availability_slot = old_slot
         booking.save(update_fields=[
-            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
-            'incomplete_tasks_reminder_sent_at',
+            'availability_slot', 'start_at', 'end_at', 'status',
+            *reminder_reset_fields,
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])
@@ -882,8 +1156,8 @@ def reschedule_booking(booking, *, new_slot, by_user):
         else:
             booking.status = Booking.Status.REQUESTED
         booking.save(update_fields=[
-            'availability_slot', 'start_at', 'end_at', 'status', 'reminder_sent_at',
-            'incomplete_tasks_reminder_sent_at',
+            'availability_slot', 'start_at', 'end_at', 'status',
+            *reminder_reset_fields,
             'awaiting_customer_acceptance', 'prior_start_at', 'prior_end_at',
             'prior_availability_slot', 'updated_at',
         ])
@@ -999,12 +1273,71 @@ def mark_booking_no_show(booking, *, staff_user):
         ),
     ).exists():
         raise PermissionDenied('Only staff can mark no-show.')
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
     booking.status = Booking.Status.CANCELLED
     booking.customer_notes = (booking.customer_notes or '').strip()
     if booking.customer_notes:
         booking.customer_notes += '\n'
     booking.customer_notes += '[Marked no-show by provider]'
-    booking.save(update_fields=['status', 'customer_notes', 'updated_at'])
+    booking.save(
+        update_fields=[
+            'status',
+            'customer_notes',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
+    if booking.availability_slot_id:
+        release_slot(_lock_slot(booking.availability_slot))
+    return booking
+
+
+@transaction.atomic
+def mark_provider_could_not_make_it(booking, *, staff_user, reason=''):
+    """
+    Close a past-due confirmed job when the provider (not the customer) missed it.
+    Before start_at, staff should use cancel_booking instead.
+    """
+    if booking.status != Booking.Status.CONFIRMED:
+        raise ValidationError({
+            'status': 'Only confirmed bookings can be marked as could not make it.',
+        })
+    _require_staff(booking, staff_user, 'mark bookings as could not make it')
+    if booking.start_at and booking.start_at > timezone.now():
+        raise ValidationError({
+            'status': 'Before the appointment time, cancel the booking instead.',
+        })
+    from .en_route_services import clear_en_route
+
+    clear_en_route(booking, save=False)
+    booking.status = Booking.Status.CANCELLED
+    booking.customer_notes = (booking.customer_notes or '').strip()
+    if booking.customer_notes:
+        booking.customer_notes += '\n'
+    reason_text = (reason or '').strip()
+    booking.customer_notes += '[Provider could not make this appointment]'
+    if reason_text:
+        booking.customer_notes += f' {reason_text}'
+    booking.save(
+        update_fields=[
+            'status',
+            'customer_notes',
+            'en_route_at',
+            'en_route_lat',
+            'en_route_lng',
+            'en_route_updated_at',
+            'en_route_distance_km',
+            'en_route_nearby_notified_at',
+            'updated_at',
+        ]
+    )
     if booking.availability_slot_id:
         release_slot(_lock_slot(booking.availability_slot))
     return booking

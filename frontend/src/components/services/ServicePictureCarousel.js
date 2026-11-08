@@ -13,6 +13,7 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
+  const indexRef = useRef(0);
 
   const updateScrollState = useCallback(() => {
     const track = trackRef.current;
@@ -57,12 +58,22 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
     track.scrollBy({ left: direction * step, behavior: 'smooth' });
   }, []);
 
+  indexRef.current = index;
+
   const openLightbox = (slideIndex) => {
     setIndex(slideIndex);
     setLightboxOpen(true);
   };
 
-  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+    // Bring the strip to the picture the viewer ended on.
+    const track = trackRef.current;
+    const slide = track?.children[indexRef.current];
+    if (track && slide) {
+      track.scrollTo({ left: Math.max(0, slide.offsetLeft - 4), behavior: 'smooth' });
+    }
+  }, []);
 
   if (!slides.length) return null;
 
@@ -71,11 +82,16 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
 
   return (
     <section>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Pictures
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="lx-eyebrow">Pictures</h2>
+        {hasMultiple && (
+          <span className="text-xs font-medium tabular-nums text-slate-500">
+            {index + 1} / {slides.length}
+          </span>
+        )}
+      </div>
 
-      <div className="relative mt-2">
+      <div className="relative mt-3">
         <div
           ref={trackRef}
           className={`flex snap-x snap-mandatory scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
@@ -87,19 +103,28 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
               key={slide.id}
               type="button"
               onClick={() => openLightbox(i)}
-              className={`group shrink-0 snap-start overflow-hidden rounded-xl bg-slate-100 text-left ${
+              className={`group relative shrink-0 snap-start overflow-hidden rounded-2xl bg-slate-100 text-left shadow-lx-card ring-1 ring-slate-200/70 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60 ${
                 singleSlide
-                  ? 'w-full max-w-sm'
-                  : 'w-[78%] sm:w-[46%] lg:w-[31%]'
+                  ? 'w-full sm:max-w-md'
+                  : 'w-[82%] sm:w-[46%] lg:w-[31%]'
               }`}
               aria-label={`View picture ${i + 1} full size`}
             >
               <img
                 src={slide.image_url}
                 alt={alt}
-                className="h-36 w-full object-cover transition group-hover:opacity-95 sm:h-40"
+                className="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                 draggable={false}
+                loading={i === 0 ? 'eager' : 'lazy'}
               />
+              <span
+                className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white opacity-90 backdrop-blur-sm"
+                aria-hidden
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" />
+                </svg>
+              </span>
             </button>
           ))}
         </div>
@@ -110,7 +135,7 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
               <button
                 type="button"
                 onClick={() => scrollByStep(-1)}
-                className="absolute left-0 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700 shadow-md transition hover:bg-slate-50"
+                className="absolute left-0 top-1/2 z-10 hidden h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700 shadow-md transition hover:bg-slate-50 sm:flex"
                 aria-label="Scroll to previous pictures"
               >
                 ‹
@@ -120,7 +145,7 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
               <button
                 type="button"
                 onClick={() => scrollByStep(1)}
-                className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700 shadow-md transition hover:bg-slate-50"
+                className="absolute right-0 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700 shadow-md transition hover:bg-slate-50 sm:flex"
                 aria-label="Scroll to next pictures"
               >
                 ›
@@ -129,6 +154,19 @@ export default function ServicePictureCarousel({ images, alt = '' }) {
           </>
         )}
       </div>
+
+      {hasMultiple && slides.length <= 8 && (
+        <div className="mt-2 flex justify-center gap-1.5 sm:hidden" aria-hidden>
+          {slides.map((slide, i) => (
+            <span
+              key={slide.id}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? 'w-5 bg-luminexa-accent' : 'w-1.5 bg-slate-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
 
       {lightboxOpen && (
         <PictureLightbox

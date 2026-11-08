@@ -35,6 +35,17 @@ def is_play_store_demo_user(user: User | None) -> bool:
     return normalize_email(user.email) in play_store_demo_emails()
 
 
+def marketing_demo_email() -> str:
+    return (getattr(settings, 'MARKETING_DEMO_PROVIDER_EMAIL', '') or '').strip().lower()
+
+
+def is_marketing_demo_user(user: User | None) -> bool:
+    if not user:
+        return False
+    email = marketing_demo_email()
+    return bool(email) and normalize_email(user.email) == email
+
+
 def play_store_demo_otp(email: str) -> str | None:
     """Legacy fixed OTP — unused when demo emails use password login."""
     demo_email = (getattr(settings, 'PLAY_STORE_DEMO_CUSTOMER_EMAIL', '') or '').strip().lower()
@@ -47,8 +58,14 @@ def play_store_demo_otp(email: str) -> str | None:
 
 
 def user_uses_password_login(user: User) -> bool:
-    """Providers, Django staff, and Play Store demo accounts use email + password."""
+    """Providers, Django staff, and Play Store demo accounts use email + password.
+
+    Marketing demo owner is passwordless via /login/marketing-demo/ only —
+    never email+password (shared account on the open internet).
+    """
     if not user:
+        return False
+    if is_marketing_demo_user(user):
         return False
     if is_play_store_demo_user(user):
         return True

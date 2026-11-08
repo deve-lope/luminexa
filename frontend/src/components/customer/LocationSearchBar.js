@@ -2,12 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AddressSearchField from '../location/AddressSearchField';
-import {
-  DEFAULT_RADIUS_MILES,
-  MILES_TO_METERS,
-  RADIUS_MILE_OPTIONS,
-  formatRadiusMiles,
-} from '../../constants/locationSearch';
+import { DEFAULT_RADIUS_MILES, MILES_TO_METERS } from '../../constants/locationSearch';
+import { IconMapPin } from '../icons/NavIcons';
+import RadiusSlider from './RadiusSlider';
 import { bookService } from '../../utils/customerPaths';
 import {
   canUseBrowserGeolocation,
@@ -75,11 +72,18 @@ export default function LocationSearchBar({
   services = [],
   /** When false (default), no map — address + radius only. */
   showMap = false,
+  /** When set and a location exists, shows a Done button that collapses the editor. */
+  onDone = null,
 }) {
-  const [locationLabel, setLocationLabel] = useState('');
-  const [hasLocation, setHasLocation] = useState(false);
-  const [lat, setLat] = useState(null);
-  const [lng, setLng] = useState(null);
+  const startsWithLocation =
+    externalLat != null &&
+    externalLng != null &&
+    Number.isFinite(Number(externalLat)) &&
+    Number.isFinite(Number(externalLng));
+  const [locationLabel, setLocationLabel] = useState(startsWithLocation ? externalLabel || '' : '');
+  const [hasLocation, setHasLocation] = useState(startsWithLocation);
+  const [lat, setLat] = useState(startsWithLocation ? Number(externalLat) : null);
+  const [lng, setLng] = useState(startsWithLocation ? Number(externalLng) : null);
   const [pendingRadius, setPendingRadius] = useState(radiusMiles);
   const gpsAvailable = canUseBrowserGeolocation();
 
@@ -235,8 +239,7 @@ export default function LocationSearchBar({
     );
   };
 
-  const handleRadiusChange = (e) => {
-    const next = Number(e.target.value);
+  const handleRadiusChange = (next) => {
     setPendingRadius(next);
     if (showMap && circleRef.current) {
       circleRef.current.setRadius(next * MILES_TO_METERS);
@@ -272,43 +275,50 @@ export default function LocationSearchBar({
   const gpsBlockedReason = !gpsAvailable ? geolocationUnavailableReason() : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
+    <div className="lx-card space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Near you</p>
-        {hasLocation && (
-          <button type="button" onClick={handleClear} className="text-xs font-medium text-luminexa-accent">
+        <h2 className="lx-eyebrow">{hasLocation ? 'Change area' : 'Where do you need it?'}</h2>
+        {hasLocation && onDone ? (
+          <button type="button" onClick={onDone} className="lx-btn-secondary min-h-[36px] px-4">
+            Done
+          </button>
+        ) : hasLocation ? (
+          <button type="button" onClick={handleClear} className="lx-link text-xs">
             Clear
           </button>
-        )}
+        ) : null}
       </div>
 
       <div className="space-y-2">
         <AddressSearchField
           id="customer-location-search"
           label=""
-          placeholder="City, postal code, province, or address…"
+          placeholder="City, postal code, or address…"
           onSelect={handleAddressSelect}
         />
         <p className="text-xs text-slate-500">
           {hasLocation
             ? 'Type a different city or postal code to move your search area.'
-            : onUseMyLocation && gpsAvailable
-              ? 'Search a city or postal code, or use your current location below.'
-              : gpsAvailable
-                ? 'Type a city, postal code, province, or address.'
-                : 'No GPS on this device — search a city or postal code to set your area.'}
+            : !gpsAvailable
+              ? 'No GPS on this device — search a city or postal code to set your area.'
+              : 'Search a city or postal code, or use your current location.'}
         </p>
       </div>
 
       {hasLocation && (
-        <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2">
-          <svg className="h-3.5 w-3.5 shrink-0 text-luminexa-accent" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-          </svg>
-          <span className="flex-1 truncate text-sm font-medium text-violet-900">{locationLabel}</span>
-          <button type="button" onClick={handleClear} className="text-slate-400 hover:text-slate-600" aria-label="Clear location">
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12"/>
+        <div className="flex items-center gap-2.5 rounded-xl bg-teal-50 px-3 py-2.5 ring-1 ring-teal-100">
+          <IconMapPin className="h-4 w-4 shrink-0 text-teal-700" />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-teal-950">
+            {locationLabel}
+          </span>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-teal-700 hover:bg-teal-100"
+            aria-label="Clear location"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+              <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -321,9 +331,16 @@ export default function LocationSearchBar({
               type="button"
               onClick={handleUseMyLocation}
               disabled={locating}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-60"
+              className="lx-btn-secondary w-full gap-2"
             >
-              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg
+                className={`h-4 w-4 shrink-0 ${locating ? 'animate-pulse' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden
+              >
                 <circle cx="12" cy="12" r="3" />
                 <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
               </svg>
@@ -357,24 +374,7 @@ export default function LocationSearchBar({
             </div>
           )}
 
-          <div>
-            <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="font-medium text-slate-600">Search within</span>
-              <span className="font-semibold text-luminexa-accent">{formatRadiusMiles(pendingRadius)}</span>
-            </div>
-            <input
-              type="range"
-              min={RADIUS_MILE_OPTIONS[0].value}
-              max={RADIUS_MILE_OPTIONS[RADIUS_MILE_OPTIONS.length - 1].value}
-              step={1}
-              value={pendingRadius}
-              onChange={handleRadiusChange}
-              className="w-full accent-luminexa-accent"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-slate-400">
-              {RADIUS_MILE_OPTIONS.map((o) => <span key={o.value}>{o.value} mi</span>)}
-            </div>
-          </div>
+          <RadiusSlider value={pendingRadius} onChange={handleRadiusChange} />
 
           {showMap && (
             orgsOnMap.length > 0 ? (

@@ -63,7 +63,7 @@ npx cap open android
 
 ```bash
 # from repo root — creates a cache-busted download name
-./frontend/scripts/pack-android-studio.sh v7
+./frontend/scripts/pack-android-studio.sh v11
 ```
 
 Then open **`frontend/android`** inside the unzipped pack. See also
@@ -73,9 +73,14 @@ In Android Studio:
 
 1. **Build → Generate Signed App Bundle / APK**
 2. Sign with the **same upload keystore** you used for the TWA (alias `luminexa`)
-3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **7** / 1.1.4)
+3. Upload `app-release.aab` to Play **Internal testing** (versionCode is **10** / 1.1.7)
 
 Do not upload an APK if Play asks for an AAB.
+
+`cap sync` copies `webDir` (`build/`) into Android assets. Never leave
+`public/downloads/*.zip` (Android Studio packs) inside that tree for a release
+build — the pack script strips `assets/public/downloads` after sync, and
+`ignoreAssetsPattern` also drops `*.zip` / `downloads`.
 
 ### What needs a new bundle vs. a web deploy
 

@@ -43,6 +43,14 @@ def send_incomplete_job_task_reminders():
 
 
 @shared_task
+def send_task_due_reminders():
+    """Remind providers ~24h before open tasks reach their due time."""
+    from .notifications import send_task_due_reminders_for_window
+
+    return send_task_due_reminders_for_window()
+
+
+@shared_task
 def send_unpaid_invoice_payment_reminders():
     """Send email follow-ups for unpaid issued invoices."""
     from .notifications import send_unpaid_invoice_followups
@@ -59,9 +67,25 @@ def send_rate_service_reminders():
 
 
 @shared_task
+def send_due_rebook_reminders():
+    """Send provider-scheduled rebook nudges that are due today."""
+    from .rebook_reminder_services import send_due_rebook_reminders as _send
+
+    return _send()
+
+
+@shared_task
 def send_subscription_ending_reminders():
     """Remind providers 30 / 7 / 2 days before trial or promo Pro access ends."""
     from .subscription_reminder_services import send_subscription_ending_reminders as _send
+
+    return _send()
+
+
+@shared_task
+def send_provider_job_nudges():
+    """Remind providers 1h before, nudge on-my-way at 30m, ask if started 30m after."""
+    from .notifications import send_provider_job_nudges as _send
 
     return _send()
 
