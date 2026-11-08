@@ -9,7 +9,13 @@ export default function DesktopNav({
   homeTo,
 }) {
   return (
-    <aside className="lx-sidebar fixed left-0 top-0 z-20 hidden h-full w-60 flex-col lg:flex">
+    <aside
+      className="lx-sidebar fixed left-0 z-20 hidden w-60 flex-col lg:flex"
+      style={{
+        top: 'var(--lx-marketing-chrome-h, 0px)',
+        height: 'calc(100% - var(--lx-marketing-chrome-h, 0px))',
+      }}
+    >
       <div className="shrink-0 border-b border-luminexa-line px-4 py-3.5">
         <Link
           to={homeTo || '/'}

@@ -307,9 +307,11 @@ def city_landing_urls() -> list[dict[str, str]]:
             'parkdale',
         ],
     }
-    alternatives = ['jobber', 'odoo']
+    alternatives = ['jobber', 'housecall-pro', 'square-appointments', 'odoo']
     urls: list[dict[str, str]] = [
         {'loc': f'{base}/', 'changefreq': 'weekly', 'priority': '1.0'},
+        {'loc': f'{base}/for-customers/', 'changefreq': 'monthly', 'priority': '0.88'},
+        {'loc': f'{base}/for-new-providers/', 'changefreq': 'monthly', 'priority': '0.9'},
         {'loc': f'{base}/alternatives/', 'changefreq': 'monthly', 'priority': '0.75'},
         {'loc': f'{base}/pricing/', 'changefreq': 'monthly', 'priority': '0.85'},
     ]

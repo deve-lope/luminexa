@@ -134,6 +134,7 @@ export const userAPI = {
   getProfile: () => api.get('/accounts/api/profile/'),
   updateProfile: (data) => api.put('/accounts/api/profile/', data),
   login: (credentials) => api.post('/accounts/api/login/', credentials),
+  marketingDemoLogin: () => api.post('/accounts/api/login/marketing-demo/', {}),
   loginStart: (data) => api.post('/accounts/api/login/start/', data),
   requestLoginOtp: (data) => api.post('/accounts/api/login/otp/request/', data),
   verifyLoginOtp: (data) => api.post('/accounts/api/login/otp/verify/', data),

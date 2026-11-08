@@ -3,12 +3,12 @@ import { Navigate } from 'react-router-dom';
 import CustomerLayout from '../layouts/CustomerLayout';
 import GuestPageShell from '../components/layout/GuestPageShell';
 import { useAuth } from '../contexts/AuthContext';
-import { isProviderMember } from '../utils/postLoginRoute';
+import { isLiveProviderMember, isMarketingDemoUser } from '../utils/postLoginRoute';
 import { firstProviderHome } from '../utils/providerPaths';
 import ServicesBrowsePage from './ServicesBrowsePage';
 
 export default function ServicesBrowseWrapper() {
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, memberships, user } = useAuth();
 
   if (loading) {
     return (
@@ -18,10 +18,12 @@ export default function ServicesBrowseWrapper() {
     );
   }
 
-  if (isAuthenticated) {
-    if (isProviderMember(memberships)) {
-      return <Navigate to={firstProviderHome(memberships)} replace />;
-    }
+  // Marketing demo cookie must not hijack Find help / Browse into the demo provider shell.
+  if (isAuthenticated && isLiveProviderMember(user, memberships)) {
+    return <Navigate to={firstProviderHome(memberships)} replace />;
+  }
+
+  if (isAuthenticated && !isMarketingDemoUser(user)) {
     return (
       <CustomerLayout>
         <ServicesBrowsePage embedded />

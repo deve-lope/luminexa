@@ -16,6 +16,10 @@ import {
   CityHubPage,
   CityNearMePage,
 } from './pages/OttawaLandingPage';
+import ForNewProvidersPage from './pages/ForNewProvidersPage';
+import ForCustomersPage from './pages/ForCustomersPage';
+import DemoChooserPage from './pages/DemoChooserPage';
+import DemoProviderPage from './pages/DemoProviderPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import GuestBookingPage from './pages/GuestBookingPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
@@ -141,6 +145,14 @@ function AppRoutes() {
         <Route path="/alternatives/" element={<AlternativesHubPage />} />
         <Route path="/alternatives/:slug" element={<AlternativePage />} />
         <Route path="/alternatives/:slug/" element={<AlternativePage />} />
+        <Route path="/for-new-providers" element={<ForNewProvidersPage />} />
+        <Route path="/for-new-providers/" element={<ForNewProvidersPage />} />
+        <Route path="/for-customers" element={<ForCustomersPage />} />
+        <Route path="/for-customers/" element={<ForCustomersPage />} />
+        <Route path="/demo" element={<DemoChooserPage />} />
+        <Route path="/demo/" element={<DemoChooserPage />} />
+        <Route path="/demo/provider" element={<DemoProviderPage />} />
+        <Route path="/demo/provider/" element={<DemoProviderPage />} />
         <Route path="/ottawa" element={<CityHubPage />} />
         <Route path="/ottawa/near-me" element={<CityNearMePage />} />
         <Route path="/ottawa/near-me/" element={<CityNearMePage />} />

@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 
 export default function BookServiceGateway() {
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, memberships, user } = useAuth();
   const location = useLocation();
   const { orgSlug } = useParams();
 
@@ -18,11 +18,11 @@ export default function BookServiceGateway() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || user?.is_marketing_demo) {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  const providerRedirect = providerBookingRedirectPath(memberships, orgSlug);
+  const providerRedirect = providerBookingRedirectPath(memberships, orgSlug, user);
   if (providerRedirect) {
     return <Navigate to={providerRedirect} replace />;
   }

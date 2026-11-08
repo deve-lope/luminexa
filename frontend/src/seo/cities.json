@@ -144,61 +144,230 @@
   ],
   "alternatives": {
     "hub": {
-      "title": "Luminexa alternatives to Jobber, Odoo & more",
-      "description": "Compare Luminexa with Jobber, Odoo, and other tools. Luminexa is a local booking marketplace for customers and providers in Ottawa and Toronto.",
-      "h1": "Looking for a Jobber or Odoo alternative?",
-      "intro": "Some teams compare Luminexa with Jobber or Odoo. They solve different jobs. Luminexa is a marketplace where customers book nearby providers; Jobber and Odoo are software suites businesses use to run their own operations."
+      "title": "Best value Jobber & Housecall Pro alternatives | Luminexa",
+      "description": "Compare Luminexa with Jobber, Housecall Pro, Square Appointments, and Odoo. For new local service businesses, Luminexa Pro is $9.99 CAD/month after a free trial — booking, schedule, messages, and invoices.",
+      "h1": "Best value alternative for new service businesses",
+      "intro": "New entrepreneurs often compare Luminexa with Jobber, Housecall Pro, Square Appointments, or Odoo. Luminexa is a booking and business app for local service providers: publish services, open a calendar, message clients, and invoice — at $9.99 CAD/month after a free trial. Most FSM and ERP tools cost more and are built for larger crews."
     },
     "pages": [
       {
         "slug": "jobber",
         "competitor": "Jobber",
-        "title": "Jobber alternative for booking local jobs | Luminexa",
-        "description": "Looking for a Jobber alternative? Luminexa helps customers book local services near them in Ottawa and Toronto — while Jobber is field-service software for running your own crew.",
-        "h1": "Jobber alternative: book local jobs on Luminexa",
-        "lead": "Jobber helps contractors manage their own customers, quotes, and invoices. Luminexa is different: homeowners and businesses find nearby providers and book open time slots.",
-        "image": "/images/home-hero.jpg",
+        "title": "Jobber alternative under $10 for new providers | Luminexa",
+        "description": "Looking for a cheaper Jobber alternative? Luminexa Pro is $9.99 CAD/month after a free trial — booking, schedule, clients, and invoices for new local service providers. Jobber is deeper field-service software from roughly US$29–49/month.",
+        "h1": "Jobber alternative: booking tools from $9.99 CAD",
+        "lead": "Jobber helps contractors manage jobs, quotes, and invoices with deeper field-service features. Luminexa is a simpler booking and business app for new providers — Luminexa Pro is $9.99 CAD/month after a 30-day free trial.",
+        "simpleHero": true,
+        "primaryCtaHref": "/register/business",
+        "primaryCtaLabel": "Start as a provider",
+        "secondaryCtaHref": "/for-new-providers/",
+        "secondaryCtaLabel": "For new businesses",
+        "continueTitle": "Start your free Pro trial",
+        "continueBody": "Publish services, set availability, share your booking page, and invoice clients — no card required to start the trial.",
+        "continueCtaHref": "/register/business",
+        "continueCtaLabel": "Offer services",
+        "comparison": {
+          "caption": "Feature comparison for a new solo provider",
+          "columns": ["Capability", "Luminexa", "Jobber"],
+          "rows": [
+            ["Best for", "New / solo providers who need booking + invoices cheaply", "Running an established book of business / crew ops"],
+            ["Starting price (solo)", "$9.99 CAD/mo after 30-day free trial", "From about US$29–49/mo (Core; USD; plans change)"],
+            ["Online booking / open slots", "Yes", "Yes"],
+            ["Shareable booking page (My page)", "Yes", "Yes (own booking flows)"],
+            ["Invoices + card payments", "Yes (0.5% Luminexa fee on card invoices + Stripe)", "Yes"],
+            ["Quotes / requests", "Yes", "Yes (strong FSM quoting)"],
+            ["Clients list", "Yes (CSV import)", "Yes"],
+            ["Crew dispatch / deep FSM", "Not a full FSM suite", "Strong"],
+            ["Apps", "Web, Android, iOS (store installs)", "Web + mobile apps"]
+          ],
+          "note": "Competitor prices are approximate USD list ranges and change often — verify on Jobber’s site. Luminexa Pro is priced in CAD."
+        },
         "sections": [
           {
             "h2": "What Jobber is for",
-            "p": "Jobber is field service management software. Providers use it to schedule their own jobs, send quotes, invoice clients, and track work for the customers they already have."
+            "p": "Jobber is field service management software. Providers use it to schedule jobs, send quotes, invoice clients, and track work — especially useful once you have an established book of business and crew workflows."
           },
           {
             "h2": "What Luminexa is for",
-            "p": "Luminexa is a local service marketplace. Customers search by address, see providers whose service area covers them, and book real availability — snow removal, car detailing, cleaning, and more in Ottawa and Toronto."
+            "p": "Luminexa is a booking and business app for local service providers. You publish services (fixed, range, or quote), set availability, share a My page so clients can book open times, message about jobs, manage clients, and send invoices."
           },
           {
-            "h2": "When Luminexa is the better fit",
-            "p": "Choose Luminexa when you want customers to discover you (or you want to hire help nearby) without cold-calling. Providers publish services, a radius, and a calendar. Customers only see you if they are inside both their search radius and your service area."
+            "h2": "When Luminexa is the better value",
+            "p": "Choose Luminexa when you are a new or solo provider who wants booking, messaging, and invoices without Jobber-level subscription fees. One Pro plan after the free trial covers the provider dashboard."
           },
           {
             "h2": "When Jobber may still be right",
-            "p": "Keep Jobber (or similar FSM tools) if you mainly need back-office software for an existing book of business — quoting, invoicing, and crew dispatch — and you are not looking for a consumer marketplace."
+            "p": "Keep Jobber if you mainly need deep field-service ops — advanced dispatch, large-crew workflows, and back-office built for a busy existing book of business."
           }
         ],
         "faq": [
           {
-            "q": "Is Luminexa a Jobber competitor?",
-            "a": "Only partly. People searching for a Jobber alternative sometimes want simpler booking or more customer demand. Luminexa competes on marketplace booking; Jobber competes as contractor operations software."
+            "q": "Is Luminexa a cheaper Jobber alternative?",
+            "a": "For new providers who need booking, clients, and invoices at a low CAD price, yes — Luminexa Pro is $9.99 CAD per month after a free trial. Jobber is a deeper FSM product and typically costs more in USD. They are not identical products."
           },
           {
             "q": "Can I use Luminexa instead of Jobber?",
-            "a": "If your goal is getting booked by nearby customers in Ottawa or Toronto, yes — list on Luminexa. If you need full invoicing and CRM for offline clients, you may still want dedicated FSM software alongside or instead."
+            "a": "If you need a simple way for clients to book open times and for you to invoice, yes. If you need full crew dispatch and heavy FSM, you may still want Jobber alongside or instead."
           },
           {
-            "q": "Where does Luminexa work?",
-            "a": "Launch cities are Ottawa and Toronto, Ontario. Search is distance-based: a provider appears only when you are inside both your search radius and their service area."
+            "q": "Where is Luminexa available?",
+            "a": "The app is available on web, Google Play, and the App Store. Launch focus includes Ottawa and Toronto, Ontario."
+          }
+        ]
+      },
+      {
+        "slug": "housecall-pro",
+        "competitor": "Housecall Pro",
+        "title": "Housecall Pro alternative for new providers | Luminexa",
+        "description": "Looking for a Housecall Pro alternative under $10? Luminexa Pro is $9.99 CAD/month after a free trial with booking, schedule, messages, and invoices. Housecall Pro is fuller home-service software from roughly US$59+/month.",
+        "h1": "Housecall Pro alternative from $9.99 CAD",
+        "lead": "Housecall Pro is home-service field software for scheduling, estimates, and payments. Luminexa is a simpler booking and business app for new local providers — $9.99 CAD/month after a free trial.",
+        "simpleHero": true,
+        "primaryCtaHref": "/register/business",
+        "primaryCtaLabel": "Start as a provider",
+        "secondaryCtaHref": "/pricing/",
+        "secondaryCtaLabel": "See pricing",
+        "continueTitle": "Start your free Pro trial",
+        "continueBody": "Open your calendar, share your booking page, and invoice when you’re ready — without a US$59+/mo FSM plan.",
+        "continueCtaHref": "/register/business",
+        "continueCtaLabel": "Offer services",
+        "comparison": {
+          "caption": "Feature comparison for a new home-service business",
+          "columns": ["Capability", "Luminexa", "Housecall Pro"],
+          "rows": [
+            ["Best for", "New providers needing booking + invoices at low cost", "Established home-service teams needing deep ops"],
+            ["Starting price (solo)", "$9.99 CAD/mo after 30-day free trial", "From about US$59–79/mo (Basic; USD; plans change)"],
+            ["Online booking", "Yes", "Yes"],
+            ["Shareable booking page", "Yes (My page)", "Yes"],
+            ["Estimates / invoices / payments", "Quotes, invoices, optional Stripe card pay", "Strong estimates, invoices, payments"],
+            ["GPS / advanced routing", "Not a full dispatch suite", "Strong on higher plans"],
+            ["Canada-friendly pricing", "Priced in CAD", "Typically listed in USD"],
+            ["Apps", "Web, Android, iOS", "Web + mobile apps"]
+          ],
+          "note": "Housecall Pro prices are approximate USD ranges and change often — verify on their site. Luminexa Pro is priced in CAD."
+        },
+        "sections": [
+          {
+            "h2": "What Housecall Pro is for",
+            "p": "Housecall Pro is field-service software for home-service businesses: scheduling, estimates, invoicing, payments, and team tools as you grow."
+          },
+          {
+            "h2": "What Luminexa is for",
+            "p": "Luminexa gives providers a dashboard for services, availability, messages, clients, and invoices — plus a shareable My page so clients can book open times. Built for simplicity and a low CAD subscription."
+          },
+          {
+            "h2": "When Luminexa is the better value",
+            "p": "Pick Luminexa when you are starting out and want booking and invoices without a high USD subscription. One Pro plan covers the provider tools after the free trial."
+          },
+          {
+            "h2": "When Housecall Pro may still be right",
+            "p": "Keep Housecall Pro if you need advanced routing, larger crew tooling, or a mature FSM stack for a busy existing book of business."
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is Luminexa a Housecall Pro alternative?",
+            "a": "For new providers who want booking and invoices at a low CAD price, yes. Housecall Pro remains stronger as a full home-service FSM suite."
+          },
+          {
+            "q": "How much is Luminexa vs Housecall Pro?",
+            "a": "Luminexa Pro is $9.99 CAD per month after a 30-day free trial. Housecall Pro typically starts much higher in USD depending on plan — always confirm on their pricing page."
+          },
+          {
+            "q": "Where is Luminexa available?",
+            "a": "Web, Google Play, and the App Store. Launch focus includes Ottawa and Toronto, Ontario."
+          }
+        ]
+      },
+      {
+        "slug": "square-appointments",
+        "competitor": "Square Appointments",
+        "title": "Square Appointments alternative for service providers | Luminexa",
+        "description": "Comparing Square Appointments to Luminexa? Square is great for booking with a free tier and POS stack. Luminexa Pro adds schedule, clients, messages, and invoices for $9.99 CAD/month after a free trial.",
+        "h1": "Square Appointments alternative for service booking",
+        "lead": "Square Appointments helps you schedule clients — with a free plan for a single location. Luminexa is a booking and business app with services, availability, messaging, clients, and invoices on Pro for $9.99 CAD/month after a free trial.",
+        "simpleHero": true,
+        "primaryCtaHref": "/register/business",
+        "primaryCtaLabel": "Start as a provider",
+        "secondaryCtaHref": "/pricing/",
+        "secondaryCtaLabel": "See pricing",
+        "continueTitle": "Try Luminexa Pro free",
+        "continueBody": "If you want booking plus clients, messages, and invoices in one provider dashboard, start the Pro trial — no card required.",
+        "continueCtaHref": "/register/business",
+        "continueCtaLabel": "Offer services",
+        "comparison": {
+          "caption": "Feature comparison for appointment and local-service providers",
+          "columns": ["Capability", "Luminexa", "Square Appointments"],
+          "rows": [
+            ["Best for", "Local service providers wanting booking + business tools", "Shops/providers in the Square POS ecosystem"],
+            ["Starting price", "$9.99 CAD/mo after free trial (Pro)", "Free plan available; paid tiers for more features"],
+            ["Online booking calendar", "Yes", "Yes"],
+            ["Shareable booking page", "Yes (My page)", "Yes (Square Online booking)"],
+            ["Clients + messages", "Yes", "Limited vs full CRM depending on plan"],
+            ["Invoices", "Yes (optional Stripe card pay)", "Yes (Square payments)"],
+            ["POS / retail ecosystem", "Not a POS suite", "Strong Square ecosystem"],
+            ["Apps", "Web, Android, iOS", "Web + Square apps"]
+          ],
+          "note": "Square plan names and fees change — verify on Square’s site. Luminexa Pro is $9.99 CAD/month after trial."
+        },
+        "sections": [
+          {
+            "h2": "What Square Appointments is for",
+            "p": "Square Appointments is scheduling software tied to Square payments. It shines when you want a calendar inside the Square POS and payments ecosystem."
+          },
+          {
+            "h2": "What Luminexa is for",
+            "p": "Luminexa is a booking and business app for local services: services catalog, open slots, booking rules, messages, clients, invoices, and a shareable My page — without requiring Square hardware."
+          },
+          {
+            "h2": "When Luminexa is the better fit",
+            "p": "Choose Luminexa when you want a dedicated provider dashboard for services, booking, messaging, and invoices at a simple CAD price — especially snow, detailing, cleaning, or handyman-style work."
+          },
+          {
+            "h2": "When Square may still be right",
+            "p": "Keep Square if you mainly need POS hardware, gift cards, and a free calendar tightly tied to Square payments."
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is Luminexa free like Square Appointments?",
+            "a": "Customer accounts are free. Providers use Luminexa Pro at $9.99 CAD/month after a 30-day free trial. Square offers a free Appointments tier for a single location; paid Square tiers add more features."
+          },
+          {
+            "q": "Does Luminexa replace Square POS?",
+            "a": "No. Luminexa is not a full POS or retail suite. You can keep Square for in-person payments while using Luminexa for booking and job tools."
+          },
+          {
+            "q": "Where is Luminexa available?",
+            "a": "Web, Google Play, and the App Store."
           }
         ]
       },
       {
         "slug": "odoo",
         "competitor": "Odoo",
-        "title": "Odoo alternative for local service booking | Luminexa",
-        "description": "Looking for an Odoo alternative focused on local services? Luminexa is a booking marketplace for Ottawa and Toronto — not a full ERP suite.",
-        "h1": "Odoo alternative for local service booking",
-        "lead": "Odoo is a broad ERP platform (CRM, accounting, inventory, and more). Luminexa is a focused marketplace: customers book local jobs; providers publish services and open times.",
-        "image": "/images/home-hero.jpg",
+        "title": "Odoo alternative for service booking | Luminexa",
+        "description": "Looking for an Odoo alternative focused on service booking? Luminexa is a booking and business app at $9.99 CAD/month Pro — not a full ERP suite.",
+        "h1": "Odoo alternative for service booking",
+        "lead": "Odoo is a broad ERP platform (CRM, accounting, inventory, and more). Luminexa is a focused booking app: providers publish services and open times, then invoice — for $9.99 CAD/month after a free trial.",
+        "simpleHero": true,
+        "primaryCtaHref": "/register/business",
+        "primaryCtaLabel": "Start as a provider",
+        "secondaryCtaHref": "/pricing/",
+        "secondaryCtaLabel": "See pricing",
+        "comparison": {
+          "caption": "Feature comparison",
+          "columns": ["Capability", "Luminexa", "Odoo"],
+          "rows": [
+            ["Best for", "Service booking + light business tools", "Company-wide ERP / many modules"],
+            ["Starting complexity", "List services + calendar", "Often heavy configuration"],
+            ["Provider price", "$9.99 CAD/mo after trial", "Depends on Odoo edition / hosting"],
+            ["Online booking", "Yes", "Possible with apps/config"],
+            ["Accounting / inventory / MRP", "No — not an ERP", "Yes"],
+            ["Apps", "Web, Android, iOS", "Web + Odoo apps"]
+          ],
+          "note": "Odoo pricing depends on edition and hosting — check Odoo’s site. Luminexa does not replace ERP."
+        },
         "sections": [
           {
             "h2": "What Odoo is for",
@@ -206,11 +375,11 @@
           },
           {
             "h2": "What Luminexa is for",
-            "p": "Luminexa helps people book everyday local services near them: snow removal, car detailing, gardening, cleaning, and similar jobs. Providers set a service area and calendar; customers book without phone tag."
+            "p": "Luminexa helps local service providers run booking and light ops: services, availability, messages, clients, and invoices — without months of ERP setup."
           },
           {
             "h2": "When Luminexa is the better fit",
-            "p": "Pick Luminexa when you need customer-facing booking for local services in Ottawa or Toronto — not a company-wide ERP. Setup is marketplace listing and availability, not months of ERP modules."
+            "p": "Pick Luminexa when you need customer-facing booking and simple business tools — not a company-wide ERP."
           },
           {
             "h2": "When Odoo may still be right",
@@ -220,17 +389,171 @@
         "faq": [
           {
             "q": "Is Luminexa an Odoo alternative?",
-            "a": "For local service booking and customer discovery, yes. For ERP, accounting, or inventory, no — those are different product categories."
+            "a": "For service booking and light provider tools, yes. For ERP, accounting, or inventory, no — those are different product categories."
           },
           {
             "q": "Can providers on Luminexa still use Odoo?",
-            "a": "Yes. Many businesses keep their own tools for books and ops while using Luminexa so nearby customers can find and book them."
+            "a": "Yes. Many businesses keep ERP or accounting tools for books while using Luminexa for booking and client scheduling."
           },
           {
-            "q": "Where can I book on Luminexa?",
-            "a": "Ottawa and Toronto are launch cities. Enter your address or postal code to see providers who cover your location."
+            "q": "How much is Luminexa Pro?",
+            "a": "Luminexa Pro is $9.99 CAD per month after a 30-day free trial. Customers use Luminexa free."
           }
         ]
+      }
+    ]
+  },
+  "forCustomers": {
+    "title": "Book local services free | Luminexa for customers",
+    "description": "Browse local providers, see prices or request a quote, pick an open time, and message about the job — free for customers on Luminexa.",
+    "h1": "Book help without the phone tag",
+    "lead": "Snow, detailing, cleaning, and more — see what’s nearby, pick an open time, and chat about the job. Customer accounts are free.",
+    "kicker": "For customers",
+    "simpleHero": true,
+    "benefits": [
+      "See prices or request a quote before you book",
+      "Pick a real open time — less phone tag",
+      "Message the provider and track the job in one place"
+    ],
+    "primaryCtaHref": "/services",
+    "primaryCtaLabel": "Find help nearby",
+    "secondaryCtaHref": "/register",
+    "secondaryCtaLabel": "Create free account",
+    "faq": [
+      {
+        "q": "Is Luminexa free for customers?",
+        "a": "Yes. Customer accounts are free. You browse providers, book open times, and message about the job at no subscription cost."
+      },
+      {
+        "q": "Do I need an account to browse?",
+        "a": "You can start browsing services nearby without paying. Creating a free account lets you book, message, and keep your jobs in one place."
+      },
+      {
+        "q": "Where does Luminexa work?",
+        "a": "Launch focus is Ottawa and Toronto, Ontario. Search uses your address and radius so you see providers whose service area reaches you."
+      }
+    ]
+  },
+  "forNewProviders": {
+    "title": "Booking app for mobile service providers | Luminexa Pro $9.99",
+    "description": "Arrival tracking, messaging, rescheduling, tasks, invoices, Stripe payments, retention reminders, and growth analytics — Luminexa Pro is $9.99 CAD/month after a free trial. Try the live demo; you bring your own clients.",
+    "h1": "Run your mobile business from your pocket",
+    "lead": "You bring the clients. Luminexa keeps the book — calendar, booking link, messages, invoices, and more. Pro is $9.99 CAD/month after a free trial. Try the live demo first.",
+    "kicker": "For providers",
+    "simpleHero": true,
+    "features": [
+      "Arrival tracking",
+      "Messaging",
+      "Rescheduling",
+      "Job tasks",
+      "Invoices",
+      "Stripe payments",
+      "Retention reminders",
+      "Growth & profit analytics",
+      "Open calendar",
+      "Booking link",
+      "Clients"
+    ],
+    "featureDetails": [
+      {
+        "name": "Arrival tracking",
+        "solves": "Customers see when you’re close — no standing outside waiting for a call pickup."
+      },
+      {
+        "name": "Messaging",
+        "solves": "Job chat stays on the booking. Less “which text thread was that?” chaos."
+      },
+      {
+        "name": "Rescheduling",
+        "solves": "Move a slot without starting over or losing the job notes."
+      },
+      {
+        "name": "Job tasks",
+        "solves": "Remind yourself what to bring or do on-site so nothing gets left in the van."
+      },
+      {
+        "name": "Invoices",
+        "solves": "Send a clear bill from the job — no spreadsheet after every driveway."
+      },
+      {
+        "name": "Stripe payments",
+        "solves": "Take card on the invoice. Less chasing cash, less Interac “did it go through?” stress."
+      },
+      {
+        "name": "Retention reminders",
+        "solves": "Nudge past customers to rebook so repeat work doesn’t fall through the cracks."
+      },
+      {
+        "name": "Growth & profit analytics",
+        "solves": "See cash, receivables, and job profit — know what actually made money."
+      },
+      {
+        "name": "Open calendar",
+        "solves": "Publish real open times from your phone between stops."
+      },
+      {
+        "name": "Booking link",
+        "solves": "One shareable link for Instagram and texts — clients book themselves."
+      },
+      {
+        "name": "Clients",
+        "solves": "Keep who you’ve served in one place instead of a contacts graveyard."
+      }
+    ],
+    "primaryCtaHref": "/demo/provider",
+    "primaryCtaLabel": "Try the live demo",
+    "secondaryCtaHref": "/register/business",
+    "secondaryCtaLabel": "Start free trial",
+    "continueTitle": "Ready to run your own book?",
+    "continueBody": "Try the live demo as a sample detailing crew, then start your free Pro trial — publish services, open times, and share your booking page.",
+    "continueCtaHref": "/demo/provider",
+    "continueCtaLabel": "Open provider demo",
+    "comparison": {
+      "caption": "Value snapshot vs common tools",
+      "columns": ["Tool type", "Typical starting price", "Booking + invoices", "Fit for brand-new solo providers"],
+      "rows": [
+        ["Luminexa Pro", "$9.99 CAD/mo after free trial", "Yes", "Strong — simple tools, low CAD price"],
+        ["Jobber (Core)", "About US$29–49/mo", "Yes (deeper FSM)", "More power; higher cost to start"],
+        ["Housecall Pro (Basic)", "About US$59–79/mo", "Yes (fuller FSM)", "Fuller FSM; higher cost to start"],
+        ["Square Appointments", "Free tier available", "Calendar + Square pay", "Great if you live in Square POS"],
+        ["Odoo ERP", "Varies by edition", "With heavy setup", "Overkill for booking-only startups"]
+      ],
+      "note": "Competitor prices are approximate and change — verify on each vendor’s site. Luminexa Pro is $9.99 CAD/month after trial; customer accounts are free."
+    },
+    "sections": [
+      {
+        "h2": "Who this is for",
+        "p": "New entrepreneurs and solo operators in local services — snow removal, car detailing, gardening, home cleaning, handyman, and similar jobs — who want booking and invoices without enterprise software pricing."
+      },
+      {
+        "h2": "What you get on Luminexa Pro",
+        "p": "Arrival tracking when you’re en route, messaging, rescheduling, job tasks, invoices with optional Stripe card pay, customer retention reminders, growth and profit analytics, open calendar, shareable booking link, and clients — plus services, service area, and booking rules. Android and iOS apps install from the official stores."
+      },
+      {
+        "h2": "Why it is strong value for money",
+        "p": "You pay one low CAD subscription after the trial instead of a high USD FSM plan. You get booking, messaging, clients, and invoices in one place without buying a full field-service suite on day one."
+      },
+      {
+        "h2": "When to choose something else",
+        "p": "If you need deep multi-crew dispatch, manufacturing ERP, or a full retail POS, keep specialized tools. Many providers use Luminexa for booking alongside another back-office app."
+      }
+    ],
+    "faq": [
+      {
+        "q": "What is the best cheap booking app for a new service business?",
+        "a": "Luminexa is built for that segment: Luminexa Pro is $9.99 CAD per month after a 30-day free trial, with booking, messaging, clients, and invoices. Customer accounts are free."
+      },
+      {
+        "q": "Is Luminexa better value than Jobber or Housecall Pro for beginners?",
+        "a": "For beginners who need booking and invoices at a low monthly cost, Luminexa is usually the better value. Jobber and Housecall Pro are stronger as full field-service suites and typically cost more in USD."
+      },
+      {
+        "q": "Do I need a credit card for the trial?",
+        "a": "No card is required to start the 30-day Pro trial. Add a payment method before the trial ends to keep Pro."
+      },
+      {
+        "q": "Does Luminexa guarantee customers?",
+        "a": "No. Luminexa gives you booking and business tools (including a shareable My page). Growing your client list still depends on your own marketing and referrals."
       }
     ]
   },

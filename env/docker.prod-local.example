@@ -115,3 +115,10 @@ PLAY_STORE_DEMO_PROVIDER_EMAIL=demo.serviceprovider@luminex-a.com
 # Webhook URL: https://YOUR_API_HOST/api/v1/webhooks/stripe/
 # Events: checkout.session.completed, customer.subscription.*, account.updated,
 #         payment_intent.succeeded
+
+# Public marketing demo (/for-new-providers → /demo/provider)
+MARKETING_DEMO_ENABLED=True
+MARKETING_DEMO_PROVIDER_EMAIL=demo.marketing.provider@luminex-a.com
+MARKETING_DEMO_ORG_SLUG=luminexa-demo
+MARKETING_DEMO_PASSWORD=change-me-marketing-demo-pass
+MARKETING_DEMO_MAX_SESSIONS=100

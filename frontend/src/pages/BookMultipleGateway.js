@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { providerBookingRedirectPath } from '../utils/providerBookingGuard';
 
 export default function BookMultipleGateway() {
-  const { isAuthenticated, loading, memberships } = useAuth();
+  const { isAuthenticated, loading, memberships, user } = useAuth();
   const location = useLocation();
   const { slug, orgSlug } = useParams();
   const key = slug || orgSlug;
@@ -19,7 +19,7 @@ export default function BookMultipleGateway() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || user?.is_marketing_demo) {
     return (
       <Navigate
         to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}
@@ -28,7 +28,7 @@ export default function BookMultipleGateway() {
     );
   }
 
-  const providerRedirect = providerBookingRedirectPath(memberships, key);
+  const providerRedirect = providerBookingRedirectPath(memberships, key, user);
   if (providerRedirect) {
     return <Navigate to={providerRedirect} replace />;
   }

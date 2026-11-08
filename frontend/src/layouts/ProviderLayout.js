@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import OrgSwitcher from '../components/provider/OrgSwitcher';
+import MarketingDemoChrome from '../components/marketing/MarketingDemoChrome';
 import AppTour from '../components/tour/AppTour';
 import { IconBell } from '../components/icons/NavIcons';
 import { useAuth } from '../contexts/AuthContext';
@@ -333,8 +334,11 @@ function ProviderShell() {
   const onSetupOrSubscribe =
     location.pathname.includes('/setup') || location.pathname.includes('/subscribe');
 
+  const isMarketingDemo = Boolean(user?.is_marketing_demo);
+
   return (
     <>
+      {isMarketingDemo ? <MarketingDemoChrome /> : null}
       <AppShell
         brand="Luminexa"
         eyebrow={eyebrow}

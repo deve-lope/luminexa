@@ -12,6 +12,11 @@ urlpatterns = [
         name='register_business_api',
     ),
     path('api/login/', api_views.LoginAPIView.as_view(), name='login_api'),
+    path(
+        'api/login/marketing-demo/',
+        api_views.MarketingDemoLoginAPIView.as_view(),
+        name='marketing_demo_login_api',
+    ),
     path('api/login/start/', api_views.LoginStartAPIView.as_view(), name='login_start_api'),
     path('api/login/otp/request/', api_views.LoginOtpRequestAPIView.as_view(), name='login_otp_request_api'),
     path('api/login/otp/verify/', api_views.LoginOtpVerifyAPIView.as_view(), name='login_otp_verify_api'),

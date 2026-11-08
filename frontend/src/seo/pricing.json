@@ -65,6 +65,10 @@
     {
       "q": "Do you take a cut of every job?",
       "a": "There is no booking commission on cash or e-transfer. On card invoice payments only, Luminexa takes 0.5% plus Stripe’s own processing fee."
+    },
+    {
+      "q": "Is Luminexa good value for new service entrepreneurs?",
+      "a": "Yes for new or solo local providers who need booking, a shareable booking page, messages, clients, and invoices without expensive FSM software. Luminexa Pro is $9.99 CAD per month after a free trial — typically far less than Jobber or Housecall Pro starting plans. See /for-new-providers/ for a feature comparison. Luminexa does not guarantee customers."
     }
   ]
 }

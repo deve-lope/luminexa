@@ -17,6 +17,52 @@ function useSeoCity() {
   return cityBySlug(pathname.split('/').filter(Boolean)[0]);
 }
 
+function ComparisonTable({ comparison }) {
+  if (!comparison?.columns?.length || !comparison?.rows?.length) return null;
+  return (
+    <section className="pt-2">
+      <h2 className="text-base font-semibold text-slate-900">
+        {comparison.caption || 'Feature comparison'}
+      </h2>
+      <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table className="min-w-[36rem] w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              {comparison.columns.map((col) => (
+                <th key={col} scope="col" className="px-3 py-2.5 font-semibold text-slate-900">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {comparison.rows.map((row) => (
+              <tr key={row[0]} className="border-t border-slate-200">
+                {row.map((cell, i) =>
+                  i === 0 ? (
+                    <th
+                      key={`${row[0]}-${i}`}
+                      scope="row"
+                      className="bg-slate-50 px-3 py-2.5 font-semibold text-slate-900"
+                    >
+                      {cell}
+                    </th>
+                  ) : (
+                    <td key={`${row[0]}-${i}`} className="px-3 py-2.5 text-slate-600">
+                      {cell}
+                    </td>
+                  ),
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {comparison.note ? <p className="mt-2 text-xs text-slate-500">{comparison.note}</p> : null}
+    </section>
+  );
+}
+
 function CityLayout({
   kicker,
   title,
@@ -25,25 +71,55 @@ function CityLayout({
   h1,
   lead,
   image,
+  simpleHero = false,
   jsonLd,
+  primaryTo,
+  primaryLabel,
   secondaryTo,
   secondaryLabel,
+  continueTitle,
+  continueBody,
+  continueTo,
+  continueLabel,
+  wide = false,
   children,
 }) {
   const hero = image || citySeo.home.heroImage;
+  const priTo = primaryTo || '/';
+  const priLabel = primaryLabel || 'Continue to Luminexa';
+  const secTo = secondaryTo || '/services';
+  const secLabel = secondaryLabel || 'Find local help';
+  const contTitle = continueTitle || 'Ready to continue?';
+  const contBody =
+    continueBody ||
+    'Open Luminexa to browse services, book open times, or set up your provider account.';
+  const contTo = continueTo || '/';
+  const contLabel = continueLabel || 'Go to homepage';
+
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <SeoHead title={title} description={description} canonical={canonical} jsonLd={jsonLd} />
-      <section className="relative flex min-h-[72vh] items-end overflow-hidden bg-teal-950 text-white">
-        <img
-          src={hero}
-          alt=""
-          className="absolute inset-0 h-full w-full scale-105 object-cover"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/25" />
+      <section
+        className={`relative overflow-hidden text-white ${
+          simpleHero
+            ? 'bg-gradient-to-br from-teal-950 via-teal-800 to-teal-900'
+            : 'flex min-h-[72vh] items-end bg-teal-950'
+        }`}
+      >
+        {!simpleHero && (
+          <>
+            <img
+              src={hero}
+              alt=""
+              className="absolute inset-0 h-full w-full scale-105 object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="absolute inset-0 bg-teal-950/50" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/40" />
+          </>
+        )}
         <header className="absolute inset-x-0 top-0 z-10">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
             <Link to="/" className="text-lg font-extrabold tracking-tight text-white">
@@ -54,43 +130,42 @@ function CityLayout({
             </Link>
           </div>
         </header>
-        <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-10 pt-28 md:px-8 md:pb-14">
+        <div
+          className={`relative z-10 mx-auto w-full max-w-6xl px-4 md:px-8 ${
+            simpleHero ? 'pb-10 pt-24 md:pb-12' : 'pb-10 pt-28 md:pb-14'
+          }`}
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-200">{kicker}</p>
-          <h1 className="mt-3 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">
+          <h1 className="mt-3 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-5xl">
             {h1}
           </h1>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-teal-50/85 sm:text-lg">
-            {lead}
-          </p>
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-white/95 sm:text-lg">{lead}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              to="/"
+              to={priTo}
               className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 shadow-xl shadow-teal-950/30"
             >
-              Continue to Luminexa
+              {priLabel}
             </Link>
             <Link
-              to={secondaryTo || '/services'}
-              className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/30 bg-white/5 px-8 text-sm font-semibold text-white"
+              to={secTo}
+              className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/40 bg-white/15 px-8 text-sm font-semibold text-white"
             >
-              {secondaryLabel || 'Find local help'}
+              {secLabel}
             </Link>
           </div>
         </div>
       </section>
-      <main className="mx-auto max-w-xl px-4 py-10">
+      <main className={`mx-auto px-4 py-10 ${wide ? 'max-w-3xl' : 'max-w-xl'}`}>
         <div className="space-y-4 text-sm leading-relaxed text-slate-600">{children}</div>
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
-          <p className="font-semibold text-slate-900">Ready to book?</p>
-          <p className="mt-1 text-sm text-slate-600">
-            Open the Luminexa homepage to search your address, compare local providers, and pick a
-            time.
-          </p>
+          <p className="font-semibold text-slate-900">{contTitle}</p>
+          <p className="mt-1 text-sm text-slate-600">{contBody}</p>
           <Link
-            to="/"
+            to={contTo}
             className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-full bg-teal-600 px-6 text-sm font-semibold text-white"
           >
-            Go to homepage
+            {contLabel}
           </Link>
         </div>
       </main>
@@ -105,6 +180,9 @@ function CityLayout({
                 {c.city}
               </Link>
             ))}
+            <Link to="/for-new-providers" className="text-teal-700 hover:underline">
+              For providers
+            </Link>
             <Link to="/alternatives" className="text-teal-700 hover:underline">
               Alternatives
             </Link>
@@ -122,8 +200,7 @@ function CityLayout({
             </a>
           </p>
           <p className="mt-2 text-xs">
-            A provider is shown only if you are inside both your search radius and their service
-            area.
+            Luminexa is a booking and business app for local service providers.
           </p>
         </div>
       </footer>
@@ -491,8 +568,16 @@ export function AlternativesHubPage() {
       canonical={canonical}
       h1={alt.hub.h1}
       lead={alt.hub.intro}
-      secondaryTo="/services"
-      secondaryLabel="Find local help"
+      simpleHero
+      primaryTo="/for-new-providers"
+      primaryLabel="For new providers"
+      secondaryTo="/register/business"
+      secondaryLabel="Offer services"
+      continueTitle="Compare tools, then list"
+      continueBody="See which alternative fits, then start the Luminexa Pro trial — no card required."
+      continueTo="/register/business"
+      continueLabel="Offer services"
+      wide
       jsonLd={[
         {
           '@context': 'https://schema.org',
@@ -516,19 +601,15 @@ export function AlternativesHubPage() {
           </li>
         ))}
       </ul>
-      <h2 className="pt-4 text-base font-semibold text-slate-900">Book local services instead</h2>
+      <h2 className="pt-4 text-base font-semibold text-slate-900">New entrepreneurs</h2>
       <p>
-        If you need help near you — not ERP or field-service back office — start in{' '}
-        <Link to="/ottawa" className="font-medium text-teal-700">
-          Ottawa
+        Starting a local service business? Read{' '}
+        <Link to="/for-new-providers" className="font-medium text-teal-700">
+          best value for new providers
         </Link>{' '}
-        or{' '}
-        <Link to="/toronto" className="font-medium text-teal-700">
-          Toronto
-        </Link>
-        , or open{' '}
-        <Link to="/ottawa/near-me" className="font-medium text-teal-700">
-          services near me in Ottawa
+        and{' '}
+        <Link to="/pricing" className="font-medium text-teal-700">
+          Luminexa pricing
         </Link>
         .
       </p>
@@ -549,9 +630,16 @@ export function AlternativePage() {
       canonical={canonical}
       h1={page.h1}
       lead={page.lead}
-      image={page.image}
-      secondaryTo="/services"
-      secondaryLabel="Book local services"
+      simpleHero={page.simpleHero !== false}
+      primaryTo={page.primaryCtaHref || '/register/business'}
+      primaryLabel={page.primaryCtaLabel || 'Start as a provider'}
+      secondaryTo={page.secondaryCtaHref || '/pricing'}
+      secondaryLabel={page.secondaryCtaLabel || 'See pricing'}
+      continueTitle={page.continueTitle}
+      continueBody={page.continueBody}
+      continueTo={page.continueCtaHref || '/register/business'}
+      continueLabel={page.continueCtaLabel || 'Offer services'}
+      wide={Boolean(page.comparison)}
       jsonLd={[
         {
           '@context': 'https://schema.org',
@@ -572,6 +660,7 @@ export function AlternativePage() {
       ]}
     >
       <p>{page.lead}</p>
+      <ComparisonTable comparison={page.comparison} />
       {page.sections.map((s) => (
         <section key={s.h2}>
           <h2 className="pt-4 text-base font-semibold text-slate-900">{s.h2}</h2>
@@ -586,16 +675,16 @@ export function AlternativePage() {
       ))}
       <p>
         Also see{' '}
+        <Link to="/for-new-providers" className="font-medium text-teal-700">
+          for new providers
+        </Link>
+        ,{' '}
         <Link to="/alternatives" className="font-medium text-teal-700">
           all alternatives
         </Link>
-        ,{' '}
-        <Link to="/ottawa/near-me" className="font-medium text-teal-700">
-          Ottawa near me
-        </Link>
         , and{' '}
-        <Link to="/toronto/near-me" className="font-medium text-teal-700">
-          Toronto near me
+        <Link to="/pricing" className="font-medium text-teal-700">
+          pricing
         </Link>
         .
       </p>
