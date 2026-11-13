@@ -23,4 +23,4 @@ Disallow: /delete-account
 Disallow: /ottawa/gigs/
 Disallow: /toronto/gigs/
 
-Sitemap: https://app.luminex-a.com/sitemap.xml
+Sitemap: https://luminex-a.com/sitemap.xml

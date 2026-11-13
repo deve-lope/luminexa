@@ -19,23 +19,31 @@
 
     <!-- SEO: homepage defaults. Per-route tags are updated by SeoHead after JS loads.
          City / pricing / alternatives / privacy URLs are separate static HTML files. -->
-    <title>Luminexa | Book local services</title>
-    <meta name="description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
-    <link rel="canonical" href="https://app.luminex-a.com/" />
+    <title>Luminexa | Book local services across Canada</title>
+    <meta name="description" content="Book local services across Canada — snow removal, car detailing, gardening, cleaning, and more. Enter your address, see prices or request a quote, and pick an open time. Customers use Luminexa free. Launch cities include Ottawa and Toronto." />
+    <link rel="canonical" href="https://luminex-a.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Luminexa" />
     <meta property="og:locale" content="en_CA" />
-    <meta property="og:title" content="Luminexa | Book local services" />
-    <meta property="og:description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
-    <meta property="og:url" content="https://app.luminex-a.com/" />
-    <meta property="og:image" content="https://app.luminex-a.com/images/home-hero.jpg" />
+    <meta property="og:title" content="Luminexa | Book local services across Canada" />
+    <meta property="og:description" content="Book local services across Canada — snow removal, car detailing, gardening, cleaning, and more. Enter your address, see prices or request a quote, and pick an open time. Customers use Luminexa free. Launch cities include Ottawa and Toronto." />
+    <meta property="og:url" content="https://luminex-a.com/" />
+    <meta property="og:image" content="https://luminex-a.com/images/og-home.jpg" />
+    <meta property="og:image:alt" content="Neighbourhood homes and yards where Luminexa customers book local services" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Luminexa | Book local services" />
-    <meta name="twitter:description" content="Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots." />
-    <meta name="twitter:image" content="https://app.luminex-a.com/images/home-hero.jpg" />
+    <meta name="twitter:title" content="Luminexa | Book local services across Canada" />
+    <meta name="twitter:description" content="Book local services across Canada — snow removal, car detailing, gardening, cleaning, and more. Enter your address, see prices or request a quote, and pick an open time. Customers use Luminexa free. Launch cities include Ottawa and Toronto." />
+    <meta name="twitter:image" content="https://luminex-a.com/images/og-home.jpg" />
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Luminexa","url":"https://app.luminex-a.com/","description":"Book local services with prices and real time slots.","areaServed":[{"@type":"City","name":"Ottawa"},{"@type":"City","name":"Toronto"}],"sameAs":["https://play.google.com/store/apps/details?id=com.luminexa.app"]},{"@type":"WebSite","name":"Luminexa","url":"https://app.luminex-a.com/","inLanguage":"en-CA","publisher":{"@type":"Organization","name":"Luminexa"}}]}
+    {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Luminexa","url":"https://luminex-a.com/","description":"Book local services across Canada with prices and real time slots. Launch cities include Ottawa and Toronto.","areaServed":{"@type":"Country","name":"Canada"},"sameAs":["https://play.google.com/store/apps/details?id=com.luminexa.app","https://apps.apple.com/ca/app/luminexa/id6804875374"]},{"@type":"WebSite","name":"Luminexa","url":"https://luminex-a.com/","inLanguage":"en-CA","publisher":{"@type":"Organization","name":"Luminexa"}}]}
     </script>
+    <style>
+      #seo-prerender { max-width:42rem; margin:0 auto; padding:2rem 1.25rem 3rem; font-family:system-ui,-apple-system,Segoe UI,sans-serif; color:#0f172a; line-height:1.55; }
+      #seo-prerender a { color:#0d9488; }
+      #seo-prerender h1 { letter-spacing:-0.03em; }
+      #seo-prerender ul { padding-left:1.15rem; }
+      #root:not(:empty) ~ #seo-prerender { display:none; }
+    </style>
     <script>
       // Kill stale service workers before the app bootstraps (fixes blank/broken home).
       if ('serviceWorker' in navigator) {
@@ -52,12 +60,36 @@
   </head>
   <body>
     <noscript>
-      Luminexa is a local service booking app.
+      Luminexa is a local service booking app for Canada.
       You need JavaScript to use the app.
-      <a href="/ottawa/">Ottawa services</a> ·
-      <a href="/toronto/">Toronto services</a> ·
-      <a href="/pricing/">Pricing</a>
     </noscript>
     <div id="root"></div>
+    <div id="seo-prerender">
+      <h1>When you need it done, book local help.</h1>
+      <p>Luminexa is a booking marketplace for local services across Canada. Enter your address, see prices or request a quote, pick an open time, and message the provider. Customers use it free. Ottawa and Toronto are launch cities.</p>
+      <h2>Cities</h2>
+      <p>
+        <a href="/ottawa/">Ottawa services</a> ·
+        <a href="/toronto/">Toronto services</a>
+      </p>
+      <h2>Popular jobs</h2>
+      <ul>
+        <li><a href="/ottawa/snow-removal/">Snow removal in Ottawa</a></li>
+        <li><a href="/ottawa/car-detailing/">Car detailing in Ottawa</a></li>
+        <li><a href="/ottawa/gardening/">Gardening in Ottawa</a></li>
+        <li><a href="/ottawa/home-cleaning/">House cleaning in Ottawa</a></li>
+        <li><a href="/toronto/snow-removal/">Snow removal in Toronto</a></li>
+        <li><a href="/toronto/car-detailing/">Car detailing in Toronto</a></li>
+        <li><a href="/toronto/gardening/">Gardening in Toronto</a></li>
+        <li><a href="/toronto/home-cleaning/">House cleaning in Toronto</a></li>
+      </ul>
+      <p>
+        <a href="/pricing/">Pricing</a> ·
+        <a href="/privacy/">Privacy</a> ·
+        <a href="/alternatives/">Alternatives</a> ·
+        <a href="https://apps.apple.com/ca/app/luminexa/id6804875374">App Store</a> ·
+        <a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Google Play</a>
+      </p>
+    </div>
   </body>
 </html>

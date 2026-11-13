@@ -52,6 +52,7 @@ export default function RegisterPage() {
       title="Create a customer account | Luminexa"
       description="Create a free Luminexa account to book local services with prices and real time slots."
       canonical="/register"
+      app
       noindex
     />
     <AuthFormShell

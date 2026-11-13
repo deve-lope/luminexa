@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Writes crawlable city SEO HTML into frontend/public/{ottawa,toronto}/,
- * neighbourhood near-me pages, and /alternatives/* comparison pages.
+ * neighbourhood hubs, and /alternatives/* comparison pages.
+ * Neighbourhood × service URLs are not generated (they 301 to city × service).
  * Crawlers get real titles, copy, and JSON-LD — not the SPA shell.
  */
 const fs = require('fs');
@@ -32,6 +33,7 @@ function categoriesFor(cityName) {
     h1: fill(c.h1, cityName),
     blurb: fill(c.blurb, cityName),
     extra: c.extra ? fill(c.extra, cityName) : '',
+    covers: Array.isArray(c.covers) ? c.covers.map((item) => fill(item, cityName)) : [],
   }));
 }
 
@@ -59,11 +61,7 @@ function orgSchema() {
     name: data.brand,
     url: `${data.siteUrl}/`,
     description: data.home.description,
-    areaServed: data.cities.map((c) => ({
-      '@type': 'City',
-      name: c.city,
-      containedInPlace: { '@type': 'AdministrativeArea', name: c.region },
-    })),
+    areaServed: { '@type': 'Country', name: 'Canada' },
     sameAs: data.sameAs,
   };
 }
@@ -89,7 +87,9 @@ function cityLinks() {
 function footerLinks() {
   const alt = '<a href="/alternatives/">Alternatives</a>';
   const pricing = '<a href="/pricing/">Pricing</a>';
-  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy/">Privacy</a> · <a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Get the app on Google Play</a>`;
+  const play = '<a href="https://play.google.com/store/apps/details?id=com.luminexa.app">Google Play</a>';
+  const ios = '<a href="https://apps.apple.com/ca/app/luminexa/id6804875374">App Store</a>';
+  return `${cityLinks()} · ${alt} · ${pricing} · <a href="/privacy/">Privacy</a> · ${ios} · ${play}`;
 }
 
 function absoluteAsset(url) {
@@ -113,9 +113,11 @@ function pageHtml({
   secondaryCtaLabel,
 }) {
   const ld = [orgSchema(), websiteSchema(), ...(extraLd || [])];
-  const hero = image && !/^https?:\/\/images\.unsplash\.com/i.test(image) ? image : data.home.heroImage;
+  const ogPath = data.home.ogImage || data.home.heroImage;
+  const hero =
+    image && !/^https?:\/\/images\.unsplash\.com/i.test(image) ? image : data.home.heroImage || ogPath;
   const heroSrc = hero;
-  const ogImage = absoluteAsset(hero);
+  const ogImage = absoluteAsset(ogPath || hero);
   const heroAlt =
     'Neighbourhood homes and yards where Luminexa customers book local services';
   const secHref = secondaryCtaHref || '/services';
@@ -176,7 +178,7 @@ function pageHtml({
 </head>
 <body>
   <section class="hero">
-    <img src="${esc(heroSrc)}" alt="${esc(heroAlt)}" width="1920" height="1080" decoding="async" onerror="this.style.display='none'" />
+    <img src="${esc(heroSrc)}" alt="${esc(heroAlt)}" width="1200" height="630" decoding="async" onerror="this.style.display='none'" />
     <div class="wash"></div>
     <div class="grad"></div>
     <div class="nav">
@@ -329,17 +331,41 @@ function writeCity(city) {
     const dir = path.join(outDir, c.slug);
     fs.mkdirSync(dir, { recursive: true });
     const extra = c.extra ? `<p>${esc(c.extra)}</p>` : '';
-    const nNames = city.neighbourhoods
-      .slice(0, 4)
-      .map((n) => n.name)
-      .join(', ');
+    const nNames = city.neighbourhoods.map((n) => n.name);
+    const nListInline = nNames.join(', ');
+    const how = fill(data.howToBook || '', city.city);
+    const coverItems = (c.covers || [])
+      .map((item) => `<li>${esc(item)}</li>`)
+      .join('');
+    const coverBlock = coverItems
+      ? `<h2>What ${esc(c.name.toLowerCase())} on Luminexa covers</h2><ul class="cats">${coverItems}</ul>`
+      : '';
+    const related = cats
+      .filter((other) => other.slug !== c.slug)
+      .slice(0, 6)
+      .map((other) => `<li><a href="/${city.slug}/${other.slug}/">${esc(other.name)} in ${esc(city.city)}</a></li>`)
+      .join('');
+    const nhoodLinks = city.neighbourhoods
+      .map(
+        (n) =>
+          `<li><a href="/${city.slug}/${n.slug}/">${esc(n.name)}</a></li>`
+      )
+      .join('');
     const body = `
     <p>${esc(c.blurb)}</p>
+    ${coverBlock}
+    <h2>How booking works</h2>
+    <p>${esc(how)}</p>
     ${extra}
-    <p>Search by your ${esc(city.city)} address or postal code. Luminexa only shows providers whose service area covers you — including people working from ${esc(
-      nNames
-    )} and other ${esc(city.city)} neighbourhoods.</p>
-    <p><a href="/${city.slug}/near-me/">Services near me in ${esc(city.city)}</a> · <a href="/${city.slug}/">All ${esc(city.city)} services</a></p>
+    <p>${esc(city.city)} is a Luminexa launch city in ${esc(city.region)}, Canada. Search is by your address, not a city-wide phone list. Providers who set a service area around ${esc(
+      nListInline
+    )} (and other ${esc(city.city)} neighbourhoods) appear when that area includes you.</p>
+    <h2>Neighbourhoods in ${esc(city.city)}</h2>
+    <p>These pages help you browse locally. Matching is still distance and service-area based:</p>
+    <ul>${nhoodLinks}</ul>
+    <h2>Other jobs in ${esc(city.city)}</h2>
+    <ul class="cats">${related}</ul>
+    <p><a href="/${city.slug}/near-me/">Services near me in ${esc(city.city)}</a> · <a href="/${city.slug}/">All ${esc(city.city)} services</a> · <a href="/pricing/">Pricing</a></p>
   `;
     fs.writeFileSync(
       path.join(dir, 'index.html'),
@@ -388,7 +414,7 @@ function writeCity(city) {
     );
   });
 
-  // Neighbourhood hubs + neighbourhood × near-me category pages
+  // Neighbourhood hubs (neighbourhood × service URLs 301 to city × service)
   city.neighbourhoods.forEach((n) => {
     const nDir = path.join(outDir, n.slug);
     fs.mkdirSync(nDir, { recursive: true });
@@ -402,9 +428,9 @@ function writeCity(city) {
       <ul class="cats">${nearCats
         .map(
           (c) =>
-            `<li><a href="/${city.slug}/${n.slug}/${c.slug}/">${esc(c.name)} near ${esc(
-              n.name
-            )}</a></li>`
+            `<li><a href="/${city.slug}/${c.slug}/">${esc(c.name)} in ${esc(
+              city.city
+            )}</a> — including providers who serve ${esc(n.name)} when their area covers you</li>`
         )
         .join('')}</ul>
       <h2>All ${esc(city.city)} categories</h2>
@@ -465,80 +491,6 @@ function writeCity(city) {
       })
     );
 
-    nearCats.forEach((c) => {
-      const cDir = path.join(nDir, c.slug);
-      fs.mkdirSync(cDir, { recursive: true });
-      const title = `${c.name} near me in ${n.name}, ${city.city} | Luminexa`;
-      const description = `Book ${c.name.toLowerCase()} near ${n.name} in ${city.city}. Luminexa shows local providers with open times when their service area covers you.`;
-      const h1 = `${c.name} near ${n.name}`;
-      const lead = `Find ${c.name.toLowerCase()} near ${n.name}. Enter your address on Luminexa to see who actually serves your block.`;
-      const body = `
-        <p>${esc(lead)}</p>
-        <p>${esc(c.blurb)}</p>
-        <p>Results are dual-radius: you only see a provider if you are inside your search radius and their service area — including crews that work around ${esc(
-          n.name
-        )} and nearby ${esc(city.city)} neighbourhoods.</p>
-        <p><a href="/${city.slug}/${n.slug}/">All services near ${esc(
-          n.name
-        )}</a> · <a href="/${city.slug}/${c.slug}/">${esc(c.name)} in ${esc(
-          city.city
-        )}</a> · <a href="/${city.slug}/near-me/">Near me in ${esc(city.city)}</a></p>
-      `;
-      fs.writeFileSync(
-        path.join(cDir, 'index.html'),
-        pageHtml({
-          title,
-          description,
-          canonical: `${data.siteUrl}/${city.slug}/${n.slug}/${c.slug}/`,
-          h1,
-          lead,
-          image: data.home.heroImage,
-          bodyHtml: body,
-          kicker: `${city.city} · ${n.name}`,
-          secondaryCtaHref: '/services',
-          secondaryCtaLabel: `Book ${c.name.toLowerCase()} near me`,
-          extraLd: [
-            {
-              '@context': 'https://schema.org',
-              '@type': 'Service',
-              name: `${c.name} near ${n.name}`,
-              serviceType: c.name,
-              provider: { '@type': 'Organization', name: 'Luminexa' },
-              areaServed: [
-                { '@type': 'City', name: city.city },
-                { '@type': 'Place', name: n.name },
-              ],
-              url: `${data.siteUrl}/${city.slug}/${n.slug}/${c.slug}/`,
-              description,
-            },
-            {
-              '@context': 'https://schema.org',
-              '@type': 'BreadcrumbList',
-              itemListElement: [
-                {
-                  '@type': 'ListItem',
-                  position: 1,
-                  name: city.city,
-                  item: `${data.siteUrl}/${city.slug}/`,
-                },
-                {
-                  '@type': 'ListItem',
-                  position: 2,
-                  name: n.name,
-                  item: `${data.siteUrl}/${city.slug}/${n.slug}/`,
-                },
-                {
-                  '@type': 'ListItem',
-                  position: 3,
-                  name: c.name,
-                  item: `${data.siteUrl}/${city.slug}/${n.slug}/${c.slug}/`,
-                },
-              ],
-            },
-          ],
-        })
-      );
-    });
   });
 }
 
@@ -562,7 +514,7 @@ function writeAlternatives() {
     <h2>Compare</h2>
     <ul class="cats">${pageLinks}</ul>
     <h2>Book local services instead</h2>
-    <p>If you need help near you — not ERP or field-service back office — start in <a href="/ottawa/">Ottawa</a> or <a href="/toronto/">Toronto</a>, or open <a href="/ottawa/near-me/">services near me in Ottawa</a>.</p>
+    <p>If you need help near you — not ERP or field-service back office — start in a launch city: <a href="/ottawa/">Ottawa</a> or <a href="/toronto/">Toronto</a>, or open <a href="/ottawa/near-me/">services near me in Ottawa</a>. Luminexa is built for Canada; matching is by address and service area.</p>
   `;
 
   fs.writeFileSync(
@@ -652,53 +604,53 @@ function writeAlternatives() {
   });
 }
 
-function writeSitemap() {
-  const urls = [
-    `  <url>\n    <loc>${data.siteUrl}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>`,
+function contentLastmod() {
+  const files = [
+    path.join(__dirname, '../src/seo/cities.json'),
+    path.join(__dirname, '../src/seo/pricing.json'),
   ];
+  let latest = 0;
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    latest = Math.max(latest, fs.statSync(file).mtimeMs);
+  }
+  return new Date(latest || Date.now()).toISOString().slice(0, 10);
+}
 
-  urls.push(
-    `  <url>\n    <loc>${data.siteUrl}/alternatives/</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.75</priority>\n  </url>`
-  );
+function sitemapEntry(loc, changefreq, priority, lastmod) {
+  return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+}
+
+function writeSitemap() {
+  const lastmod = contentLastmod();
+  const urls = [sitemapEntry(`${data.siteUrl}/`, 'weekly', '1.0', lastmod)];
+
+  urls.push(sitemapEntry(`${data.siteUrl}/alternatives/`, 'monthly', '0.75', lastmod));
   (data.alternatives?.pages || []).forEach((p) => {
     urls.push(
-      `  <url>\n    <loc>${data.siteUrl}/alternatives/${p.slug}/</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`
+      sitemapEntry(`${data.siteUrl}/alternatives/${p.slug}/`, 'monthly', '0.8', lastmod)
     );
   });
-  urls.push(
-    `  <url>\n    <loc>${data.siteUrl}/pricing/</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.85</priority>\n  </url>`
-  );
+  urls.push(sitemapEntry(`${data.siteUrl}/pricing/`, 'monthly', '0.85', lastmod));
 
-  const nearSlugs = new Set(data.nearMeCategorySlugs || []);
   data.cities.forEach((city) => {
+    urls.push(sitemapEntry(`${data.siteUrl}/${city.slug}/`, 'weekly', '0.9', lastmod));
     urls.push(
-      `  <url>\n    <loc>${data.siteUrl}/${city.slug}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>`
-    );
-    urls.push(
-      `  <url>\n    <loc>${data.siteUrl}/${city.slug}/near-me/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.88</priority>\n  </url>`
+      sitemapEntry(`${data.siteUrl}/${city.slug}/near-me/`, 'weekly', '0.88', lastmod)
     );
     data.categories.forEach((c) => {
       const pri = c.featured ? '0.85' : '0.8';
       urls.push(
-        `  <url>\n    <loc>${data.siteUrl}/${city.slug}/${c.slug}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${pri}</priority>\n  </url>`
+        sitemapEntry(`${data.siteUrl}/${city.slug}/${c.slug}/`, 'weekly', pri, lastmod)
       );
     });
     city.neighbourhoods.forEach((n) => {
       urls.push(
-        `  <url>\n    <loc>${data.siteUrl}/${city.slug}/${n.slug}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`
+        sitemapEntry(`${data.siteUrl}/${city.slug}/${n.slug}/`, 'weekly', '0.7', lastmod)
       );
-      data.categories
-        .filter((c) => nearSlugs.has(c.slug))
-        .forEach((c) => {
-          urls.push(
-            `  <url>\n    <loc>${data.siteUrl}/${city.slug}/${n.slug}/${c.slug}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.65</priority>\n  </url>`
-          );
-        });
     });
   });
-  urls.push(
-    `  <url>\n    <loc>${data.siteUrl}/privacy/</loc>\n    <changefreq>yearly</changefreq>\n    <priority>0.2</priority>\n  </url>`
-  );
+  urls.push(sitemapEntry(`${data.siteUrl}/privacy/`, 'yearly', '0.2', lastmod));
   fs.writeFileSync(
     path.join(publicDir, 'sitemap.xml'),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`
@@ -736,13 +688,14 @@ function writeLlms() {
     path.join(publicDir, 'llms.txt'),
     `# Luminexa
 
-Luminexa is a local service booking marketplace. Customers find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar.
+Luminexa is a local service booking marketplace for Canada. Customers find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar. Customers use it free.
 
-Launch cities: Ottawa and Toronto, Ontario, Canada.
+Region: Canada. Launch cities: Ottawa and Toronto, Ontario.
 Website: ${data.siteUrl}/
 Ottawa hub: ${data.siteUrl}/ottawa/
 Toronto hub: ${data.siteUrl}/toronto/
 Android app: https://play.google.com/store/apps/details?id=com.luminexa.app
+iOS app: https://apps.apple.com/ca/app/luminexa/id6804875374
 
 Featured jobs: snow removal, car detailing, gardening.
 
@@ -832,7 +785,7 @@ function writePricing() {
           '@type': 'SoftwareApplication',
           name: 'Luminexa',
           applicationCategory: 'BusinessApplication',
-          operatingSystem: 'Web, Android',
+          operatingSystem: 'Web, Android, iOS',
           offers: [
             {
               '@type': 'Offer',
@@ -916,12 +869,56 @@ function writePrivacy() {
   );
 }
 
+function resetGeneratedDirs() {
+  ['ottawa', 'toronto', 'alternatives', 'pricing', 'privacy'].forEach((rel) => {
+    fs.rmSync(path.join(publicDir, rel), { recursive: true, force: true });
+  });
+}
+
+function write404() {
+  const html = `<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Page not found | Luminexa</title>
+  <meta name="description" content="This Luminexa page does not exist. Open the homepage or browse services in Ottawa and Toronto." />
+  <meta name="robots" content="noindex,follow" />
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; color:#0f172a; background:#f8fafc; }
+    main { max-width:36rem; margin:0 auto; padding:6rem 1.25rem; text-align:center; }
+    h1 { letter-spacing:-0.03em; }
+    a { color:#0d9488; }
+    p { color:#475569; line-height:1.55; }
+  </style>
+</head>
+<body>
+  <main>
+    <p>404</p>
+    <h1>Page not found</h1>
+    <p>That URL is not a Luminexa page.</p>
+    <p>
+      <a href="/">Home</a> ·
+      <a href="/ottawa/">Ottawa</a> ·
+      <a href="/toronto/">Toronto</a> ·
+      <a href="/pricing/">Pricing</a>
+    </p>
+  </main>
+</body>
+</html>
+`;
+  fs.writeFileSync(path.join(publicDir, '404.html'), html);
+}
+
+resetGeneratedDirs();
 data.cities.forEach(writeCity);
 writeAlternatives();
 writePricing();
 writePrivacy();
 writeSitemap();
 writeLlms();
+write404();
 console.log(
   `Wrote city, near-me, neighbourhood, alternatives, pricing, and privacy SEO pages for ${data.cities
     .map((c) => c.slug)

@@ -178,6 +178,7 @@ export default function LoginPage() {
       title="Sign in | Luminexa"
       description="Sign in to Luminexa to book local services or manage your business."
       canonical="/login"
+      app
       noindex
     />
     <AuthFormShell

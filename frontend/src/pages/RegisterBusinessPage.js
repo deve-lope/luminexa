@@ -118,6 +118,7 @@ export default function RegisterBusinessPage() {
         title="Offer local services on Luminexa"
         description="Publish your services, prices, and calendar so nearby customers can book you on Luminexa."
         canonical="/register/business"
+        app
       />
       <div className="mx-auto grid min-h-[100dvh] max-w-6xl lg:h-full lg:grid-cols-12">
         <aside className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 px-6 py-8 text-white lg:col-span-5 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:px-10 lg:py-12">

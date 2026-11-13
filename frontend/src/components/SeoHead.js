@@ -1,5 +1,13 @@
 import { useEffect } from 'react';
-import { HOME_DESCRIPTION, HOME_TITLE, SITE_NAME, SITE_URL, absUrl } from '../seo/site';
+import {
+  APP_URL,
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  OG_IMAGE_URL,
+  SITE_NAME,
+  SITE_URL,
+  absUrl,
+} from '../seo/site';
 
 function upsertMeta(attr, key, content) {
   if (content == null || content === '') return;
@@ -27,6 +35,9 @@ function upsertLink(rel, href) {
  * Sets document title, description, canonical, robots, Open Graph, Twitter,
  * and JSON-LD for SPA routes. Static /ottawa/*.html still wins for crawlers
  * that do not execute JavaScript.
+ *
+ * Pass `app` for logged-in / booking / auth routes so canonicals stay on
+ * app.luminex-a.com instead of the marketing host.
  */
 export default function SeoHead({
   title,
@@ -34,12 +45,13 @@ export default function SeoHead({
   canonical,
   robots = 'index,follow',
   jsonLd,
-  ogImage = `${SITE_URL}/images/home-hero.jpg`,
+  ogImage = OG_IMAGE_URL,
   noindex = false,
+  app = false,
 }) {
   const resolvedTitle = title || HOME_TITLE;
   const resolvedDescription = description || HOME_DESCRIPTION;
-  const resolvedCanonical = absUrl(canonical || '/');
+  const resolvedCanonical = absUrl(canonical || '/', app ? APP_URL : SITE_URL);
   const robotsContent = noindex ? 'noindex,nofollow' : robots;
   const ldText = jsonLd ? JSON.stringify(jsonLd) : '';
 

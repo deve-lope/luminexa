@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoHead from '../components/SeoHead';
+import { APP_URL, SITE_URL } from '../seo/site';
 
 const UPDATED = 'September 7, 2026';
 const CONTACT = 'support@luminex-a.com';
-const APP_URL = 'https://app.luminex-a.com';
 
 function Section({ title, children }) {
   return (
@@ -39,7 +39,7 @@ export default function PrivacyPolicyPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Legal</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">Privacy Policy</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Last updated {UPDATED}. Applies to {APP_URL} and the Luminexa progressive web app.
+          Last updated {UPDATED}. Applies to {SITE_URL}, {APP_URL}, and the Luminexa apps.
         </p>
 
         <Section title="Who we are">

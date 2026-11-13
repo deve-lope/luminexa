@@ -2,7 +2,28 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import SeoHead from '../components/SeoHead';
-import { HOME_DESCRIPTION, HOME_TITLE, ORG_JSON_LD, WEBSITE_JSON_LD } from '../seo/site';
+import {
+  APP_URL,
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  ORG_JSON_LD,
+  WEBSITE_JSON_LD,
+} from '../seo/site';
+
+function AppLink({ to, className, children }) {
+  if (/^https?:\/\//i.test(to)) {
+    return (
+      <a href={to} className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link to={to} className={className}>
+      {children}
+    </Link>
+  );
+}
 
 const NEED_PROMPTS = [
   {
@@ -49,18 +70,18 @@ const PLATFORM_POINTS = [
 const HOW_STEPS = [
   {
     n: '01',
-    title: 'Say what you need',
-    text: 'Tires, lawn, cleaning, repairs — start from the job, not a search maze.',
+    title: 'Enter your address',
+    text: 'Search any Canadian address or postal code. You only see providers whose service area covers you.',
   },
   {
     n: '02',
-    title: 'Compare locals',
-    text: 'Check who’s nearby, what they charge, and when they’re free.',
+    title: 'See prices or request a quote',
+    text: 'Listings show a fixed price, a range, or a quote request — then you can message the provider.',
   },
   {
     n: '03',
-    title: 'Book and go',
-    text: 'Confirm the visit, stay in touch, and get it done without phone tag.',
+    title: 'Pick an open time',
+    text: 'Choose a published slot, confirm the visit, and keep the job in one thread. Customers use Luminexa free.',
   },
 ];
 
@@ -129,16 +150,16 @@ function SiteHeader() {
           >
             How it works
           </a>
-          <Link
-            to="/login"
+          <a
+            href={`${APP_URL}/login`}
             className={`inline-flex min-h-[44px] items-center px-3 text-sm font-medium transition ${
               solid ? 'text-slate-700 hover:text-teal-700' : 'text-white/90 hover:text-white'
             }`}
           >
             Sign in
-          </Link>
-          <Link
-            to="/register/business"
+          </a>
+          <a
+            href={`${APP_URL}/register/business`}
             className={`inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-semibold shadow-lg transition ${
               solid
                 ? 'bg-luminexa-accent text-white shadow-teal-600/20 hover:bg-luminexa-accent-dark'
@@ -146,7 +167,7 @@ function SiteHeader() {
             }`}
           >
             Offer services
-          </Link>
+          </a>
         </nav>
       </div>
     </header>
@@ -172,10 +193,10 @@ function Hero({ embedded = false, findPath = '/services' }) {
     >
       <motion.div style={{ y: imageY }} className="absolute inset-0 scale-110">
         <img
-          src="/images/home-hero.jpg"
+          src="/images/og-home.jpg"
           alt="Neighbourhood homes and yards where Luminexa customers book local services"
-          width={1920}
-          height={1080}
+          width={1200}
+          height={630}
           fetchPriority="high"
           decoding="async"
           className="h-full w-full object-cover"
@@ -212,8 +233,9 @@ function Hero({ embedded = false, findPath = '/services' }) {
           transition={{ duration: 0.6, delay: 0.22 }}
           className="mt-5 max-w-xl text-base leading-relaxed text-teal-50/85 sm:text-lg"
         >
-          Find people nearby for tires, lawns, cleaning, repairs, and more — with clear prices and
-          real booking times.
+          Book local services across Canada — snow removal, car detailing, gardening, cleaning, and
+          more. Enter your address, see prices or request a quote, and pick an open time. Customers
+          use Luminexa free. Ottawa and Toronto are launch cities.
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -221,12 +243,12 @@ function Hero({ embedded = false, findPath = '/services' }) {
           transition={{ duration: 0.55, delay: 0.32 }}
           className="mt-8 flex flex-col gap-3 sm:flex-row"
         >
-          <Link
+          <AppLink
             to={findPath}
             className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 shadow-xl shadow-teal-950/30 transition hover:bg-teal-300"
           >
             Find help near you
-          </Link>
+          </AppLink>
           <a
             href="#needs"
             className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/30 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10"
@@ -265,7 +287,7 @@ function NeedPrompts({ findPath = '/services' }) {
         >
           {NEED_PROMPTS.map((item) => (
             <motion.li key={item.q} variants={staggerChild}>
-              <Link
+              <AppLink
                 to={findPath}
                 className="group flex flex-col gap-2 py-7 transition sm:flex-row sm:items-end sm:justify-between sm:gap-8 sm:py-9"
               >
@@ -289,7 +311,7 @@ function NeedPrompts({ findPath = '/services' }) {
                     →
                   </span>
                 </span>
-              </Link>
+              </AppLink>
             </motion.li>
           ))}
         </motion.ul>
@@ -313,7 +335,8 @@ function HowItWorks() {
             From “I need help” to a booked visit.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-teal-100/75 sm:text-lg">
-            Built for everyday service work — customers book faster, providers stay organized.
+            Enter your address, see prices or request a quote, pick an open time, and message the
+            provider. Customers use Luminexa free.
           </p>
         </motion.div>
 
@@ -353,12 +376,12 @@ function PlatformBand({ findPath = '/services' }) {
             messy parts of hiring help — chasing quotes, missing calls, unclear timing — out of
             the way.
           </p>
-          <Link
+          <AppLink
             to={findPath}
             className="mt-8 inline-flex min-h-[48px] items-center rounded-full bg-luminexa-accent px-6 text-sm font-semibold text-white shadow-sm shadow-teal-600/25 transition hover:bg-luminexa-accent-dark"
           >
             Explore services nearby
-          </Link>
+          </AppLink>
         </motion.div>
 
         <motion.ul
@@ -462,12 +485,12 @@ function SplitShowcase() {
             Publish services and prices, open your calendar, take requests, complete jobs, and
             issue invoices — built for lawn crews, cleaners, mobile techs, and local trades.
           </p>
-          <Link
-            to="/register/business"
+          <a
+            href={`${APP_URL}/register/business`}
             className="mt-8 inline-flex min-h-[48px] w-fit items-center rounded-full border border-teal-700/20 bg-white px-6 text-sm font-semibold text-teal-800 shadow-sm transition hover:border-teal-600 hover:bg-teal-50"
           >
             Start offering services
-          </Link>
+          </a>
         </motion.div>
 
         <motion.div
@@ -521,19 +544,19 @@ function FinalCta({ embedded = false, findPath = '/services' }) {
           and prices that make sense.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
+          <AppLink
             to={findPath}
             className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full bg-teal-400 px-8 text-sm font-bold text-teal-950 transition hover:bg-teal-300 sm:w-auto"
           >
             Find help near you
-          </Link>
+          </AppLink>
           {!embedded && (
-            <Link
-              to="/register"
+            <a
+              href={`${APP_URL}/register`}
               className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border border-white/25 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto"
             >
               Create a customer account
-            </Link>
+            </a>
           )}
         </div>
       </motion.div>
@@ -548,18 +571,24 @@ function SiteFooter() {
         <div>
           <p className="text-lg font-extrabold tracking-tight text-slate-900">Luminexa</p>
           <p className="mt-1 text-sm text-slate-500">
-            Local services, booked the simple way.
+            Local services across Canada, booked the simple way.
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm font-medium text-slate-600">
-          <Link to="/services" className="hover:text-teal-700">
+          <a href={`${APP_URL}/services`} className="hover:text-teal-700">
             Find help
-          </Link>
+          </a>
           <a href="/ottawa/" className="hover:text-teal-700">
             Ottawa
           </a>
           <a href="/toronto/" className="hover:text-teal-700">
             Toronto
+          </a>
+          <a href="/ottawa/snow-removal/" className="hover:text-teal-700">
+            Snow removal
+          </a>
+          <a href="/ottawa/car-detailing/" className="hover:text-teal-700">
+            Car detailing
           </a>
           <a href="/pricing/" className="hover:text-teal-700">
             Pricing
@@ -567,12 +596,24 @@ function SiteFooter() {
           <a href="/privacy/" className="hover:text-teal-700">
             Privacy
           </a>
-          <Link to="/register/business" className="hover:text-teal-700">
+          <a
+            href="https://apps.apple.com/ca/app/luminexa/id6804875374"
+            className="hover:text-teal-700"
+          >
+            App Store
+          </a>
+          <a
+            href="https://play.google.com/store/apps/details?id=com.luminexa.app"
+            className="hover:text-teal-700"
+          >
+            Google Play
+          </a>
+          <a href={`${APP_URL}/register/business`} className="hover:text-teal-700">
             Offer services
-          </Link>
-          <Link to="/login" className="hover:text-teal-700">
+          </a>
+          <a href={`${APP_URL}/login`} className="hover:text-teal-700">
             Sign in
-          </Link>
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">
@@ -587,7 +628,7 @@ export default function LuminexaHomePage({ embedded = false }) {
   const findPath =
     embedded && typeof window !== 'undefined' && window.location.pathname.startsWith('/customer')
       ? '/customer/find'
-      : '/services';
+      : `${APP_URL}/services`;
 
   return (
     <div className="bg-luminexa-canvas text-slate-900">

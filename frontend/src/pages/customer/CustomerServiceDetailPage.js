@@ -14,7 +14,7 @@ import {
 import { providerRouteKey } from '../../utils/providerRouteKey';
 import { formatServiceMeta } from '../../utils/serviceDisplay';
 import SeoHead from '../../components/SeoHead';
-import { absUrl } from '../../seo/site';
+import { absAppUrl } from '../../seo/site';
 
 function ReviewDimensionBreakdown({ review }) {
   const dims = [
@@ -127,7 +127,8 @@ export default function CustomerServiceDetailPage() {
           service.description ||
           `Book ${service.name} from ${service.organization_name} on Luminexa.`
         }
-        canonical={absUrl(`/book/${customerKey}/services/${service.id}`)}
+        canonical={absAppUrl(`/book/${customerKey}/services/${service.id}`)}
+        app
         noindex={!isPublicBook}
         jsonLd={
           isPublicBook
@@ -137,7 +138,7 @@ export default function CustomerServiceDetailPage() {
                 name: service.name,
                 description: service.description || undefined,
                 provider: { '@type': 'LocalBusiness', name: service.organization_name },
-                url: absUrl(`/book/${customerKey}/services/${service.id}`),
+                url: absAppUrl(`/book/${customerKey}/services/${service.id}`),
               }
             : undefined
         }

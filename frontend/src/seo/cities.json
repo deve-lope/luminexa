@@ -1,14 +1,17 @@
 {
-  "siteUrl": "https://app.luminex-a.com",
+  "siteUrl": "https://luminex-a.com",
   "brand": "Luminexa",
   "sameAs": [
-    "https://play.google.com/store/apps/details?id=com.luminexa.app"
+    "https://play.google.com/store/apps/details?id=com.luminexa.app",
+    "https://apps.apple.com/ca/app/luminexa/id6804875374"
   ],
   "home": {
-    "title": "Luminexa | Book local services",
-    "description": "Book local services — snow removal, car detailing, gardening, cleaning, and more — with prices and real time slots.",
-    "heroImage": "/images/home-hero.jpg"
+    "title": "Luminexa | Book local services across Canada",
+    "description": "Book local services across Canada — snow removal, car detailing, gardening, cleaning, and more. Enter your address, see prices or request a quote, and pick an open time. Customers use Luminexa free. Launch cities include Ottawa and Toronto.",
+    "heroImage": "/images/og-home.jpg",
+    "ogImage": "/images/og-home.jpg"
   },
+  "howToBook": "Customers use Luminexa free. Enter your {city} address or postal code, browse providers whose service area covers you, see a listed price or request a quote, pick an open time, and message the provider about the job. A provider appears only if you are inside both your search radius and their service area.",
   "nearMeCategorySlugs": [
     "snow-removal",
     "car-detailing",
@@ -21,10 +24,15 @@
       "name": "Snow removal",
       "featured": true,
       "title": "Book snow removal in {city} | Luminexa",
-      "description": "Find {city} snow removal for driveways, walkways, and seasonal clearing. Book local crews on Luminexa with open times.",
+      "description": "Book {city} snow removal on Luminexa. Enter your address, see prices or request a quote, and pick an open time for driveway and walkway clearing.",
       "h1": "Snow removal in {city}",
-      "blurb": "Driveway and walkway clearing, salting, and seasonal snow contracts from {city} crews who publish real availability.",
-      "extra": "Many snow crews list under Yard & outdoors. After you enter your {city} address, search that category if you do not see a dedicated snow listing yet.",
+      "blurb": "Driveway and walkway clearing, salting, and seasonal snow visits from {city} crews who publish real availability on Luminexa.",
+      "covers": [
+        "Clearing driveways, walkways, and similar outdoor paths after a snowfall",
+        "Salting or sanding when the provider lists it on the service",
+        "One-off storm visits, or repeat visits if the provider offers them"
+      ],
+      "extra": "Many snow crews list under Yard & outdoors. After you enter your {city} address, search that category if you do not see a dedicated snow listing yet. Availability depends on which providers cover your address — Luminexa does not dispatch a city-wide crew.",
       "image": "https://images.unsplash.com/photo-1418985991508-e47386d96a71?auto=format&fit=crop&w=1600&q=80"
     },
     {
@@ -32,10 +40,15 @@
       "name": "Car detailing",
       "featured": true,
       "title": "Book car detailing in {city} | Luminexa",
-      "description": "Book mobile or local car detailing in {city} — interior, exterior, and paint-safe washes. See prices and open times on Luminexa.",
+      "description": "Book mobile or local car detailing in {city} on Luminexa. Enter your address, compare interior and exterior jobs, and pick an open time.",
       "h1": "Car detailing in {city}",
       "blurb": "Interior, exterior, and mobile detailing at your home or workplace when a {city} provider serves your area.",
-      "extra": "Many detailers list under Auto & vehicles. Enter your {city} address, then browse that category to book a visit.",
+      "covers": [
+        "Interior vacuuming, wipe-downs, and similar cabin cleaning when listed",
+        "Exterior wash and paint-safe detailing when the provider offers it",
+        "Mobile visits at a home or workplace address inside the provider’s service area"
+      ],
+      "extra": "Many detailers list under Auto & vehicles. Enter your {city} address, then browse that category to book a visit. You only see someone if their service area reaches you.",
       "image": "https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=1600&q=80"
     },
     {
@@ -43,107 +56,172 @@
       "name": "Gardening",
       "featured": true,
       "title": "Book gardening in {city} | Luminexa",
-      "description": "Find {city} gardening and lawn help — planting, weeding, hedges, and yard care. Book local crews on Luminexa with open times.",
+      "description": "Book {city} gardening and lawn help on Luminexa — planting, weeding, hedges, and yard care. See prices or request a quote, then pick an open time.",
       "h1": "Gardening in {city}",
       "blurb": "Planting, weeding, hedges, and seasonal garden care from {city} crews who list real availability.",
+      "covers": [
+        "Planting, weeding, and bed cleanup when listed on the service",
+        "Hedge trimming and similar plant care",
+        "Seasonal garden visits if the provider publishes them"
+      ],
       "extra": "Garden and lawn crews usually list under Yard & outdoors. Enter your {city} address, then browse that category to book a visit.",
-      "image": "/images/home-hero.jpg"
+      "image": "/images/og-home.jpg"
     },
     {
       "slug": "home-cleaning",
       "name": "Home cleaning",
       "title": "Book house cleaning in {city} | Luminexa",
-      "description": "Find {city} house cleaners and book a time on Luminexa. Browse local providers for regular cleans, deep cleans, and move-out jobs.",
+      "description": "Find {city} house cleaners on Luminexa. Enter your address, see prices or request a quote for regular cleans, deep cleans, or move-out jobs, and pick an open slot.",
       "h1": "House cleaning in {city}",
       "blurb": "Book {city} cleaners for weekly visits, deep cleans, windows, and move-out jobs. See who serves your postal code and pick an open slot.",
+      "covers": [
+        "Recurring or one-off house cleaning when the provider lists it",
+        "Deeper cleans, windows, or move-out jobs if offered on the listing",
+        "Work at the address you enter, when that address is inside the provider’s service area"
+      ],
+      "extra": "What is included is whatever the provider published — rooms, hours, and supplies vary by listing. Message them in Luminexa if you need to confirm details before the visit.",
       "image": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "yard-outdoors",
       "name": "Yard & outdoors",
       "title": "Book lawn and yard work in {city} | Luminexa",
-      "description": "Book {city} lawn care, leaf cleanup, hedges, snow, and seasonal yard jobs on Luminexa. Compare local crews with open times.",
+      "description": "Book {city} lawn care, leaf cleanup, hedges, snow, and seasonal yard jobs on Luminexa. Enter your address and compare local crews with open times.",
       "h1": "Lawn and yard work in {city}",
       "blurb": "Mowing, leaf cleanup, snow, and garden help from {city} crews who list real availability — not just a phone number.",
-      "image": "/images/home-hero.jpg"
+      "covers": [
+        "Mowing, leaf cleanup, and similar lawn visits when listed",
+        "Hedges, garden help, and seasonal outdoor jobs",
+        "Snow clearing when a provider publishes a snow service under this category"
+      ],
+      "extra": "Yard & outdoors is also where many {city} snow and garden crews list if they do not use a dedicated category. Search after you enter your address.",
+      "image": "/images/og-home.jpg"
     },
     {
       "slug": "auto-vehicles",
       "name": "Auto & vehicles",
       "title": "Book mobile auto service in {city} | Luminexa",
-      "description": "Find mobile tire, car detailing, and auto helpers in {city} on Luminexa. Book a visit at your home or workplace.",
+      "description": "Find mobile tire, car detailing, and auto helpers in {city} on Luminexa. Enter your address and book a visit at your home or workplace.",
       "h1": "Mobile auto service in {city}",
       "blurb": "{city} mobile techs for tires, car detailing, jump starts, and similar jobs. The provider comes to you when they serve your area.",
+      "covers": [
+        "Mobile tire work, jump starts, and similar vehicle help when listed",
+        "Car detailing offered as a mobile or local visit",
+        "Jobs at the address you enter, not a generic {city}-wide dispatch"
+      ],
+      "extra": "Auto & vehicles is also where many {city} detailers list. Results depend on who covers your coordinates — not every neighbourhood has the same providers.",
       "image": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "handyman-repairs",
       "name": "Handyman & repairs",
       "title": "Book a handyman in {city} | Luminexa",
-      "description": "Book {city} handyman jobs — mounting, assembly, and small home repairs — on Luminexa with prices and open times.",
+      "description": "Book {city} handyman jobs on Luminexa — mounting, assembly, and small home repairs. See prices or request a quote, then pick an open time.",
       "h1": "Handyman and small repairs in {city}",
       "blurb": "TV mounts, furniture assembly, and minor fixes. {city} handypeople publish what they offer and when they can come.",
+      "covers": [
+        "Furniture assembly, mounting, and similar small jobs when listed",
+        "Minor household repairs the provider says they take on",
+        "A scheduled visit at your {city} address when you are in their service area"
+      ],
+      "extra": "Listings say what the provider actually offers. If a job is unclear, send a quote request or message from the booking flow instead of assuming a trade licence or emergency service.",
       "image": "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "plumbing",
       "name": "Plumbing",
       "title": "Book a plumber in {city} | Luminexa",
-      "description": "Find {city} plumbers for faucets, toilets, clogs, and minor leaks. Book or request a visit on Luminexa.",
+      "description": "Find {city} plumbers for faucets, toilets, clogs, and minor leaks. Enter your address on Luminexa, then book or request a visit.",
       "h1": "Plumbing in {city}",
       "blurb": "Faucets, toilets, clogs, and small leaks. Browse {city} plumbers who take bookings or requests through Luminexa.",
+      "covers": [
+        "Faucet, toilet, and clog jobs when the provider lists them",
+        "Minor leak visits if offered on the service",
+        "Booked or requested times — not an emergency dispatch board"
+      ],
+      "extra": "Luminexa shows whoever listed plumbing and covers your {city} address. Confirm licensing or emergency availability with the provider in messages if that matters for the job.",
       "image": "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "electrical",
       "name": "Electrical",
       "title": "Book an electrician in {city} | Luminexa",
-      "description": "Book {city} electrical help for outlets, fixtures, and fans on Luminexa. See local providers and available times.",
+      "description": "Book {city} electrical help for outlets, fixtures, and fans on Luminexa. See local providers, prices or quotes, and available times.",
       "h1": "Electrical help in {city}",
       "blurb": "Outlets, fixtures, fans, and troubleshooting from {city} electricians who list services and open slots.",
+      "covers": [
+        "Outlets, fixtures, fans, and similar listed electrical jobs",
+        "Troubleshooting visits when the provider offers them",
+        "A scheduled slot or request — not a 24/7 emergency line"
+      ],
+      "extra": "Use the listing and in-app messages to confirm the work is in scope. Luminexa matches you by address and service area; it does not assign a utility crew.",
       "image": "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "painting",
       "name": "Painting",
       "title": "Book painting in {city} | Luminexa",
-      "description": "Find {city} painters for interior and exterior work and touch-ups. Compare local providers on Luminexa.",
+      "description": "Find {city} painters for interior and exterior work and touch-ups. Compare local providers on Luminexa and book a start time or request a quote.",
       "h1": "Painting in {city}",
       "blurb": "Interior, exterior, and touch-up painting. {city} painters can show prices or quotes and let you book a start time.",
+      "covers": [
+        "Interior or exterior painting when listed",
+        "Touch-ups and smaller prep jobs if the provider offers them",
+        "A booked start time or quote request for the address you enter"
+      ],
+      "extra": "Room counts, prep, and paint supply vary by listing. Ask in messages before you book if you need those details in writing.",
       "image": "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "moving-help",
       "name": "Moving & heavy help",
       "title": "Book moving help in {city} | Luminexa",
-      "description": "Book {city} movers for loading, furniture moves, and junk haul on Luminexa. Local help with scheduled times.",
+      "description": "Book {city} movers for loading, furniture moves, and junk haul on Luminexa. Local help with scheduled times — enter your address to see who covers you.",
       "h1": "Moving and heavy help in {city}",
       "blurb": "Load, unload, furniture moves, and junk haul. {city} helpers you can actually schedule.",
+      "covers": [
+        "Loading, unloading, and furniture moves when listed",
+        "Junk haul or heavy lifting if the provider offers it",
+        "Help at the pickup or drop-off address you enter, when it is in their service area"
+      ],
+      "extra": "This is marketplace booking, not a moving-van fleet. Check the listing for crew size, truck, and stairs, then message the provider if the job is larger than a listed visit.",
       "image": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "pet-care",
       "name": "Pet care",
       "title": "Book pet care in {city} | Luminexa",
-      "description": "Find {city} dog walking, sitting, and basic grooming on Luminexa. Book local pet care with open times.",
+      "description": "Find {city} dog walking, sitting, and basic grooming on Luminexa. Enter your address, see who covers you, and book an open time.",
       "h1": "Pet care in {city}",
       "blurb": "Walking, sitting, and basic grooming from {city} pet sitters and walkers listed on Luminexa.",
+      "covers": [
+        "Dog walking and drop-in visits when listed",
+        "Sitting or basic grooming if the provider offers it",
+        "Care at or near the {city} address you search, inside their service area"
+      ],
+      "extra": "Each listing says which animals and visits they take. Use messages for keys, medication, or longer sits before you book.",
       "image": "https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1600&q=80"
     },
     {
       "slug": "personal-beauty",
       "name": "Personal / beauty",
       "title": "Book hair and beauty in {city} | Luminexa",
-      "description": "Book {city} hair, nails, barber, and wellness appointments on Luminexa when studios list open times.",
+      "description": "Book {city} hair, nails, barber, and wellness appointments on Luminexa when studios list open times. See prices or request a quote.",
       "h1": "Hair, nails, and beauty in {city}",
       "blurb": "Hair, nails, barber, and wellness — often studio-based in {city}. Book a chair when the provider is listed.",
+      "covers": [
+        "Hair, barber, nails, and similar appointments when listed",
+        "Wellness visits the provider publishes on Luminexa",
+        "Studio or mobile bookings, depending on the service area they set"
+      ],
+      "extra": "Many beauty providers work from a studio rather than your home. The address search still applies: you only see them if you fall inside both your radius and theirs.",
       "image": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1600&q=80"
     }
   ],
   "alternatives": {
     "hub": {
       "title": "Luminexa alternatives to Jobber, Odoo & more",
-      "description": "Compare Luminexa with Jobber, Odoo, and other tools. Luminexa is a local booking marketplace for customers and providers in Ottawa and Toronto.",
+      "description": "Compare Luminexa with Jobber, Odoo, and other tools. Luminexa is a local booking marketplace for customers and providers across Canada, with launch cities in Ottawa and Toronto.",
       "h1": "Looking for a Jobber or Odoo alternative?",
       "intro": "Some teams compare Luminexa with Jobber or Odoo. They solve different jobs. Luminexa is a marketplace where customers book nearby providers; Jobber and Odoo are software suites businesses use to run their own operations."
     },
@@ -152,10 +230,10 @@
         "slug": "jobber",
         "competitor": "Jobber",
         "title": "Jobber alternative for booking local jobs | Luminexa",
-        "description": "Looking for a Jobber alternative? Luminexa helps customers book local services near them in Ottawa and Toronto — while Jobber is field-service software for running your own crew.",
+        "description": "Looking for a Jobber alternative? Luminexa helps customers book local services near them across Canada — while Jobber is field-service software for running your own crew. Launch cities include Ottawa and Toronto.",
         "h1": "Jobber alternative: book local jobs on Luminexa",
         "lead": "Jobber helps contractors manage their own customers, quotes, and invoices. Luminexa is different: homeowners and businesses find nearby providers and book open time slots.",
-        "image": "/images/home-hero.jpg",
+        "image": "/images/og-home.jpg",
         "sections": [
           {
             "h2": "What Jobber is for",
@@ -163,7 +241,7 @@
           },
           {
             "h2": "What Luminexa is for",
-            "p": "Luminexa is a local service marketplace. Customers search by address, see providers whose service area covers them, and book real availability — snow removal, car detailing, cleaning, and more in Ottawa and Toronto."
+            "p": "Luminexa is a local service marketplace. Customers search by address, see providers whose service area covers them, and book real availability — snow removal, car detailing, cleaning, and more across Canada. Ottawa and Toronto are launch cities."
           },
           {
             "h2": "When Luminexa is the better fit",
@@ -181,11 +259,11 @@
           },
           {
             "q": "Can I use Luminexa instead of Jobber?",
-            "a": "If your goal is getting booked by nearby customers in Ottawa or Toronto, yes — list on Luminexa. If you need full invoicing and CRM for offline clients, you may still want dedicated FSM software alongside or instead."
+            "a": "If your goal is getting booked by nearby customers, yes — list on Luminexa. If you need full invoicing and CRM for offline clients, you may still want dedicated FSM software alongside or instead."
           },
           {
             "q": "Where does Luminexa work?",
-            "a": "Launch cities are Ottawa and Toronto, Ontario. Search is distance-based: a provider appears only when you are inside both your search radius and their service area."
+            "a": "Luminexa is built for Canada. You search by address or postal code. A provider appears only when you are inside both your search radius and their service area. Ottawa and Toronto are launch cities."
           }
         ]
       },
@@ -193,10 +271,10 @@
         "slug": "odoo",
         "competitor": "Odoo",
         "title": "Odoo alternative for local service booking | Luminexa",
-        "description": "Looking for an Odoo alternative focused on local services? Luminexa is a booking marketplace for Ottawa and Toronto — not a full ERP suite.",
+        "description": "Looking for an Odoo alternative focused on local services? Luminexa is a booking marketplace for Canada — not a full ERP suite. Launch cities include Ottawa and Toronto.",
         "h1": "Odoo alternative for local service booking",
         "lead": "Odoo is a broad ERP platform (CRM, accounting, inventory, and more). Luminexa is a focused marketplace: customers book local jobs; providers publish services and open times.",
-        "image": "/images/home-hero.jpg",
+        "image": "/images/og-home.jpg",
         "sections": [
           {
             "h2": "What Odoo is for",
@@ -208,7 +286,7 @@
           },
           {
             "h2": "When Luminexa is the better fit",
-            "p": "Pick Luminexa when you need customer-facing booking for local services in Ottawa or Toronto — not a company-wide ERP. Setup is marketplace listing and availability, not months of ERP modules."
+            "p": "Pick Luminexa when you need customer-facing booking for local services in Canada — not a company-wide ERP. Setup is marketplace listing and availability, not months of ERP modules. Ottawa and Toronto are launch cities."
           },
           {
             "h2": "When Odoo may still be right",
@@ -226,7 +304,7 @@
           },
           {
             "q": "Where can I book on Luminexa?",
-            "a": "Ottawa and Toronto are launch cities. Enter your address or postal code to see providers who cover your location."
+            "a": "Search any Canadian address or postal code. You see providers who cover that location. Ottawa and Toronto are launch cities."
           }
         ]
       }
@@ -253,36 +331,36 @@
       ],
       "hub": {
         "title": "Book local services in Ottawa | Luminexa",
-        "description": "Luminexa helps Ottawa residents book snow removal, car detailing, home cleaning, and other local jobs — with prices and real time slots.",
+        "description": "Luminexa helps Ottawa residents book snow removal, car detailing, home cleaning, and other local jobs. Enter your address, see prices or request a quote, and pick an open time. Customers book free.",
         "h1": "Book local services in Ottawa",
-        "intro": "Luminexa is a booking app for everyday jobs in Ottawa, including snow removal and car detailing. Find providers who serve your neighbourhood, see prices or request a quote, and lock in a time without phone tag."
+        "intro": "Luminexa is a booking marketplace for everyday jobs in Ottawa — snow removal, car detailing, cleaning, and more. Enter your address or postal code, see providers whose service area covers you, compare listed prices or send a quote request, pick an open time, and message the provider. Customers use Luminexa free. Ottawa is a launch city; the same app works across Canada wherever a provider covers your address."
       },
       "nearMe": {
         "title": "Local services near me in Ottawa | Luminexa",
         "description": "Book services near you in Ottawa — snow removal, car detailing, cleaning, and more. Luminexa shows providers whose service area covers your address.",
         "h1": "Services near me in Ottawa",
-        "intro": "Searching for help near you in Ottawa? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results."
+        "intro": "Searching for help near you in Ottawa? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results. Customers book free."
       },
       "faq": [
         {
           "q": "What is Luminexa?",
-          "a": "Luminexa is a local service booking platform. Customers in Ottawa find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar."
+          "a": "Luminexa is a local service booking marketplace. Customers find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar. Customers use it free."
         },
         {
           "q": "Does Luminexa operate in Ottawa?",
-          "a": "Yes. Ottawa is one of Luminexa’s launch cities in Ontario, Canada. You search by address or postal code. A provider appears only if you are inside both your search radius and their service area."
+          "a": "Yes. Ottawa is a launch city. You search by address or postal code. A provider appears only if you are inside both your search radius and their service area."
         },
         {
           "q": "Can I book snow removal, car detailing, or gardening in Ottawa?",
-          "a": "Yes — those are jobs we highlight. Snow and garden crews often list under Yard & outdoors; detailers often list under Auto & vehicles. Availability depends on which Ottawa providers are on Luminexa."
+          "a": "Those are jobs we highlight. Snow and garden crews often list under Yard & outdoors; detailers often list under Auto & vehicles. You see whoever covers your Ottawa address and has published that service."
         },
         {
           "q": "How do I book a service?",
-          "a": "Open Luminexa, enter your Ottawa address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play."
+          "a": "Enter your Ottawa address or postal code, choose a category, compare providers, see a listed price or request a quote, pick an open slot or send a request, and message the provider. iOS and Android apps are on the App Store and Google Play."
         },
         {
-          "q": "Do you also serve Toronto?",
-          "a": "Yes. Toronto is a launch city alongside Ottawa. The product works by distance and service area, so you see providers who actually cover your address."
+          "q": "Is Luminexa only in Ottawa?",
+          "a": "No. Luminexa is built for Canada. Toronto is also a launch city. Matching is by address and service area, not a city limit drawn on a map."
         }
       ]
     },
@@ -306,36 +384,36 @@
       ],
       "hub": {
         "title": "Book local services in Toronto | Luminexa",
-        "description": "Luminexa helps Toronto residents book snow removal, car detailing, home cleaning, and other local jobs — with prices and real time slots.",
+        "description": "Luminexa helps Toronto residents book snow removal, car detailing, home cleaning, and other local jobs. Enter your address, see prices or request a quote, and pick an open time. Customers book free.",
         "h1": "Book local services in Toronto",
-        "intro": "Luminexa is a booking app for everyday jobs in Toronto, including snow removal and car detailing. Find providers who serve your neighbourhood, see prices or request a quote, and lock in a time without phone tag."
+        "intro": "Luminexa is a booking marketplace for everyday jobs in Toronto — snow removal, car detailing, cleaning, and more. Enter your address or postal code, see providers whose service area covers you, compare listed prices or send a quote request, pick an open time, and message the provider. Customers use Luminexa free. Toronto is a launch city; the same app works across Canada wherever a provider covers your address."
       },
       "nearMe": {
         "title": "Local services near me in Toronto | Luminexa",
         "description": "Book services near you in Toronto — snow removal, car detailing, cleaning, and more. Luminexa shows providers whose service area covers your address.",
         "h1": "Services near me in Toronto",
-        "intro": "Searching for help near you in Toronto? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results."
+        "intro": "Searching for help near you in Toronto? Enter your address on Luminexa to see providers nearby — only crews whose service area reaches you appear in results. Customers book free."
       },
       "faq": [
         {
           "q": "What is Luminexa?",
-          "a": "Luminexa is a local service booking platform. Customers in Toronto find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar."
+          "a": "Luminexa is a local service booking marketplace. Customers find nearby providers and book open time slots. Businesses publish services, a service area, and a calendar. Customers use it free."
         },
         {
           "q": "Does Luminexa operate in Toronto?",
-          "a": "Yes. Toronto is a launch city alongside Ottawa. You search by address or postal code. A provider appears only if you are inside both your search radius and their service area."
+          "a": "Yes. Toronto is a launch city. You search by address or postal code. A provider appears only if you are inside both your search radius and their service area."
         },
         {
           "q": "Can I book snow removal, car detailing, or gardening in Toronto?",
-          "a": "Yes — those are jobs we highlight. Snow and garden crews often list under Yard & outdoors; detailers often list under Auto & vehicles. Availability depends on which Toronto providers are on Luminexa."
+          "a": "Those are jobs we highlight. Snow and garden crews often list under Yard & outdoors; detailers often list under Auto & vehicles. You see whoever covers your Toronto address and has published that service."
         },
         {
           "q": "How do I book a service?",
-          "a": "Open Luminexa, enter your Toronto address or postal code, choose a category, compare providers, and pick an open slot or send a request. You can also install the Luminexa app from Google Play."
+          "a": "Enter your Toronto address or postal code, choose a category, compare providers, see a listed price or request a quote, pick an open slot or send a request, and message the provider. iOS and Android apps are on the App Store and Google Play."
         },
         {
-          "q": "Do you also serve Ottawa?",
-          "a": "Yes. Ottawa is a launch city alongside Toronto. The same booking app works in both cities."
+          "q": "Is Luminexa only in Toronto?",
+          "a": "No. Luminexa is built for Canada. Ottawa is also a launch city. Matching is by address and service area, not a city limit drawn on a map."
         }
       ]
     }

@@ -53,6 +53,7 @@ import {
 import ProviderLegacyRedirect from './components/provider/ProviderLegacyRedirect';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ScrollToTop from './components/ScrollToTop';
+import NotFoundPage from './pages/NotFoundPage';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -200,7 +201,7 @@ function AppRoutes() {
           <Route path="services" element={<PublicProviderServicesPage />} />
           <Route index element={<BookingStorefrontPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </div>
   );

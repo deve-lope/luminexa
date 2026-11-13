@@ -10,6 +10,10 @@ ALLOWED_HOSTS=localhost,127.0.0.1,web,0.0.0.0
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 PUBLIC_APP_URL=http://localhost:3000
+# Production: keep PUBLIC_APP_URL=https://app.luminex-a.com (emails, booking links).
+# Add https://luminex-a.com and https://app.luminex-a.com to CORS_ALLOWED_ORIGINS
+# and CSRF_TRUSTED_ORIGINS. Marketing pages live on the apex host; the logged-in
+# app stays on app.luminex-a.com.
 
 # Docker prod-local DB (named volume luminexa_prod_data)
 SQLITE_DB_PATH=/app/data/db.sqlite3

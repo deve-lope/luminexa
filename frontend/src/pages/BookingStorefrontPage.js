@@ -23,7 +23,7 @@ import { providerHome, providerSchedule } from '../utils/providerPaths';
 import { formatProviderServiceArea, providerHasServiceArea } from '../utils/serviceArea';
 import { isShopService } from '../utils/serviceDisplay';
 import SeoHead from '../components/SeoHead';
-import { absUrl } from '../seo/site';
+import { absAppUrl } from '../seo/site';
 
 /**
  * Public booking profile at /book/:slug
@@ -204,7 +204,8 @@ export default function BookingStorefrontPage() {
           organization.description ||
           `Book ${organization.name} on Luminexa — see services, prices, and open times.`
         }
-        canonical={absUrl(`/book/${customerKey}`)}
+        canonical={absAppUrl(`/book/${customerKey}`)}
+        app
         noindex={!isGuest}
         jsonLd={
           isGuest
@@ -213,7 +214,7 @@ export default function BookingStorefrontPage() {
                 '@type': 'LocalBusiness',
                 name: organization.name,
                 description: organization.tagline || undefined,
-                url: absUrl(`/book/${customerKey}`),
+                url: absAppUrl(`/book/${customerKey}`),
                 image: organization.logo_url || organization.banner_url || undefined,
                 address: organization.service_city
                   ? {

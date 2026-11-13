@@ -241,6 +241,7 @@ export default function ServicesBrowsePage({ embedded = false }) {
       title="Find local services | Luminexa"
       description="Browse nearby providers on Luminexa — see prices and open times for snow removal, cleaning, auto, and more."
       canonical="/services"
+      app
     />
   );
 

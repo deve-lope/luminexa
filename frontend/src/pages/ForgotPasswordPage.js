@@ -31,6 +31,7 @@ export default function ForgotPasswordPage() {
       title="Reset password | Luminexa"
       description="Reset your Luminexa business account password."
       canonical="/forgot-password"
+      app
       noindex
     />
     <AuthFormShell

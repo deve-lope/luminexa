@@ -18,6 +18,9 @@ export function resolvedCategories(cityName) {
     h1: fillCityCopy(c.h1, cityName),
     blurb: fillCityCopy(c.blurb, cityName),
     extra: c.extra ? fillCityCopy(c.extra, cityName) : '',
+    covers: Array.isArray(c.covers)
+      ? c.covers.map((item) => fillCityCopy(item, cityName))
+      : [],
   }));
 }
 

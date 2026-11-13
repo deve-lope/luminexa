@@ -112,7 +112,7 @@ export default function CustomerLayout({ children }) {
 
   return (
     <>
-    <SeoHead title="Luminexa" canonical="/customer" noindex />
+    <SeoHead title="Luminexa" canonical="/customer" app noindex />
     <AppShell
       brand="Luminexa"
       eyebrow={eyebrow}

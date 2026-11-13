@@ -137,7 +137,7 @@ function ProviderShell() {
 
   return (
     <>
-    <SeoHead title="Luminexa" canonical="/provider" noindex />
+    <SeoHead title="Luminexa" canonical="/provider" app noindex />
     <AppShell
       brand="Luminexa"
       eyebrow={eyebrow}

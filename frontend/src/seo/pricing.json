@@ -16,7 +16,8 @@
       "Message providers about the job",
       "Track bookings, status, and invoices",
       "Post help requests on Gig wall",
-      "Install the Android app from Google Play"
+      "iOS app on the App Store",
+      "Android app on Google Play"
     ]
   },
   "provider": {
@@ -68,7 +69,7 @@
     },
     {
       "q": "Where does Luminexa work?",
-      "a": "Launch cities are Ottawa and Toronto, Ontario. Matching uses your address and each provider’s service area."
+      "a": "Luminexa is built for Canada. Enter any Canadian address or postal code; you see providers whose service area covers you. Ottawa and Toronto are launch cities."
     }
   ]
 }
